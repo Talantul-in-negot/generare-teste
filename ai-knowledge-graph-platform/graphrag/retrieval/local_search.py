@@ -419,6 +419,61 @@ class LocalSearch:
                 elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
             )
 
+            # ── PageRank tiebreak — low-confidence retrieval only ──────────
+            # Deliberately narrow: fires only when the top chunk's final_score
+            # is weak (no confident text/GNN winner), and only nudges the
+            # ranking with a small additive weight. Global entity importance
+            # anti-correlates with correctness on precise lookups (e.g. exact
+            # document IDs), so this must never override a confident signal —
+            # see tasks/lessons.md for why this is scoped this narrowly.
+            if (
+                cfg.get("pagerank_tiebreak_enabled", True)
+                and all_chunks
+                and all_chunks[0].get("final_score", 0) < cfg.get("pagerank_tiebreak_threshold", 0.4)
+            ):
+                top_n = min(len(all_chunks), cfg.get("rerank_top_k", 5))
+                candidates = all_chunks[:top_n]
+                candidate_ids = {c["chunk_id"] for c in candidates}
+                candidate_entity_names = list({
+                    r["entity_name"] for r in chunk_entities
+                    if r["chunk_id"] in candidate_ids
+                })
+                pagerank_by_name = await self._neo4j.get_pagerank_by_entity_names(
+                    candidate_entity_names, tenant=tenant
+                )
+                if pagerank_by_name:
+                    max_pr = max(pagerank_by_name.values())
+                    chunk_to_entities: dict[str, list[str]] = {}
+                    for r in chunk_entities:
+                        if r["chunk_id"] in candidate_ids:
+                            chunk_to_entities.setdefault(r["chunk_id"], []).append(r["entity_name"])
+
+                    weight = cfg.get("pagerank_tiebreak_weight", 0.15)
+                    before_order = [c["chunk_id"] for c in candidates]
+                    for c in candidates:
+                        names = chunk_to_entities.get(c["chunk_id"], [])
+                        # Normalise to [0, 1] within this candidate set — raw
+                        # PageRank scores are tiny (~1/N-scale) and not
+                        # comparable to final_score's range on their own.
+                        pr = max((pagerank_by_name.get(n, 0.0) for n in names), default=0.0)
+                        pr_norm = (pr / max_pr) if max_pr > 0 else 0.0
+                        c["final_score"] = c.get("final_score", 0.0) + weight * pr_norm
+                    candidates.sort(key=lambda c: c["final_score"], reverse=True)
+                    all_chunks[:top_n] = candidates
+                    after_order = [c["chunk_id"] for c in candidates]
+
+                    log.info(
+                        "local_search.pagerank_tiebreak.applied",
+                        candidates=len(candidates),
+                        scored_entities=len(pagerank_by_name),
+                        reordered=before_order != after_order,
+                    )
+                else:
+                    log.info(
+                        "local_search.pagerank_tiebreak.skipped",
+                        reason="no_pagerank_data_for_candidates",
+                    )
+
         # Attach source document filenames so the LLM can attribute claims to
         # a specific document/revision — needed for cross-document questions
         # (e.g. "which revision of X is referenced in Y, and is it current?")

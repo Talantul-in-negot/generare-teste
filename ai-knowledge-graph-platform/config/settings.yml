@@ -84,6 +84,18 @@ retrieval:
   gnn_edge_confidence_threshold: 0.7  # drop RELATES_TO edges below this confidence
   gnn_confidence_half_life_days: 180  # edge confidence decay half-life; 0 = no decay
   gnn_adaptive_weights: true          # relational queries use 0.5/0.5, factoid uses alpha/beta
+  # ── PageRank tiebreak (low-confidence retrieval only) ─────────────────────
+  pagerank_tiebreak_enabled: true     # only fires when the top-ranked chunk's final_score
+                                       # is below pagerank_tiebreak_threshold — i.e. no
+                                       # confident winner from text/GNN scoring alone.
+                                       # Deliberately NOT a general relevance boost — global
+                                       # entity importance anti-correlates with correctness on
+                                       # precise lookups (e.g. exact document IDs), so this only
+                                       # engages as a fallback tiebreaker, never overriding a
+                                       # confident text/GNN signal. See tasks/lessons.md.
+  pagerank_tiebreak_threshold: 0.4    # top chunk's final_score must be below this to trigger
+  pagerank_tiebreak_weight: 0.15      # small additive weight — a nudge among near-ties, not
+                                       # a dominant term
   # ── Authority-weighted retrieval ─────────────────────────────────────────────
   authority_weighting_enabled: true   # adjust edge confidence by source doc authority
   # ── Conflict-aware answering ──────────────────────────────────────────────

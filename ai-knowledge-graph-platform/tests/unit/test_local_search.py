@@ -57,6 +57,7 @@ def _make_local_search(cfg_overrides: dict | None = None) -> LocalSearch:
         "gnn_adaptive_weights": False,
         "authority_weighting_enabled": False,
         "session_context_enabled": False,
+        "pagerank_tiebreak_enabled": False,
     }
     if cfg_overrides:
         base_cfg.update(cfg_overrides)
@@ -80,6 +81,7 @@ def _make_local_search(cfg_overrides: dict | None = None) -> LocalSearch:
         ls._cfg = base_cfg
         ls._neo4j = AsyncMock()
         ls._neo4j.get_chunk_filenames = AsyncMock(return_value={})
+        ls._neo4j.get_pagerank_by_entity_names = AsyncMock(return_value={})
         ls._embedder = AsyncMock()
         ls._bm25 = AsyncMock()
         ls._reranker = AsyncMock()
@@ -175,6 +177,91 @@ class TestLocalSearchPipelineFlags:
 
         await ls.search("test question")
         ls._gnn.score.assert_not_called()
+
+    async def test_pagerank_tiebreak_disabled_skips_lookup(self):
+        """Default test cfg has pagerank_tiebreak_enabled=False — must never
+        call get_pagerank_by_entity_names, even with a low-confidence top chunk."""
+        ls = _make_local_search()
+        ls._embedder.embed_text = AsyncMock(return_value=[0.1] * 768)
+        ls._neo4j.vector_search_chunks = AsyncMock(return_value=[_chunk("c1")])
+        ls._bm25.search = AsyncMock(return_value=[_chunk("c1")])
+        ls._reranker.rerank = AsyncMock(return_value=[_chunk("c1")])
+        ls._neo4j.get_multihop_chunks = AsyncMock(return_value=[])
+        ls._neo4j.get_chunk_entity_embeddings = AsyncMock(return_value=[])
+        ls._neo4j.get_entity_relations_subgraph = AsyncMock(return_value=[])
+        ls._neo4j.get_entity_neighbors = AsyncMock(return_value=[])
+        low_confidence_chunk = {**_chunk("c1"), "final_score": 0.1}
+        ls._gnn.score = MagicMock(return_value=[low_confidence_chunk])
+
+        await ls.search("test question")
+        ls._neo4j.get_pagerank_by_entity_names.assert_not_called()
+
+    async def test_pagerank_tiebreak_skipped_when_top_chunk_confident(self):
+        """A confident top chunk (final_score above threshold) must never
+        trigger the pagerank lookup — this is a fallback tiebreak, not a
+        general boost."""
+        ls = _make_local_search({"pagerank_tiebreak_enabled": True, "pagerank_tiebreak_threshold": 0.4})
+        ls._embedder.embed_text = AsyncMock(return_value=[0.1] * 768)
+        ls._neo4j.vector_search_chunks = AsyncMock(return_value=[_chunk("c1")])
+        ls._bm25.search = AsyncMock(return_value=[_chunk("c1")])
+        ls._reranker.rerank = AsyncMock(return_value=[_chunk("c1")])
+        ls._neo4j.get_multihop_chunks = AsyncMock(return_value=[])
+        ls._neo4j.get_chunk_entity_embeddings = AsyncMock(return_value=[])
+        ls._neo4j.get_entity_relations_subgraph = AsyncMock(return_value=[])
+        ls._neo4j.get_entity_neighbors = AsyncMock(return_value=[])
+        confident_chunk = {**_chunk("c1"), "final_score": 0.9}
+        ls._gnn.score = MagicMock(return_value=[confident_chunk])
+
+        await ls.search("test question")
+        ls._neo4j.get_pagerank_by_entity_names.assert_not_called()
+
+    async def test_pagerank_tiebreak_reorders_low_confidence_candidates(self):
+        """A weak top-score result set, with pagerank data differentiating the
+        candidates, must be re-sorted so the higher-pagerank entity's chunk
+        ranks first."""
+        ls = _make_local_search({"pagerank_tiebreak_enabled": True, "pagerank_tiebreak_threshold": 0.4})
+        ls._embedder.embed_text = AsyncMock(return_value=[0.1] * 768)
+        ls._neo4j.vector_search_chunks = AsyncMock(return_value=[_chunk("c1"), _chunk("c2")])
+        ls._bm25.search = AsyncMock(return_value=[_chunk("c1"), _chunk("c2")])
+        ls._reranker.rerank = AsyncMock(return_value=[_chunk("c1"), _chunk("c2")])
+        ls._neo4j.get_multihop_chunks = AsyncMock(return_value=[])
+        ls._neo4j.get_chunk_entity_embeddings = AsyncMock(return_value=[
+            {"chunk_id": "c1", "entity_name": "MinorEntity", "entity_type": "ORG"},
+            {"chunk_id": "c2", "entity_name": "MajorEntity", "entity_type": "ORG"},
+        ])
+        ls._neo4j.get_entity_relations_subgraph = AsyncMock(return_value=[])
+        ls._neo4j.get_entity_neighbors = AsyncMock(return_value=[])
+        # Near-tied, both below the 0.4 threshold — a genuine low-confidence case.
+        weak_c1 = {**_chunk("c1"), "final_score": 0.30}
+        weak_c2 = {**_chunk("c2"), "final_score": 0.28}
+        ls._gnn.score = MagicMock(return_value=[weak_c1, weak_c2])
+        ls._neo4j.get_pagerank_by_entity_names = AsyncMock(
+            return_value={"MinorEntity": 0.001, "MajorEntity": 0.05}
+        )
+
+        result = await ls.search("test question")
+        assert result["chunks"][0]["chunk_id"] == "c2"  # MajorEntity's chunk now leads
+
+    async def test_pagerank_tiebreak_no_data_does_not_crash(self):
+        """No pagerank scored for any candidate entity — must fall through
+        cleanly with no reordering and no exception."""
+        ls = _make_local_search({"pagerank_tiebreak_enabled": True, "pagerank_tiebreak_threshold": 0.4})
+        ls._embedder.embed_text = AsyncMock(return_value=[0.1] * 768)
+        ls._neo4j.vector_search_chunks = AsyncMock(return_value=[_chunk("c1")])
+        ls._bm25.search = AsyncMock(return_value=[_chunk("c1")])
+        ls._reranker.rerank = AsyncMock(return_value=[_chunk("c1")])
+        ls._neo4j.get_multihop_chunks = AsyncMock(return_value=[])
+        ls._neo4j.get_chunk_entity_embeddings = AsyncMock(return_value=[
+            {"chunk_id": "c1", "entity_name": "SomeEntity", "entity_type": "ORG"},
+        ])
+        ls._neo4j.get_entity_relations_subgraph = AsyncMock(return_value=[])
+        ls._neo4j.get_entity_neighbors = AsyncMock(return_value=[])
+        low_confidence_chunk = {**_chunk("c1"), "final_score": 0.1}
+        ls._gnn.score = MagicMock(return_value=[low_confidence_chunk])
+        ls._neo4j.get_pagerank_by_entity_names = AsyncMock(return_value={})  # nothing scored
+
+        result = await ls.search("test question")
+        assert result["chunks"][0]["chunk_id"] == "c1"
 
     async def test_multihop_chunks_deduped_from_seed(self):
         """Multihop chunks already in seed set must not be added twice."""

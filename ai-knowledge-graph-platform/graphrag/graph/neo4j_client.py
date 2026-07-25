@@ -947,6 +947,32 @@ class Neo4jClient:
             top_k=top_k,
         )
 
+    async def get_pagerank_by_entity_names(
+        self, entity_names: list[str], tenant: str = "default"
+    ) -> dict[str, float]:
+        """Return {entity_name: pagerank} for the given names, tenant-scoped.
+
+        Used only by the low-confidence-retrieval PageRank tiebreak (see
+        local_search.py) — a small, targeted lookup fired on a rare path, not
+        part of the per-query hot path. Entities with no computed pagerank
+        (coverage is currently partial/stale across tenants — see
+        tasks/lessons.md) are simply absent from the returned dict; callers
+        must treat a missing key as "no signal," not zero.
+        """
+        if not entity_names:
+            return {}
+        rows = await self.run(
+            """
+            UNWIND $names AS name
+            MATCH (e:Entity {name: name, tenant: $tenant})
+            WHERE e.pagerank IS NOT NULL
+            RETURN e.name AS name, e.pagerank AS score
+            """,
+            names=entity_names,
+            tenant=tenant,
+        )
+        return {r["name"]: float(r["score"]) for r in rows}
+
 
 _client: Neo4jClient | None = None
 
