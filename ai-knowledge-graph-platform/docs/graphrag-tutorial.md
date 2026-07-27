@@ -214,31 +214,74 @@ The "automated ETL ingestion pipelines" requirement, end to end:
 
 ```
 raw docs → chunker → LLM extractor → validation → entity resolution
-        → Neo4j writer (batched) → inference engine → contradiction scan
-        → community rebuild
+        → Neo4j writer (batched, natural-key MERGE) → inference engine
+        → contradiction scan → community rebuild → PageRank recompute
 ```
 
 1. **Chunking** — `graphrag/ingestion/chunker.py`, heading-aware section
    splitting (512 tokens, 64 overlap), so table rows keep their section
    headings for embedding quality.
-2. **Extraction** — Groq LLM produces entities + relations as JSON with
+2. **Extraction** — DeepSeek by default (`get_llm()`; Groq is opt-in via
+   `LLM_INGEST_PROVIDER=groq`, and always the fast-routing model for
+   agentic retrieval) produces entities + relations as JSON with
    per-relation confidence; clamped and schema-validated in
    `extractor.py`.
 3. **Ontology validation** — domain/range check per triplet.
 4. **Entity resolution** — 4-stage alias pipeline: exact → normalized →
    embedding similarity → human review queue (`alias_registry.py`).
-5. **Batched graph writes** — `UNWIND`-batched entity embeddings and chunk
-   writes (A131–A132 performance work).
+5. **Batched graph writes** — natural-key `MERGE` on `(tenant, filename)`
+   for documents and `(document_id, chunk_index)` for chunks — re-ingesting
+   the same file updates the existing nodes instead of duplicating them
+   (A136). `UNWIND`-batched entity embeddings and chunk writes (A131–A132
+   performance work).
 6. **Bayesian confidence merge** — same relation from two independent docs:
    `fused = 1 − (1−c₁)(1−c₂)` (ADR-0003). Two 0.8s fuse to 0.96, not
    average to 0.8.
-7. **Post-ingestion jobs** — scoped inference, contradiction scan (5
-   contradiction types), community rebuild.
+7. **Post-ingestion jobs** (`GraphWriter.validate_and_check_cycles`) —
+   scoped validation, cycle detection (whole-graph, deferred during bulk
+   ingestion), auto-quarantine, contradiction scan (4 types — see 6.4),
+   community rebuild, PageRank recompute — the last two use a cheap
+   count-based staleness check first and only pay the expensive full-graph
+   cost when actually triggered (A139).
 8. **Async orchestration** — RabbitMQ queues with dead-letter queues;
    idempotent re-runs via checkpoint (resume without `--wipe`).
 
 Run: `py -3.11 scripts/ingest_corpus.py --commit` (add `--wipe` only for a
 full rebuild).
+
+### 5.1 Worked example — ingesting, then re-ingesting the same document
+
+Fake data, tenant `aerospace`:
+
+**First ingestion of `AD-2024-99.txt`**:
+```
+chunk_0: "AD-2024-99 requires Boeing to inspect the tail fin bracket
+          every 500 flight hours."
+→ entities: Boeing (ORG), tail fin bracket (PART)
+→ relation: (AD-2024-99) -REQUIRES_INSPECTION_OF-> (tail fin bracket),
+            confidence=0.85
+```
+`MERGE (d:Document {tenant:"aerospace", filename:"AD-2024-99.txt"})` — no
+match, `ON CREATE` fires, new `Document` + `Chunk` + `Entity` + `RELATES_TO`
+nodes created.
+
+**Same file re-ingested later** (source text unchanged, or a revised PDF
+with the same filename):
+```
+MERGE (d:Document {tenant:"aerospace", filename:"AD-2024-99.txt"})
+→ matches the existing node → canonical_id = the original id
+→ is_reingest = True (canonical_id != the fresh id this run generated)
+
+MERGE (r:RELATES_TO {relation:"REQUIRES_INSPECTION_OF"})
+→ old confidence 0.85, new confidence 0.85 (same source re-asserting)
+→ merged: 1 - (1-0.85)(1-0.85) = 0.9775   ← boosted, not just refreshed
+→ r.extracted_at reset to now (decay clock restarts)
+```
+Post-ingestion jobs: community rebuild is **skipped** (entity/edge counts
+unchanged, no growth drift) — but PageRank recomputes anyway because
+`is_reingest=True` forces it regardless of drift, since the confidence
+boost above changed PageRank's weighted inputs with zero change to
+entity/edge count (A139).
 
 ---
 
@@ -253,7 +296,7 @@ Six stages, each addressing a failure mode of the previous:
 | 3. RRF fusion + cross-encoder rerank | `ms-marco-MiniLM-L-6-v2` | precision on the fused pool |
 | 4. Multi-hop traversal | 2-hop entity walk with confidence decay | facts no single chunk contains |
 | 5. GNN re-scoring | GCN/GAT over the query subgraph | structural relevance |
-| 6. LLM synthesis | Groq, with cited chunks + graph facts | grounded, auditable answer |
+| 6. LLM synthesis | DeepSeek by default (Groq fallback), cited chunks + graph facts + open-conflict warnings | grounded, auditable answer |
 
 Fallbacks: **agentic retrieval** (IRCoT — retrieve→reason→retrieve, max 4
 steps) when confidence is low; **global search** (map-reduce over community
@@ -328,6 +371,70 @@ the graph feeds the GNN adjacency + node features, the entity-resolution
 embedding comparisons, TransE link prediction, and the retrieval context
 itself — the KG is a feature store for every model in the loop.
 
+### 6.3 Worked example — a query end to end
+
+Question: *"Which document currently governs engine mount inspection for
+the Boeing 737 MAX?"*, tenant `aerospace`.
+
+1. **Vector ANN + BM25** — pulls chunks mentioning "engine mount
+   inspection," "737 MAX," and specific AD numbers; RRF-fused into one
+   ranked list.
+2. **Cross-encoder rerank** — re-scores the fused pool against the literal
+   question text; top 5 chunks become the seed set.
+3. **Multi-hop traversal** — from the seed chunks' entities (`737 MAX
+   engine mount`, `AD-2022-03-07`, `AD-2024-01-02`), walks `SUPERSEDES`
+   edges 2 hops out — finds `AD-2024-01-02` supersedes `AD-2022-03-07`,
+   which partially supersedes `AD-2020-05-11`.
+4. **GNN re-scoring** — blends text relevance with structural position;
+   `AD-2024-01-02` (the current, non-superseded directive) scores highest.
+5. **Conflict check** — `HybridRetriever` looks up open conflicts for the
+   retrieved entities; none found here, so no warning is added to context.
+6. **LLM synthesis** — answer: *"FAA-AD-2024-01-02 currently governs it —
+   it supersedes AD-2022-03-07, which itself partially superseded
+   AD-2020-05-11."* Citations: `[FAA-AD-2024-01-02, FAA-AD-2022-03-07]`.
+
+If step 5 *had* found an open conflict on one of these entities (e.g. two
+docs disagreeing on which directive is current), the context would include
+`"⚠ Unresolved conflicts: ..."` and the LLM would be instructed to state
+the disagreement rather than pick a directive silently — see 6.4.
+
+### 6.4 Conflict detection and resolution workflow
+
+Detected automatically during ingestion (`ContradictionDetector.scan()`,
+step 7 in Part 5); resolved manually — nothing auto-resolves today.
+
+**4 detection types, each with a fake-data example**:
+
+| Type | Example |
+|---|---|
+| `directional_reversal` | Doc A: `(Boeing) -OWNS-> (Spirit AeroSystems)`. Doc B: the reverse. |
+| `exclusive_state` | `(tail fin bracket)` is `"active"` per Doc A, `"deprecated"` per Doc B. |
+| `functional_violation` | `(AD-2024-99) -MANUFACTURER-> (Boeing)` per Doc A, `-> (Airbus)` per Doc B — single-valued relation, two targets. |
+| `positive_negative_pair` | Doc A: `(G-ABCD) -COMPLIES_WITH-> (AD-2024-99)`. Doc B: `(G-ABCD) -NOT_COMPLIES_WITH-> (AD-2024-99)`. |
+
+**Not a conflict**: the same triple reported identically by two docs is
+corroboration (`independent_source_count`), not a contradiction — this
+distinction is why the retired `multi_source` strategy was wrong (A135).
+
+**Workflow once detected**:
+1. A `Conflict` node is created — `{status:"open", conflict_type, src, tgt,
+   relation, sources, detected_at}`. Both conflicting facts stay in the
+   graph untouched.
+2. **Retrieval-side warning**: any query touching either entity gets a
+   `"⚠ Unresolved conflicts:"` section appended to the LLM's context (see
+   6.3, step 5) — the LLM is instructed to state the disagreement, not
+   pick a side.
+3. **Human resolution** — via the dashboard's Conflicts tab or
+   `POST /corrections/conflict/resolve`, a person marks it:
+   - `resolved_authority` — picked because one source has higher
+     `authority_level` (a human decision informed by that field, not an
+     automatic lookup — nothing currently auto-resolves by authority).
+   - `resolved_manual` — a judgment call with no clean authority tiebreaker.
+   - `false_positive` — dismissed as not a real contradiction.
+4. Until resolved, visible via `GET /corrections/conflicts` and counted in
+   `conflict_rate()` (open conflicts ÷ total edges) — a tracked graph
+   quality metric.
+
 ---
 
 ## Part 7 — Evaluation & Observability
@@ -364,6 +471,90 @@ itself — the KG is a feature store for every model in the loop.
   pipeline, write results to Redis.
 - Clean separation: API never touches Neo4j for queries — everything goes
   through the worker, so retrieval load can scale independently.
+
+### 8.1 Cross-process result flow — worker writes, API polls
+
+`ResultStore` (`graphrag/retrieval/result_store.py`) exists because the API
+and the worker are **separate containers** — a module-level dict in the
+worker's memory is invisible to the API process. Redis is the only thing
+both sides can see.
+
+1. API receives `POST /query` → publishes to RabbitMQ → immediately writes
+   `{"status": "processing", "query_id": ...}` to Redis and returns
+   `query_id` to the client.
+2. Worker picks up the message, runs the 6-stage retrieval pipeline. After
+   each stage it calls `push_progress(query_id, step)` — this does a
+   Redis `GET` (read current entry), appends the step name to a `steps`
+   list, `SET`s it back. This is what feeds the chain-of-thought trace in
+   the `/demo` UI.
+3. **Client polls `GET /query/{id}` at any point**, including mid-processing.
+   There's no lock, no "in progress" error — the client just gets whatever
+   was last written: `{"status": "processing", "steps": [...]}` (partial)
+   or `{"status": "completed", "answer": ..., "steps": [...]}` (final).
+4. Worker finishes → `set(query_id, {"status": "completed", "answer": ...,
+   "steps": prior_steps})`, preserving the steps accumulated during
+   processing so the trace stays intact through the final read.
+
+**Failure mode is asymmetric with the other Redis consumers in this
+codebase.** Session store, query cache, alias registry, and the alert log
+all fall back to an in-memory structure when Redis is unreachable — the
+request degrades (slower, or not shared across workers) but still
+completes. `ResultStore` can't do that: the worker's memory and the API's
+memory are different processes, so a memory fallback would just mean the
+API never sees what the worker wrote. Instead, `set()`/`get()` log at **ERROR** level — not WARNING, unlike every
+other Redis consumer in §8.2 — and return without touching a local dict.
+The ERROR level is deliberate (see the comment at
+`result_store.py:104-109`): a WARNING would suggest "degraded but fine,"
+but here the result is genuinely gone. `set()` after a mid-write failure
+means the client polling `GET /query/{id}` gets `None` (looks like "not
+found") and eventually times out; `get()` after a mid-read failure returns
+`None` even if the worker's `set()` actually succeeded moments earlier.
+This is the one Redis consumer where a Redis outage produces a lost query
+rather than a degraded one.
+
+### 8.2 The other five Redis consumers — short before/after workflows
+
+Every other Redis usage in this codebase follows the same shape: read
+before the operation, write after, fall back to an in-memory structure on
+Redis failure. Concrete examples:
+
+| Consumer | Before | Redis op | After |
+|---|---|---|---|
+| **Session store** (`session_store.py`) | new message arrives in an existing conversation | `RPUSH graphrag:session:<id> turn_json` | next message in the session does `LRANGE` to rebuild history for the LLM prompt |
+| **Query cache** (`query_cache.py`) | new question comes in, cache key computed from `(query, tenant, session_id)` | `GET key` → hit: skip LLM entirely; miss: run retrieval, then `SETEX key ttl answer_json` | same question asked again → served from cache; if a cited document changes, its provenance set is invalidated so the cached entry is dropped |
+| **Alias registry** (`alias_registry.py`) | an ingestion batch finishes, new aliases exist (e.g. "Boeing" → "The Boeing Company") | `HSET graphrag:aliases:<tenant> alias "name\|type"`, `EXPIRE 86400` | a different worker sees "Boeing" in a query → resolves via Redis `HGET` instead of a Neo4j round-trip |
+| **Alerts** (`alerts.py`) | a monitoring check fires (e.g. LLM provider unhealthy) | `LPUSH graphrag:alerts:recent alert_json`, `LTRIM 0 ALERT_HISTORY-1` | dashboard reads the list to show recent alerts, capped history |
+| **Rate limiter** (`api/limiter.py`) | `POST /query` request arrives from a client | `slowapi` checks/increments the per-IP counter against `60/minute` | over limit → `429` immediately, no Neo4j/LLM touched; under limit → request proceeds |
+
+Failure behavior confirmed by reading each module's except-path: all five
+catch the Redis exception, log a warning, and continue on
+`self._memory`/local `deque` — the request still completes, just without
+cross-worker sharing or persistence. This is the audited pattern from the
+Redis-failure-mode pass earlier in the project (health-check gating +
+split-brain elimination) — `ResultStore` (§8.1) is the deliberate
+exception, not an oversight.
+
+**RabbitMQ's failure mode is not the same shape.** It isn't a cache with a
+memory substitute — it *is* the cross-process transport, so there's
+nothing to fall back to. Instead (`graphrag/messaging/rabbitmq_client.py`):
+connection loss is handled by `aio_pika.connect_robust`, which
+auto-reconnects in the background. A handler exception on an individual
+message doesn't touch the connection at all — it's retried with
+exponential backoff (1s, 2s, 4s… capped at 30s, up to `MAX_RETRIES = 3`),
+and after that sent to a per-queue dead-letter queue (`<queue>.dlq`) with a
+structured envelope (`exception_type`, `error`, `retry_count`,
+`payload_summary`) so ops can triage without parsing raw headers — the
+original message is `ack()`'d either way so it doesn't block the queue.
+
+### 8.3 RabbitMQ workflows — short before/after examples
+
+| Flow | Before | RabbitMQ op | After |
+|---|---|---|---|
+| **Ingest** (`IngestionConsumer`) | document uploaded via API | publish `IngestMessage` to `INGEST_EXCHANGE`/`INGEST_QUEUE` | worker's `handle()` picks it up, runs `IngestionAgent.run(msg)` — this is the entry point into the whole ingestion pipeline (Part 5) |
+| **Query** (`QueryConsumer`) | `POST /query` from client | publish `QueryMessage`; API writes `{"status": "processing"}` to Redis and returns `query_id` | worker checks `QueryCache` first (cache hit → skip all 6 retrieval stages, write cached answer straight to `ResultStore`); miss → runs `QueryAgent.run(msg)`, caches the result, writes final answer to `ResultStore` |
+| **Eval sampling** (`EvaluationConsumer`) | a query result just completed | `QueryConsumer` publishes an `EvalJob` for ~20% of queries (`eval_sample_rate`) — async, doesn't block the client's answer | `EvaluationConsumer` picks it up, runs RAGAS scoring (faithfulness, relevancy, etc.) against the sampled query |
+| **Handler failure, any consumer** | e.g. `IngestionAgent.run()` raises (Neo4j timeout, malformed LLM output) | message headers get `x-retry-count` incremented, republished after backoff (1s → 2s → 4s, cap 30s) | after 3 failed retries, message → `<queue>.dlq` with a structured envelope (`exception_type`, `error`, `payload_summary`) for manual triage; original message acked either way so the queue isn't blocked |
+| **Connection drop** (any consumer) | RabbitMQ container restarts or network blip | `aio_pika.connect_robust` detects the drop | connection and channels are re-established automatically in the background — consumers resume without code intervention, no manual reconnect logic needed |
 
 ---
 
