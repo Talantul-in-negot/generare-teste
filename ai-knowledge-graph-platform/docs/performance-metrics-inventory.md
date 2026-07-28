@@ -434,6 +434,13 @@ The system emits alerts when metrics fall outside healthy ranges:
    Agentic path adds 1–2 reasoning steps at 0.2s each (llama-3.1-8b-instant) before the
    final 70B synthesis call. The bottleneck is always the LLM synthesis step."
 
+   **Don't round this down to "retrieval is under a second" or cite a rounder public
+   figure (e.g. a "~700ms" line from a LinkedIn post) as if it matches this table.**
+   Retrieval sums to **~1.0s average** (0.5+0.2+0.2+0.1), not comfortably under a
+   second — synthesis at ~1.4s is still the larger piece (~58% of the 2.4s average),
+   which is the load-bearing claim, but state the retrieval number as ~1.0s, not a
+   looser rounded figure pulled from marketing copy.
+
 ---
 
 ## Next steps to instrument further
