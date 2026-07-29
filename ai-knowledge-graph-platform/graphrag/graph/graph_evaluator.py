@@ -259,6 +259,65 @@ class GraphEvaluator:
             "community_count":         r.get("community_count", 0),
         }
 
+    async def community_modularity(self, tenant: str = "default") -> dict:
+        """
+        Standard graph-theoretic modularity (Newman-Girvan), computed via
+        NetworkX, as an independent cross-check on ``community_coherence``.
+
+        ``community_coherence`` is a hand-rolled ratio (intra-community edges
+        / total edges, averaged per community) computed entirely in Cypher.
+        Modularity is a different, standard formula — it compares actual
+        intra-community edge density against the density *expected* under a
+        random graph with the same degree distribution, so a community that
+        looks coherent by the simple ratio can still score low modularity if
+        its members are high-degree hubs that would rack up "intra" edges by
+        chance alone. Neo4j GDS doesn't expose this formula directly, and the
+        subgraphs here (hundreds to low thousands of entities per tenant) are
+        well within NetworkX's comfortable range — no reason to reimplement
+        modularity by hand in Cypher when a maintained, correct
+        implementation already exists.
+
+        Returns ``{}`` if there are fewer than 2 communities (modularity is
+        undefined for a single partition).
+        """
+        rows = await self._neo4j.run(
+            """
+            MATCH (e:Entity)-[:MEMBER_OF]->(c:Community)
+            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            OPTIONAL MATCH (e)-[r:RELATES_TO]->(t:Entity)
+            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            RETURN e.name AS source, c.id AS community_id,
+                   collect(DISTINCT t.name) AS targets
+            """,
+            tenant=tenant,
+        )
+        if not rows:
+            return {}
+
+        import networkx as nx
+
+        graph = nx.Graph()
+        communities: dict[str, set[str]] = {}
+        for row in rows:
+            source = row["source"]
+            graph.add_node(source)
+            communities.setdefault(row["community_id"], set()).add(source)
+            for target in row.get("targets") or []:
+                if target:
+                    graph.add_edge(source, target)
+
+        partition = [members for members in communities.values() if members]
+        if len(partition) < 2 or graph.number_of_edges() == 0:
+            return {}
+
+        score = nx.algorithms.community.quality.modularity(graph, partition)
+        log.info("graph_evaluator.community_modularity", tenant=tenant,
+                  modularity=round(score, 4), community_count=len(partition))
+        return {
+            "modularity":      round(score, 4),
+            "community_count": len(partition),
+        }
+
     # ── Full report ────────────────────────────────────────────────────────────
 
     async def full_report(self, tenant: str = "default") -> dict:
@@ -269,6 +328,7 @@ class GraphEvaluator:
         orphans       = await self.orphan_growth_rate(tenant)
         merge_proxy   = await self.merge_split_error_proxy(tenant)
         coherence     = await self.community_coherence(tenant)
+        modularity    = await self.community_modularity(tenant)
 
         report = {
             "tenant":               tenant,
@@ -278,6 +338,7 @@ class GraphEvaluator:
             "orphan_growth":        orphans,
             "merge_split_proxy":    merge_proxy,
             "community_coherence":  coherence,
+            "community_modularity": modularity,
         }
 
         log.info("graph_evaluator.full_report", tenant=tenant, **{
@@ -286,6 +347,7 @@ class GraphEvaluator:
             "conflicts_per_1k":    contradiction.get("conflicts_per_1k_edges"),
             "orphan_rate":         orphans.get("orphan_rate"),
             "community_coherence": coherence.get("avg_community_coherence"),
+            "community_modularity": modularity.get("modularity"),
         })
         return report
 

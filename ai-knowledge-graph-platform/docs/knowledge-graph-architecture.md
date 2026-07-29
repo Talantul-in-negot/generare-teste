@@ -191,6 +191,44 @@ The export maps:
 This allows the ontology to be consumed by Protégé, reasoners (HermiT, Pellet),
 and SPARQL endpoints without requiring a full migration to a triple store.
 
+**Confidence and provenance are reified, not just attached.** Every exported
+edge with a confidence score or source document is wrapped in an `owl:Axiom`
+(`export_rdf.py`) carrying `owl:annotatedSource` / `annotatedProperty` /
+`annotatedTarget` plus `:confidence` (`xsd:float`) and `:sourceDoc`
+annotations — the standard OWL pattern for making statements *about*
+statements, matching the reification already used internally (§7).
+
+**SHACL validation is real and CI-verified, not just present.** `shacl_validator.py`
+defines actual `sh:NodeShape` shapes (every entity needs an `rdfs:label` and a
+domain type; every `owl:Axiom` needs a complete source/property/target triple;
+confidence must be `xsd:float` in `[0,1]`) and runs them via `pyshacl.validate()`.
+`tests/unit/test_export_rdf.py::TestExportProducesConformantGraph` asserts the
+*real* `export()` pipeline output — not just hand-built test graphs — conforms,
+which runs in `pytest tests/unit/` on every push (`.github/workflows/ci.yml`).
+A change that breaks the export's shape guarantees fails CI, not just a manual
+`--validate` run.
+
+**Community structure gets an independent, standard cross-check.**
+`graph_evaluator.py`'s `community_coherence()` is a hand-rolled intra-community
+edge-density ratio computed in Cypher. `community_modularity()` computes
+standard Newman-Girvan modularity via **NetworkX** on the same subgraph —
+a different formula (it accounts for expected edge density under a random
+graph with the same degree distribution, not just raw intra/total edges),
+so a community that looks coherent by the simple ratio can still score low
+modularity if it's dominated by high-degree hub entities.
+
+**SPARQL is real and network-exposed, but bounded — precise framing
+matters here.** `POST /kg/sparql` (`api/routes/kg/knowledge.py`) runs real
+SPARQL 1.1 SELECT queries (`SPARQLBridge`, `graphrag/graph/sparql_bridge.py`,
+wrapping rdflib's built-in engine) against the last Turtle export on disk.
+This is a genuine, tested, callable SPARQL capability — not a stub. What it
+is *not*: a persistent triple-store service (no GraphDB/Stardog/Virtuoso),
+and not live against current graph state — it queries a snapshot file that
+only updates when `export_rdf.py` is re-run, so it can be stale relative to
+Neo4j. The live, continuously-updated system is Neo4j as a labeled property
+graph; RDF/OWL/SHACL/SPARQL is a real, tested interoperability layer
+exported from it, not a second production database running in parallel.
+
 ---
 
 ## 9. LLM Routing — DeepSeek for Generation, Groq for Fast Routing, OpenAI for Embeddings
@@ -310,7 +348,7 @@ graphrag/graph/
 ├── alias_registry.py       — 4-stage entity resolution, per-tenant pool
 ├── bitemporal.py           — valid time + transaction time queries
 ├── inference_engine.py     — Datalog forward-chaining rules
-├── contradiction_detector.py  — 5 conflict types, resolution workflow
+├── contradiction_detector.py  — 4 conflict types, resolution workflow (multi_source retired 2026-07-24, see A135)
 ├── contradiction_strategies.py — detection method implementations (mixin)
 ├── negative_knowledge.py   — NEGATIVE_RELATES_TO edges
 ├── reification.py          — Statement nodes for meta-assertions
@@ -321,5 +359,38 @@ graphrag/graph/
 ├── incremental_community.py — changed-entity-only community rebuild
 ├── confidence_calibration.py — Brier score, isotonic correction curves
 ├── graph_snapshots.py      — before/after snapshot diffing
+├── pagerank.py             — GDS centrality + staleness-triggered recompute (see §12)
+├── gnn_scorer.py           — GCN/GAT retrieval re-scoring (see §12)
 └── edge_embeddings.py      — TransE triple embeddings, link prediction
 ```
+
+## 12. Retrieval Scoring — GNN and PageRank, and why they're not combined
+
+Two structural-signal mechanisms exist in retrieval, deliberately kept
+separate rather than merged, after investigating whether they should be
+(see `tasks/lessons.md` A139 for the full reasoning):
+
+**GNN scoring** (`graphrag/graph/gnn_scorer.py`) — query-scoped, recomputed
+fresh on every query, never persisted. Runs 2 layers of GCN or GAT
+message-passing over the ~50 entities relevant to *this* query's retrieved
+chunks, blending the result with cross-encoder/text score into
+`final_score`. Hub-dampening penalizes high-fan-out entities using
+graph-level `degree` (not PageRank — degree directly measures the dilution
+risk dampening exists to suppress; PageRank measures something else).
+
+**PageRank** (`graphrag/graph/pagerank.py`) — corpus-wide, computed once per
+tenant via Neo4j GDS, persisted onto `Entity.pagerank`, recomputed only when
+`GraphWriter._maybe_recompute_pagerank()` detects staleness after an
+ingestion (growth drift, document re-ingestion, or a decay-conditional time
+ceiling — see A139). Consumed only as a narrow low-confidence-retrieval
+tiebreak in `local_search.py`, never as a general relevance boost: global
+importance anti-correlates with correctness on precise lookups (a specific
+document ID is rarely the corpus's most central entity), so it only nudges
+rankings when neither text nor GNN scoring produced a confident result.
+
+**Why not wired together**: GNN's own message-passing already partially
+captures "nearness to structurally important entities" through ordinary
+2-hop aggregation — explicitly injecting PageRank into GNN's attention
+weights would risk double-counting that signal, on top of touching tested
+propagation math for an uncertain gain. Kept as two independent,
+interpretable signals instead.
