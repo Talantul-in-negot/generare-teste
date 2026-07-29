@@ -5042,3 +5042,71 @@ attributed numbers instead of inferring from HTTP log correlation.
 Tracked on `docs/roadmap.md`: `chunk_entities_edges` root-cause and the
 p95 correction are both now top-priority items, replacing the old
 (wrong) "LLM synthesis investigation" entry.
+
+---
+
+## A143 — `chunk_entities_edges`'s real cause: Bolt deserialization of 3072-dim embeddings, not the query plan — fixed with an entity-keyed cache
+
+**What happened:**
+A142 isolated `chunk_entities_edges` (4.4-5.3s) as the platform's largest
+reproducible non-LLM latency cost but didn't root-cause it. First
+hypothesis — a non-sargable filter in `get_entity_relations_subgraph`
+(`WHERE (t.name + ':' + t.type) IN $entity_keys`, can't use the
+`entity_name_type_tenant` constraint) — was real (confirmed via `PROFILE`:
+1,795 dbHits from that filter) but not the dominant cost: the query
+completed in 157ms in isolation. The actual bottleneck was the *other*
+query in that window, `get_chunk_entity_embeddings`.
+
+Isolating it directly: the same query minus `e.embedding` ran in 281ms;
+with it, 4.1-6.6s, for `dbHits` under 1,000 either way. A scaling test
+(5/15/30/54 chunks → 500ms/1.0s/2.3s/4.3s) proved the cost is linear at
+~21ms per **distinct entity**, not per row (deduping 327→202 rows barely
+moved the number) — this is per-element PackStream deserialization of
+3072-dim OpenAI embedding float lists in the Neo4j Python driver, an
+inherent cost of moving that much data over Bolt, not a fixable query
+shape.
+
+**Rule:**
+> `PROFILE` first, always — a plausible-sounding hypothesis about *why*
+> something is slow (missing index, bad filter) can be completely wrong
+> even when the code genuinely has that flaw. The flaw here (the
+> non-sargable filter) was real and I'd have "fixed" it confidently if I
+> hadn't checked the actual isolated timing first — it just wasn't the
+> cause of the thing I was trying to fix. Isolate before you optimize:
+> remove one variable at a time (drop a field, dedupe rows, scale the
+> input) until the cost tracks something specific, then fix that.
+
+**Fix**: `graphrag/graph/embedding_cache.py` — an in-process,
+tenant-scoped `(tenant, name, type) → np.float32` cache. Not a whole-result
+cache keyed by chunk_ids (near-zero hit rate — different queries rarely
+share an exact chunk set); entity-keyed, because a single aerospace query
+touches 59% of the tenant's entities (202/343), so the real overlap is at
+the entity level across *different* chunk sets. Required restructuring
+`get_chunk_entity_embeddings` into two phases: a cheap discovery query
+(no `e.embedding` field, can't be skipped — it's what tells you which
+entities exist for *this* chunk set) then a second query only for cache
+misses.
+
+**A correctness fix uncovered along the way**: the function had no
+`tenant` parameter at all — harmless today (chunk IDs are already
+tenant-scoped), but caching by `(name, type)` alone would have silently
+served one tenant's embedding for another's query with the same entity
+name/type. `tenant` is now required, not defaulted, at both call sites.
+
+**Live-verified in the real request path** (not just isolated Cypher):
+same question called twice in one live MCP server process —
+`chunk_entities_edges.done`: 2859ms → 109ms (26x). Isolated scaling test:
+4515ms → 110ms cold vs warm, embeddings confirmed bit-identical (`np.allclose`)
+between runs — the cache doesn't just get faster, it stays correct.
+
+**New finding, not chased here**: `global_search.reduce.done` measured
+17.6s and 13.9s across the two live calls — a single LLM call, the largest
+individual cost observed anywhere in the pipeline so far, bigger than
+either map call or the final synthesis call. Not investigated in this
+change; worth a closer look before the next latency pass.
+
+Tests: 16 new (9 `EmbeddingCache` get/set/invalidate/tenant-isolation, 5
+`get_chunk_entity_embeddings` cache-hit/miss/mixed/tenant-isolation — the
+all-hit test asserting **zero** phase-2 Neo4j calls is the one that
+actually proves the optimization works, not just that it doesn't crash —
+2 `graph_writer` invalidation-hook tests). Full suite: 609 passed, 0 failed.

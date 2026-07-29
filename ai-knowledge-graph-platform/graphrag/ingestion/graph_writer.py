@@ -18,6 +18,7 @@ import structlog
 
 from graphrag.core.config import get_settings
 from graphrag.core.models import Chunk, Document, Entity, Relation
+from graphrag.graph.embedding_cache import get_embedding_cache
 from graphrag.graph.alias_registry import (
     AmbiguousMatch,
     get_alias_registry,
@@ -298,6 +299,15 @@ class GraphWriter:
             written.append(entity)
 
         merge_results = await self._neo4j.merge_entities_batch(to_merge, tenant=tenant)
+
+        # Evict any cached embeddings for entities just (re)written — merge_entities_batch's
+        # ON MATCH SET only overwrites e.embedding when a non-empty new embedding is
+        # supplied, so invalidating exactly to_merge's entities matches exactly the
+        # entities whose embedding may have changed. Entities resolved via alias/dedup
+        # matching never reach to_merge (redirected above, canonical embedding untouched),
+        # so correctly not invalidating them is intentional, not a gap.
+        get_embedding_cache().invalidate(tenant, [(e.name, e.type) for e in to_merge])
+
         await self._neo4j.merge_mentions_batch(chunk.id, to_mention, tenant=tenant)
         await self._audit.log_entities_batch(to_audit)
 

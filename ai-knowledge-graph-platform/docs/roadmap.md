@@ -79,10 +79,20 @@ order of magnitude over the documented "hybrid p95 2.2s" claim, which needs
 correcting once more live samples exist (two runs isn't enough to replace a
 documented p95).
 
+**Update, 2026-07-29**: `chunk_entities_edges` root-caused and fixed (see
+`tasks/lessons.md` A143) — not a query-plan issue, an inherent Bolt
+deserialization cost for 3072-dim embeddings, fixed with an entity-keyed
+in-process cache (`graphrag/graph/embedding_cache.py`). Live-verified: 26x
+faster on a warm cache in the real request path (2859ms → 109ms). That
+investigation surfaced a bigger, unaddressed cost: `global_search.reduce`
+(a single LLM call) measured **17.6s and 13.9s** across two live runs —
+larger than any other single stage in the pipeline, including the map
+phase and final synthesis combined. This is now the top candidate.
+
 | Priority | Candidate | Recommendation | Why it matters |
 |---|---|---|---|
-| 1 | **`chunk_entities_edges` root-cause investigation** | Implement next | Now precisely isolated via live per-stage timing (see correction above): 4.4-5.3s, the single biggest reproducible non-LLM cost. Needs the actual Cypher in `get_chunk_entity_embeddings`/`_fetch_subgraph_edges` (`local_search.py`) profiled — missing index, oversized payload (~341 entities/~310 edges per call), or an inherently expensive query shape are the live candidates. |
-| 2 | **Correct the "hybrid p95 2.2s" documented claim** | Implement next | Two live MCP-verified runs measured 25.2s and 46.5s total — not remotely close to 2.2s. Needs a proper sample (10+ queries) run through the now-instrumented pipeline before writing a corrected number into `docs/performance-metrics-inventory.md`, not another single-sample guess. |
+| 1 | **`global_search.reduce` latency investigation** | Implement next | Measured 17.6s/13.9s across two live runs — the single largest cost anywhere in the pipeline. Needs the actual prompt/response size profiled (is it token-count-bound, a large `partial_answers` payload, or provider-side variance) before concluding anything — same PROFILE-first discipline that found `chunk_entities_edges` wasn't what it first looked like (A142/A143). |
+| 2 | **Correct the "hybrid p95 2.2s" documented claim** | Implement next | Live runs now measure in the 25-45s range even after the `chunk_entities_edges` fix — not remotely close to 2.2s. Needs a proper sample (10+ queries) through the now-instrumented pipeline, not another single-sample guess. |
 | 3 | **Re-ranking feedback loop** | Worth implementing | Adds product maturity, but no real usage data exists yet to make it meaningful — a portfolio project has no click stream. Build the plumbing; low urgency. |
 | 4 | **GNN pre-training scheduled job** | Worth implementing | The GNN-stage latency question is now answered (commit `125ae9e`: GNN math itself is 125ms, not the bottleneck) — no longer blocked, but still low urgency. |
 | 5 | **TimescaleDB KPI store** | Implement only if pitching observability hard | Useful for enterprise monitoring, but larger than it looks because compose/dev config and migration paths must be added. |
@@ -95,9 +105,13 @@ End-to-end demo videos (WPP, IATF) are done — recorded from `docs/video-script
 MCP server (exposing hybrid retrieval + entity lookup as MCP tools) is done
 — see `mcp_server/`, `docs/knowledge-graph-architecture.md` §13.
 
+Entity embedding cache (fixes `chunk_entities_edges`) is done — see
+`graphrag/graph/embedding_cache.py`, `tasks/lessons.md` A143.
+
 ### Recommended Next Sprint
 
-- [ ] **Profile `chunk_entities_edges`** — the actual Cypher in `get_chunk_entity_embeddings`/`_fetch_subgraph_edges`, to find why it's consistently 4.4-5.3s
+- [x] ~~Profile `chunk_entities_edges`~~ — done (A143): Bolt deserialization cost of 3072-dim embeddings, fixed with an entity-keyed cache, 26x faster live-verified
+- [ ] **Profile `global_search.reduce`** — 17.6s/13.9s measured across two live runs, the largest single cost anywhere in the pipeline; find out why before proposing a fix
 - [ ] **Correct the "hybrid p95 2.2s" claim** in `docs/performance-metrics-inventory.md` — run a proper multi-query sample through the now-instrumented pipeline, not a single-sample guess
 
 ---

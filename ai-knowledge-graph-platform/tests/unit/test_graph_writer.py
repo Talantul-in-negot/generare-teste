@@ -124,6 +124,58 @@ class TestWriteEntities:
         assert len(result) == 1
         assert result[0].name == "SpaceX"
 
+    async def test_new_entity_invalidates_embedding_cache(self):
+        """merge_entities_batch's ON MATCH SET may overwrite the entity's
+        embedding — the cache for exactly this (name, type) must be
+        invalidated so a stale embedding is never served afterward."""
+        writer = _build_writer()
+        chunk = _make_chunk()
+
+        mock_registry = MagicMock()
+        mock_registry.resolve = MagicMock(return_value=None)
+        mock_registry.find_duplicate_by_embedding = AsyncMock(return_value=None)
+        mock_registry._exact = {}
+
+        writer._neo4j.entity_exists = AsyncMock(return_value=False)
+        writer._neo4j.merge_entities_batch = AsyncMock(return_value=[])
+        writer._neo4j.merge_mentions_batch = AsyncMock()
+        writer._audit.log_entity_change = AsyncMock()
+
+        with patch.object(writer, "_get_registry", return_value=mock_registry), \
+             patch.object(writer, "_ensure_registry", AsyncMock()), \
+             patch("graphrag.ingestion.graph_writer.get_embedding_cache") as mock_get_cache:
+            mock_cache = MagicMock()
+            mock_get_cache.return_value = mock_cache
+            entity = _make_entity("SpaceX")
+            await writer.write_entities([entity], chunk)
+
+        mock_cache.invalidate.assert_called_once_with("default", [("SpaceX", "ORG")])
+
+    async def test_alias_resolved_entity_does_not_invalidate_cache(self):
+        """Alias-redirected entities never reach to_merge — their canonical
+        node's embedding is never rewritten, so the invalidation call must
+        receive an empty list for them (not evict a still-valid cache
+        entry). merge_entities_batch/invalidate still run unconditionally
+        after the loop even when to_merge is empty — that's existing,
+        harmless behavior; what matters is the entities argument is empty."""
+        writer = _build_writer()
+        chunk = _make_chunk()
+
+        mock_registry = MagicMock()
+        mock_registry.resolve = MagicMock(return_value=("SpaceX", "ORG"))
+        mock_registry.register_alias = AsyncMock()
+        writer._neo4j.merge_mentions = AsyncMock()
+
+        with patch.object(writer, "_get_registry", return_value=mock_registry), \
+             patch.object(writer, "_ensure_registry", AsyncMock()), \
+             patch("graphrag.ingestion.graph_writer.get_embedding_cache") as mock_get_cache:
+            mock_cache = MagicMock()
+            mock_get_cache.return_value = mock_cache
+            entity = _make_entity("Space Exploration Technologies")
+            await writer.write_entities([entity], chunk)
+
+        mock_cache.invalidate.assert_called_once_with("default", [])
+
     async def test_low_similarity_merge_logs_collision_warning(self):
         """merge_entities_batch reporting a low prior_similarity (same name+type,
         semantically distant embedding — e.g. "Apple" ORG for the company vs.

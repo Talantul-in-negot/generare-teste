@@ -74,7 +74,10 @@ async def _retrieve_with_params(
 
     # Sequential, not gather — _fetch_subgraph_edges takes the already-fetched
     # chunk_entities now, not chunk_ids (see local_search.py, 2026-07-24).
-    chunk_entities = await neo4j.get_chunk_entity_embeddings(all_ids)
+    # This script has no tenant concept (single-corpus calibration tool) —
+    # "default" preserves its existing behavior, unchanged by the tenant
+    # param now required by get_chunk_entity_embeddings (see neo4j_client.py).
+    chunk_entities = await neo4j.get_chunk_entity_embeddings(all_ids, tenant="default")
     entity_edges = await _fetch_subgraph_edges(neo4j, chunk_entities)
 
     scorer = GNNScorer(

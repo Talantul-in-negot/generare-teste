@@ -771,15 +771,35 @@ class Neo4jClient:
         )
 
     async def get_chunk_entity_embeddings(
-        self, chunk_ids: list[str]
+        self, chunk_ids: list[str], tenant: str
     ) -> list[dict]:
         """Return entity embeddings for all entities mentioned by the given chunks.
 
         Used by GNNScorer to build the node-feature matrix H.
         Only returns entities that actually have a stored embedding.
         Excludes quarantined entities.
+
+        Two-phase, cache-backed (see graphrag/graph/embedding_cache.py):
+        live profiling found this call cost ~21ms per distinct entity,
+        dominated by PackStream deserialization of 3072-dim embeddings over
+        Bolt (confirmed via PROFILE: dbHits are trivial; the same query
+        minus e.embedding runs in a fraction of the time). A single query
+        typically touches a large fraction of a tenant's entities, so
+        caching by (tenant, name, type) recovers most of that cost across
+        queries in a long-running process.
+
+        ``tenant`` is required (not defaulted) — caching by (name, type)
+        alone would silently conflate two tenants' entities that happen to
+        share a name and type but have different embeddings.
         """
-        return await self.run(
+        from graphrag.graph.embedding_cache import get_embedding_cache
+        cache = get_embedding_cache()
+
+        # Phase 1: discover which entities these chunks mention, without
+        # fetching the embedding itself — this step can't be skipped or
+        # cached, since it's what tells us which entities exist for *this*
+        # chunk set. Cheap on its own (confirmed via PROFILE).
+        rows = await self.run(
             """
             UNWIND $chunk_ids AS cid
             MATCH (c:Chunk {id: cid})-[:MENTIONS]->(e:Entity)
@@ -788,11 +808,53 @@ class Neo4jClient:
             RETURN cid          AS chunk_id,
                    e.name       AS entity_name,
                    e.type       AS entity_type,
-                   e.embedding  AS embedding,
                    COUNT { (e)-[:RELATES_TO]-() } AS degree
             """,
             chunk_ids=chunk_ids,
         )
+        if not rows:
+            return []
+
+        # Phase 2: split into cache hits (skip Neo4j entirely) and misses
+        # (need one batched fetch for just the missing entities).
+        miss_pairs: list[tuple[str, str]] = []
+        seen_misses: set[tuple[str, str]] = set()
+        for r in rows:
+            key = (r["entity_name"], r["entity_type"])
+            if cache.get(tenant, *key) is None and key not in seen_misses:
+                seen_misses.add(key)
+                miss_pairs.append({"name": key[0], "type": key[1]})
+
+        if miss_pairs:
+            fetched = await self.run(
+                """
+                UNWIND $pairs AS pair
+                MATCH (e:Entity {name: pair.name, type: pair.type, tenant: $tenant})
+                WHERE e.embedding IS NOT NULL AND size(e.embedding) > 0
+                RETURN e.name AS entity_name, e.type AS entity_type, e.embedding AS embedding
+                """,
+                pairs=miss_pairs, tenant=tenant,
+            )
+            for f in fetched:
+                cache.set(tenant, f["entity_name"], f["entity_type"], f["embedding"])
+
+        # Merge: attach each row's embedding from the (now fully warmed for
+        # this batch) cache. A row whose entity has no embedding after
+        # phase 2 (e.g. quarantined/deleted between phase 1 and phase 2) is
+        # dropped, matching the old query's e.embedding IS NOT NULL filter.
+        results = []
+        for r in rows:
+            emb = cache.get(tenant, r["entity_name"], r["entity_type"])
+            if emb is None:
+                continue
+            results.append({
+                "chunk_id":    r["chunk_id"],
+                "entity_name": r["entity_name"],
+                "entity_type": r["entity_type"],
+                "embedding":   emb,
+                "degree":      r["degree"],
+            })
+        return results
 
     async def get_entity_relations_subgraph(
         self,

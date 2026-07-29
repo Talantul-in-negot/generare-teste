@@ -381,7 +381,7 @@ class LocalSearch:
             # expensive Neo4j round-trip twice. Fixed 2026-07-24; see
             # tasks/lessons.md.
             _t0 = time.monotonic()
-            chunk_entities = await self._neo4j.get_chunk_entity_embeddings(all_ids)
+            chunk_entities = await self._neo4j.get_chunk_entity_embeddings(all_ids, tenant=tenant)
             entity_edges = await _fetch_subgraph_edges(self._neo4j, chunk_entities, tenant)
             log.info(
                 "local_search.chunk_entities_edges.done",
