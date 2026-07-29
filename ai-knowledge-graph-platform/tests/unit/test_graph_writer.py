@@ -315,4 +315,72 @@ class TestWriteRelations:
              patch.object(writer, "_ensure_registry", AsyncMock()):
             await writer.write_relations([rel], {}, doc_id="doc1")
 
+
+class TestMaybeRecomputePagerank:
+    """_maybe_recompute_pagerank — the PageRank trigger hook added 2026-07-25."""
+
+    async def test_disabled_gate_does_zero_neo4j_work(self):
+        writer = _build_writer()
+        writer._cfg.graph = {"pagerank_recompute_on_ingest": False}
+
+        with patch("graphrag.ingestion.graph_writer.PageRankComputer") as mock_cls:
+            report = await writer._maybe_recompute_pagerank("acme", is_reingest=False)
+
+        assert report == {"checked": False, "recomputed": False}
+        mock_cls.assert_not_called()
+
+    async def test_is_reingest_passed_through_to_check_staleness(self):
+        writer = _build_writer()
+        writer._cfg.graph = {"pagerank_recompute_on_ingest": True}
+
+        mock_computer = AsyncMock()
+        mock_computer.check_staleness = AsyncMock(
+            return_value={"should_recompute": False, "reason": "up_to_date"}
+        )
+        with patch(
+            "graphrag.ingestion.graph_writer.PageRankComputer",
+            return_value=mock_computer,
+        ):
+            await writer._maybe_recompute_pagerank("acme", is_reingest=True)
+
+        mock_computer.check_staleness.assert_awaited_once_with(is_reingest=True)
+
+    async def test_should_recompute_triggers_compute_and_persist(self):
+        writer = _build_writer()
+        writer._cfg.graph = {"pagerank_recompute_on_ingest": True}
+
+        mock_computer = AsyncMock()
+        mock_computer.check_staleness = AsyncMock(
+            return_value={"should_recompute": True, "reason": "reingest"}
+        )
+        mock_computer.compute_and_persist = AsyncMock(
+            return_value={"entities_scored": 42}
+        )
+        with patch(
+            "graphrag.ingestion.graph_writer.PageRankComputer",
+            return_value=mock_computer,
+        ):
+            report = await writer._maybe_recompute_pagerank("acme", is_reingest=True)
+
+        mock_computer.compute_and_persist.assert_awaited_once()
+        assert report["recomputed"] is True
+        assert report["entities_scored"] == 42
+
+    async def test_not_stale_skips_compute_and_persist(self):
+        writer = _build_writer()
+        writer._cfg.graph = {"pagerank_recompute_on_ingest": True}
+
+        mock_computer = AsyncMock()
+        mock_computer.check_staleness = AsyncMock(
+            return_value={"should_recompute": False, "reason": "up_to_date"}
+        )
+        with patch(
+            "graphrag.ingestion.graph_writer.PageRankComputer",
+            return_value=mock_computer,
+        ):
+            report = await writer._maybe_recompute_pagerank("acme", is_reingest=False)
+
+        mock_computer.compute_and_persist.assert_not_called()
+        assert report["recomputed"] is False
+
         writer._neo4j.merge_relation.assert_not_called()

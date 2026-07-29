@@ -255,14 +255,14 @@ A type of graph neural network that assigns different attention weights to diffe
 
 **Example:** Entity "G-ABCD" has edges to "FAA-AD-2024-01-02" (high attention — it's directly affected) and "Boeing 737 History" (lower attention — only loosely related). The GAT selectively amplifies the more relevant neighbors.
 
-**In this project:** `graphrag/graph/gnn_scorer.py` — implements both GCN and GAT. Selectable via config `gnn_type: gat`.
+**In this project:** `graphrag/graph/gnn_scorer.py` — implements both GCN and GAT. Selectable via config `gnn_type: gat`. The GAT implementation is lightweight and zero-shot: it does not train attention weights, but computes them from cosine similarity between entity embeddings already stored in Neo4j. For each node `i`, it scores all neighbours `j` in `N(i) ∪ {i}` with `cos(h_i, h_j)`, applies a softmax across those scores, then aggregates `h'_i = Σ_j α_ij h_j`. That means a node keeps its own embedding via the self-loop, but more similar neighbours get more influence.
 
 ---
 
 ### GCN (Graph Convolutional Network)
 A type of graph neural network that aggregates information from all neighbors with equal weight, using symmetric normalization.
 
-**In this project:** Default GNN type in `graphrag/graph/gnn_scorer.py`. Lighter than GAT; use GAT when neighbor selectivity matters.
+**In this project:** Default GNN type in `graphrag/graph/gnn_scorer.py`. Lighter than GAT; use GAT when neighbour selectivity matters. The code adds self-loops, computes `A_hat = A + I`, builds `D_hat^(-1/2) A_hat D_hat^(-1/2)`, then applies message passing as `H' = ReLU(A_norm H)` for intermediate layers. The last layer skips ReLU so cosine similarity to the query can stay signed before final clipping.
 
 ---
 
@@ -278,7 +278,18 @@ A retrieval mode that answers broad, thematic questions by summarising across al
 ### GNN (Graph Neural Network)
 A neural network architecture that operates on graphs by passing messages between connected nodes. Each node aggregates information from its neighbors to update its representation.
 
-**In this project:** Stage 5 of the retrieval pipeline. Re-scores chunks by their structural position in the entity subgraph relative to the query entity. See `graphrag/graph/gnn_scorer.py`.
+**In this project:** Stage 5 of the retrieval pipeline. Re-scores chunks by their structural position in the entity subgraph relative to the query entity. See `graphrag/graph/gnn_scorer.py`. The scorer is not a trained task-specific model; it is a deterministic graph propagation layer over existing entity embeddings. The pipeline is:
+
+1. collect seed chunks from rerank and multi-hop retrieval
+2. build an entity adjacency matrix from `RELATES_TO` edges
+3. optionally decay edge confidence on the fly using `gnn_confidence_half_life_days`
+4. drop edges whose decayed confidence falls below `gnn_edge_confidence_threshold`
+5. apply hub dampening so high-degree entities do not dominate
+6. propagate entity embeddings with either GCN or GAT
+7. score each chunk by cosine similarity between the query vector and the best linked entity embedding
+8. blend text and graph signals as `final_score = alpha * text_score + beta * gnn_score`
+
+The chunk-level `gnn_score` is the maximum cosine similarity between the query and any entity mentioned in that chunk after propagation. The edge confidence decay is transient: the stored Neo4j property is not rewritten, only the value used during scoring changes.
 
 ---
 
@@ -434,6 +445,23 @@ A tractable subset of OWL 2 that can be implemented using forward-chaining rules
 ---
 
 ## P
+
+### PageRank (tiebreak)
+A graph-centrality algorithm measuring how structurally important a node is, based on how many (and how important) other nodes connect to it. Computed once per tenant via a batch job (Neo4j GDS `pageRank.stream`), not per query — see `graphrag/graph/pagerank.py`.
+
+Deliberately **not** used as a general relevance boost: global importance anti-correlates with correctness on precise lookups (e.g. "what is the exact document ID of the 2022 FAA directive?" — the correct answer is a narrow, low-centrality document, not a globally central one like "FAA" itself). Boosting by PageRank there would push the ranking *away* from the correct answer.
+
+**Where it's used in this project**: a narrow fallback tiebreak in `graphrag/retrieval/local_search.py`, firing only when neither text nor GNN scoring produced a confident top result (`final_score < pagerank_tiebreak_threshold`, default 0.4). When it fires, it nudges the ranking toward the more established/central entity among near-tied candidates, with a small additive weight (`pagerank_tiebreak_weight`, default 0.15) — never overriding a confident signal.
+
+**Example**: a vague question like "what connects to the maintenance procedures in this corpus?" retrieves two near-tied chunks — one mentioning an obscure addendum document, one mentioning "FAA" (globally central). Since neither chunk scores confidently on its own, the tiebreak nudges the FAA-linked chunk slightly ahead — a reasonable default when the system genuinely can't tell what's relevant. Contrast with the exact-document-ID example above, where a confident text/GNN match means the tiebreak never even checks PageRank.
+
+**Recompute triggers** (added 2026-07-25, `graphrag/graph/pagerank.py`): PageRank is no longer manual-only. `GraphWriter._maybe_recompute_pagerank()` checks staleness after every ingestion via three triggers — (1) growth drift (entity/edge counts changed enough since the last `PageRankSnapshot`, mirroring the community-rebuild staleness pattern), (2) re-ingestion of an existing document (always forces recompute — verified that `merge_relation` resets `extracted_at` and boosts `confidence` via the Bayesian merge on every match, changing PageRank's weighted inputs with zero change to entity/edge count, which a growth check alone would miss), (3) a decay-conditional time ceiling (only evaluated when `gnn_confidence_half_life_days > 0` for the tenant — a tenant with decay disabled has nothing to drift between ingestions, so the ceiling never fires there). Gated by `graph.pagerank_recompute_on_ingest` (default true).
+
+**How the score is computed:** the batch job calls Neo4j GDS PageRank over the tenant’s entity subgraph, then persists the resulting numeric score back onto `:Entity` nodes. The score is a normal PageRank centrality value: it is influenced by graph structure and edge weights, but it is not “decayed” by time. If a cache exists, the system simply decides whether to recompute it; it does not gradually half the stored PageRank value.
+
+Logged via `local_search.pagerank_tiebreak.applied` (with `reordered: bool`) or `.skipped` at query time, and `pagerank.staleness_check` (with `reason`) at ingestion time — both directly observable rather than silent. See `tasks/lessons.md` for the fuller investigation (why hub-dampening and GNN-attention integration were both ruled out first, and why re-ingestion needed its own trigger).
+
+---
 
 ### Provenance
 The record of where a fact came from — which source document, which extraction model, which prompt version, when it was extracted.

@@ -1,3 +1,12 @@
+## graphify
+
+This repo has a persistent code knowledge graph in `graphify-out/` (god nodes,
+communities, cross-file relationships). For questions about codebase
+architecture, file relationships, or "how does X connect to Y" — run
+`graphify query "<question>"` first instead of manually grepping/reading
+files cold. Rebuild with `graphify update .` after significant code changes
+(no LLM/API key needed — code-only extraction is pure AST).
+
 ## Workflow Orchestration
 
 ### 1. Plan Mode Default

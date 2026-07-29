@@ -33,6 +33,7 @@ from graphrag.graph.cycle_detector import CycleDetector
 from graphrag.graph.ingestion_validator import IngestionValidator
 from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.graph.ontology_registry import get_ontology_registry
+from graphrag.graph.pagerank import PageRankComputer
 from graphrag.graph.quarantine import QuarantineService
 from graphrag.graph.review_queue import ReviewQueueService
 
@@ -442,11 +443,18 @@ class GraphWriter:
         self,
         doc_id: str,
         tenant: str = "default",
+        is_reingest: bool = False,
     ) -> dict:
         """
         Run validation, cycle detection, contradiction detection, and
         auto-quarantine of flagged anomalies after a full document write.
         Returns the combined report.
+
+        is_reingest: True when this document already existed before this
+        ingestion (IngestionAgent.write()'s canonical_id != original_id) —
+        passed through to the PageRank recompute trigger, which forces a
+        recompute on re-ingestion regardless of growth drift (see
+        graphrag/graph/pagerank.py for why growth alone isn't sufficient).
         """
         validation_report = await self._validator.validate(doc_id=doc_id)
         await self._validator.remove_self_loops()
@@ -478,6 +486,7 @@ class GraphWriter:
             new_conflicts = await self._contradiction.scan(doc_id=doc_id, tenant=tenant)
 
         community_report = await self._maybe_rebuild_communities(tenant)
+        pagerank_report = await self._maybe_recompute_pagerank(tenant, is_reingest)
 
         return {
             "validation": validation_report,
@@ -485,6 +494,7 @@ class GraphWriter:
             "auto_quarantined": quarantined,
             "new_conflicts": len(new_conflicts),
             "community_rebuild": community_report,
+            "pagerank_recompute": pagerank_report,
         }
 
     async def _maybe_rebuild_communities(self, tenant: str) -> dict:
@@ -519,4 +529,24 @@ class GraphWriter:
 
         report["rebuilt"] = True
         report["community_count"] = len(communities)
+        return report
+
+    async def _maybe_recompute_pagerank(self, tenant: str, is_reingest: bool) -> dict:
+        graph_cfg = self._cfg.graph
+
+        # Same short-circuit pattern as _maybe_rebuild_communities above — no
+        # Neo4j read at all when disabled, so ingestion cost stays flat.
+        if not graph_cfg.get("pagerank_recompute_on_ingest", True):
+            return {"checked": False, "recomputed": False}
+
+        computer = PageRankComputer(tenant=tenant)
+        stale = await computer.check_staleness(is_reingest=is_reingest)
+        report = {"checked": True, **stale, "recomputed": False}
+
+        if not stale.get("should_recompute"):
+            return report
+
+        result = await computer.compute_and_persist()
+        report["recomputed"] = True
+        report["entities_scored"] = result.get("entities_scored", 0)
         return report

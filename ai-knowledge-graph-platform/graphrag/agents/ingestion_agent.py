@@ -121,7 +121,8 @@ class IngestionAgent(BaseGraphRAGAgent):
         # silently create a duplicate (see tasks/lessons.md A136).
         original_id = doc.id
         canonical_id = await self._writer.write_document(doc)  # mutates doc.id in place
-        if canonical_id != original_id:
+        is_reingest = canonical_id != original_id
+        if is_reingest:
             for c in chunks:
                 c.document_id = canonical_id
 
@@ -146,6 +147,7 @@ class IngestionAgent(BaseGraphRAGAgent):
         maintenance_report = await self._writer.validate_and_check_cycles(
             doc_id=doc.id,
             tenant=doc.tenant,
+            is_reingest=is_reingest,
         )
 
         # Optional post-write step: ground high-confidence entities in Wikidata.

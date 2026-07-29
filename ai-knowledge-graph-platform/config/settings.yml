@@ -50,6 +50,17 @@ graph:
   pagerank_damping_factor: 0.85     # standard PageRank default
   pagerank_iterations: 20           # GDS default max iterations
   pagerank_min_score_threshold: 0.0000001  # GDS convergence tolerance
+  # ── PageRank recompute triggers ──────────────────────────────────────────────
+  # Was previously never recomputed automatically — live check found aerospace
+  # 45% coverage, automotive 100% but 11 days stale, marketing/telecom 0%.
+  # Mirrors the community-rebuild staleness pattern above. Three triggers:
+  # growth drift (below), re-ingestion of an existing document (always forces
+  # recompute — see PageRankComputer.check_staleness, not separately
+  # switchable), and a decay-conditional time ceiling (only evaluated when
+  # retrieval.gnn_confidence_half_life_days > 0 for the tenant).
+  pagerank_recompute_on_ingest: true    # master gate
+  pagerank_growth_threshold: 0.15       # 0.0-1.0 — same idiom as community_staleness_threshold
+  pagerank_time_ceiling_days: 60        # backstop; only applies when confidence decay is enabled
   # ── Document authority ───────────────────────────────────────────────────────
   default_authority_level: 4        # INFORMAL — override per document on ingestion
   superseded_confidence_penalty: 0.5  # confidence multiplier for superseded doc edges

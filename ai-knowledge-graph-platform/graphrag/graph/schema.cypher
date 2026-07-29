@@ -42,6 +42,7 @@ CREATE CONSTRAINT ontology_migration_id IF NOT EXISTS FOR (m:OntologyMigration) 
 CREATE CONSTRAINT community_snapshot_id IF NOT EXISTS FOR (s:CommunitySnapshot) REQUIRE s.id IS UNIQUE;
 CREATE CONSTRAINT quarantine_log_id IF NOT EXISTS FOR (q:QuarantineLog) REQUIRE q.id IS UNIQUE;
 CREATE CONSTRAINT graph_health_snapshot_id IF NOT EXISTS FOR (h:GraphHealthSnapshot) REQUIRE h.id IS UNIQUE;
+CREATE CONSTRAINT pagerank_snapshot_id IF NOT EXISTS FOR (s:PageRankSnapshot) REQUIRE s.id IS UNIQUE;
 
 -- ── Tenant + quarantine indexes ───────────────────────────────────────────────
 CREATE INDEX chunk_tenant IF NOT EXISTS FOR (c:Chunk) ON (c.tenant);
