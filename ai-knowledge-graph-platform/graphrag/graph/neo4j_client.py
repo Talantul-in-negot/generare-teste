@@ -844,6 +844,49 @@ class Neo4jClient:
             **({"as_of": as_of} if as_of else {}),
         )
 
+    async def get_relations_for_entity(
+        self,
+        name: str,
+        type: str,
+        tenant: str = "default",
+        as_of: str | None = None,
+        limit: int = 25,
+    ) -> list[dict]:
+        """Return RELATES_TO edges (either direction) touching a single entity.
+
+        Not to be confused with ``get_entity_neighbors`` (chunk_ids -> 1-hop
+        entity expansion, used by LocalSearch's retrieval path) or
+        ``get_entity_relations_subgraph`` (edges *between* members of an
+        explicit set — both endpoints must be in the passed-in list, so a
+        1-item list only matches self-loops). This answers "what is this one
+        named entity connected to" — the shape a single-entity lookup needs.
+        Excludes quarantined entities on either side.
+        """
+        temporal_filter = (
+            "AND (r.valid_from IS NULL OR r.valid_from <= $as_of) "
+            "AND (r.valid_to IS NULL OR r.valid_to > $as_of)"
+            if as_of else ""
+        )
+        return await self.run(
+            f"""
+            MATCH (e:Entity {{name: $name, type: $type, tenant: $tenant}})
+                  -[r:RELATES_TO]-(other:Entity {{tenant: $tenant}})
+            WHERE coalesce(e.quarantined, false) = false
+              AND coalesce(other.quarantined, false) = false
+              {temporal_filter}
+            RETURN other.name AS name, other.type AS type,
+                   r.weight AS weight,
+                   coalesce(r.confidence, 1.0) AS confidence,
+                   r.extracted_at AS extracted_at,
+                   r.source_doc_id AS source_doc_id,
+                   CASE WHEN startNode(r) = e THEN 'outgoing' ELSE 'incoming' END AS direction
+            ORDER BY confidence DESC
+            LIMIT $limit
+            """,
+            name=name, type=type, tenant=tenant, limit=limit,
+            **({"as_of": as_of} if as_of else {}),
+        )
+
     async def get_all_entities(self, tenant: str = "default") -> list[dict]:
         return await self.run(
             """

@@ -394,3 +394,44 @@ captures "nearness to structurally important entities" through ordinary
 weights would risk double-counting that signal, on top of touching tested
 propagation math for an uncertain gain. Kept as two independent,
 interpretable signals instead.
+
+---
+
+## 13. MCP Server — Exposing Retrieval as Agent Tools
+
+`mcp_server/` (new — see `tasks/lessons.md` A141) exposes the platform's
+hybrid retrieval and entity resolution as two Model Context Protocol tools,
+callable by any MCP-compatible client (Claude Desktop, Claude Code, others),
+not just this platform's own FastAPI/RabbitMQ stack:
+
+| Tool | Wraps | Returns |
+|---|---|---|
+| `query_knowledge_graph_tool` | `HybridRetriever.retrieve_and_answer()` — the same 6-stage pipeline the API uses | `QueryResult.model_dump()`: answer, citations, contexts, latency, mode |
+| `lookup_entity_tool` | `AliasRegistry.resolve()` + `Neo4jClient.get_relations_for_entity()` + `get_pagerank_by_entity_names()` | resolved canonical name/type, relations, PageRank importance (nullable — never coerced to 0) |
+
+**Transport is stdio** (the standard local/dev MCP transport) — this is a
+portfolio/demo project, not a hosted service needing remote access, and
+stdio matches how Claude Desktop/Code connect to local servers. No HTTP
+auth exists for it; tenant scoping is handled the same way it is
+everywhere else in this codebase — an explicit `tenant` parameter threaded
+through every call, not new auth machinery.
+
+**A design constraint worth naming explicitly**: stdout is the MCP
+protocol's JSON-RPC channel. This codebase never calls
+`structlog.configure()` anywhere else, so structlog runs on its default
+`PrintLogger`, which writes to stdout — and `HybridRetriever` logs
+extensively. `mcp_server/server.py` redirects structlog to stderr *before*
+importing anything from `graphrag.*`, or every tool call would corrupt the
+protocol stream. Verified under real load (live end-to-end run, hundreds of
+interleaved log lines including a `tqdm` progress bar from the reranker) —
+the stream stayed clean throughout.
+
+**What it deliberately doesn't expose (yet)**: `get_pagerank_by_entity_names`
+isn't a standalone tool — folded into `lookup_entity_tool`'s
+`importance_pagerank` field instead, since a bare "importance score" lookup
+has no use once entity lookup already surfaces it. `SPARQLBridge` (§8)
+is excluded too — it queries a Turtle export that only refreshes when
+`scripts/export_rdf.py` is manually re-run, so it can silently drift stale
+relative to what the other two tools see live in Neo4j. A future
+`sparql_query` tool would need an explicit "as of export timestamp X"
+caveat in its response to be honest about that gap.

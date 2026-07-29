@@ -62,25 +62,43 @@ call failed for ~40+ minutes (3x retry per call, one query lost to the DLQ)
 before it was noticed, purely by accident while debugging something unrelated.
 Provider health monitoring and the latency investigation this surfaced are
 now both done (commit `125ae9e`) — see `tasks/lessons.md` for the incident
-writeup — and excluded from this table per the convention above. That work
-surfaced one new follow-up item (below): a ~21s gap in the retrieval pipeline
-that the new instrumentation doesn't yet cover.
+writeup — and excluded from this table per the convention above.
+
+**Correction, 2026-07-29**: the item below originally hypothesized the ~21s
+gap was "almost certainly the LLM synthesis call itself." Live verification
+(via the new MCP server — see `mcp_server/`, `tasks/lessons.md`) with real
+per-stage timing now added to `global_search.py` disproved that: synthesis
+alone is ~1-6s per call, in line with expectations. The real, reproducible
+costs are (a) a Neo4j fetch in `local_search.py` (`chunk_entities_edges`,
+~4.4-5.3s across two live runs — the single largest non-LLM cost, still slow
+after the earlier redundant-fetch fix in commit `125ae9e`), and (b) the
+cumulative weight of several sequential LLM round-trips (query rewrite, map,
+reduce, final synthesis) each individually normal but adding up across the
+full pipeline. Two live runs measured **25.2s and 46.5s total** — both an
+order of magnitude over the documented "hybrid p95 2.2s" claim, which needs
+correcting once more live samples exist (two runs isn't enough to replace a
+documented p95).
 
 | Priority | Candidate | Recommendation | Why it matters |
 |---|---|---|---|
-| 1 | **LLM synthesis latency investigation** | Implement next | Live verification of the GNN-stage instrumentation fix (commit `125ae9e`) found a ~21s gap between `local_search.done` and `hybrid_retriever.done` not covered by any current instrumentation — almost certainly the LLM synthesis call itself. Same pattern as the GNN investigation: needs per-step timing before the "hybrid p95 2.2s" documented claim can be trusted or corrected. |
-| 2 | **Re-ranking feedback loop** | Worth implementing | Adds product maturity, but no real usage data exists yet to make it meaningful — a portfolio project has no click stream. Build the plumbing; low urgency. |
-| 3 | **GNN pre-training scheduled job** | Worth implementing | The GNN-stage latency question is now answered (commit `125ae9e`: GNN math itself is 125ms, not the bottleneck) — no longer blocked, but still low urgency. |
-| 4 | **TimescaleDB KPI store** | Implement only if pitching observability hard | Useful for enterprise monitoring, but larger than it looks because compose/dev config and migration paths must be added. |
-| 5 | **Multi-modal extraction pipeline** | Defer unless targeting multi-modal roles | Storage exists, but OCR/visual embedding/audio ingestion expands scope away from the core GraphRAG hiring story. |
-| 6 | **Cross-encoder fine-tuning** | Defer | Hard to prove without real usage data and domain-labeled query/chunk pairs. |
-| 7 | **Kafka streaming ingestion** | Defer | Interesting scale path, but RabbitMQ already supports the current MVP story. Kafka would add operational complexity before it adds hiring value. |
+| 1 | **`chunk_entities_edges` root-cause investigation** | Implement next | Now precisely isolated via live per-stage timing (see correction above): 4.4-5.3s, the single biggest reproducible non-LLM cost. Needs the actual Cypher in `get_chunk_entity_embeddings`/`_fetch_subgraph_edges` (`local_search.py`) profiled — missing index, oversized payload (~341 entities/~310 edges per call), or an inherently expensive query shape are the live candidates. |
+| 2 | **Correct the "hybrid p95 2.2s" documented claim** | Implement next | Two live MCP-verified runs measured 25.2s and 46.5s total — not remotely close to 2.2s. Needs a proper sample (10+ queries) run through the now-instrumented pipeline before writing a corrected number into `docs/performance-metrics-inventory.md`, not another single-sample guess. |
+| 3 | **Re-ranking feedback loop** | Worth implementing | Adds product maturity, but no real usage data exists yet to make it meaningful — a portfolio project has no click stream. Build the plumbing; low urgency. |
+| 4 | **GNN pre-training scheduled job** | Worth implementing | The GNN-stage latency question is now answered (commit `125ae9e`: GNN math itself is 125ms, not the bottleneck) — no longer blocked, but still low urgency. |
+| 5 | **TimescaleDB KPI store** | Implement only if pitching observability hard | Useful for enterprise monitoring, but larger than it looks because compose/dev config and migration paths must be added. |
+| 6 | **Multi-modal extraction pipeline** | Defer unless targeting multi-modal roles | Storage exists, but OCR/visual embedding/audio ingestion expands scope away from the core GraphRAG hiring story. |
+| 7 | **Cross-encoder fine-tuning** | Defer | Hard to prove without real usage data and domain-labeled query/chunk pairs. |
+| 8 | **Kafka streaming ingestion** | Defer | Interesting scale path, but RabbitMQ already supports the current MVP story. Kafka would add operational complexity before it adds hiring value. |
 
 End-to-end demo videos (WPP, IATF) are done — recorded from `docs/video-script-wpp-demo.md` and `docs/video-script-iatf-demo.md`.
 
+MCP server (exposing hybrid retrieval + entity lookup as MCP tools) is done
+— see `mcp_server/`, `docs/knowledge-graph-architecture.md` §13.
+
 ### Recommended Next Sprint
 
-- [ ] **LLM synthesis latency investigation** — instrument the ~21s gap between `local_search.done` and `hybrid_retriever.done` found during commit `125ae9e`'s live verification; reconcile against the documented "hybrid p95 2.2s" claim once the LLM-call cost is actually measured, not assumed
+- [ ] **Profile `chunk_entities_edges`** — the actual Cypher in `get_chunk_entity_embeddings`/`_fetch_subgraph_edges`, to find why it's consistently 4.4-5.3s
+- [ ] **Correct the "hybrid p95 2.2s" claim** in `docs/performance-metrics-inventory.md` — run a proper multi-query sample through the now-instrumented pipeline, not a single-sample guess
 
 ---
 

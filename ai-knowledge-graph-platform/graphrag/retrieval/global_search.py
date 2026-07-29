@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import structlog
 
@@ -51,13 +52,24 @@ class GlobalSearch:
             log.info("global_search.vector_skipped", reason="vector_search_enabled=false")
             return {"communities": [], "synthesized_answer": ""}
 
+        _t0 = time.monotonic()
         embedding = await self._embedder.embed_text(question)
+        log.info(
+            "global_search.embed.done",
+            elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
+        )
 
         top_k = cfg.get("global_top_communities", 5)
+        _t0 = time.monotonic()
         communities = await self._neo4j.vector_search_communities(
             embedding,
             top_k=top_k,
             tenant=tenant,
+        )
+        log.info(
+            "global_search.community_vector_search.done",
+            elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
+            communities=len(communities),
         )
 
         if not communities:
@@ -88,11 +100,17 @@ class GlobalSearch:
 
         # Map: extract relevant info from each community summary
         llm = get_llm()
+        _t0 = time.monotonic()
         map_tasks = [
             llm.generate(_MAP_PROMPT.format(question=question, summary=c["summary"]))
             for c in communities
         ]
         map_texts = await asyncio.gather(*map_tasks)
+        log.info(
+            "global_search.map.done",
+            elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
+            map_calls=len(map_tasks),
+        )
 
         partial_answers = []
         for community, text in zip(communities, map_texts):
@@ -100,14 +118,25 @@ class GlobalSearch:
                 partial_answers.append(f"[Level {community['level']}] {text}")
 
         if not partial_answers:
+            log.info(
+                "global_search.done",
+                communities=len(communities),
+                partial_answers=0,
+                reason="all_map_results_not_relevant",
+            )
             return {"communities": communities, "synthesized_answer": ""}
 
         # Reduce: synthesize all partial answers
+        _t0 = time.monotonic()
         synthesized = await llm.generate(
             _REDUCE_PROMPT.format(
                 question=question,
                 partial_answers="\n\n".join(partial_answers),
             )
+        )
+        log.info(
+            "global_search.reduce.done",
+            elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
         )
 
         log.info(

@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["graphrag*", "api*", "workers*"]
+include = ["graphrag*", "api*", "workers*", "mcp_server*"]
 
 [tool.pytest.ini_options]
 asyncio_mode        = "auto"          # no need for @pytest.mark.asyncio on every test

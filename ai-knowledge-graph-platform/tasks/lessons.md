@@ -4786,3 +4786,259 @@ measured on the 34-question aerospace set; real production queries with more
 boilerplate/verbose phrasing may exercise the accuracy benefit this eval set
 doesn't surface — this is not evidence rewrite is useless everywhere, only
 that it's latency-protective and accuracy-neutral on this specific benchmark.
+
+## A139 — PageRank: why it's not wired into hub-dampening or GNN attention, and what it's used for instead (commits `76f69cd`, `[pending]`)
+
+PageRank existed in the codebase only as a manual batch job feeding a
+"top entities" dashboard query — never consumed by retrieval. Investigated
+whether it should be, in three escalating framings, each rejected for a
+specific, code-grounded reason (not just "seemed unnecessary"):
+
+**1. Hub-dampening in `gnn_scorer.py` — wrong metric.** Dampening's job is
+suppressing *dilution from local fan-out*: a node with many edges gets its
+propagated embedding averaged with a lot of neighbor signal, diluting
+whatever made it relevant. PageRank measures *global importance*, which
+anti-correlates with fan-out in exactly the cases that matter — a node with
+many low-importance neighbors has high dilution risk but low PageRank, and
+vice versa. Confirmed the existing dampener already uses graph-level
+`degree` (`COUNT { (e)-[:RELATES_TO]-() }`, computed live per query in
+`get_chunk_entity_embeddings`), which is the metric that actually matches
+the problem — not local at all, contrary to the first assumption made while
+investigating this.
+
+**2. GNN attention (`_gat_layer`) — double-counting risk + regression cost,
+no clear gain.** GAT's `α_ij = softmax(cos(h_i, h_j))` already lets a node
+connected to well-connected, structurally important neighbors absorb more
+signal through ordinary message-passing — that's the whole point of
+propagation. Explicitly injecting PageRank into the attention formula risks
+duplicating a signal the GNN's own topology-aware aggregation already
+partially encodes, on top of touching tested propagation math for a small,
+uncertain gain. Neither objection is a hard technical wall (both are
+addressable with careful weighting/normalization) — but combined with
+staleness, neither was worth the cost.
+
+**3. General relevance boost — actively harmful for this project's own
+question distribution.** Global importance and query relevance point in
+different, often opposing directions. `PRE-01` ("what is the exact document
+ID of the 2022 FAA airworthiness directive?") is answered by
+`FAA-AD-2022-03-07` — a narrow, non-central document, not the corpus's
+globally central entity ("FAA" itself). Biasing attention/scoring toward
+globally important neighbors would systematically pull precise-lookup
+answers toward generic hubs and away from the correct, narrow one — a
+known failure mode in search generally (naive authority-weighting drowning
+out rare-but-correct matches), not a design detail specific to this system.
+
+**What was worth building instead**: a narrow fallback tiebreak
+(`local_search.py`, commit `76f69cd`) — engages *only* when neither text nor
+GNN scoring produced a confident top result (`final_score < 0.4`), nudges
+ranking among near-ties with a small additive weight (`0.15`), never
+overrides a confident signal. Logged (`local_search.pagerank_tiebreak.applied`
+/ `.skipped`) so it's directly observable whether/when it fired, not a
+silent behavior change.
+
+**Coverage gap found while investigating**: live check showed real, uneven
+PageRank staleness — aerospace 45% (stale since 2026-07-04), automotive 100%
+but 11 days stale, marketing 0% (never run), telecom no data. Root cause:
+`PageRankComputer.compute_and_persist()` had no automatic trigger, only a
+manual script/admin route. Fixed with three recompute triggers, hooked into
+`GraphWriter.validate_and_check_cycles()` (called from every ingestion):
+(a) growth drift — entity/edge counts changed >15% since the last
+`PageRankSnapshot`, mirroring `CommunityManager.check_staleness()`'s proven
+pattern exactly rather than inventing a new one; (b) re-ingestion of an
+existing document — verified this is *not* subsumed by growth drift, since
+`merge_relation` resets `r.extracted_at` and boosts `r.confidence` via the
+Bayesian noisy-OR merge unconditionally on every match (not just on
+create), and `run_pagerank` weights edges by
+`coalesce(r.weight, r.confidence, 1.0)` — so re-ingestion changes PageRank's
+actual inputs with zero change to entity/edge count, which a pure count
+check would completely miss; (c) a decay-conditional time ceiling — only
+evaluated when `gnn_confidence_half_life_days > 0` for the tenant, since a
+tenant with decay disabled has nothing drifting between ingestions and a
+blanket time trigger there would recompute an unchanged result for no
+reason.
+
+**Known gap, not fixed here**: all three triggers are only ever *evaluated*
+as a side effect of an ingestion happening — there is no standalone
+scheduler. If a tenant stops receiving new documents entirely, the decay
+time ceiling never gets checked, no matter how stale PageRank becomes.
+`scripts/pagerank_compute.py` remains the only entry point an external cron
+could call to close this gap; nothing currently does.
+
+## A140 — LLM provider circuit breaker + a redundant Neo4j fetch found while instrumenting GNN latency (commit `125ae9e`)
+
+Follow-on to the DeepSeek `deepseek-chat` deprecation incident (root-caused
+and the model id fixed separately, commit `6fe2cc7`). This entry covers the
+structural fixes the incident exposed, which had no lessons.md entry despite
+landing in a real commit.
+
+**Provider health / fail-fast circuit breaker**
+`graphrag/core/provider_health.py` (new) — pure in-memory, dependency-free
+sliding-window tracker. Trips unhealthy on 3 consecutive failures OR an 80%
+failure rate over the last 20 calls (min 3 samples before judging). Recorded
+per retry *attempt*, not per logical call, so a single request against a
+fully-broken provider can trip the breaker on its own. Once tripped,
+`DeepSeekLLM`/`GroqLLM.generate()` drop to 1 fail-fast attempt (no sleep)
+instead of the full retry budget — not 0 attempts, since a 0-attempt policy
+would never get a fresh data point to detect recovery.
+
+**The actual gap that caused the incident**: `get_llm()`'s default path was
+a bare `DeepSeekLLM` with *no fallback at all* — `FallbackLLM` existed but
+was hardcoded Groq-primary/DeepSeek-secondary only, used by `get_fast_llm()`,
+never the main synthesis path. Generalized `FallbackLLM` to accept any
+primary/secondary pair via two classmethods (`groq_primary`/
+`deepseek_primary`), one shared try/except implementation instead of a
+duplicate class. `deepseek_primary()`'s fallback exceptions deliberately
+include `openai.APIStatusError` — the exact exception a bad/deprecated model
+id raises — so a repeat of this incident now fails over to Groq
+transparently instead of taking down synthesis for ~40 minutes again.
+
+**`GET /health/ready` gating decision**: unlike Redis (no fallback exists,
+so any failure is gating), the LLM layer is now redundant by design — only
+set `failed=True` (503) when *both* providers are unhealthy. A single-
+provider outage is degraded service, not down service; gating on it would
+take healthy traffic offline for no reason.
+
+**Redundant Neo4j fetch, found while instrumenting GNN-stage latency to
+diagnose the incident's other symptom** (13-20s gaps in worker.log that
+required reading source code to explain, not a log field):
+`_fetch_subgraph_edges()` (`local_search.py`) internally re-called
+`get_chunk_entity_embeddings(chunk_ids)` — the exact same query already
+running in the sibling branch of the `asyncio.gather()` it was called from.
+Fixed by passing the already-fetched rows in instead of re-fetching
+(signature change: `chunk_ids` → `chunk_entities`); the same bug existed
+in `scripts/calibrate_gnn.py`, which duplicates the retrieval pipeline
+pattern rather than reusing `LocalSearch.search()` — fixed there too. Both
+call sites become sequential instead of `gather()`'d, which is a net win
+despite losing nominal parallelism: the two "parallel" branches were really
+serializing under connection-pool contention anyway, since one branch's own
+work called the query the other branch was already running.
+
+Added granular per-step timing (`local_search.multihop.done`,
+`.chunk_entities_edges.done`, `.authority_weights.done`, `.gnn_score.done`)
+so this class of gap is self-diagnosing from the log going forward. Verified
+live post-fix: GNN math itself is 125ms as originally claimed; the dominant
+cost is the single (now non-redundant) entity/edge fetch — ~7s for a
+353-entity subgraph.
+
+**New finding, explicitly not chased in this change**: live verification
+found a ~21s gap between `local_search.done` and `hybrid_retriever.done` not
+covered by any instrumentation added here — almost certainly the LLM
+synthesis call itself. Hiring docs claim "hybrid p95 2.2s"; this observation
+directly contradicts that number and hasn't been reconciled. Tracked on
+`docs/roadmap.md` as the next latency-investigation candidate; not
+addressed in this entry or commit.
+
+Tests: 21 new (11 `provider_health`, 9 `llm_client` — including a regression
+test that `get_llm()`'s default path returns a `FallbackLLM` not a bare
+`DeepSeekLLM`, the exact regression guard for this incident — plus 1
+`local_search` call-count regression test that fails against the pre-fix
+code and passes after). Full suite: 562 passed, 0 failed at the time.
+
+---
+
+## A141 — MCP server: a method-name collision that unit tests couldn't catch, only live verification could
+
+**What happened:**
+Added an MCP server (`mcp_server/`) exposing hybrid retrieval + entity
+lookup as MCP tools. The entity-lookup tool needed a "get everything this
+one named entity connects to" query, so a new `Neo4jClient` method was
+added — named `get_entity_neighbors`. A method with that exact name
+**already existed** (`neo4j_client.py:592`, chunk-based: `get_entity_neighbors(chunk_ids, tenant)`,
+used by `local_search.py`'s Step 6 in every single retrieval query). Since
+Python has no method overloading, the new definition — placed later in the
+class body — silently won, overwriting the original in the class
+namespace. This didn't just break the new MCP tool; it broke
+`local_search.py`'s existing entity-context step for **every query in the
+whole platform**, MCP or not.
+
+585 unit tests passed. None caught it. `test_mcp_tools.py`'s new tests
+mocked `get_neo4j()` generically and asserted the new method's own
+behavior in isolation — they never exercised the real class where the
+name collision lived, so a signature change silently accepted by Python
+(no overload conflict, no import error) was invisible to every test in
+the suite.
+
+**What caught it:** live, end-to-end verification — spawning the actual
+MCP server as a subprocess and driving it through the real `mcp` client
+over stdio, against real Neo4j data. The very first live call to
+`query_knowledge_graph_tool` threw `Neo4jClient.get_entity_neighbors()
+missing 1 required positional argument: 'type'` — `local_search.py`'s
+existing call site (`get_entity_neighbors(all_ids, tenant=tenant)`) was
+now hitting the new signature, passing a chunk-id list where a `name: str`
+was expected.
+
+**Rule:**
+> A green test suite proves the code you tested does what you tested it
+> to do — it says nothing about a name collision with code you didn't
+> think to re-check. Before adding a method to a class with more than a
+> handful of existing methods, grep the exact method name across the
+> whole file first, not just the region you're inserting into. And: no
+> amount of AsyncMock-based unit testing substitutes for actually running
+> the thing end-to-end at least once before calling it done — this is
+> exactly the class of bug (Python's silent last-definition-wins
+> semantics) that only manifests when the real class, not a mock, is
+> exercised.
+
+Fixed by renaming to `get_relations_for_entity` (`neo4j_client.py`,
+`mcp_server/tools.py`, `tests/unit/test_mcp_tools.py`), re-verified live
+end to end — both tools round-trip correctly against real Neo4j/Redis with
+real LLM calls (Groq/OpenAI/DeepSeek), and stdout stayed clean throughout
+(confirming the separate structlog-to-stderr redirect, needed because
+stdout is the MCP JSON-RPC channel, also worked correctly under real load).
+Full suite: 593 passed, 0 failed.
+
+---
+
+## A142 — The "~21s latency gap" from A140 was misdiagnosed: it wasn't LLM synthesis
+
+**What happened:**
+A140 (commit `125ae9e`) found a live ~21s gap between `local_search.done`
+and `hybrid_retriever.done` and hypothesized it was "almost certainly the
+LLM synthesis call itself," explicitly flagging it as unchased and
+unverified. That hypothesis was wrong, and the way it was disproven is the
+actual lesson here.
+
+First correction attempt (before touching code): re-derived the arithmetic
+from a stale `worker.log` predating the `125ae9e` fix by a full day. The
+log showed local_search's internal per-stage timers (multihop, GNN score)
+totaling far less than the ~21s gap, which looked like it pointed away from
+retrieval and toward synthesis — but the log simply didn't contain the
+granular timing that would let a synthesis-vs-retrieval question be
+answered at all. Recognizing this (a log predating the relevant fix can't
+be trusted to diagnose the fix's own behavior) stopped a second wrong
+conclusion from being written down.
+
+Real fix: added the same per-stage timing pattern already proven for
+`local_search.py` (A140) to `global_search.py` (`global_search.embed.done`,
+`.community_vector_search.done`, `.map.done`, `.reduce.done`/`.done`), then
+ran two live queries through the new MCP server (A141) to get real,
+attributed numbers instead of inferring from HTTP log correlation.
+
+**What the live data actually showed** (two runs, 25.2s and 46.5s total):
+- LLM synthesis alone: ~1-6s per call — normal, not the bottleneck.
+- **`local_search.chunk_entities_edges` (Neo4j fetch): 4.4-5.3s across
+  both runs** — the single largest reproducible non-LLM cost, and still
+  slow *after* A140's redundant-fetch fix, meaning there's a separate,
+  real cost here (index, payload size, or query shape) not yet
+  investigated.
+- Global search's map phase genuinely runs concurrently (`asyncio.gather`,
+  confirmed via two DeepSeek calls completing in the same second) — not a
+  bug, contrary to what the raw HTTP log timestamps looked like on first
+  read.
+- The documented "hybrid p95 2.2s" claim is off by an order of magnitude
+  against both live samples — not yet correctable to a specific number,
+  since two samples isn't a p95, but the existing number can no longer be
+  trusted as-is.
+
+**Rule:**
+> Don't infer stage attribution from HTTP request log timestamps when the
+> code path itself has no timing instrumentation — that's exactly how A140
+> arrived at "almost certainly LLM synthesis," and it was wrong. If a
+> question needs to distinguish "which of these five calls took the time,"
+> the fix is to add per-stage timing to the code, the same pattern already
+> proven once, not to eyeball log correlation a second time and hope it's
+> right this time.
+
+Tracked on `docs/roadmap.md`: `chunk_entities_edges` root-cause and the
+p95 correction are both now top-priority items, replacing the old
+(wrong) "LLM synthesis investigation" entry.
