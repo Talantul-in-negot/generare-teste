@@ -153,13 +153,26 @@ class ToolPolicy:
             return self._deny(tool_name, args, tenant, "invalid_arg", err, t0)
 
         # 5. Execute with timeout
+        # Force the policy-level tenant onto any tool whose schema doesn't
+        # declare tenant itself. Overwrite, not setdefault: a tool with no
+        # `tenant` in arg_schema doesn't validate/reject unknown keys either
+        # (see _validate_args), so an agent could otherwise smuggle a
+        # `tenant` key into args and have it silently win over the tenant
+        # this call was actually scoped for. Tools that DO declare tenant in
+        # their own arg_schema (the write/restricted tools, where the caller
+        # must say which tenant to act on) are untouched — their
+        # already-validated agent-supplied value is used as-is.
+        call_args = dict(args)
+        if "tenant" not in spec.arg_schema:
+            call_args["tenant"] = tenant
+
         timeout = spec.timeout_s or self._timeout
         try:
             if asyncio.iscoroutinefunction(spec.fn):
-                result = await asyncio.wait_for(spec.fn(**args), timeout=timeout)
+                result = await asyncio.wait_for(spec.fn(**call_args), timeout=timeout)
             else:
                 result = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(None, lambda: spec.fn(**args)),
+                    asyncio.get_event_loop().run_in_executor(None, lambda: spec.fn(**call_args)),
                     timeout=timeout,
                 )
             latency = (time.monotonic() - t0) * 1000

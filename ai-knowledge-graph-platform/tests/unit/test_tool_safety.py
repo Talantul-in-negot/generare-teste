@@ -39,7 +39,7 @@ async def _erase_tool(entity_name: str = "", entity_type: str = "",
 async def _read_tool_with_tenant(question: str = "", tenant: str = "") -> list[dict]:
     return [{"result": "ok"}]
 
-async def _slow_tool(question: str = "") -> list[dict]:
+async def _slow_tool(question: str = "", tenant: str = "") -> list[dict]:
     await asyncio.sleep(99)
     return []
 
@@ -443,3 +443,77 @@ class TestAuditLogWritten:
         entry = p.audit_log()[0]
         assert entry.outcome == "denied"
         assert entry.reason  == "dry_run"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 9. Tenant forced onto tools that don't declare it themselves (A147)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestTenantForcedForSchemalessTools:
+    """ToolPolicy.call() previously dropped its `tenant` param entirely at
+    execution time — every read tool ran as tenant="default" (the
+    established wildcard meaning "match all tenants"), regardless of what
+    tenant the call was actually scoped for. Fixed by forcing the
+    policy-level tenant onto any tool whose arg_schema doesn't declare
+    `tenant` itself; write/restricted tools that DO declare it (and are
+    agent-supplied, validated by the cross-tenant guard above) are
+    untouched."""
+
+    async def test_schemaless_tool_receives_policy_tenant(self):
+        received = {}
+
+        async def _capture(question: str = "", tenant: str = "") -> dict:
+            received["tenant"] = tenant
+            return {"ok": True}
+
+        p = ToolPolicy(
+            tools=[ToolSpec("probe", _capture, scopes=["read"], risk="low",
+                             arg_schema={"question": {"type": str}})],
+            caller_scopes=["read"],
+        )
+        await p.call("probe", {"question": "q"}, tenant="automotive")
+
+        assert received["tenant"] == "automotive"
+
+    async def test_agent_cannot_smuggle_tenant_into_schemaless_tool(self):
+        """The exact regression this fix exists to prevent: a tool with no
+        `tenant` in its arg_schema doesn't validate/reject unknown keys, so
+        an agent could try to pass its own `tenant` in args and have it
+        silently win over the tenant the call was actually scoped for."""
+        received = {}
+
+        async def _capture(question: str = "", tenant: str = "") -> dict:
+            received["tenant"] = tenant
+            return {"ok": True}
+
+        p = ToolPolicy(
+            tools=[ToolSpec("probe", _capture, scopes=["read"], risk="low",
+                             arg_schema={"question": {"type": str}})],
+            caller_scopes=["read"],
+        )
+        await p.call("probe", {"question": "q", "tenant": "attacker-chosen"},
+                      tenant="real-tenant")
+
+        assert received["tenant"] == "real-tenant"
+
+    async def test_schema_declared_tenant_tool_keeps_agent_supplied_value(self):
+        """Write/restricted tools declare `tenant` in their own arg_schema
+        on purpose — the caller must say which tenant to act on. This path
+        must stay exactly as it was: agent-supplied value used as-is,
+        independent of ToolPolicy.call()'s own tenant param."""
+        received = {}
+
+        async def _capture(entity_name: str = "", tenant: str = "") -> dict:
+            received["tenant"] = tenant
+            return {"ok": True}
+
+        p = ToolPolicy(
+            tools=[ToolSpec("write_probe", _capture, scopes=["write"], risk="high",
+                             arg_schema={"entity_name": {"type": str, "required": True},
+                                         "tenant": {"type": str, "required": True}})],
+            caller_scopes=["write"],
+        )
+        await p.call("write_probe", {"entity_name": "Boeing", "tenant": "aerospace"},
+                      tenant="unrelated-call-tenant")
+
+        assert received["tenant"] == "aerospace"
