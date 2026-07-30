@@ -5263,3 +5263,71 @@ satisfy). Plus per-mode call-gating (hybrid/local/global) and
 exception-type-preservation tests for both branches (the regression the
 `ExceptionGroup` unwrap exists to prevent). Full suite: 626 passed, 0
 failed.
+
+## A146 — `global_search.no_communities`: not a missing-data gap, a shared tenant-starvation bug in Neo4j ANN post-filtering
+
+Investigating the `global_search.no_communities` warning (flagged, not yet
+investigated, in the round-1 latency work) started from the wrong
+hypothesis — the warning's own hint text ("No Community nodes found... run
+`scripts/community_rebuild.py`") strongly suggested a missing-data problem.
+An Explore agent traced the ingestion/rebuild pipeline thoroughly and
+reported this was plausible. Live-querying Neo4j directly
+(`MATCH (c:Community) WHERE c.tenant=$tenant RETURN count(c)`) disproved
+it in one line: automotive had **200** Community nodes (aerospace 201,
+marketing 204) — not zero. Second reminder this session (after A142) that
+an agent's well-reasoned trace of what the code *could* do is not the same
+as checking what the *data* actually is — the fastest way to falsify a
+plausible-sounding hypothesis is still one direct query.
+
+**Real root cause**: `Neo4jClient.vector_search_communities`
+(`graphrag/graph/neo4j_client.py`) does
+`CALL db.index.vector.queryNodes('community_embeddings', $k, $embedding) YIELD node, score WHERE ($tenant = 'default' OR node.tenant = $tenant)`.
+Neo4j's vector index ANN search runs **before** the tenant filter and
+returns the **global** top-k nearest neighbors across *all* tenants first;
+`WHERE tenant = $tenant` only filters what already survived that global
+top-k. With `top_k=5` and 3+ tenants of comparable community counts
+(~200 each), a tenant can have zero of its own communities land in the
+global top-5 for a given query embedding — not because nothing relevant
+exists, but because other tenants' communities happened to score higher.
+Confirmed Neo4j 5.20 (this project's pinned version) has no native
+metadata pre-filter for `queryNodes`, so post-filter is the only option in
+this version — the bug isn't a mistake so much as an unhandled consequence
+of that constraint.
+
+**Fix**: over-fetch a larger candidate pool before filtering —
+`fetch_k = max(top_k * 20, 100)` — then `LIMIT $top_k` after the tenant
+`WHERE` clause, in both `vector_search_communities` and
+`vector_search_chunks` (identical pattern, same file). Chunks share the
+exact same bug shape but hadn't produced a visible symptom yet: `top_k=10`
+(vs. communities' 5) and thousands of chunks per tenant (vs. ~200
+communities) make starvation statistically rarer, not impossible — this is
+a shared-code bug, not a `global_search`-specific one, and it was only
+found by comparing the two call sites side by side after the first one
+turned up.
+
+**Explicitly deferred, not fixed here** (flagged in `docs/roadmap.md`
+rather than silently expanded into this change):
+- `graphrag/graph/link_predictor.py` and `graphrag/graph/alias_registry.py`
+  query `entity_embeddings` with the same post-filter-after-top-k shape.
+  Same bug class, but touching entity-resolution correctness paths is a
+  larger blast radius than this fix needed, and neither has a
+  live-observed failure.
+- `graphrag/agents/tools/neo4j_tools.py` and `scripts/calibrate_gnn.py`
+  call `vector_search_chunks` **without passing `tenant` at all**, silently
+  defaulting to `"default"` — a different, arguably worse bug (tenant
+  filter bypassed entirely, not just starved by ANN skew). Not the
+  retrieval path this investigation was about; flagged separately.
+
+**Live-verified**: re-ran the exact automotive query that originally
+triggered the warning — `global_search.community_vector_search.done
+communities=5` now (was 0, with `no_communities` firing). The warning is
+gone entirely. The final answer for that specific question was still "not
+relevant" — a legitimate content-relevance outcome from 5 real retrieved
+communities, distinguishable from the starvation bug (zero communities
+retrieved at all) that was actually fixed. Community count re-verified
+unchanged at 200 — confirms the fix only changed query behavior, not data.
+
+Tests: 5 new (`test_neo4j_client_embeddings.py`) — `fetch_k` floor vs.
+multiplier for both methods at two `top_k` values, plus a regression guard
+that the quarantine `NOT EXISTS` clause survived the edit. Full suite: 631
+passed, 0 failed.

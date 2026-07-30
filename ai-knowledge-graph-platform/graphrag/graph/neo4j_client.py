@@ -492,11 +492,17 @@ class Neo4jClient:
         self, embedding: list[float], top_k: int = 10, tenant: str = "default"
     ) -> list[dict]:
         """ANN search over Chunk.embedding using Neo4j vector index.
-        Filters by tenant and excludes chunks whose mentioned entities are quarantined.
+        Filters by tenant and excludes chunks whose mentioned entities are
+        quarantined.
+
+        Over-fetches before tenant-filtering — same tenant-starvation risk
+        as vector_search_communities, see that method's docstring and
+        tasks/lessons.md A146.
         """
+        fetch_k = max(top_k * 20, 100)
         return await self.run(
             """
-            CALL db.index.vector.queryNodes('chunk_embeddings', $k, $embedding)
+            CALL db.index.vector.queryNodes('chunk_embeddings', $fetch_k, $embedding)
             YIELD node AS c, score
             WHERE ($tenant = 'default' OR c.tenant = $tenant)
               AND NOT EXISTS {
@@ -505,10 +511,12 @@ class Neo4jClient:
               }
             RETURN c.id AS chunk_id, c.text AS text, score
             ORDER BY score DESC
+            LIMIT $top_k
             """,
-            k=top_k,
+            fetch_k=fetch_k,
             embedding=embedding,
             tenant=tenant,
+            top_k=top_k,
         )
 
     async def get_document_filenames(self, tenant: str = "default") -> list[str]:
@@ -575,18 +583,30 @@ class Neo4jClient:
         top_k: int = 5,
         tenant: str = "default",
     ) -> list[dict]:
-        """ANN search over Community.embedding for global search."""
+        """ANN search over Community.embedding for global search.
+
+        Over-fetches before tenant-filtering: db.index.vector.queryNodes
+        returns the global top-k across all tenants, and this Neo4j version
+        has no native pre-filter — so a tenant can be starved out of a
+        small top-k by other tenants' higher-scoring nodes even when it has
+        plenty of its own relevant communities (see tasks/lessons.md A146).
+        fetch_k gives the tenant filter a much larger candidate pool before
+        truncating to top_k.
+        """
+        fetch_k = max(top_k * 20, 100)
         return await self.run(
             """
-            CALL db.index.vector.queryNodes('community_embeddings', $k, $embedding)
+            CALL db.index.vector.queryNodes('community_embeddings', $fetch_k, $embedding)
             YIELD node AS c, score
             WHERE ($tenant = 'default' OR c.tenant = $tenant)
             RETURN c.id AS community_id, c.summary AS summary, c.level AS level, score
             ORDER BY score DESC
+            LIMIT $top_k
             """,
-            k=top_k,
+            fetch_k=fetch_k,
             embedding=embedding,
             tenant=tenant,
+            top_k=top_k,
         )
 
     async def get_entity_neighbors(

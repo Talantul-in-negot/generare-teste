@@ -138,4 +138,66 @@ class TestEmptyPhaseOne:
         result = await client.get_chunk_entity_embeddings(["c1"], tenant="aerospace")
 
         assert result == []
+
+
+class TestVectorSearchOverFetch:
+    """vector_search_communities / vector_search_chunks over-fetch before
+    tenant-filtering — Neo4j's db.index.vector.queryNodes returns the
+    global top-k across all tenants, so a small top_k can starve a tenant
+    out entirely even when it has plenty of its own relevant nodes (see
+    tasks/lessons.md A146)."""
+
+    async def test_communities_fetch_k_uses_floor_at_small_top_k(self) -> None:
+        client = _make_client()
+        client.run = AsyncMock(return_value=[])
+
+        await client.vector_search_communities([0.1, 0.2], top_k=5, tenant="automotive")
+
+        _, kwargs = client.run.call_args
+        assert kwargs["fetch_k"] == 100  # floor dominates: max(5*20, 100)
+        assert kwargs["top_k"] == 5
+
+    async def test_communities_fetch_k_uses_multiplier_at_larger_top_k(self) -> None:
+        client = _make_client()
+        client.run = AsyncMock(return_value=[])
+
+        await client.vector_search_communities([0.1, 0.2], top_k=10, tenant="automotive")
+
+        _, kwargs = client.run.call_args
+        assert kwargs["fetch_k"] == 200  # multiplier dominates: max(10*20, 100)
+        assert kwargs["top_k"] == 10
+
+    async def test_chunks_fetch_k_uses_floor_at_small_top_k(self) -> None:
+        client = _make_client()
+        client.run = AsyncMock(return_value=[])
+
+        await client.vector_search_chunks([0.1, 0.2], top_k=5, tenant="automotive")
+
+        _, kwargs = client.run.call_args
+        assert kwargs["fetch_k"] == 100
+        assert kwargs["top_k"] == 5
+
+    async def test_chunks_fetch_k_uses_multiplier_at_larger_top_k(self) -> None:
+        client = _make_client()
+        client.run = AsyncMock(return_value=[])
+
+        await client.vector_search_chunks([0.1, 0.2], top_k=10, tenant="automotive")
+
+        _, kwargs = client.run.call_args
+        assert kwargs["fetch_k"] == 200
+        assert kwargs["top_k"] == 10
+
+    async def test_chunks_query_still_excludes_quarantined_entities(self) -> None:
+        """Regression guard: the over-fetch edit must not have dropped the
+        quarantine filter (mirrors the live-query check in
+        tests/integration/test_safety_paths.py, as a fast unit test on the
+        query string itself)."""
+        client = _make_client()
+        client.run = AsyncMock(return_value=[])
+
+        await client.vector_search_chunks([0.1, 0.2], top_k=5, tenant="automotive")
+
+        query = client.run.call_args.args[0]  # client.run(query, **kwargs)
+        assert "quarantined" in query
+        assert "NOT EXISTS" in query
         client.run.assert_called_once()  # phase 2 never issued for an empty phase 1

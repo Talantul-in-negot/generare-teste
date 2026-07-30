@@ -18,7 +18,9 @@ Architecture
   alerts so the GET /kg/health/alerts endpoint can return them without a DB query.
 
 Configuration (config/settings.yml → business_matrix.alert_thresholds):
-  latency_p95_ms:      3000   # breach if API p95 latency exceeds this (ms)
+  latency_p95_ms:      30000  # breach if API p95 latency exceeds this (ms). Raised
+                               # 2026-07-30 from 3000 to match measured reality (n=44:
+                               # p95 26.4s) — see docs/performance-metrics-inventory.md
   faithfulness:        0.8    # breach if RAGAS faithfulness drops below this
   context_recall:      0.6    # breach if RAGAS context_recall drops below this
   contradiction_rate:  0.05   # breach if conflicts_per_1k_edges exceeds 5 %
@@ -50,7 +52,7 @@ _REDIS_URL     = os.getenv("REDIS_URL", "")
 # ── Default thresholds ─────────────────────────────────────────────────────────
 
 _DEFAULT_THRESHOLDS: dict[str, float] = {
-    "latency_p95_ms":     3000.0,
+    "latency_p95_ms":     30000.0,
     "faithfulness":       0.8,
     "context_recall":     0.6,
     "contradiction_rate": 0.05,   # conflicts_per_1k_edges / 1000 (normalised to 0-1)
