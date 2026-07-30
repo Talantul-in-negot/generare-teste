@@ -99,7 +99,9 @@ result = cursor.fetchone()
 
 ### Sample data
 
-From `results/kpi_snapshots/kpis.db` (104 queries measured 2026-06-03):
+From `results/kpi_snapshots/kpis.db` (104 queries measured 2026-06-03) —
+**superseded by the live re-measurement below; kept here for historical
+record, not as a current claim:**
 
 ```
 Aggregate across 104 queries:
@@ -112,6 +114,70 @@ Aggregate across 104 queries:
   Generation model:    DeepSeek deepseek-v4-pro (get_llm() default) / Groq (opt-in dev override)
   Embedding model:     text-embedding-3-large (OpenAI, 3072d)
 ```
+
+**Corrected, 2026-07-29** — the 2.2s figure above no longer reflects
+reality and should not be cited. Live re-measurement: 10 real questions
+(`data/eval_golden/queries_automotive.json`, the automotive tenant — 3,013
+entities, the largest live tenant) run sequentially through
+`HybridRetriever.retrieve_and_answer` in one warm process, reranker
+pre-warmed:
+
+```
+n=10  min=6.8s  p50=22.4s  p95=45.9s  max=45.9s  mean=22.0s
+mode: 100% hybrid (agentic fallback never triggered in this sample)
+```
+
+**Caveats, stated plainly:**
+- n=10 is not large enough for a statistically meaningful p95 — with 10
+  samples, "p95" and "max" are the same point. Treat this as a rough
+  order-of-magnitude correction, not a production SLA number. A real p95
+  needs 30+ samples at minimum.
+- This is a **cold-ish run**: 10 different questions touching different
+  entity subsets of a 3,013-entity tenant, so the entity embedding cache
+  (`graphrag/graph/embedding_cache.py`, `tasks/lessons.md` A143) only
+  partially warms across the run — `chunk_entities_edges` ranged 657ms to
+  6,203ms question-to-question, not the ~26x-faster warm-cache number
+  measured when the *same* question repeats. A long-running server
+  (`mcp_server/`, `workers/query_worker.py`) will trend faster than this
+  sample as its cache saturates a tenant's entities.
+- `global_search.reduce` — the single largest per-call cost found in
+  A143 (13.9-17.6s) — only fired on 2 of 10 questions here; the other 8
+  took the cheaper early-return path (`reason=all_map_results_not_relevant`).
+  So the map-only queries in this sample understate how bad the tail gets
+  when reduce *does* fire, and the ones that hit it (45.9s, 27.1s) show it.
+- One question (`NEG-02`) hit `global_search.no_communities` — a real,
+  separate gap (automotive appears to be missing Community nodes for at
+  least part of its graph; the code's own hint suggests
+  `scripts/community_rebuild.py`), not investigated further here.
+
+**Corrected again, 2026-07-29 (same day, post-fix)** — `global_search.reduce`
+(flagged above as "the next latency investigation") is now fixed:
+root-caused as unbounded LLM generation for a call whose output is never
+user-facing, plus usually nothing to synthesize (3 of 4 live occurrences
+had only one partial answer). Fixed with a short-circuit for the
+single-partial case and a `max_tokens` cap for the genuine multi-partial
+case — see `tasks/lessons.md` A144. Re-running the **same 10-question
+sample**:
+
+```
+n=10  min=5.1s  p50=20.7s  p95=33.9s  max=33.9s  mean=18.3s
+```
+
+p95 45.9s → 33.9s (-26%), mean 22.0s → 18.3s (-17%). The same n=10 caveat
+applies — this is still not a statistically meaningful p95. The single
+worst case from the whole investigation (an aerospace question that
+previously triggered a 13.9-17.6s reduce call) dropped from 30-43s total
+to **9.1s** on a warm cache.
+
+**Honest summary for a pitch**: don't quote "2.2s p95" — it's stale, even
+after two rounds of fixes this session. Current live behavior (automotive,
+n=10) is p50 ~21s, p95 ~34s — down from p95 ~46s before this session's
+work, but still an order of magnitude over the old documented claim. The
+remaining cost is round-trip *count* (query rewrite, embed, map,
+occasionally reduce, final synthesis), not per-call cost — p50 barely
+moved across both fixes (22.4s → 20.7s) because most of that chain is
+still there. Reducing round-trip count is the next lever, per
+`docs/roadmap.md`, not yet scoped.
 
 ---
 
@@ -392,7 +458,7 @@ The system emits alerts when metrics fall outside healthy ranges:
 
 | Metric | Alert threshold | Severity | Action |
 |---|---|---|---|
-| `p95_latency_ms` (hybrid) | > 3000 | ⚠️ Warning | Alert on **hybrid-only** p95. Hybrid p95 target: < 2.5s. |
+| `p95_latency_ms` (hybrid) | > 3000 | ⚠️ Warning | **Stale relative to measured behavior (2026-07-29, post-A144 fix): real p95 is ~33.9s (n=10), ~11x this threshold** — down from ~46x before this session's two latency fixes, still nowhere close. This is real active config (`graphrag/monitoring/alerts.py:21,53`), not just a doc claim — as configured today, any live deployment would be in constant alert. Not recalibrated here; whether to tighten (treat current latency as an active incident) or loosen (match reality, alert only on further regression) is a product decision, not made in this pass. |
 | `p95_latency_ms` (agentic) | > 10000 | ⚠️ Warning | Agentic/IRCoT runs 3–4 LLM rounds by design; 4–8s is expected and correct. Alert only on outliers. |
 | `agentic_rate` | > 20% | ⚠️ Warning | If >20% of queries trigger agentic fallback, the hybrid confidence threshold is too loose — tighten `_is_low_confidence` trigger. |
 | `faithfulness` | < 0.80 (3-sample window) | ⚠️ Warning | Check recent document ingestions; may have extraction errors. Target is **≥ 0.85**; 0.80 is the alert floor, not the goal. Measured: 0.937 on answerable questions; 0.842 overall (correct refusals score 0 and are excluded from answerable). |
@@ -407,11 +473,18 @@ The system emits alerts when metrics fall outside healthy ranges:
 
 **For a CTO evaluating the platform:**
 
-1. **Start with KPI data**: "We have 104 queries recorded against a live Neo4j instance.
-   Hybrid p95 latency is 2.2s. The agentic IRCoT path — which fires on roughly 9% of queries
-   for hard multi-hop questions — runs at 3.4s p95 by design. Combined p95 is 2.7s.
-   Faithfulness is 0.937 on answerable questions (0.842 overall including correct refusals). Context
-   precision is 0.907, meaning almost everything we retrieve is relevant."
+1. **Start with KPI data**: "Live-measured against the automotive tenant (3,013
+   entities, the largest live corpus), 10 real questions, post-fix: p50 20.7s,
+   p95 33.9s (n=10 — order-of-magnitude, not a production SLA number; see the
+   'Corrected again, 2026-07-29' note above for full caveats and the before/
+   after breakdown — two root-caused fixes this session cut p95 from 45.9s).
+   The remaining cost is round-trip count (query rewrite, embed, map,
+   occasionally reduce, final synthesis), not a single bottleneck — p50 barely
+   moved across both fixes because most of that chain is unavoidable per
+   query. Faithfulness is 0.937 on answerable questions (0.842 overall
+   including correct refusals). Context precision is 0.907, meaning almost
+   everything we retrieve is relevant." **Do not cite "2.2s p95" — that
+   number is stale even after two rounds of live fixes.**
 
 2. **Show graph health**: "The knowledge graph is built from 12 aerospace regulatory
    documents — FAA/EASA airworthiness directives, manufacturer records, fleet data —
@@ -429,17 +502,36 @@ The system emits alerts when metrics fall outside healthy ranges:
    The pipeline is implemented and wired; the trajectory you see in the dashboard
    represents the expected correction curve."
 
-4. **Explain the latency breakdown**: "Hybrid retrieval: ~0.5s for graph search, ~0.2s for
-   BM25, ~0.2s for reranking, ~0.1s for GNN scoring, ~1.4s for 70B synthesis = ~2.4s avg.
-   Agentic path adds 1–2 reasoning steps at 0.2s each (llama-3.1-8b-instant) before the
-   final 70B synthesis call. The bottleneck is always the LLM synthesis step."
+4. **Explain the latency breakdown** — this entire section (the "~0.5s graph
+   search, ~1.4s synthesis, ~2.4s avg" table that used to live here) has been
+   **live-superseded and removed**. It was an illustrative estimate, never
+   independently instrumented, and real per-stage timing (added this session
+   — `local_search.py`, `global_search.py`) now contradicts it directly.
+   The real breakdown, per-stage, live-measured:
+   - Retrieval (BM25 + rerank + multihop + GNN): sub-second to a few seconds,
+     genuinely fast — never the bottleneck.
+   - `chunk_entities_edges` (Neo4j entity-embedding fetch): was the largest
+     non-LLM cost (2.9-6.6s cold), fixed with an entity-keyed cache
+     (`graphrag/graph/embedding_cache.py`, `tasks/lessons.md` A143) — 26x
+     faster on a warm cache, live-verified.
+   - `global_search.map` (concurrent per-community LLM calls): 2.6-7.4s.
+   - `global_search.reduce` (single LLM call) — **was** 13.9-17.6s, the
+     single largest cost anywhere in the pipeline. Root-caused: unbounded
+     LLM generation for a call whose output is never user-facing (it's
+     consumed only as another prompt's input), and usually nothing to
+     synthesize (3 of 4 live occurrences had one partial answer, not
+     several to merge). Fixed — single-partial case now short-circuits
+     entirely (skips the LLM call), multi-partial case capped via
+     `max_tokens` (`tasks/lessons.md` A144). Now 0s (skipped) or
+     ~4.5s (genuine merge case), live-verified.
+   - Final answer synthesis: single-digit seconds.
 
-   **Don't round this down to "retrieval is under a second" or cite a rounder public
-   figure (e.g. a "~700ms" line from a LinkedIn post) as if it matches this table.**
-   Retrieval sums to **~1.0s average** (0.5+0.2+0.2+0.1), not comfortably under a
-   second — synthesis at ~1.4s is still the larger piece (~58% of the 2.4s average),
-   which is the load-bearing claim, but state the retrieval number as ~1.0s, not a
-   looser rounded figure pulled from marketing copy.
+   **The honest one-line version**: retrieval is fast, the graph fetch is
+   fixed, `global_search.reduce` is fixed — the pipeline's remaining cost is
+   round-trip *count* (query rewrite, embed, map, occasionally reduce,
+   final synthesis), not one dominant stage. Don't quote the old "synthesis
+   is ~58% of a 2.4s average" framing; it undercounted by an order of
+   magnitude and named the wrong stage as dominant, twice over now.
 
 ---
 

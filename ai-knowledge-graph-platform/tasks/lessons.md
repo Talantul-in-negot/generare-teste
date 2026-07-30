@@ -5110,3 +5110,88 @@ Tests: 16 new (9 `EmbeddingCache` get/set/invalidate/tenant-isolation, 5
 all-hit test asserting **zero** phase-2 Neo4j calls is the one that
 actually proves the optimization works, not just that it doesn't crash —
 2 `graph_writer` invalidation-hook tests). Full suite: 609 passed, 0 failed.
+
+---
+
+## A144 — `global_search.reduce`'s 13.9-17.6s cost: the prompt was asking for the expensive thing, and usually had nothing to synthesize
+
+**What happened:**
+A143 corrected the `chunk_entities_edges` misdiagnosis; that same investigation
+flagged `global_search.reduce` as the new largest cost (13.9-17.6s live). First
+instinct was another Cypher-style root cause. It wasn't — no retries/timeouts
+in any trace, a real production reduce prompt measured only 591 chars, and
+`graphrag/core/llm_client.py` sets no `max_tokens` on any provider, any call.
+Five identical calls to the same prompt produced responses from 494 to 2,090
+chars taking 6.5s to 15.7s — DeepSeek's non-deterministic output length,
+directly proportional to wall time (~4.3s fixed overhead + ~5.5ms/char, a
+rough fit on 5 noisy points).
+
+Two things made this fixable rather than just inherent to LLM generation:
+
+1. **The output is never user-facing.** `context_builder.py:109-111` appends
+   `synthesized_answer` as a `"Community knowledge:\n..."` section that
+   becomes *input* to the final synthesis call in `hybrid_retriever.py`. The
+   old prompt's closing line — `"Final comprehensive answer:"` — was asking
+   for polished markdown prose whose only reader is another LLM's prompt.
+   All that formatting was paid for in latency and then discarded.
+
+2. **Reduce usually had nothing to synthesize.** Across 4 real reduce calls
+   captured in live traces, 3 had `partial_answers=1` — a single community's
+   extraction, with no second answer to merge it against. A 9-17.6s LLM call
+   to reformat one string into prose.
+
+**Rule:**
+> Before optimizing an LLM call, ask what actually consumes its output.
+> Prompting for polish (headers, bullets, "comprehensive") makes sense for
+> a user-facing answer and is pure latency tax for one that only ever
+> becomes another prompt's input. And check whether the call is even doing
+> real work — `len(inputs) == 1` is "there is nothing to merge," not a
+> smaller version of the merge case; it deserves a short-circuit, not a
+> smaller prompt.
+
+**Fix**, `graphrag/retrieval/global_search.py`:
+- `len(partial_answers) == 1` → skip reduce entirely, return the single
+  extraction directly (its `[Level N] ` source-label prefix stripped, since
+  that only existed to label sources inside the now-skipped reduce prompt).
+- `_REDUCE_PROMPT` rewritten: "merge into a compact factual summary... no
+  preamble, no markdown formatting" instead of "final comprehensive answer."
+- New `retrieval.global_reduce_max_tokens` (default 300, per-tenant
+  overridable) caps the genuine multi-partial case, applied only to the
+  reduce call — not map, not final synthesis (user-facing, where truncation
+  would be worse).
+
+**`max_tokens` plumbing** (`graphrag/core/llm_client.py`): added to all four
+`generate()` signatures. Groq/DeepSeek: conditional `kwargs["max_tokens"]`,
+mirroring the existing `json_mode` pattern. Gemini is structurally different
+— its SDK field is `max_output_tokens` on `GenerateContentConfig`, not
+`max_tokens`. `FallbackLLM.generate()` forwards `max_tokens` on **both**
+primary and secondary paths (unlike `model`, which is deliberately *not*
+forwarded to the secondary — a model name valid on one provider isn't valid
+on another; `max_tokens` is provider-agnostic, so it doesn't have that
+problem).
+
+**Live-verified, before/after** (10-question automotive sample,
+`data/eval_golden/queries_automotive.json`): p95 45,953ms → **33,906ms**
+(-26%), mean 22,041ms → **18,305ms** (-17%). Confirmed live in the trace:
+`global_search.reduce.skipped reason=single_partial_answer` firing exactly
+where the old `reduce.done` used to appear; the one genuine multi-partial
+case in that run completed reduce in 4,469ms, down from the old 6,891-17,578ms
+range. Separately, the single worst case from the whole investigation (the
+aerospace FAA question, `partial_answers=1`) now skips reduce entirely —
+warm-cache total latency dropped to 9,078ms, down from the 30,000-43,172ms
+baseline measured at the start of this investigation (A142/A143).
+
+**Honest ceiling, stated in the plan up front and confirmed by the data**:
+this removes wasted calls and bounds the worst-case tail — it does not make
+the pipeline fast. The remaining cost is still several sequential LLM
+round-trips (query rewrite, embed, map, occasionally reduce, final
+synthesis); p50 barely moved (22,391ms → 20,688ms). `docs/roadmap.md`
+re-ranked accordingly — the next lever is reducing round-trip *count*, not
+per-call cost.
+
+Tests: 11 new (6 `global_search.py` — single-partial short-circuit, prefix
+stripping, multi-partial reduce with `max_tokens`, tenant override,
+zero-partial regression guard, empty-communities guard; 5 `llm_client.py` —
+`max_tokens` omitted-by-default on both Groq and DeepSeek, present when
+given, forwarded to `FallbackLLM`'s secondary on failover). Full suite:
+620 passed, 0 failed.

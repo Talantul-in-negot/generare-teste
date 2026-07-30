@@ -24,14 +24,16 @@ Community summary: {summary}
 Relevant information:"""
 
 _REDUCE_PROMPT = """\
-You are synthesizing partial answers from multiple community summaries to answer a question.
+Merge the partial answers below into a compact factual summary answering the question.
+Keep every substantive fact; drop redundancy across partials. No preamble, no
+markdown formatting, no restating the question.
 
 Question: {question}
 
 Partial answers:
 {partial_answers}
 
-Final comprehensive answer:"""
+Merged facts:"""
 
 
 class GlobalSearch:
@@ -126,13 +128,32 @@ class GlobalSearch:
             )
             return {"communities": communities, "synthesized_answer": ""}
 
+        if len(partial_answers) == 1:
+            # Nothing to synthesize — reduce would spend a full LLM call
+            # (measured live: 9-17.6s) reformatting one extraction into
+            # prose that is only ever consumed as context by the final
+            # synthesis call (context_builder.py), never shown to the user.
+            # Strip the "[Level N] " prefix — it exists only to label
+            # sources for the reduce prompt above; downstream wants facts.
+            log.info("global_search.reduce.skipped", reason="single_partial_answer")
+            only = partial_answers[0]
+            synthesized = only.split("] ", 1)[1] if only.startswith("[Level ") else only
+            log.info(
+                "global_search.done",
+                communities=len(communities),
+                partial_answers=1,
+            )
+            return {"communities": communities, "synthesized_answer": synthesized}
+
         # Reduce: synthesize all partial answers
+        max_tokens = cfg.get("global_reduce_max_tokens", 300)
         _t0 = time.monotonic()
         synthesized = await llm.generate(
             _REDUCE_PROMPT.format(
                 question=question,
                 partial_answers="\n\n".join(partial_answers),
-            )
+            ),
+            max_tokens=max_tokens,
         )
         log.info(
             "global_search.reduce.done",

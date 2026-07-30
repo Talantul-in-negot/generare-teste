@@ -89,6 +89,72 @@ class TestGroqFailFast:
         assert llm._client.chat.completions.create.call_count == 1
 
 
+class TestMaxTokens:
+    """max_tokens (added for global_search.py's reduce step — A144): must be
+    an opt-in per-call kwarg that never leaks onto calls that don't ask for
+    it, and must survive FallbackLLM's primary->secondary failover."""
+
+    async def test_deepseek_omits_max_tokens_key_when_not_given(self):
+        llm = DeepSeekLLM(api_key="test-key")
+        response = MagicMock()
+        response.choices = [MagicMock(message=MagicMock(content="answer"))]
+        llm._client.chat.completions.create = MagicMock(return_value=response)
+
+        await llm.generate("prompt")
+
+        _, kwargs = llm._client.chat.completions.create.call_args
+        assert "max_tokens" not in kwargs
+
+    async def test_deepseek_passes_max_tokens_when_given(self):
+        llm = DeepSeekLLM(api_key="test-key")
+        response = MagicMock()
+        response.choices = [MagicMock(message=MagicMock(content="answer"))]
+        llm._client.chat.completions.create = MagicMock(return_value=response)
+
+        await llm.generate("prompt", max_tokens=300)
+
+        _, kwargs = llm._client.chat.completions.create.call_args
+        assert kwargs["max_tokens"] == 300
+
+    async def test_groq_omits_max_tokens_key_when_not_given(self):
+        llm = GroqLLM(api_key="test-key", default_model="test-model")
+        response = MagicMock()
+        response.choices = [MagicMock(message=MagicMock(content="answer"))]
+        llm._client.chat.completions.create = MagicMock(return_value=response)
+
+        await llm.generate("prompt")
+
+        _, kwargs = llm._client.chat.completions.create.call_args
+        assert "max_tokens" not in kwargs
+
+    async def test_groq_passes_max_tokens_when_given(self):
+        llm = GroqLLM(api_key="test-key", default_model="test-model")
+        response = MagicMock()
+        response.choices = [MagicMock(message=MagicMock(content="answer"))]
+        llm._client.chat.completions.create = MagicMock(return_value=response)
+
+        await llm.generate("prompt", max_tokens=300)
+
+        _, kwargs = llm._client.chat.completions.create.call_args
+        assert kwargs["max_tokens"] == 300
+
+    async def test_fallback_forwards_max_tokens_to_secondary_on_failover(self):
+        """The path most likely to be missed: max_tokens must survive
+        primary->secondary failover, unlike `model` which is deliberately
+        NOT forwarded (a model name valid on the primary isn't valid on a
+        different provider)."""
+        cfg = MagicMock(deepseek_api_key="ds-key", groq_api_key="groq-key", groq_model="groq-model")
+        fb = FallbackLLM.deepseek_primary(cfg)
+
+        fb._primary.generate = AsyncMock(side_effect=_api_status_error())
+        fb._secondary.generate = AsyncMock(return_value="answer from groq")
+
+        await fb.generate("prompt", max_tokens=300)
+
+        _, kwargs = fb._secondary.generate.call_args
+        assert kwargs.get("max_tokens") == 300
+
+
 class TestFallbackLLMClassmethods:
     def test_deepseek_primary_uses_deepseek_first(self):
         cfg = MagicMock(deepseek_api_key="ds-key", groq_api_key="groq-key", groq_model="groq-model")

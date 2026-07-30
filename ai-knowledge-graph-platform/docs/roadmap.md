@@ -83,22 +83,34 @@ documented p95).
 `tasks/lessons.md` A143) — not a query-plan issue, an inherent Bolt
 deserialization cost for 3072-dim embeddings, fixed with an entity-keyed
 in-process cache (`graphrag/graph/embedding_cache.py`). Live-verified: 26x
-faster on a warm cache in the real request path (2859ms → 109ms). That
-investigation surfaced a bigger, unaddressed cost: `global_search.reduce`
-(a single LLM call) measured **17.6s and 13.9s** across two live runs —
-larger than any other single stage in the pipeline, including the map
-phase and final synthesis combined. This is now the top candidate.
+faster on a warm cache in the real request path (2859ms → 109ms).
+
+**Update, 2026-07-29 (later same day)**: `global_search.reduce` — which
+that investigation surfaced as the new largest cost (17.6s/13.9s) —
+root-caused and fixed (`tasks/lessons.md` A144). Not a bug: unbounded LLM
+generation for a call whose output is never user-facing, and 3 of 4 live
+occurrences had nothing to synthesize (`partial_answers=1`). Fixed with a
+short-circuit for the single-partial case, a rewritten prompt asking for
+compact facts instead of prose, and a `max_tokens` cap for the genuine
+multi-partial case. Live-verified on the same 10-question sample: p95
+45.9s → **33.9s** (-26%), mean 22.0s → **18.3s** (-17%). The worst case
+found in the whole investigation (aerospace FAA question) dropped from
+30-43s to **9.1s** warm.
+
+**Both round-1 latency items are now done.** What's left is smaller and
+more open-ended — see the re-ranked table below.
 
 | Priority | Candidate | Recommendation | Why it matters |
 |---|---|---|---|
-| 1 | **`global_search.reduce` latency investigation** | Implement next | Measured 17.6s/13.9s across two live runs — the single largest cost anywhere in the pipeline. Needs the actual prompt/response size profiled (is it token-count-bound, a large `partial_answers` payload, or provider-side variance) before concluding anything — same PROFILE-first discipline that found `chunk_entities_edges` wasn't what it first looked like (A142/A143). |
-| 2 | **Correct the "hybrid p95 2.2s" documented claim** | Implement next | Live runs now measure in the 25-45s range even after the `chunk_entities_edges` fix — not remotely close to 2.2s. Needs a proper sample (10+ queries) through the now-instrumented pipeline, not another single-sample guess. |
-| 3 | **Re-ranking feedback loop** | Worth implementing | Adds product maturity, but no real usage data exists yet to make it meaningful — a portfolio project has no click stream. Build the plumbing; low urgency. |
-| 4 | **GNN pre-training scheduled job** | Worth implementing | The GNN-stage latency question is now answered (commit `125ae9e`: GNN math itself is 125ms, not the bottleneck) — no longer blocked, but still low urgency. |
-| 5 | **TimescaleDB KPI store** | Implement only if pitching observability hard | Useful for enterprise monitoring, but larger than it looks because compose/dev config and migration paths must be added. |
-| 6 | **Multi-modal extraction pipeline** | Defer unless targeting multi-modal roles | Storage exists, but OCR/visual embedding/audio ingestion expands scope away from the core GraphRAG hiring story. |
-| 7 | **Cross-encoder fine-tuning** | Defer | Hard to prove without real usage data and domain-labeled query/chunk pairs. |
-| 8 | **Kafka streaming ingestion** | Defer | Interesting scale path, but RabbitMQ already supports the current MVP story. Kafka would add operational complexity before it adds hiring value. |
+| 1 | **Re-measure and correct the "hybrid p95 2.2s" documented claim** | Implement next | Corrected once already this session with a 10-question sample (pre-reduce-fix: p95 45.9s) — now stale again post-fix (p95 33.9s). `docs/performance-metrics-inventory.md` needs the post-fix numbers, and ideally a larger sample (30+) than the 10 used so far before treating any number as a stable claim. |
+| 2 | **Reduce sequential LLM round-trip count** | Worth investigating | p50 barely moved from this session's two fixes (22.4s → 20.7s) because the remaining cost is round-trip *count* (rewrite, embed, map, occasionally reduce, final synthesis), not per-call cost. The next real lever is fewer round-trips, not faster ones — e.g. whether query rewrite and the map phase's embedding step could be merged or parallelized further. Not scoped yet. |
+| 3 | **`global_search.no_communities` gap** | Worth investigating | Live sample hit this warning on real automotive data (`docs/performance-metrics-inventory.md`'s corrected-metrics note) — a tenant missing Community nodes for part of its graph degrades silently to no global-search answer for that slice. Small in this session's data (1 of 10 queries) but unquantified at scale. |
+| 4 | **Re-ranking feedback loop** | Worth implementing | Adds product maturity, but no real usage data exists yet to make it meaningful — a portfolio project has no click stream. Build the plumbing; low urgency. |
+| 5 | **GNN pre-training scheduled job** | Worth implementing | The GNN-stage latency question is now answered (commit `125ae9e`: GNN math itself is 125ms, not the bottleneck) — no longer blocked, but still low urgency. |
+| 6 | **TimescaleDB KPI store** | Implement only if pitching observability hard | Useful for enterprise monitoring, but larger than it looks because compose/dev config and migration paths must be added. |
+| 7 | **Multi-modal extraction pipeline** | Defer unless targeting multi-modal roles | Storage exists, but OCR/visual embedding/audio ingestion expands scope away from the core GraphRAG hiring story. |
+| 8 | **Cross-encoder fine-tuning** | Defer | Hard to prove without real usage data and domain-labeled query/chunk pairs. |
+| 9 | **Kafka streaming ingestion** | Defer | Interesting scale path, but RabbitMQ already supports the current MVP story. Kafka would add operational complexity before it adds hiring value. |
 
 End-to-end demo videos (WPP, IATF) are done — recorded from `docs/video-script-wpp-demo.md` and `docs/video-script-iatf-demo.md`.
 
@@ -108,11 +120,15 @@ MCP server (exposing hybrid retrieval + entity lookup as MCP tools) is done
 Entity embedding cache (fixes `chunk_entities_edges`) is done — see
 `graphrag/graph/embedding_cache.py`, `tasks/lessons.md` A143.
 
+`global_search.reduce` latency (single-partial short-circuit + `max_tokens`
+cap) is done — see `graphrag/retrieval/global_search.py`,
+`graphrag/core/llm_client.py`, `tasks/lessons.md` A144.
+
 ### Recommended Next Sprint
 
 - [x] ~~Profile `chunk_entities_edges`~~ — done (A143): Bolt deserialization cost of 3072-dim embeddings, fixed with an entity-keyed cache, 26x faster live-verified
-- [ ] **Profile `global_search.reduce`** — 17.6s/13.9s measured across two live runs, the largest single cost anywhere in the pipeline; find out why before proposing a fix
-- [ ] **Correct the "hybrid p95 2.2s" claim** in `docs/performance-metrics-inventory.md` — run a proper multi-query sample through the now-instrumented pipeline, not a single-sample guess
+- [x] ~~Profile `global_search.reduce`~~ — done (A144): output was never user-facing and usually had nothing to synthesize; single-partial short-circuit + max_tokens cap, p95 45.9s → 33.9s (-26%) live-verified
+- [ ] **Re-measure and correct the "hybrid p95 2.2s" claim** in `docs/performance-metrics-inventory.md` with post-A144 numbers — done once already this session pre-reduce-fix (p95 45.9s), now stale again; ideally 30+ queries rather than 10 before treating any number as stable
 
 ---
 

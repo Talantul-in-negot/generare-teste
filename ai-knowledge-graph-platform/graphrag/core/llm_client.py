@@ -79,6 +79,7 @@ class BaseLLM:
         model: str | None = None,
         json_mode: bool = False,
         temperature: float = 0.0,
+        max_tokens: int | None = None,
     ) -> str:
         raise NotImplementedError
 
@@ -113,6 +114,7 @@ class GroqLLM(BaseLLM):
         model: str | None = None,
         json_mode: bool = False,
         temperature: float = 0.0,
+        max_tokens: int | None = None,
     ) -> str:
         from groq import RateLimitError, APITimeoutError, APIConnectionError
 
@@ -124,6 +126,8 @@ class GroqLLM(BaseLLM):
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
 
         loop = asyncio.get_running_loop()
         last_exc: Exception | None = None
@@ -214,15 +218,20 @@ class GeminiLLM(BaseLLM):
         model: str | None = None,
         json_mode: bool = False,
         temperature: float = 0.0,
+        max_tokens: int | None = None,
     ) -> str:
         from google.genai import types as genai_types
         from google.genai.errors import ClientError, ServerError
 
         model = model or self._default_model
-        config = genai_types.GenerateContentConfig(
-            temperature=temperature,
-            response_mime_type="application/json" if json_mode else "text/plain",
-        )
+        config_kwargs: dict[str, Any] = {
+            "temperature": temperature,
+            "response_mime_type": "application/json" if json_mode else "text/plain",
+        }
+        # Gemini's SDK names this max_output_tokens, not max_tokens.
+        if max_tokens is not None:
+            config_kwargs["max_output_tokens"] = max_tokens
+        config = genai_types.GenerateContentConfig(**config_kwargs)
 
         loop = asyncio.get_running_loop()
         last_exc: Exception | None = None
@@ -292,6 +301,7 @@ class DeepSeekLLM(BaseLLM):
         model: str | None = None,
         json_mode: bool = False,
         temperature: float = 0.0,
+        max_tokens: int | None = None,
     ) -> str:
         from openai import RateLimitError, APIStatusError, APITimeoutError, APIConnectionError
 
@@ -303,6 +313,8 @@ class DeepSeekLLM(BaseLLM):
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
 
         loop = asyncio.get_running_loop()
         last_exc: Exception | None = None
@@ -372,10 +384,12 @@ class FallbackLLM(BaseLLM):
         model: str | None = None,
         json_mode: bool = False,
         temperature: float = 0.0,
+        max_tokens: int | None = None,
     ) -> str:
         try:
             return await self._primary.generate(
-                prompt, model=model, json_mode=json_mode, temperature=temperature
+                prompt, model=model, json_mode=json_mode, temperature=temperature,
+                max_tokens=max_tokens,
             )
         except self._fallback_exceptions as exc:
             log.warning(
@@ -383,8 +397,12 @@ class FallbackLLM(BaseLLM):
                 primary=self._primary_name,
                 reason=type(exc).__name__,
             )
+            # model is deliberately NOT forwarded here — the primary's model
+            # name isn't valid on a different provider. max_tokens is
+            # provider-agnostic, so unlike model it belongs on both paths.
             return await self._secondary.generate(
-                prompt, json_mode=json_mode, temperature=temperature
+                prompt, json_mode=json_mode, temperature=temperature,
+                max_tokens=max_tokens,
             )
 
     @classmethod
