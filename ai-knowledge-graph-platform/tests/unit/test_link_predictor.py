@@ -145,6 +145,29 @@ class TestPredictTail:
         results = await pred.predict_tail("head-id", "REL")
         assert results == []
 
+    @pytest.mark.asyncio
+    async def test_ann_fetch_k_uses_floor_at_small_top_k(self) -> None:
+        """fetch_k = max(top_k*2, 100) — the 100 floor prevents the same
+        tenant-starvation bug fixed in A146 for a small top_k (see
+        tasks/lessons.md A148)."""
+        neo4j = _make_neo4j([1.0, 0.0], [])
+        pred  = LinkPredictor(neo4j, _make_trainer({"REL": [0.0, 0.0]}))
+
+        await pred.predict_tail("head-id", "REL", top_k=5)
+
+        ann_call_kwargs = neo4j.run.call_args_list[1].kwargs
+        assert ann_call_kwargs["top_k"] == 100
+
+    @pytest.mark.asyncio
+    async def test_ann_fetch_k_uses_multiplier_at_larger_top_k(self) -> None:
+        neo4j = _make_neo4j([1.0, 0.0], [])
+        pred  = LinkPredictor(neo4j, _make_trainer({"REL": [0.0, 0.0]}))
+
+        await pred.predict_tail("head-id", "REL", top_k=100)
+
+        ann_call_kwargs = neo4j.run.call_args_list[1].kwargs
+        assert ann_call_kwargs["top_k"] == 200
+
 
 # ── predict_relation tests ─────────────────────────────────────────────────────
 

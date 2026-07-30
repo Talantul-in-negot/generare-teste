@@ -116,6 +116,12 @@ class LinkPredictor:
         exclude_ids: list[str] | None = None,
     ) -> list[dict]:
         """ANN search over entity embeddings using the Neo4j vector index."""
+        # fetch_k: 2x compensates for excluded-ID filtering below; the 100
+        # floor prevents tenant starvation on small top_k — the shared
+        # entity_embeddings index spans all tenants, so a small k can miss
+        # this tenant's own best matches entirely (same bug class as A146).
+        # Measured safe at ~3.4k entities (tasks/lessons.md A148).
+        fetch_k = max(top_k * 2, 100)
         rows = await self._neo4j.run(
             """
             CALL db.index.vector.queryNodes('entity_embeddings', $top_k, $qv)
@@ -129,7 +135,7 @@ class LinkPredictor:
                    score
             LIMIT $top_k
             """,
-            top_k=top_k * 2,   # over-fetch so filtering excluded IDs still returns top_k
+            top_k=fetch_k,
             qv=query_vector,
             tenant=tenant,
         )

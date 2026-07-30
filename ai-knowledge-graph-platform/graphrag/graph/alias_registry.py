@@ -46,6 +46,15 @@ class AmbiguousMatch:
 # ingestion.alias_fuzzy_threshold in config/settings.yml.
 _DEFAULT_EMBEDDING_SIMILARITY_THRESHOLD = 0.97   # cosine similarity for dedup
 _DEFAULT_FUZZY_SCORE_THRESHOLD = 85              # rapidfuzz ratio for soft match
+
+# ANN candidate pool for the two embedding-search methods below, before the
+# tenant/type/threshold WHERE filter. entity_embeddings is a shared index
+# across all tenants, so a small k (previously hardcoded 5/10) can starve
+# out a tenant's own true duplicate if other tenants score higher for the
+# same query vector — silent false negative on dedup. 100 is generous
+# against current entity counts (~3.4k total across tenants) and measured
+# latency-neutral vs. the old k=5 (see tasks/lessons.md A148).
+_FETCH_K = 100
 _REDIS_TTL = 86400                       # 24h — alias table refreshed each ingestion batch
 
 # Redis key pattern:  graphrag:aliases:{tenant}   → Hash { normalized_alias: "canonical|type" }
@@ -322,7 +331,7 @@ class AliasRegistry:
         """
         rows = await self._neo4j.run(
             """
-            CALL db.index.vector.queryNodes('entity_embeddings', 5, $embedding)
+            CALL db.index.vector.queryNodes('entity_embeddings', $fetch_k, $embedding)
             YIELD node AS e, score
             WHERE e.type = $entity_type
               AND e.name <> $exclude_name
@@ -332,6 +341,7 @@ class AliasRegistry:
             ORDER BY score DESC
             LIMIT 1
             """,
+            fetch_k=_FETCH_K,
             embedding=embedding,
             entity_type=entity_type,
             exclude_name=exclude_name,
@@ -361,7 +371,7 @@ class AliasRegistry:
             upper = self._embedding_threshold
         rows = await self._neo4j.run(
             """
-            CALL db.index.vector.queryNodes('entity_embeddings', 10, $embedding)
+            CALL db.index.vector.queryNodes('entity_embeddings', $fetch_k, $embedding)
             YIELD node AS e, score
             WHERE e.type = $entity_type
               AND e.name <> $exclude_name
@@ -372,6 +382,7 @@ class AliasRegistry:
             ORDER BY score DESC
             LIMIT 1
             """,
+            fetch_k=_FETCH_K,
             embedding=embedding,
             entity_type=entity_type,
             exclude_name=exclude_name,

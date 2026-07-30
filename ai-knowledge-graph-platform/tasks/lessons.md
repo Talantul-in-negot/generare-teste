@@ -5331,3 +5331,129 @@ Tests: 5 new (`test_neo4j_client_embeddings.py`) — `fetch_k` floor vs.
 multiplier for both methods at two `top_k` values, plus a regression guard
 that the quarantine `NOT EXISTS` clause survived the edit. Full suite: 631
 passed, 0 failed.
+
+## A147 — ToolPolicy's read tools looked tenant-scoped but weren't enforcing it: `tenant` was checked, audited, and logged, then silently dropped before execution
+
+Found while investigating two sibling bugs deferred from A146. Escalated
+twice in scope over the course of one thread — worth recording the shape
+of that, not just the fix: started as "check `link_predictor.py`/
+`alias_registry.py` for the same starvation pattern," which surfaced
+`neo4j_tools.py`'s `search_graph` missing `tenant` entirely; investigating
+*that* found `get_community`/`get_neighbors` shared the same gap; checking
+whether that was really isolated found `retrieval_tools.py`'s
+`local_search`/`global_search` had it too — at which point it was 5 of 5
+read tools in the entire `ToolPolicy.from_defaults()` registry, not 3
+isolated functions. Stopped and re-scoped with the user explicitly at each
+widening rather than silently expanding — the right call, since the actual
+fix (one change in `ToolPolicy.call()`) ended up smaller and more correct
+than patching 5 call sites independently would have been.
+
+**Root cause**: `ToolPolicy.call(tool_name, args, tenant=...)`
+(`graphrag/agents/tool_policy.py`) accepts, scope-checks, and audit-logs
+`tenant` — real work happens with it. But at the actual execution line
+(`spec.fn(**args)`), `tenant` is never merged into `args` or passed
+separately. Per the established convention elsewhere in this codebase
+(`neo4j_client.py`'s `WHERE ($tenant = 'default' OR x.tenant = $tenant)`,
+confirmed via A94 that no real data is ever stored under
+`tenant="default"`), the silent default meant **unfiltered, cross-tenant-
+mixed results** — not empty ones, not an error. The policy layer's own
+audit log would show `tenant=automotive` for a call that actually returned
+every tenant's data. Two of the five tools (`get_community`,
+`get_neighbors`) had no tenant filter in their raw Cypher at all, not just
+a missing parameter — the query itself needed a `WHERE` clause added.
+
+**Fix, and the subtlety in it**: force the policy-level `tenant` onto any
+tool whose `arg_schema` doesn't declare `tenant` itself —
+`if "tenant" not in spec.arg_schema: call_args["tenant"] = tenant`. The
+overwrite (not `setdefault`) matters: `_validate_args` only iterates over
+schema-declared fields, so a tool with no `tenant` in its schema doesn't
+reject unknown keys either — an agent could smuggle
+`args={"question": "x", "tenant": "attacker-chosen"}` for a tool whose
+schema never mentions `tenant`, and `setdefault` would have let that
+attacker-supplied value win. A test (`test_agent_cannot_smuggle_tenant_into_schemaless_tool`)
+exists specifically for this — the kind of case that's easy to get subtly
+wrong in a way that looks fixed.
+
+The write/restricted tools (`ingest_document`, `quarantine_entity`,
+`erase_entity`) were deliberately left untouched: they already declare
+`tenant` as a required, agent-supplied `arg_schema` field, because for a
+write the caller must say *which* tenant to act on — different from a read
+where the session's own scope should be authoritative. Investigating this
+also surfaced (and corrected an overstated first-draft claim about) an
+**existing** partial protection for exactly this case: `_validate_args`
+already checks agent-supplied `args["tenant"]` against `tenant:<name>`
+markers in `caller_scopes` for any tool that declares `tenant` in its
+schema (`tool_policy.py`, the "cross-tenant access denied" path,
+pre-existing, not part of this fix) — but only when the caller actually
+holds a `tenant:X` scope; `test_no_tenant_scope_passes_all_tenants`
+confirms it silently no-ops otherwise. That gap (agent-args tenant vs.
+`.call()`'s tenant can still diverge unchecked when no `tenant:X` scope is
+granted) is real and adjacent but a different fix — flagged in
+`docs/roadmap.md`, not solved here.
+
+**Live-verified**: `SPEC-PROD-01` (real automotive entity) via
+`ToolPolicy.call("get_neighbors", {...}, tenant="automotive")` → 6
+neighbors; the identical call with `tenant="aerospace"` → 0. Before this
+fix both calls would have returned the same unfiltered result regardless
+of the `tenant` argument — the audit log's `tenant` field was cosmetic.
+
+Tests: 9 new — 3 in `test_tool_safety.py` (policy tenant forced onto a
+schemaless tool; smuggling attempt overridden, not honored; schema-declared
+tenant on a write-shaped tool stays agent-supplied, confirming that path is
+untouched) and 6 in new `tests/unit/test_neo4j_tools.py` (tenant threading
+through all three `neo4j_tools.py` functions, including asserting the raw
+Cypher string actually contains the `$tenant`/`e.tenant`/`neighbor.tenant`
+filter — a regression guard on the query text itself, not just the call
+signature). Full suite: 640 passed, 0 failed.
+
+## A148 — Same tenant-starvation bug class as A146, but this one needed a real latency benchmark before applying the fix, and the earlier framing overstated it as an isolation leak
+
+Closes the two siblings deferred out of A146: `link_predictor.py`'s
+`_ann_search` (over-fetched `top_k*2`, but only to compensate for
+excluded-ID filtering, not tenant starvation) and `alias_registry.py`'s
+`find_duplicate_by_embedding`/`find_candidate_by_embedding` (hardcoded ANN
+`k` of `5`/`10` directly in the Cypher, no over-fetch at all). Both query
+the shared, cross-tenant `entity_embeddings` index and filter by tenant
+*after* Neo4j picks the global top-k — identical shape to A146.
+
+**Correction to the earlier investigation summary**: that summary
+characterized this as "the same tenant-starvation bug," which was accurate
+for `link_predictor.py` (uses the `$tenant='default' OR e.tenant=$tenant`
+wildcard convention — a starved result there is at worst a slightly worse
+link prediction, low stakes) but **imprecise for `alias_registry.py`**,
+whose filter is `e.tenant = $tenant` — strict equality, no wildcard. That
+means it was never a cross-tenant *leak* (unlike A147); it's purely a
+recall problem. But the recall failure mode there is worse in a different
+way: `alias_registry.py`'s two methods run **per entity, inside the
+ingestion loop** — a starved true-duplicate match is a silent false
+negative on dedup (two aliases of the same real-world entity fail to
+merge, no error, no review-queue entry, just a quietly duplicated node).
+Worth recording as its own small lesson: even a summary written carefully
+enough to get the *mechanism* right can still blur a real distinction
+(leak vs. recall-loss) that matters for how urgently to treat two
+superficially similar findings.
+
+**The deferred question, answered by measurement, not assumption**: A146's
+`fetch_k=max(top_k*20,100)` runs once per user query; porting it blind to
+`alias_registry.py`'s per-entity ingestion-loop calls risked a real
+ingestion slowdown nobody had checked. Benchmarked
+`db.index.vector.queryNodes('entity_embeddings', k, ...)` at k=5 vs. k=100
+on the real index (automotive=3013, aerospace=343, marketing=66 entities,
+~3422 total), interleaved and warmed to avoid cold-cache noise: **31-47ms
+both ways, no consistent ordering between k=5 and k=100** — statistically
+indistinguishable at this scale. The fix was safe to apply without
+benchmarking the full ingestion loop separately, since the ANN call is the
+only thing changing and its own cost proved flat. (Caveat left in the code
+comment: measured at ~3.4k entities; re-check if the corpus grows an order
+of magnitude.)
+
+**Fix**: `link_predictor.py` — `fetch_k = max(top_k * 2, 100)`, replacing
+the bare `top_k * 2`. `alias_registry.py` — new module-level `_FETCH_K =
+100` constant, replacing both hardcoded literals (`5`, `10`).
+
+Tests: 4 new — 2 in `test_link_predictor.py` (floor at small `top_k`,
+multiplier at larger `top_k`, same two-case shape as A146's tests) and 2 in
+`test_alias_registry.py` (assert `$fetch_k` replaces the hardcoded literal
+in both methods' Cypher, and that the old `, 5, `/`, 10, ` literal is
+gone — a regression guard on the query text, not just the parameter dict).
+Full suite: 644 passed, 0 failed.

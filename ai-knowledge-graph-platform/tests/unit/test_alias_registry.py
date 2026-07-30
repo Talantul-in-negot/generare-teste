@@ -183,3 +183,39 @@ class TestLoad:
 
         await reg.load()
         assert len(reg._exact) == 0   # cleared on reload
+
+
+# ── Embedding-search ANN candidate pool (A148) ─────────────────────────────────
+# entity_embeddings is a shared index across all tenants — a small,
+# hardcoded k (previously 5/10) could starve a tenant's own true duplicate
+# out of the candidate pool if other tenants scored higher for the same
+# query vector, causing a silent false negative on dedup.
+
+class TestFindDuplicateByEmbeddingFetchK:
+    async def test_uses_fetch_k_not_hardcoded_five(self):
+        neo4j = AsyncMock()
+        neo4j.run = AsyncMock(return_value=[])
+        reg = AliasRegistry(neo4j, tenant="aerospace")
+
+        await reg.find_duplicate_by_embedding([0.1, 0.2], "ORG")
+
+        query = neo4j.run.call_args.args[0]
+        kwargs = neo4j.run.call_args.kwargs
+        assert "$fetch_k" in query
+        assert ", 5, " not in query  # the old hardcoded literal is gone
+        assert kwargs["fetch_k"] == 100
+
+
+class TestFindCandidateByEmbeddingFetchK:
+    async def test_uses_fetch_k_not_hardcoded_ten(self):
+        neo4j = AsyncMock()
+        neo4j.run = AsyncMock(return_value=[])
+        reg = AliasRegistry(neo4j, tenant="aerospace")
+
+        await reg.find_candidate_by_embedding([0.1, 0.2], "ORG")
+
+        query = neo4j.run.call_args.args[0]
+        kwargs = neo4j.run.call_args.kwargs
+        assert "$fetch_k" in query
+        assert ", 10, " not in query  # the old hardcoded literal is gone
+        assert kwargs["fetch_k"] == 100
