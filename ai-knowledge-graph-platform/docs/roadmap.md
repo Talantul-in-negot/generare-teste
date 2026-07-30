@@ -102,7 +102,7 @@ more open-ended — see the re-ranked table below.
 
 | Priority | Candidate | Recommendation | Why it matters |
 |---|---|---|---|
-| 1 | **Re-measure and correct the "hybrid p95 2.2s" documented claim** | Implement next | Corrected twice already this session (pre-reduce-fix: p95 45.9s; post-reduce-fix: p95 33.9s; post-parallelization: p95 27.1s). `docs/performance-metrics-inventory.md` needs the latest numbers, and ideally a larger sample (30+) than the 10 used so far before treating any number as a stable claim. |
+| 1 | ~~Re-measure and correct the "hybrid p95 2.2s" documented claim~~ | Done | n=44 across two tenants (10 automotive + 34 aerospace golden-set questions) — the first sample in this investigation large enough to trust: p50 13.2s, p95 26.4s, mean 15.2s. Confirms the n=10 re-run of the same fix (p50 14.75s, p95 27.1s) rather than contradicting it. `docs/performance-metrics-inventory.md` updated. |
 | 2 | ~~Reduce sequential LLM round-trip count~~ | Done (A145) | `local_search` and `global_search` had no data dependency but ran sequentially — parallelized via `asyncio.TaskGroup`. Live-verified: p50 20.7s → 14.75s (-29%), p95 33.9s → 27.1s (-20%). Embedding dedup (each branch independently embeds the query) explicitly deferred — see A145, requires hoisting session-context enrichment out of `LocalSearch`, a bigger refactor with its own correctness surface. |
 | 3 | **`global_search.no_communities` gap** | Worth investigating | Live sample hit this warning on real automotive data (`docs/performance-metrics-inventory.md`'s corrected-metrics note) — a tenant missing Community nodes for part of its graph degrades silently to no global-search answer for that slice. Small in this session's data (1 of 10 queries) but unquantified at scale. |
 | 4 | **Re-ranking feedback loop** | Worth implementing | Adds product maturity, but no real usage data exists yet to make it meaningful — a portfolio project has no click stream. Build the plumbing; low urgency. |
@@ -129,7 +129,7 @@ cap) is done — see `graphrag/retrieval/global_search.py`,
 - [x] ~~Profile `chunk_entities_edges`~~ — done (A143): Bolt deserialization cost of 3072-dim embeddings, fixed with an entity-keyed cache, 26x faster live-verified
 - [x] ~~Profile `global_search.reduce`~~ — done (A144): output was never user-facing and usually had nothing to synthesize; single-partial short-circuit + max_tokens cap, p95 45.9s → 33.9s (-26%) live-verified
 - [x] ~~Reduce sequential LLM round-trip count~~ — done (A145): local_search and global_search ran back-to-back with no data dependency; parallelized via asyncio.TaskGroup, p50 20.7s → 14.75s (-29%), p95 33.9s → 27.1s (-20%) live-verified
-- [ ] **Re-measure and correct the "hybrid p95 2.2s" claim** in `docs/performance-metrics-inventory.md` with post-A145 numbers — corrected twice already this session (45.9s → 33.9s → 27.1s), still trending down; ideally 30+ queries rather than 10 before treating any number as stable
+- [x] ~~Re-measure and correct the "hybrid p95 2.2s" claim~~ — done: n=44 across automotive + aerospace, p50 13.2s, p95 26.4s, mean 15.2s — first trustworthy sample size in this investigation, confirms rather than contradicts the earlier n=10 re-run
 
 ---
 

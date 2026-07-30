@@ -169,15 +169,34 @@ worst case from the whole investigation (an aerospace question that
 previously triggered a 13.9-17.6s reduce call) dropped from 30-43s total
 to **9.1s** on a warm cache.
 
+**Corrected again, 2026-07-30 — parallelized local_search + global_search
+(A145)**: the two had no data dependency but ran back-to-back; switched to
+`asyncio.TaskGroup` so global search's latency hides behind local search's
+instead of adding to it — see `tasks/lessons.md` A145. Also, this round
+finally replaces the n=10 sample: combined the 10-question automotive set
+with the 34-question aerospace golden set (`evals/golden_set.json`) for
+**n=44** across two tenants — the first sample in this whole investigation
+large enough to treat as more than a rough order-of-magnitude check:
+
+```
+n=44  min=6.3s  p50=13.2s  p95=26.4s  max=52.8s  mean=15.2s
+tenant breakdown: aerospace=34, automotive=10
+```
+
+p50 20.7s → 13.2s, p95 33.9s → 26.4s — consistent with the earlier n=10
+automotive-only re-run of this same fix (p50 14.75s, p95 27.1s), which is
+itself reassuring: the two samples roughly agree despite different tenants
+and a 4x larger n. The max (52.8s, one aerospace multi-partial-reduce case)
+is a reminder the tail is still real, not eliminated.
+
 **Honest summary for a pitch**: don't quote "2.2s p95" — it's stale, even
-after two rounds of fixes this session. Current live behavior (automotive,
-n=10) is p50 ~21s, p95 ~34s — down from p95 ~46s before this session's
-work, but still an order of magnitude over the old documented claim. The
-remaining cost is round-trip *count* (query rewrite, embed, map,
-occasionally reduce, final synthesis), not per-call cost — p50 barely
-moved across both fixes (22.4s → 20.7s) because most of that chain is
-still there. Reducing round-trip count is the next lever, per
-`docs/roadmap.md`, not yet scoped.
+after three rounds of fixes this session. Current live behavior (n=44,
+two tenants) is p50 ~13s, p95 ~26s — down from p95 ~46s before this
+session's work, but still roughly an order of magnitude over the old
+documented claim. The remaining cost is round-trip *count* (query rewrite,
+embed, map, occasionally reduce, final synthesis) — most of that chain is
+still fully sequential; parallelizing local+global search removed only one
+join point. Further round-trip reduction is not yet scoped.
 
 ---
 
@@ -458,7 +477,7 @@ The system emits alerts when metrics fall outside healthy ranges:
 
 | Metric | Alert threshold | Severity | Action |
 |---|---|---|---|
-| `p95_latency_ms` (hybrid) | > 3000 | ⚠️ Warning | **Stale relative to measured behavior (2026-07-29, post-A144 fix): real p95 is ~33.9s (n=10), ~11x this threshold** — down from ~46x before this session's two latency fixes, still nowhere close. This is real active config (`graphrag/monitoring/alerts.py:21,53`), not just a doc claim — as configured today, any live deployment would be in constant alert. Not recalibrated here; whether to tighten (treat current latency as an active incident) or loosen (match reality, alert only on further regression) is a product decision, not made in this pass. |
+| `p95_latency_ms` (hybrid) | > 3000 | ⚠️ Warning | **Stale relative to measured behavior (2026-07-30, post-A145 fix, n=44 across two tenants): real p95 is ~26.4s, ~9x this threshold** — down from ~46x before this session's three latency fixes, still nowhere close. This is real active config (`graphrag/monitoring/alerts.py:21,53`), not just a doc claim — as configured today, any live deployment would be in constant alert. Not recalibrated here; whether to tighten (treat current latency as an active incident) or loosen (match reality, alert only on further regression) is a product decision, not made in this pass. |
 | `p95_latency_ms` (agentic) | > 10000 | ⚠️ Warning | Agentic/IRCoT runs 3–4 LLM rounds by design; 4–8s is expected and correct. Alert only on outliers. |
 | `agentic_rate` | > 20% | ⚠️ Warning | If >20% of queries trigger agentic fallback, the hybrid confidence threshold is too loose — tighten `_is_low_confidence` trigger. |
 | `faithfulness` | < 0.80 (3-sample window) | ⚠️ Warning | Check recent document ingestions; may have extraction errors. Target is **≥ 0.85**; 0.80 is the alert floor, not the goal. Measured: 0.937 on answerable questions; 0.842 overall (correct refusals score 0 and are excluded from answerable). |
@@ -473,18 +492,18 @@ The system emits alerts when metrics fall outside healthy ranges:
 
 **For a CTO evaluating the platform:**
 
-1. **Start with KPI data**: "Live-measured against the automotive tenant (3,013
-   entities, the largest live corpus), 10 real questions, post-fix: p50 20.7s,
-   p95 33.9s (n=10 — order-of-magnitude, not a production SLA number; see the
-   'Corrected again, 2026-07-29' note above for full caveats and the before/
-   after breakdown — two root-caused fixes this session cut p95 from 45.9s).
-   The remaining cost is round-trip count (query rewrite, embed, map,
-   occasionally reduce, final synthesis), not a single bottleneck — p50 barely
-   moved across both fixes because most of that chain is unavoidable per
-   query. Faithfulness is 0.937 on answerable questions (0.842 overall
-   including correct refusals). Context precision is 0.907, meaning almost
-   everything we retrieve is relevant." **Do not cite "2.2s p95" — that
-   number is stale even after two rounds of live fixes.**
+1. **Start with KPI data**: "Live-measured across two tenants (automotive +
+   aerospace), 44 real questions, post-fix: p50 13.2s, p95 26.4s, mean 15.2s
+   (n=44 — the first sample in this investigation large enough to be more
+   than an order-of-magnitude check; see the 'Corrected again, 2026-07-30'
+   note above for the full breakdown — three root-caused fixes this session
+   cut p95 from 45.9s to 26.4s). The remaining cost is round-trip count
+   (query rewrite, embed, map, occasionally reduce, final synthesis), not a
+   single bottleneck — most of that chain is still fully sequential.
+   Faithfulness is 0.937 on answerable questions (0.842 overall including
+   correct refusals). Context precision is 0.907, meaning almost everything
+   we retrieve is relevant." **Do not cite "2.2s p95" — that number is
+   stale even after three rounds of live fixes.**
 
 2. **Show graph health**: "The knowledge graph is built from 12 aerospace regulatory
    documents — FAA/EASA airworthiness directives, manufacturer records, fleet data —
