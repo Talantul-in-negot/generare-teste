@@ -56,84 +56,30 @@ Completed items are intentionally excluded from this list. These are the
 remaining roadmap items most worth implementing for hiring signal, JD alignment,
 and technical credibility.
 
-Re-prioritized 2026-07-24 after a live incident during this session: DeepSeek
-deprecated a model id mid-session with zero detection — every answer-synthesis
-call failed for ~40+ minutes (3x retry per call, one query lost to the DLQ)
-before it was noticed, purely by accident while debugging something unrelated.
-Provider health monitoring and the latency investigation this surfaced are
-now both done (commit `125ae9e`) — see `tasks/lessons.md` for the incident
-writeup — and excluded from this table per the convention above.
+A multi-round live latency investigation (provider-health monitoring,
+`chunk_entities_edges`, `global_search.reduce`, round-trip parallelization,
+p95 re-measurement, and a tenant-starvation bug in vector search) is
+complete. Full incident/investigation history — hypotheses tried, what was
+wrong about them, before/after numbers — lives in `tasks/lessons.md`
+(A140–A146), not here; this file stays forward-looking.
 
-**Correction, 2026-07-29**: the item below originally hypothesized the ~21s
-gap was "almost certainly the LLM synthesis call itself." Live verification
-(via the new MCP server — see `mcp_server/`, `tasks/lessons.md`) with real
-per-stage timing now added to `global_search.py` disproved that: synthesis
-alone is ~1-6s per call, in line with expectations. The real, reproducible
-costs are (a) a Neo4j fetch in `local_search.py` (`chunk_entities_edges`,
-~4.4-5.3s across two live runs — the single largest non-LLM cost, still slow
-after the earlier redundant-fetch fix in commit `125ae9e`), and (b) the
-cumulative weight of several sequential LLM round-trips (query rewrite, map,
-reduce, final synthesis) each individually normal but adding up across the
-full pipeline. Two live runs measured **25.2s and 46.5s total** — both an
-order of magnitude over the documented "hybrid p95 2.2s" claim, which needs
-correcting once more live samples exist (two runs isn't enough to replace a
-documented p95).
-
-**Update, 2026-07-29**: `chunk_entities_edges` root-caused and fixed (see
-`tasks/lessons.md` A143) — not a query-plan issue, an inherent Bolt
-deserialization cost for 3072-dim embeddings, fixed with an entity-keyed
-in-process cache (`graphrag/graph/embedding_cache.py`). Live-verified: 26x
-faster on a warm cache in the real request path (2859ms → 109ms).
-
-**Update, 2026-07-29 (later same day)**: `global_search.reduce` — which
-that investigation surfaced as the new largest cost (17.6s/13.9s) —
-root-caused and fixed (`tasks/lessons.md` A144). Not a bug: unbounded LLM
-generation for a call whose output is never user-facing, and 3 of 4 live
-occurrences had nothing to synthesize (`partial_answers=1`). Fixed with a
-short-circuit for the single-partial case, a rewritten prompt asking for
-compact facts instead of prose, and a `max_tokens` cap for the genuine
-multi-partial case. Live-verified on the same 10-question sample: p95
-45.9s → **33.9s** (-26%), mean 22.0s → **18.3s** (-17%). The worst case
-found in the whole investigation (aerospace FAA question) dropped from
-30-43s to **9.1s** warm.
-
-**Both round-1 latency items are now done.** What's left is smaller and
-more open-ended — see the re-ranked table below.
+**Current measured baseline** (n=44, automotive + aerospace,
+`docs/performance-metrics-inventory.md`): p50 13.2s, p95 26.4s, mean 15.2s.
+Down from an original undocumented ~2.2s claim that was never re-derived
+under load — don't cite that number. The remaining cost is round-trip
+*count* (query rewrite, embed, map, occasionally reduce, final synthesis),
+not one dominant stage; further reduction is unscoped.
 
 | Priority | Candidate | Recommendation | Why it matters |
 |---|---|---|---|
-| 1 | ~~Re-measure and correct the "hybrid p95 2.2s" documented claim~~ | Done | n=44 across two tenants (10 automotive + 34 aerospace golden-set questions) — the first sample in this investigation large enough to trust: p50 13.2s, p95 26.4s, mean 15.2s. Confirms the n=10 re-run of the same fix (p50 14.75s, p95 27.1s) rather than contradicting it. `docs/performance-metrics-inventory.md` updated. |
-| 2 | ~~Reduce sequential LLM round-trip count~~ | Done (A145) | `local_search` and `global_search` had no data dependency but ran sequentially — parallelized via `asyncio.TaskGroup`. Live-verified: p50 20.7s → 14.75s (-29%), p95 33.9s → 27.1s (-20%). Embedding dedup (each branch independently embeds the query) explicitly deferred — see A145, requires hoisting session-context enrichment out of `LocalSearch`, a bigger refactor with its own correctness surface. |
-| 3 | ~~`global_search.no_communities` gap~~ | Done (A146) | Root cause was misdiagnosed by its own warning text — automotive had 200 real Community nodes (confirmed live), not zero. Actual bug: `vector_search_communities`/`vector_search_chunks` (`neo4j_client.py`) run Neo4j ANN search globally across all tenants *before* filtering by tenant, so a tenant can be starved out of a small top-k by other tenants' higher-scoring nodes. Fixed by over-fetching a larger candidate pool (`fetch_k = max(top_k*20, 100)`) before the tenant filter. Live-verified: the query that triggered the warning now returns `communities=5`, warning gone. |
-| 4 | **Same tenant-starvation bug in `link_predictor.py` / `alias_registry.py`** | Worth investigating | Same post-filter-after-top-k pattern against `entity_embeddings`, found while fixing #3 but explicitly not fixed there (entity-resolution correctness paths, larger blast radius, no live-observed failure yet). See `tasks/lessons.md` A146. |
-| 5 | **`vector_search_chunks` called without a `tenant` arg** | Worth investigating | `graphrag/agents/tools/neo4j_tools.py` and `scripts/calibrate_gnn.py` call it with no `tenant`, silently defaulting to `"default"` — a tenant-isolation bypass, not just ANN starvation. Found while fixing #3, not fixed there (MCP agent tool + calibration script, not the retrieval hot path). See `tasks/lessons.md` A146. |
-| 6 | **Re-ranking feedback loop** | Worth implementing | Adds product maturity, but no real usage data exists yet to make it meaningful — a portfolio project has no click stream. Build the plumbing; low urgency. |
-| 7 | **GNN pre-training scheduled job** | Worth implementing | The GNN-stage latency question is now answered (commit `125ae9e`: GNN math itself is 125ms, not the bottleneck) — no longer blocked, but still low urgency. |
-| 8 | **TimescaleDB KPI store** | Implement only if pitching observability hard | Useful for enterprise monitoring, but larger than it looks because compose/dev config and migration paths must be added. |
-| 9 | **Multi-modal extraction pipeline** | Defer unless targeting multi-modal roles | Storage exists, but OCR/visual embedding/audio ingestion expands scope away from the core GraphRAG hiring story. |
-| 10 | **Cross-encoder fine-tuning** | Defer | Hard to prove without real usage data and domain-labeled query/chunk pairs. |
-| 11 | **Kafka streaming ingestion** | Defer | Interesting scale path, but RabbitMQ already supports the current MVP story. Kafka would add operational complexity before it adds hiring value. |
-
-End-to-end demo videos (WPP, IATF) are done — recorded from `docs/video-script-wpp-demo.md` and `docs/video-script-iatf-demo.md`.
-
-MCP server (exposing hybrid retrieval + entity lookup as MCP tools) is done
-— see `mcp_server/`, `docs/knowledge-graph-architecture.md` §13.
-
-Entity embedding cache (fixes `chunk_entities_edges`) is done — see
-`graphrag/graph/embedding_cache.py`, `tasks/lessons.md` A143.
-
-`global_search.reduce` latency (single-partial short-circuit + `max_tokens`
-cap) is done — see `graphrag/retrieval/global_search.py`,
-`graphrag/core/llm_client.py`, `tasks/lessons.md` A144.
-
-### Recommended Next Sprint
-
-- [x] ~~Profile `chunk_entities_edges`~~ — done (A143): Bolt deserialization cost of 3072-dim embeddings, fixed with an entity-keyed cache, 26x faster live-verified
-- [x] ~~Profile `global_search.reduce`~~ — done (A144): output was never user-facing and usually had nothing to synthesize; single-partial short-circuit + max_tokens cap, p95 45.9s → 33.9s (-26%) live-verified
-- [x] ~~Reduce sequential LLM round-trip count~~ — done (A145): local_search and global_search ran back-to-back with no data dependency; parallelized via asyncio.TaskGroup, p50 20.7s → 14.75s (-29%), p95 33.9s → 27.1s (-20%) live-verified
-- [x] ~~Re-measure and correct the "hybrid p95 2.2s" claim~~ — done: n=44 across automotive + aerospace, p50 13.2s, p95 26.4s, mean 15.2s — first trustworthy sample size in this investigation, confirms rather than contradicts the earlier n=10 re-run
-- [x] ~~Raise `alert_thresholds.latency_p95_ms`~~ — done: 3000 → 30000, matching measured reality (n=44: p95 26.4s) with headroom above baseline so it fires on genuine regressions, not constantly. `config/settings.yml`, `graphrag/monitoring/alerts.py`.
-- [x] ~~Investigate `global_search.no_communities`~~ — done (A146): misdiagnosed by its own warning text as missing data; real bug was Neo4j ANN search returning global top-k across all tenants before the tenant filter applied, starving smaller top-k queries. Fixed with over-fetch-then-filter in `vector_search_communities`/`vector_search_chunks`. Two sibling occurrences of the same bug shape found and deferred — see roadmap items 4-5 above.
+| 1 | **Same tenant-starvation bug in `link_predictor.py` / `alias_registry.py`** | Worth investigating | Same post-filter-after-top-k ANN pattern against `entity_embeddings` as the fixed `global_search.no_communities` bug (A146), found while fixing it but deferred — entity-resolution correctness paths, larger blast radius, no live-observed failure yet. |
+| 2 | **`vector_search_chunks` called without a `tenant` arg** | Worth investigating | `graphrag/agents/tools/neo4j_tools.py` and `scripts/calibrate_gnn.py` call it with no `tenant`, silently defaulting to `"default"` — a tenant-isolation bypass, not just ANN starvation. Found alongside A146, not fixed there. |
+| 3 | **Re-ranking feedback loop** | Worth implementing | Adds product maturity, but no real usage data exists yet to make it meaningful — a portfolio project has no click stream. Build the plumbing; low urgency. |
+| 4 | **GNN pre-training scheduled job** | Worth implementing | GNN-stage latency is not the bottleneck (125ms) — no longer blocked, but still low urgency. |
+| 5 | **TimescaleDB KPI store** | Implement only if pitching observability hard | Useful for enterprise monitoring, but larger than it looks because compose/dev config and migration paths must be added. |
+| 6 | **Multi-modal extraction pipeline** | Defer unless targeting multi-modal roles | Storage exists, but OCR/visual embedding/audio ingestion expands scope away from the core GraphRAG hiring story. |
+| 7 | **Cross-encoder fine-tuning** | Defer | Hard to prove without real usage data and domain-labeled query/chunk pairs. |
+| 8 | **Kafka streaming ingestion** | Defer | Interesting scale path, but RabbitMQ already supports the current MVP story. Kafka would add operational complexity before it adds hiring value. |
 
 ---
 
