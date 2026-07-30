@@ -120,7 +120,39 @@ class HybridRetriever:
             if search_query != question:
                 await _step(f"📝 Query expanded → {search_query[:60]}")
 
-        if mode in ("local", "hybrid"):
+        if mode == "hybrid":
+            # Local and global search share no data dependency, so run them
+            # concurrently instead of back-to-back — this hides global
+            # search's latency behind local search's rather than adding to
+            # it. TaskGroup (not gather) so a failing branch cancels its
+            # sibling instead of leaving it orphaned.
+            await _step("🔍 BM25 + vector search in graph...")
+            await _step("🕸️ GNN scoring — 2-hop traversal...")
+            await _step("🕸️ Graph expansion (Leiden communities)...")
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    local_task = tg.create_task(
+                        self._local.search(search_query, session_id=session_id, tenant=tenant)
+                    )
+                    global_task = tg.create_task(
+                        self._global.search(search_query, tenant=tenant)
+                    )
+            except ExceptionGroup as eg:
+                # TaskGroup always wraps failures in an ExceptionGroup, even a
+                # single one. rabbitmq_client.py logs type(exc).__name__ for
+                # DLQ diagnostics — unwrap the common single-failure case so
+                # that still sees the real exception type (e.g.
+                # APIStatusError), not "ExceptionGroup". Only a genuine
+                # double-failure (both branches raising at once) surfaces as
+                # a group.
+                if len(eg.exceptions) == 1:
+                    raise eg.exceptions[0] from eg
+                raise
+            local_results = local_task.result()
+            global_results = global_task.result()
+            n_reranked = cfg.get("rerank_top_k", 5)
+            await _step(f"📊 Cross-encoder reranking → top {n_reranked} chunks")
+        elif mode == "local":
             await _step("🔍 BM25 + vector search in graph...")
             await _step("🕸️ GNN scoring — 2-hop traversal...")
             local_results = await self._local.search(
@@ -130,8 +162,7 @@ class HybridRetriever:
             )
             n_reranked = cfg.get("rerank_top_k", 5)
             await _step(f"📊 Cross-encoder reranking → top {n_reranked} chunks")
-
-        if mode in ("global", "hybrid"):
+        elif mode == "global":
             await _step("🕸️ Graph expansion (Leiden communities)...")
             global_results = await self._global.search(search_query, tenant=tenant)
 

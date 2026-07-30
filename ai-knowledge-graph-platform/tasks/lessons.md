@@ -5195,3 +5195,71 @@ zero-partial regression guard, empty-communities guard; 5 `llm_client.py` —
 `max_tokens` omitted-by-default on both Groq and DeepSeek, present when
 given, forwarded to `FallbackLLM`'s secondary on failover). Full suite:
 620 passed, 0 failed.
+
+## A145 — `local_search` and `global_search` ran sequentially with no data dependency — parallelized with `asyncio.TaskGroup`, and the `ExceptionGroup` unwrap gotcha that comes with it
+
+A143 and A144 fixed the two biggest single-stage costs, but p50 barely
+moved (22.4s → 20.7s) because the remaining cost was round-trip *count*, not
+one dominant stage. A live trace of `HybridRetriever.retrieve_and_answer`
+(`graphrag/retrieval/hybrid_retriever.py`) found the next real lever:
+`local_search` and `global_search` were awaited back-to-back — neither reads
+the other's output, so there was no reason for the second to wait on the
+first.
+
+**Fix**: for `mode == "hybrid"`, run both under `asyncio.TaskGroup` instead
+of sequential `await`s. Chose `TaskGroup` over `asyncio.gather` deliberately
+— `gather` leaves a sibling task orphaned/un-awaited if the other branch
+raises first; `TaskGroup` cancels it automatically. `mode == "local"` and
+`mode == "global"` alone are untouched (only one branch runs, no
+concurrency needed).
+
+**The gotcha**: `TaskGroup` always wraps a failure in an `ExceptionGroup`,
+even when only one task fails. `graphrag/messaging/rabbitmq_client.py`'s
+consumer loop logs `type(exc).__name__` for DLQ diagnostics — without
+unwrapping, a real `APIStatusError` from a flaky LLM provider would show up
+in logs and the DLQ as the opaque `"ExceptionGroup"` instead of the actual
+failure type, silently degrading an existing observability path that no
+test would catch (unit tests mock the failure and assert on the raised
+type; nothing exercises the DLQ logging path). Fixed by catching
+`ExceptionGroup` around the `TaskGroup` block and re-raising
+`eg.exceptions[0]` when there's exactly one — only a genuine simultaneous
+double-failure (both branches raising at once) surfaces as a group. This is
+exactly the kind of change that passes code review and every existing test
+while quietly breaking a downstream consumer that no test path touches —
+caught here only by explicitly tracing who reads `type(exc).__name__`
+before writing the fix, not after.
+
+**Scope discipline**: a secondary finding — both branches independently
+embed the query (`local_search.py`, `global_search.py`) — was found and
+explicitly *not* fixed. `local_search.py` runs session-context enrichment
+before embedding; `global_search.py` embeds the raw query-rewriter output
+with no enrichment. The two are only guaranteed identical text when session
+context is off, so a correct dedup means hoisting enrichment out of
+`LocalSearch` into the caller — but `LocalSearch.search()` is also called
+independently by `agentic_retriever.py` (twice) and the MCP tool in
+`retrieval_tools.py`, neither of which goes through `hybrid_retriever`.
+That's a real refactor with its own correctness surface, not a one-line
+dedup, and one embedding call costs a few hundred ms, not seconds — small
+next to the win below. Flagged in `docs/roadmap.md`, not solved.
+
+**Live-verified, before/after** (same 10-question automotive sample used
+for A143/A144): p50 20,688ms → **14,750ms** (-29%), p95 33,906ms →
+**27,110ms** (-20%), mean 15,025ms. Confirmed in the trace logs that
+`global_search.embed.done` and `local_search.multihop.done` now fire within
+the same window instead of one branch's entire log sequence completing
+before the other starts. Also re-verified end-to-end through the `/demo`
+UI: `result.steps` still renders live (the progress narration moved to
+before the concurrent block starts, since per-branch steps can no longer be
+interleaved once both run at once — but no step was dropped, and this was
+already coarse narration before the change, not a live trace: the existing
+"Cross-encoder reranking" step was already posted after reranking had
+already happened inside `local_search`).
+
+Tests: 6 new (`test_hybrid_retriever.py` — first test file for this
+module). The load-bearing one times two mocked 0.05s-delayed branches and
+asserts wall-clock stays under 0.09s, proving actual concurrency rather
+than just "both got called" (which a sequential-but-mocked test would also
+satisfy). Plus per-mode call-gating (hybrid/local/global) and
+exception-type-preservation tests for both branches (the regression the
+`ExceptionGroup` unwrap exists to prevent). Full suite: 626 passed, 0
+failed.
