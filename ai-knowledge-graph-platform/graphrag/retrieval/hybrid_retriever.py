@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
+from datetime import datetime, timedelta, timezone
 
 import structlog
 
 from graphrag.core.config import get_settings, resolve_tenant_config
 from graphrag.core.llm_client import get_llm
 from graphrag.core.models import QueryResult
+from graphrag.context_graph.models import (
+    AgentRun, Case, ContextManifest, Decision, DecisionOption, DecisionTrace,
+    OptionDisposition, PolicyEvaluation, PolicyResult, PolicyVersion,
+)
+from graphrag.context_graph.repository import ContextGraphRepository
 from graphrag.graph.contradiction_detector import ContradictionDetector
 from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.retrieval.local_search import LocalSearch
@@ -19,7 +26,6 @@ from graphrag.retrieval.agentic_retriever import AgenticRetriever, _is_low_confi
 from graphrag.retrieval.claim_verifier import ClaimVerifier
 from graphrag.retrieval.query_rewriter import QueryRewriter
 from graphrag.retrieval.session_context import get_session_context
-from graphrag.core.llm_utils import safe_response_text
 
 log = structlog.get_logger(__name__)
 
@@ -82,6 +88,77 @@ class HybridRetriever:
         self._rewriter = QueryRewriter()
         self._use_session_ctx = self._cfg.get("session_context_enabled", True)
         self._session_ctx = get_session_context() if self._use_session_ctx else None
+        self._context_graph = ContextGraphRepository(get_neo4j())
+
+    async def _record_context_trace(
+        self, *, question: str, answer: str, tenant: str, query_id: str,
+        mode: str, model_version: str, local_results: dict,
+    ) -> None:
+        """Persist the evidence-backed query decision for API/worker queries.
+
+        Query IDs are stable across retries in the worker path, making the trace
+        idempotent. Direct library calls without a query ID remain side-effect
+        free, which keeps CLI and unit-test usage lightweight.
+        """
+        chunk_ids = list(dict.fromkeys(local_results.get("referenced_chunks", [])))
+        if not query_id or not chunk_ids:
+            return
+        now = datetime.now(timezone.utc)
+        later = now + timedelta(days=1)
+        digest = hashlib.sha256(f"{tenant}:{query_id}".encode()).hexdigest()[:20]
+        case = Case(
+            id=f"case-query-{digest}", tenant=tenant, case_type="retrieval_query",
+            title="Governed GraphRAG query", description=question,
+            valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
+        )
+        run = AgentRun(
+            id=f"run-query-{digest}", tenant=tenant, case_id=case.id,
+            actor_id="graphrag-retriever", model_provider="configured",
+            model_version=model_version, prompt_version="hybrid-answer-v1",
+            valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
+        )
+        policy = PolicyVersion(
+            id="policy-retrieval-evidence-v1", tenant=tenant,
+            policy_id="retrieval-evidence", version="v1", title="Evidence-grounded retrieval",
+            valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
+        )
+        manifest = ContextManifest(
+            id=f"manifest-query-{digest}", tenant=tenant, case_id=case.id, run_id=run.id,
+            chunk_ids=chunk_ids, chunk_versions=["current"] * len(chunk_ids),
+            policy_version_ids=[policy.id], model_provider="configured",
+            model_version=model_version, prompt_version="hybrid-answer-v1",
+            retrieval_mode=mode, retrieval_config={"query_id": query_id}, task_input=question,
+            ontology_version="platform/v1", valid_from=now, valid_to=later,
+            transaction_from=now, transaction_to=later,
+        ).with_integrity_hash()
+        decision = Decision(
+            id=f"decision-query-{digest}", tenant=tenant, case_id=case.id, run_id=run.id,
+            manifest_id=manifest.id, title="GraphRAG answer", selected_option_id=f"option-query-{digest}",
+            reason_code="retrieved_evidence", rationale="Answer synthesized from the captured retrieval context.",
+            valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
+        )
+        option = DecisionOption(
+            id=f"option-query-{digest}", tenant=tenant, decision_id=decision.id,
+            label="answer", disposition=OptionDisposition.SELECTED,
+            reason_code="retrieved_evidence", rationale=answer[:500],
+            valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
+        )
+        evaluation = PolicyEvaluation(
+            id=f"policy-evaluation-query-{digest}", tenant=tenant, decision_id=decision.id,
+            policy_version_id=policy.id, result=PolicyResult.ALLOW,
+            matched_rule="evidence captured", reason_code="evidence_captured",
+            rationale="The retrieval pipeline captured the evidence used for synthesis.",
+            valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
+        )
+        try:
+            await self._context_graph.record_trace(DecisionTrace(
+                case=case, run=run, manifest=manifest, policy_versions=[policy],
+                policy_evaluations=[evaluation], options=[option], decision=decision,
+            ))
+        except Exception as exc:
+            # Retrieval availability must not depend on Context Graph maintenance.
+            log.warning("context_graph.trace_persist_failed", query_id=query_id, error=str(exc)[:200])
+
 
     async def retrieve_and_answer(
         self,
@@ -241,11 +318,17 @@ class HybridRetriever:
                 session_id=session_id,
             )
             result.latency_ms += latency_ms
+            result.query_id = query_id or result.query_id
+            await self._record_context_trace(
+                question=question, answer=result.answer, tenant=tenant, query_id=query_id,
+                mode=result.retrieval_mode, model_version=result.model_version,
+                local_results=local_results,
+            )
             return result
 
         log.info("hybrid_retriever.done", mode=mode, latency_ms=round(latency_ms, 1))
 
-        return QueryResult(
+        result = QueryResult(
             question=question,
             answer=answer,
             # `context` is the full string fed to the synthesis LLM (local chunks +
@@ -258,3 +341,10 @@ class HybridRetriever:
             retrieval_mode=mode,
             model_version=self._model_version,
         )
+        if query_id:
+            result.query_id = query_id
+        await self._record_context_trace(
+            question=question, answer=answer, tenant=tenant, query_id=query_id,
+            mode=mode, model_version=self._model_version, local_results=local_results,
+        )
+        return result

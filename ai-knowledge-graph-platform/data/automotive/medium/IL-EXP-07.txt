@@ -1,0 +1,394 @@
+# IL-EXP-07 - INSTRUCTIUNE DE LUCRU
+
+## 1. HEADER COMPLET
+
+**FIRMĂ:** PlastiAuto SRL  
+**PROIECT:** Gestionarea comenzilor pentru AutoCorp GmbH  
+**DOCUMENT:** IL-EXP-07  
+**VERSIONARE:** Revizia 1.0  
+**DATA EMITERII:** 15.10.2023  
+**APROBAT DE:** Ion Popescu, Director General  
+**DISTRIBUȚIE:** Departamentul Achiziții, Departamentul Calitate, Departamentul Logistică, Departamentul Financiar  
+
+---
+
+## 2. SCOP
+
+Scopul acestei Instrucțiuni de Lucru este de a stabili proceduri clare și coerente pentru gestionarea comenzilor către furnizorii utilizati de PlastiAuto SRL, asigurându-se că toate etapele procesului sunt respectate în conformitate cu cerințele sistemului de management al calității conform standardului IATF 16949. Aceasta are ca obiectiv principal asigurarea livrărilor conforme și la timp către clientul principal, AutoCorp GmbH, pe întregul parcurs al procesului de achiziție, minimizând riscurile asociate.
+
+---
+
+## 3. DOMENIU DE APLICARE
+
+Această Instrucțiune de Lucru se aplică tuturor activităților de achiziție de bunuri și servicii de la furnizorii PastiAuto SRL destinate producției automotive. Este relevantă pentru toate departamentele implicate în procesul de gestionare a comenzilor și este aplicabilă tuturor angajaților din cadrul PlastiAuto SRL care au responsabilități în acest domeniu.
+
+---
+
+## 4. DEFINIȚII ȘI ABREVIERI
+
+1. **IATF 16949** - Standard internațional pentru sistemele de management al calității în industria automotive.
+2. **SPC** - Control statistic al proceselor.
+3. **MSA** - Analiza sistemului de măsurare.
+4. **FAI** - Inspecția inițială a produsului.
+5. **PPAP** - Planificarea și aprobarea părților de producție.
+6. **FMEA** - Analiza modurilor și efectelor de defect.
+7. **Furnizor** - Entitate externă care furnizează bunuri sau servicii pentru PlastiAuto SRL.
+8. **Comandă** - Document formal prin care se solicită achiziția de bunuri de la un furnizor.
+9. **Neconformitate** - Deviere de la cerințele specificate.
+10. **Receptie** - Proces de primire și verificare a bunurilor livrate de furnizor.
+
+---
+
+## 5. REFERINȚE
+
+1. **ISO 9001:2015** - Sistem de management al calității, Revizie 3.
+2. **IATF 16949:2016** - Cerințe pentru sistemele de management al calității, Revizie 2.
+3. **Procedura internă de evaluare a furnizorilor, cod PI-EV-01, Revizie 1.0.**
+4. **Politica de calitate a PlastiAuto SRL, cod POL-CAL-01, Revizie 3.**
+5. **Plan de management al riscurilor, cod PMR-01, Revizie 2.**
+6. **Procedura gestionării neconformităților, cod PI-GN-02, Revizie 1.0.**
+7. **Norme interne de recepție a mărfurilor, cod NI-RM-03, Revizie 1.0.**
+
+---
+
+## 6. RESPONSABILITĂȚI
+
+| Funcție                    | Responsabilități                                           |
+|---------------------------|----------------------------------------------------------|
+| Director General          | Aprobat documentele interne și gestionarea resurselor    |
+| Manager Achiziții         | Coordonarea procesului de achiziție și aprobat comenzile |
+| Specialist Calitate       | Monitorizarea calității bunurilor primite                |
+| Responsabil Logistică     | Gestionarea livrărilor și coordonarea recepției          |
+| Responsabil Financiar     | Verificarea documentației financiare asociate comenzilor  |
+| Toți angajații implicați  | Respectarea procedurilor stabilite și raportarea neconformităților |
+
+---
+
+## 7. PROCEDURA DETALIATĂ
+
+### 7.1 Inițierea comenzii
+
+Procedura de inițiere a unei comenzi începe cu identificarea necesităților de produse sau servicii. Aceasta este realizată de departamentul de producție și comunicată către departamentul achiziții prin intermediul unui formular standardizat.
+
+1. **Identificarea necesităților:**  
+   - Se analizează consumul anterior și se evaluează cerințele curente.
+   - Se stabilește cantitatea de produse necesare si termenul de livrare.
+
+2. **Elaborarea cererii de ofertă:**  
+   - Departamentul achiziții formulează o cerere de ofertă (RFP) pe baza specificațiilor tehnice și calitative.
+   - Cererea se trimite către cel puțin trei furnizori potențiali pentru a asigura o competiție echitabilă.
+
+3. **Evaluarea ofertelor:**  
+   - Ofertele primite sunt evaluate atât din punct de vedere tehnic, cât și financiar, conform criteriilor stabilite.
+   - Se va realiza o matrice de evaluare pentru a facilita compararea ofertelor.
+
+### 7.2 Selectarea furnizorului
+
+După evaluarea ofertelor, urmează procesul de selecție a furnizorului.
+
+1. **Evaluarea calității și performanței furnizorilor:**  
+   - Se vor analiza rezultatele evaluărilor anterioare, raportul de neconformitate și capacitatea de livrare a furnizorilor.
+   - Se va solicita o vizită de audit, dacă este necesar, pentru a verifica conformitatea proceselor furnizorului.
+
+2. **Decizia cu privire la furnizor:**  
+   - Managerul achiziții va propune furnizorul selecționat pe baza evaluării.
+   - Propunerea va fi discutată și aprobată de directorul general.
+
+3. **Comunicarea deciziei:**  
+   - Furnizorul selectat va fi informat despre decizia de colaborare, iar cei neacceptați vor primi o notificare corespunzătoare.
+
+### 7.3 Emiterea comenzii
+
+Odată aprobarea furnizorului, se va emite comanda.
+
+1. **Redactarea comenzii:**  
+   - Comanda va conține detaliile referitoare la produse, cantitate, preț, termene de livrare, precum și condiții de plată.
+   - Este important ca toate specificațiile tehnice să fie clare și precise.
+
+2. **Transmiterea comenzii:**  
+   - Comanda se va transmite furnizorului prin intermediul e-mailului sau faxului, asigurându-se confirmarea primirii.
+
+3. **Monitorizarea confirmării:**  
+   - Este responsabilitatea departamentului de achiziții să confirme primirea comenzii de către furnizor și să obțină o confirmare scrisă a acesteia.
+
+### 7.4 Recepția și verificarea
+
+Recepția bunurilor se va realiza conform procedurii interne stabilite.
+
+1. **Planificarea recepției:**  
+   - Departamentul logistică va planifica și organiza recepția bunurilor pe baza programului de livrări.
+
+2. **Verificarea livrărilor:**  
+   - La primirea bunurilor, se va realiza o verificare a cantităților și stării acestora în raport cu comanda.
+   - Bunurile necorespunzătoare din punct de vedere cantitativ sau calitativ vor fi separate pentru a fi tratate conform procesului de gestionare a neconformităților.
+
+3. **Documentarea recepției:**  
+   - Se va redacta un proces verbal de recepție ce va include toate detaliile relevante și se va înregistra în sistemul de gestiune a calității al PlastiAuto SRL.
+
+### 7.5 Gestionarea neconformităților
+
+În cazul în care se identifică neconformități în produsele livrate, se va urma următoarea procedură:
+
+1. **Identificarea neconformității:**  
+   - Orice angajat care descoperă o neconformitate trebuie să informeze imediat superiorul ierarhic și să completeze un formular de neconformitate.
+
+2. **Analiza neconformității:**  
+   - Departamentul de calitate va analiza fiecare caz pentru a determina cauzele și va stabili un plan de acțiune corectiv.
+
+3. **Comunicarea cu furnizorul:**  
+   - Furnizorul va fi informat despre neconformitate și va fi invitat la o întâlnire pentru a discuta situația și a stabili măsuri corective, dacă este cazul.
+
+4. **Implementarea măsurilor corective:**  
+   - Măsurile corective stabilite se vor implementa atât de PlastiAuto SRL, cât și de furnizor, iar eficacitatea acestora va fi monitorizată.
+
+5. **Raportarea și urmărirea neconformităților:**  
+   - Un raport de neconformitate va fi întocmit și urmărit prin sistemul de management al calității pentru a asigura că problemele nu se repetă.
+
+---
+
+## 8. ÎNREGISTRĂRI
+
+Toate înregistrările asociate cu gestionarea comenzilor și neconformităților vor fi păstrate conform cerințelor sistemului de management al calității. Înregistrările includ, dar nu se limitează la:
+
+1. Cererile de ofertă (RFP)
+2. Ofertele primite
+3. Documentele de evaluare a furnizorilor
+4. Comenzile emise
+5. Procesele verbale de recepție
+6. Formularele de neconformitate
+
+Aceste înregistrări vor fi păstrate timp de minimum 3 ani de la data emiterii sau conform cerințelor specifice ale contractului cu AutoCorp GmbH.
+
+---
+
+## 9. ISTORIC REVIZII
+
+| Revizie | Data        | Descriere                          | Aprobat de         |
+|---------|-------------|------------------------------------|---------------------|
+| 1.0     | 15.10.2023  | Primă emisă, document de bază     | Ion Popescu, DG     |
+
+---
+
+Acesta este un exemplu de instrucțiune de lucru pentru gestionarea comenzilor în cadrul PlastiAuto SRL, conform cerințelor standardului IATF 16949. Relevantă pentru toate departamentele implicate, aceasta asigură un proces clar și bine structurat care să răspundă cerințelor clientului AutoCorp GmbH, minimizând riscurile de neconformitate și optimizând procesele interne.## 7. PROCEDURA DETALIATĂ (continuare)
+
+### 7.6 Formarea și instruirea angajaților
+
+Pentru a asigura implementarea eficientă și corectă a tuturor procedurilor legate de gestionarea comenzilor, este esențial ca angajații implicați în acest proces să beneficieze de instruire adecvată.
+
+1. **Identificarea nevoilor de formare:**  
+   - Managerul de resurse umane, împreună cu managerul departamentului de achiziții, va evalua periodic competențele angajaților și va identifica necesitățile de formare legate de gestionarea comenzilor, standardele IATF 16949 și procedurile interne.
+
+2. **Planificarea sesiunilor de formare:**  
+   - Se va elabora un plan anual de formare care să includă sesiunile cu tematici precum:
+     - Cerințele IATF 16949
+     - Proceduri interne de achiziție
+     - Gestionarea neconformităților
+     - Importanța calității în procesele de achiziție
+
+3. **Evaluarea eficienței formării:**  
+   - După fiecare sesiune de formare, se va efectua o evaluare a eficienței acesteia prin chestionare și feedback din partea participanților.
+   - Rezultatele evaluării vor fi analizate pentru a îmbunătăți viitoarele sesiuni de formare.
+
+### 7.7 Rapoartele de performanță
+
+Pentru a monitoriza și îmbunătăți continuu procesul de gestionare a comenzilor, se vor elabora rapoarte periodice de performanță care vor cuprinde următoarele aspecte:
+
+1. **Analiza KPI-urilor (Indicatori Cheie de Performanță):**  
+   - Rapoartele vor include evaluări ale indicatorilor de performanță precum:
+     - Procentul comenzii livrate la timp
+     - Rata de neconformitate a produselor primite
+     - Timpul mediu de răspuns al furnizorilor
+     - Costurile asociate gestionării comenzilor
+
+2. **Întâlniri periodice:**  
+   - Rapoartele vor fi prezentate în cadrul întâlnirilor scurte programate săptămânal sau lunar, unde managerii departamentelor implicate vor discuta despre rezultatele raportate și vor lua măsuri corective, dacă este cazul.
+
+3. **Decizii de îmbunătățire:**  
+   - În funcție de analizele efectuate, se vor lua măsuri de îmbunătățire care ar putea include renegocierea termenilor de livrare cu furnizorii, evaluarea suplimentară a performanțelor acestora sau revizuirea procedurilor interne.
+
+## 8. ÎNREGISTRĂRI
+
+Toate înregistrările legate de gestionarea comenzilor vor fi gestionate în conformitate cu procedurile interne de documentare și arhivare. Înregistrările trebuie să fie:
+
+1. **Accesibile:**  
+   - Toate înregistrările trebuie păstrate într-un sistem de gestionare a documentelor, accesibil angajaților care au nevoie de aceste informații pentru îndeplinirea responsabilităților lor.
+
+2. **Complete:**  
+   - Înregistrările trebuie să cuprindă toate informațiile necesare care demonstrează conformitatea cu procedurile stabilite, precum și evidența acțiunilor corective întreprinse.
+
+3. **Confidențiale:**  
+   - Informațiile sensibile din înregistrări trebuie să fie gestionate cu strictețe, respectând politicile de securitate a informațiilor din cadrul PlastiAuto SRL.
+
+4. **Conservate pe o perioadă de minim 3 ani:**  
+   - Înregistrările relevante trebuie păstrate timp de 3 ani de la data emiterii sau conform cerințelor specifice contractului cu AutoCorp GmbH.
+
+## 9. ISTORIC REVIZII
+
+| Revizie | Data        | Descriere                          | Aprobat de         |
+|---------|-------------|------------------------------------|---------------------|
+| 1.0     | 15.10.2023  | Primă emisă, document de bază     | Ion Popescu, DG     |
+| 1.1     | (data)      | Corecturi minore și actualizări   | (nume aprobat)      |
+| 1.2     | (data)      | Actualizări privind KPI-uri        | (nume aprobat)      |
+
+---
+
+### 10. CONCLUZII OPERAȚIONALE
+
+Documentul "IL-EXP-07 - INSTRUCTIUNE DE LUCRU" reflectă angajamentul PlastiAuto SRL față de îmbunătățirea continuă și respectarea standardelor internaționale de calitate. Implementarea corectă a procedurilor descrise va contribui la livrarea de produse conforme și de calitate superioară către clientul principal, AutoCorp GmbH. Aceasta nu doar că va îmbunătăți relațiile comerciale, dar va și asigura o poziție competitivă pe piața automotive.
+
+---
+
+### 11. ANEXE
+
+- **Anexa A:** Formular Standardizat pentru Cererea de Ofertă (RFP)
+- **Anexa B:** Matricea de Evaluare a Ofertei
+- **Anexa C:** Formular de Neconformitate
+- **Anexa D:** Proces Verbal de Recepție a Bunurilor
+
+---
+
+### 12. GLOSAR DE TERMENI
+
+- **Anticipare:** Estimarea cererii pentru bunuri înainte de emiterea comenzii.
+- **Deschidere:** Procesul de deschidere a unei comenzi în sistemul informatic.
+- **Planificare:** Activitatea de a organiza și programa ordinea livrărilor.
+- **Monitorizare:** Activitatea de a verifica statusul comenzilor și livrărilor.
+
+---
+
+Acesta este documentul complet, structurat sistematic, care respectă cerințele IATF 16949, asigurându-se că toți pașii necesari sunt acoperiți și implementați corect. Forța de muncă instruită, procesele monitorizate și documentele bine gestionate vor conduce către succesul organizatoric și îndeplinirea așteptărilor autoîntreprinderii.**### 10. CONCLUZII OPERAȚIONALE**
+
+Documentul "IL-EXP-07 - INSTRUCTIUNE DE LUCRU pentru gestionarea comenzilor în cadrul PlastiAuto SRL" reprezintă o componentă esențială în sistemul de management al calității al companiei, conform IATF 16949. Acesta servește ca bază pentru standardizarea și optimizarea proceselor de achiziție, ceea ce contribuie semnificativ la menținerea unei relații de parteneriat susținute cu AutoCorp GmbH. 
+
+Implementarea acestor proceduri asigură nu doar conformitatea cu cerințele legale și de reglementare, dar și creșterea eficienței operaționale și a satisfacției clientului. Documentul divizează clar responsabilitățile pe roluri și descrie în detaliu fluxul de lucru, permițând astfe alte angajaților să înțeleagă mai bine cerințele și așteptările companiei în relația cu furnizorii.
+
+În plus, continuitatea procesului de îmbunătățire este fundamentală, iar managementul riscurilor, prin analiza neconformităților, nu face decât să întărească rigoarea cu care PlastiAuto SRL își desfășoară activitatea. Astfel, compania își propune nu doar să răspundă provocărilor curente, ci și să inoveze și să se adapteze constant la cerințele unei piețe în continuă schimbare. Această abordare preventivă consolidează poziția de lider a PlastiAuto SRL în industria automotive, asigurându-se că livrările sunt la cele mai înalte standarde de calitate.
+
+**### 11. ANEXE**
+
+- **Anexa A: Formular Standardizat pentru Cererea de Ofertă (RFP)**
+
+Formularul RFP va conține rubrics pentru:
+
+1. Datele furnizorului: nume, adresă, telefon, e-mail.
+2. Detalii despre produs: descriere, specificații tehnice, cantitate.
+3. Termeni de livrare: data estimată de livrare, condiții de transport.
+4. Condiții de plată: modalitate de plată, termene.
+5. Alte observații: orice alte cerințe specifice ale PlastiAuto SRL.
+
+- **Anexa B: Matricea de Evaluare a Ofertei**
+
+Matricea va include criterii de evaluare precum:
+
+1. Prețul ofertei.
+2. Termenele de livrare.
+3. Calitatea produselor oferite.
+4. Capacitatea de producție și livrare.
+5. Răspunsul la neconformități anterioare.
+6. Suport post-vânzare.
+
+Fiecare criteriu va fi punctat pe o scară de 1 la 5, iar rezultatele vor contribui la selecția finală a furnizorului.
+
+- **Anexa C: Formular de Neconformitate**
+
+Formularul de neconformitate va include:
+
+1. Detalii despre neconformitate: descrierea problemei, dată, locul și persoana de contact.
+2. Analiza cauzei fundamentale: procesul de investigare a neconformității.
+3. Plan de acțiune corectiv: măsuri propuse, resurse necesare, termene.
+4. Valabilitatea neconformității: evaluarea impactului asupra produselor și proceselor.
+
+- **Anexa D: Proces Verbalar de Recepție a Bunurilor**
+
+Procesele verbale vor include:
+
+1. Datele livrării: numărul comenzii, data livrării.
+2. Detalii despre bunuri recepționate: cantitate, stare, specificații.
+3. Observații: eventuale neconformități identificate.
+4. Semnătura persoanei responsabile cu recepția și a șefului de departament.
+
+**### 12. GLOSAR DE TERMENI**
+
+- **Anticipare:** Procesul de estimare a cererii pentru bunuri înainte de emiterea comenzii.
+- **Deschidere:** Acțiunea de inițiere a unei comenzi într-un sistem informatic.
+- **Planificare:** Activitatea de organizare și programare a ordinii livrărilor.
+- **Monitorizare:** Activitatea de verificare a stării comenzilor și livrărilor.
+- **KPI (Indicator Cheie de Performanță):** Metrici care sunt utilizați pentru a evalua succesul unei organizații sau a unei activități.
+- **FMEA (Analiza Modurilor de Eșec și a Efectelor):** O metodă sistematică de identificare și evaluare a riscurilor posibile în procesele de producție.
+- **MSA (Analiza Sistemului de Măsurare):** Procesul de evaluare a fiabilității și preciziei sistemelor de măsurare.
+- **PPAP (Pachetul de Aprobat de Producție):** Documentația necesară pentru aprobarea primelor loturi de produse înainte de livrare.
+
+### ÎN FINAL
+
+Prin implementarea acestor măsuri și proceduri structurate, PlastiAuto SRL își asumă un angajament ferm față de calitate și satisfacția clientului, demonstrând că este aliniată standardelor internaționale izvorâte din IATF 16949. Îmbunătățirea continuă a proceselor de gestionare a comenzilor va facilita nu doar menținerea unei relații de business durabile cu AutoCorp GmbH, dar va contribui și la dezvoltarea sustenabilă a companiei în complexul peisaj al industriei automotive.
+
+---
+
+Aceasta reprezintă o finalizare detaliată a segmentelor lipsă, completându-se astfel structura cerută pentru documentul IL-EXP-07, conferind o imagine cuprinzătoare asupra proceselor interne de gestionare a comenzilor la PlastiAuto SRL.### 11. ANEXE (continuu)
+
+- **Anexa E: Ghid pentru Evaluarea Performanței Furnizorilor**
+  Ghidul va include criterii esențiale de evaluare a performanței furnizorilor, având rolul de a oferi un cadru uniform pentru monitorizarea calității și eficienței acestora. Criteriile includ:
+  1. **Calitate:** Procentajul de livrări conforme, rata de neconformitate a produselor.
+  2. **Servicii:** Capacitatea de a răspunde rapid la solicitările PlastiAuto SRL.
+  3. **Termenele de livrare:** Procentajul livrărilor efectuate la termen.
+  4. **Colaborare:** Disponibilitatea furnizorului de a participa activ la sesiuni de formare și evaluări comune.
+  5. **Îmbunătățiri propuse:** Idei și soluții pentru creșterea eficienței proceselor de livrare.
+
+- **Anexa F: Procedura de Feedback și Revizuire a Furnizorilor**
+  Această anexă va stabili pașii necesari pentru a colecta feedback de la toate departamentele care interacționează cu furnizorii. Procedura va include:
+  1. **Colectarea Feedback-ului:** Informarea angajaților despre modalitățile de raportare a experiențelor și observațiilor legate de furnizori.
+  2. **Analiza Periodică:** Realizarea de întâlniri trimestriale pentru a discuta feedback-ul colectat și a determina acțiuni corective sau îmbunătățiri necesare.
+  3. **Informarea Furnizorului:** Comunicare clară a rezultatelor feedback-ului pentru a discuta posibile îmbunătățiri și a stimula o relație de colaborare între PlastiAuto SRL și furnizor.
+
+### 12. GLOSAR DE TERMENI (continuare)
+
+- **Audit de Calitate:** Evaluare sistematică a activităților și documentelor de calitate din cadrul unei organizații, menită să determine dacă acestea sunt conforme cu standardele stabilite.
+- **Accord de Nivel de Serviciu (SLA):** Document care definește așteptările în ceea ce privește serviciile oferite de către furnizor, incluzând specificații despre calitate, timpii de livrare și răspuns.
+- **Plan de Contingență:** Strategii prestabilite pentru a face față problemelor neprevăzute, asigurând continuitatea operațiunilor în cazul apariției unor neconformități.
+
+### 13. RECOMANDĂRI PENTRU IMPLEMENTARE
+
+- Asigurarea că toți angajații implicați în procesul de achiziție și gestionare a comenzilor sunt familiarizați cu acest document, prin sesiuni de instruire regulată.
+- Realizarea unor simulări de situații de neconformitate pentru a pregăti echipa în gestionarea eficientă a acestora.
+- Colaborarea strânsă cu furnizorii pentru a implementa soluții inovatoare care să reducă ratele de neconformitate și să îmbunătățească termenele de livrare.
+
+### ÎN CHEIE
+
+Documentul "IL-EXP-07 - INSTRUCTIUNE DE LUCRU pentru gestionarea comenzilor în cadrul PlastiAuto SRL" este menit să asigure implementarea eficientă a proceselor de achiziție, consolidând astfel angajamentul față de calitate și satisfacția consumatorului. Continuarea îmbunătățirii proceselor, în conformitate cu standardele IATF 16949, va permite PlastiAuto SRL să își întărească poziția pe piața automotive și să răspundă prompt la provocările și cerințele clienților. Prin managementul eficient al comenzilor, compania nu doar se va conforma standardelor internaționale, dar va și inova, dezvoltându-se constant în cadrul unui mediu de afaceri dinamic și competitiv. Astfel, PlastiAuto SRL își va împlini misiunea de a livra produse de cea mai înaltă calitate către AutoCorp GmbH și alți clienți, asigurându-se că fiecare pas al procesului de achiziție este documentat, evaluat și îmbunătățit continuu.### 13. RECOMANDĂRI PENTRU IMPLEMENTARE
+
+- **Instruire continuă:** Toți angajații implicați în gestionarea comenzilor și interacțiunile cu furnizorii trebuie să participe la sesiuni de formare periodice. Aceste sesiuni vor include prezentări despre metodele de evaluare a furnizorilor, gestionarea neconformităților și importanța respectării standardelor IATF 16949.
+
+- **Analiza de proces:** Se recomandă desfășurarea de studii de caz periodice pentru a evalua eficiența proceselor existente. Aceste analize vor permite identificarea punctelor slabe și vor oferi sugestii pentru remedieri.
+
+- **Îmbunătățirea colaborării cu furnizorii:** Este esențial ca echipa de achiziții să dezvolte relații de colaborare strânsă cu furnizorii prin întâlniri regulate. Aceste întâlniri vor facilita discuții deschise despre problemele întâmpinate și inovațiile posibile care pot fi implementate pentru optimizarea livrărilor.
+
+- **Monitorizarea performanței furnizorilor:** Utilizarea indicatorilor cheie de performanță (KPI) va permite o urmărire eficientă a performanței furnizorilor. Acest lucru include evaluarea periodică a calității produselor livrate, respectarea termenelor de livrare și reacția acestora la feedback-ul primit.
+
+- **Revizuirea procedurelor interne:** Ea trebuie să fie efectuată anual pentru a asigura conformitatea cu cele mai recente standarde şi tendințe în industrie. Orice modificări legislative sau în cerințele IATF 16949 vor obliga compania să actualizeze instrucțiunile de lucru și să informeze angajații.
+
+### 14. CONCLUZII FINALE
+
+Implementarea acestor practici va contribui semnificativ la consolidarea poziției PlastiAuto SRL pe piața automotive. Prin asumarea angajamentului față de excelență și prin cooperarea eficientă cu furnizorii, compania va reuși nu numai să își îmbunătățească performanțele, dar și să răspundă în mod adecvat cerințelor în continuă schimbare ale clienților.
+
+Adoptarea acestei instructiuni de lucru nu doar va crea un cadru organizat pentru gestionarea comenzilor, ci va și fortifica încrederea clienților, contribuind astfel la dezvoltarea pe termen lung a PlastiAuto SRL. Printr-o abordare sistematică și orientată către calitate, compania va continua să ofere produse de top pentru AutoCorp GmbH și va asigura o experiență pozitivă pentru toți partenerii implicați.
+
+### 15. ANEXE SUPLIMENTARE
+
+- **Anexa G: Politica de Calitate a PlastiAuto SRL** Documentul care detaliază angajamentul companiei față de calitate, includerea obiectivelor de calitate și strategii de îmbunătățire continuă.
+
+- **Anexa H: Raport de Audit Intern** Formulare utilizate în cadrul auditurilor interne pentru a asigura conformitatea cu procesele stabilite și pentru a identifica oportunitățile de îmbunătățire.
+
+- **Anexa I: Plan de Acțiune Corectivă** Exemple de planuri de acțiune pentru tratarea neconformităților detectate, cu responsabilități alocate și termene următoare.
+
+Prin finalizarea acestei instrucțiuni de lucru, PlastiAuto SRL își reafirmă angajamentul față de excelență și calitate, facilitând un mediu operațional eficient, adaptabil și orientat spre client. Această abordare va sprijini compania în atingerea obiectivelor sale pe piața automotive, împreună cu menținerea unei relații durabile și favorabile cu partenerul său principal, AutoCorp GmbH.
+
+=== METADATA ===
+doc_id: IL-EXP-07
+industry: automotive
+doc_type: medium
+language: ro
+standard: IATF 16949
+contradiction: 
+save_path: data/automotive/medium/IL-EXP-07.txt
+save_command: python manage_corpus.py save --file IL-EXP-07.txt --name IL-EXP-07 --industry automotive --lang ro
+================

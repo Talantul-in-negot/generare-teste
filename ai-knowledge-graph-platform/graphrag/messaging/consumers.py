@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import random
 
 import structlog
@@ -29,6 +28,15 @@ class IngestionConsumer:
         async def handle(payload: dict):
             msg = IngestMessage(**payload)
             await agent.run(msg)
+            # Calibration is deliberately scheduled after successful writes and
+            # kept best-effort so a maintenance outage cannot fail ingestion.
+            try:
+                from graphrag.graph.calibration_scheduler import GNNCalibrationScheduler
+                from graphrag.graph.neo4j_client import get_neo4j
+                threshold = int(__import__("os").environ.get("GNN_CALIBRATION_THRESHOLD", "100"))
+                await GNNCalibrationScheduler(await get_neo4j(), threshold).maybe_schedule(msg.tenant)
+            except Exception as exc:  # maintenance path must not nack ingestion
+                log.warning("gnn_calibration.schedule_failed", error=str(exc)[:200])
 
         await mq.consume(INGEST_EXCHANGE, INGEST_QUEUE, INGEST_ROUTING_KEY, handle)
 

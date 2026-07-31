@@ -1,0 +1,12 @@
+{
+  "doc_id": "FP-INJ-02",
+  "industry": "automotive",
+  "doc_type": "short",
+  "language": "ro",
+  "saved_at": "2026-06-13T10:33:14.535206",
+  "word_count": 463,
+  "char_count": 3474,
+  "detected_contradictions": [
+    "C04"
+  ]
+}

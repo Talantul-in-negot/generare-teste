@@ -70,7 +70,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: graphrag_ingestion_worker
     command: python workers/ingestion_worker.py
     env_file: .env
     environment:

@@ -609,6 +609,36 @@ The process of connecting extracted entities to their corresponding entries in W
 
 ---
 
+## Context Graph terms
+
+### ContextManifest
+A versioned, tenant-scoped record of the exact evidence, statements, policy
+versions, retrieval settings, model, prompt, and tool observations consumed by
+an answer or governed action. It is persisted in Neo4j and linked to an
+`AgentRun`.
+
+**In this project:** `graphrag/context_graph/models.py` and the P0 trace
+repository/service.
+
+### DecisionTrace
+The connected, append-only P0 graph record for a governed decision: case, run,
+manifest, options and reason codes, policy versions/evaluations, tool calls,
+observations, and decision. Stable IDs make retries idempotent; P1-P3 extend
+this record with governance, outcomes, precedents, and proactive context.
+
+**In this project:** `graphrag/context_graph/repository.py`, exposed under
+`/context-graph`.
+
+### Precedent
+A tenant-authorized prior decision retrieved for comparison using structured
+filters, outcomes, and policy compatibility through the P2 repository query.
+
+### Evidence
+An addressable span or derived artifact supporting a graph statement. An
+`Evidence` node links to a `SourceArtifact`, and may point to its document or
+chunk location. OCR, transcript, caption, and visual-embedding transformations
+retain these links and their model/output digest.
+
 ## Platform-specific terms
 
 ### GraphHealthSnapshot

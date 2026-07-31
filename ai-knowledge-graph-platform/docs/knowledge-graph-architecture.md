@@ -334,7 +334,7 @@ starting workers.
 | Community rebuild | Leiden on full entity graph per tenant | Incremental rebuild (changed entities only) via `IncrementalCommunityDetector` |
 | Alias resolution | In-memory dict per process | Redis-backed for multi-replica deployments |
 | Inference | Post-ingestion forward-chaining; bounded by MAX_RETRIES | Scoped to affected document's entity subgraph via `run_for_document()` |
-| KPI metrics | SQLite per-process | TimescaleDB hypertable with continuous aggregates |
+| KPI metrics | SQLite by default; optional TimescaleDB backend via `TIMESCALE_DB_URL` and `KPI_BACKEND=timescale` | TimescaleDB hypertable with continuous aggregates when volume/SLOs justify it |
 
 ---
 

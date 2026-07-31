@@ -8,7 +8,7 @@ This document catalogs every metric the platform measures, where it's recorded, 
 
 | Layer | Storage | Granularity | API | Status |
 |---|---|---|---|---|
-| Query-level KPIs | SQLite (`results/kpi_snapshots/kpis.db`) | Per query | `GET /kpis/summary`, `/kpis/timeseries` | **Active** |
+| Query-level KPIs | SQLite by default; optional TimescaleDB via `KPI_BACKEND=timescale` | Per query | `GET /kpis/summary`, `/kpis/timeseries` | **Active** |
 | Graph health | Neo4j (`GraphHealthSnapshot` nodes) | Per snapshot (24h default) | `GET /kg/health/snapshot` | Implemented, needs Neo4j running |
 | Confidence calibration | Neo4j (`CalibrationSample` nodes) | Per model version | Internal (no public API) | Implemented, needs Neo4j running |
 | GNN scoring | In-flight (retrieval results) | Per chunk | Returned in `/search` response | Active |
@@ -21,7 +21,10 @@ This document catalogs every metric the platform measures, where it's recorded, 
 Every user query fires a `KPIEvent` that captures the full lifecycle: retrieval latency, RAGAS evaluation, cost, and operational metadata.
 
 ### Storage
-**Database:** SQLite at `results/kpi_snapshots/kpis.db`
+**Database:** SQLite at `results/kpi_snapshots/kpis.db` by default. For durable
+time-series workloads, set `KPI_BACKEND=timescale` and
+`TIMESCALE_DB_URL=postgresql+asyncpg://...`; the same KPI schema is initialized
+as a TimescaleDB hypertable.
 
 **Schema:**
 ```

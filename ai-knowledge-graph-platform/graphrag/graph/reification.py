@@ -161,7 +161,8 @@ class ReificationService:
             ON CREATE SET stmt.id             = $stmt_id,
                           stmt.confidence     = $confidence,
                           stmt.source_doc_ids = $source_doc_ids,
-                          stmt.reified_at     = datetime()
+                          stmt.reified_at     = datetime(),
+                          stmt.recorded_at    = datetime()
             MERGE (s)-[:SUBJECT_OF]->(stmt)
             MERGE (stmt)-[:OBJECT_OF]->(t)
             RETURN stmt.id AS id

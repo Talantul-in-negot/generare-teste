@@ -1,5 +1,12 @@
 domain: synthetic
 version: '1.0'
+ontology:
+  id: synthetic-large
+  version: "1.0.0"
+  status: active
+  compatible_with: ">=1.0.0"
+  deprecated_types: []
+  deprecated_relations: []
 type_hierarchy:
 - child: DOMAIN_TYPE_0000
   parent: CONCEPT

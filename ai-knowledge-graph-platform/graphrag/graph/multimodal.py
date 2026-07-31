@@ -37,12 +37,25 @@ embedding externally.
 from __future__ import annotations
 
 from uuid import uuid4
+from pydantic import BaseModel, Field
 
 import structlog
 
 log = structlog.get_logger(__name__)
 
 _VALID_MODALITIES = frozenset({"image", "audio", "video", "document"})
+
+
+class MediaTransformation(BaseModel):
+    """A provenance-preserving derived representation of a media artifact."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    tenant: str = "default"
+    input_attachment_id: str
+    output_artifact_id: str
+    transform_type: str  # ocr | transcript | visual_embedding | caption
+    model_version: str = ""
+    output_digest: str = ""
+    metadata: dict = Field(default_factory=dict)
 
 
 class MultiModalEntityService:
@@ -83,6 +96,27 @@ class MultiModalEntityService:
 
     def __init__(self, neo4j_client):
         self._neo4j = neo4j_client
+
+    async def record_transformation(self, transformation: MediaTransformation) -> str:
+        """Store OCR/transcript/embedding provenance without copying media bytes."""
+        await self._neo4j.run(
+            """
+            MATCH (m:MediaAttachment {id: $input_id, tenant: $tenant})
+            MERGE (a:SourceArtifact {id: $output_id, tenant: $tenant})
+            SET a.modality = m.modality, a.transform_type = $transform_type,
+                a.model_version = $model_version, a.output_digest = $output_digest,
+                a.metadata = $metadata, a.created_at = datetime()
+            MERGE (m)-[:TRANSFORMED_TO {type: $transform_type}]->(a)
+            """,
+            input_id=transformation.input_attachment_id,
+            output_id=transformation.output_artifact_id,
+            tenant=transformation.tenant,
+            transform_type=transformation.transform_type,
+            model_version=transformation.model_version,
+            output_digest=transformation.output_digest,
+            metadata=transformation.metadata,
+        )
+        return transformation.id
 
     # ── Attach ─────────────────────────────────────────────────────────────────
 

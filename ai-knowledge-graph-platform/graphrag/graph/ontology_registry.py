@@ -23,7 +23,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import structlog
@@ -133,12 +132,13 @@ class OntologyRegistry:
                     load_domain_ontology,
                     get_relation_rules,
                     get_type_hierarchy_pairs,
+                    assert_valid_ontology,
                 )
-                from pathlib import Path
                 from graphrag.core.config import ROOT
                 full_path = ROOT / domain_path
                 ontology  = load_domain_ontology(full_path)
                 if ontology:
+                    assert_valid_ontology(ontology, source=str(full_path))
                     self.add_domain_range_rules(get_relation_rules(ontology))
                     # Extend allowed types from the domain hierarchy
                     for child, _ in get_type_hierarchy_pairs(ontology):

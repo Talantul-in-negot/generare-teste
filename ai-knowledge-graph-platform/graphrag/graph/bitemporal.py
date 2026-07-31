@@ -162,6 +162,87 @@ class BitemporalStore:
 
     # ── Transaction-time diff ─────────────────────────────────────────────────
 
+    async def as_of_statements(
+        self,
+        valid_time: str,
+        transaction_time: str,
+        tenant: str = "default",
+        limit: int = 1000,
+    ) -> list[dict]:
+        """Return reified statements visible at a bitemporal point."""
+        return await self._neo4j.run(
+            """
+            MATCH (s:Entity)-[:SUBJECT_OF]->(stmt:Statement)-[:OBJECT_OF]->(t:Entity)
+            WHERE ($tenant = 'default' OR stmt.tenant = $tenant)
+              AND (stmt.valid_from IS NULL OR stmt.valid_from <= $vt)
+              AND (stmt.valid_to   IS NULL OR stmt.valid_to   >  $vt)
+              AND (stmt.recorded_at IS NULL OR stmt.recorded_at <= $tt)
+              AND NOT s.quarantined = true
+              AND NOT t.quarantined = true
+            RETURN s.name AS src, s.type AS src_type,
+                   stmt.relation AS relation,
+                   t.name AS tgt, t.type AS tgt_type,
+                   stmt.confidence AS confidence,
+                   stmt.valid_from AS valid_from,
+                   stmt.valid_to AS valid_to,
+                   stmt.recorded_at AS recorded_at,
+                   stmt.source_doc_ids AS source_doc_ids
+            LIMIT $limit
+            """,
+            tenant=tenant, vt=valid_time, tt=transaction_time, limit=limit,
+        )
+
+    async def as_of_authority(
+        self,
+        valid_time: str,
+        transaction_time: str,
+        tenant: str = "default",
+        limit: int = 1000,
+    ) -> list[dict]:
+        """Return document authority state visible at a bitemporal point."""
+        return await self._neo4j.run(
+            """
+            MATCH (d:Document)
+            WHERE ($tenant = 'default' OR d.tenant = $tenant)
+              AND (d.valid_from IS NULL OR d.valid_from <= $vt)
+              AND (d.valid_to   IS NULL OR d.valid_to   >  $vt)
+              AND (d.recorded_at IS NULL OR d.recorded_at <= $tt)
+            OPTIONAL MATCH (c:AuthorityChange {document_id: d.id})
+            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+              AND (c.recorded_at IS NULL OR c.recorded_at <= $tt)
+            WITH d, c ORDER BY c.recorded_at DESC
+            WITH d, collect(c)[0] AS c
+            RETURN d.id AS document_id,
+                   coalesce(c.authority_level, d.authority_level) AS authority_level,
+                   d.superseded_by AS superseded_by,
+                   d.valid_from AS valid_from, d.valid_to AS valid_to,
+                   coalesce(c.recorded_at, d.recorded_at) AS recorded_at
+            LIMIT $limit
+            """,
+            tenant=tenant, vt=valid_time, tt=transaction_time, limit=limit,
+        )
+
+    async def as_of_supersessions(
+        self,
+        transaction_time: str,
+        tenant: str = "default",
+        limit: int = 1000,
+    ) -> list[dict]:
+        """Return supersession links known by a transaction-time cutoff."""
+        return await self._neo4j.run(
+            """
+            MATCH (newer:Document)-[r:SUPERSEDES]->(older:Document)
+            WHERE ($tenant = 'default'
+                   OR coalesce(r.tenant, newer.tenant, older.tenant) = $tenant)
+              AND (r.recorded_at IS NULL OR r.recorded_at <= $tt)
+            RETURN newer.id AS newer_document_id,
+                   older.id AS older_document_id,
+                   r.recorded_at AS recorded_at
+            LIMIT $limit
+            """,
+            tenant=tenant, tt=transaction_time, limit=limit,
+        )
+
     async def transaction_diff(
         self,
         tt_from: str,
@@ -280,6 +361,9 @@ class BitemporalStore:
         """
         entities = await self.as_of_entities(valid_time, transaction_time, tenant)
         edges    = await self.as_of_edges(valid_time, transaction_time, tenant)
+        statements = await self.as_of_statements(valid_time, transaction_time, tenant)
+        authority = await self.as_of_authority(valid_time, transaction_time, tenant)
+        supersessions = await self.as_of_supersessions(transaction_time, tenant)
 
         return {
             "valid_time":       valid_time,
@@ -287,6 +371,12 @@ class BitemporalStore:
             "tenant":           tenant,
             "entity_count":     len(entities),
             "edge_count":       len(edges),
+            "statement_count":  len(statements),
+            "authority_count":  len(authority),
+            "supersession_count": len(supersessions),
             "entities":         entities[:20],   # sample for readability
             "edges":            edges[:50],
+            "statements":       statements[:50],
+            "authority":        authority[:50],
+            "supersessions":    supersessions[:50],
         }

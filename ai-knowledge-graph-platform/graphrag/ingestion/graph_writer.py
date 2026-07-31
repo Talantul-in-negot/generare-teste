@@ -411,6 +411,7 @@ class GraphWriter:
                 "relation": rel.relation,
                 "weight": rel.weight,
                 "confidence": rel.confidence,
+                "confidence_state": rel.confidence_state,
                 "extracted_at": rel.extracted_at.isoformat(),
                 "source_doc_id": rel.source_doc_id,
                 "source_type": rel.source_type if isinstance(rel.source_type, str) else rel.source_type.value,
@@ -433,6 +434,7 @@ class GraphWriter:
                 "old_values": "{}",
                 "new_values": str({
                     "confidence":      rel.confidence,
+                    "confidence_state": rel.confidence_state,
                     "constraint_type": rel.constraint_type,
                     "source_type":     rel.source_type,
                     "valid_from":      str(rel.valid_from) if rel.valid_from else None,

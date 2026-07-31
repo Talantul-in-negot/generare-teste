@@ -1,0 +1,58 @@
+1. HEADER:  
+   Cod: FP-INJ-01  
+   Titlu: FISA DE PROCES INJECTIE PLASTICE  
+   Revizie: 1  
+   Data: 20.10.2023  
+   Responsabil: Ionescu Mihai  
+
+2. SCOP SI DOMENIU  
+FISA DE PROCES INJECTIE PLASTICE are ca scop definirea etapelor, responsabilităților și parametrilor de control pentru procesul de injectie a componentelor plastice utilizate în industria auto. Documentul se aplică tuturor activităților desfășurate de PlastiAuto SRL în colaborare cu clientul AutoCorp GmbH.
+
+3. REFERINTE DOCUMENTE  
+- IL-INS-03 rev.2 - Instrucțiune de lucru pentru inspecția la recepție  
+- FP-TQM-02 rev.1 - Procedură de management al calității  
+- FP-FMEA-04 rev.0 - Procedură pentru analiza modurilor de defectare și efectele acestora  
+- FP-PPAP-05 rev.1 - Procedură pentru prezentarea planurilor de aprobat  
+- FP-SPC-06 rev.1 - Procedură pentru controlul proceselor statistice  
+
+4. DESCRIERE PROCES  
+1. **Planificarea producției**: Se stabilește planul de producție în funcție de comenzile primite de la AutoCorp GmbH, inclusiv volumele și termenele de livrare.  
+2. **Pregătirea matrițelor**: Matrițele necesare pentru injectarea componentelor sunt verificate și pregătite conform specificațiilor tehnice.  
+3. **Setarea parametrilor de injecție**: Se reglează parametrii de injecție (temperatură, presiune, timp de injecție) conform fișei tehnice a produsului.  
+4. **Realizarea primei injectări**: Se efectuează o primă injecție pentru verificarea corectitudinii setărilor.  
+5. **Controlul calității**: Se realizează inspecția produsului injectat conform instrucțiunilor din IL-INS-03 rev.2 pentru a verifica conformitatea cu standardele specifice.  
+6. **Ajustarea procesului**: Dacă produse nu respectă specificațiile, se efectuează ajustări ale parametrilor de injecție și se reiterează procesul.  
+7. **Producția de serie**: Odată ce procesul este validat, se începe producția de serie, menținându-se monitorizarea continuă a parametrilor de control.  
+8. **Livrarea produselor**: Produsele finite sunt ambalate și livrate către client, împreună cu documentele de calitate necesare, inclusiv FAI și documentația PPAP.
+
+5. PARAMETRI DE CONTROL  
+
+| Parametru                  | Target           | Limite              | Frecvență    |
+|----------------------------|------------------|---------------------|--------------|
+| Temperatura matriței       | 180-200°C        | 175-185°C / 205-210°C | La fiecare ciclu   |
+| Presiunea de injecție      | 800-1200 bar     | 750-790 bar / 1220-1250 bar | La fiecare ciclu   |
+| Timp de ciclu              | 25-35 secunde    | 20-24 secunde / 36-40 secunde | La fiecare 10 produse |
+| Inspecție dimensională      | ±0.1 mm          | ±0.2 mm             | La fiecare 50 produse |
+
+6. INREGISTRARI GENERATE  
+- Fișe de control ale parametrilor de proces  
+- Raport de inspecție pentru fiecare lot de produse  
+- Înregistrări de ajustări ale procesului  
+- Documentația FAI (First Article Inspection)  
+- Dosarul PPAP (Production Part Approval Process) 
+
+7. ISTORIC REVIZII  
+- Revizie 1 - Data: 20.10.2023 - Prima emitere a documentului.  
+- Revizie 0 - Data: N/A. - Document neexistent.  
+- Revizie 0 - Data: N/A. - Document neexistent.
+
+=== METADATA ===
+doc_id: FP-INJ-01
+industry: automotive
+doc_type: short
+language: ro
+standard: IATF 16949
+contradiction: C04
+save_path: data/automotive/short/FP-INJ-01.txt
+save_command: python manage_corpus.py save --file FP-INJ-01.txt --name FP-INJ-01 --industry automotive --lang ro
+================

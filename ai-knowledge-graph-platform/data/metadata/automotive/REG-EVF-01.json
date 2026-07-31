@@ -1,0 +1,12 @@
+{
+  "doc_id": "REG-EVF-01",
+  "industry": "automotive",
+  "doc_type": "short",
+  "language": "ro",
+  "saved_at": "2026-06-13T10:02:12.016194",
+  "word_count": 520,
+  "char_count": 4027,
+  "detected_contradictions": [
+    "C02"
+  ]
+}

@@ -40,9 +40,7 @@ list of dicts:
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass, field
-from uuid import uuid4
+from dataclasses import dataclass
 
 import structlog
 
@@ -235,8 +233,6 @@ class ForwardChainingEngine:
         rel = rule.relation
         depth = rule.max_depth
         decay = rule.confidence_decay
-        tenant_filter = "AND a.tenant = $tenant AND c.tenant = $tenant" if tenant else ""
-
         # Tenant must be enforced on every node and edge along the path,
         # not only on the endpoints — otherwise a 2-hop path can traverse
         # an intermediate entity from a different tenant.
@@ -435,6 +431,7 @@ class ForwardChainingEngine:
             MERGE (s)-[r:RELATES_TO {relation: $relation}]->(t)
             ON CREATE SET r.confidence      = $confidence,
                           r.source_type     = 'inferred',
+                          r.confidence_state = 'INFERRED',
                           r.inferred_by     = $rule,
                           r.tenant          = $tenant,
                           r.recorded_at     = datetime(),
@@ -443,7 +440,8 @@ class ForwardChainingEngine:
             WITH r
             WHERE r.source_type = 'inferred'
             SET r.confidence  = $confidence,
-                r.inferred_by = $rule
+                r.inferred_by = $rule,
+                r.confidence_state = 'INFERRED'
             """,
             src_name=src_name,
             src_type=src_type,

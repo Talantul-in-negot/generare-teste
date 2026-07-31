@@ -46,15 +46,44 @@ class DocumentAuthorityService:
     def __init__(self, neo4j_client):
         self._neo4j = neo4j_client
 
-    async def set_authority_level(self, doc_id: str, level: int) -> None:
-        """Set the authority level of a document."""
+    async def set_authority_level(
+        self, doc_id: str, level: int, tenant: str = "default"
+    ) -> None:
+        """Set authority and retain an immutable transaction-time change."""
+        previous = await self._neo4j.run(
+            """
+            MATCH (d:Document {id: $doc_id})
+            WHERE ($tenant = 'default' OR d.tenant = $tenant)
+            RETURN d.authority_level AS authority_level
+            """,
+            doc_id=doc_id,
+            tenant=tenant,
+        )
+        previous_level = previous[0].get("authority_level") if previous else None
         await self._neo4j.run(
             """
             MATCH (d:Document {id: $doc_id})
+            WHERE ($tenant = 'default' OR d.tenant = $tenant)
             SET d.authority_level = $level,
                 d.authority_updated_at = datetime()
             """,
             doc_id=doc_id,
+            level=level,
+            tenant=tenant,
+        )
+        await self._neo4j.run(
+            """
+            CREATE (:AuthorityChange {
+                document_id: $doc_id,
+                tenant: $tenant,
+                previous_level: $previous_level,
+                authority_level: $level,
+                recorded_at: datetime()
+            })
+            """,
+            doc_id=doc_id,
+            tenant=tenant,
+            previous_level=previous_level,
             level=level,
         )
         log.info("doc_authority.set", doc_id=doc_id, level=level)

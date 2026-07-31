@@ -39,6 +39,14 @@
 # ── Entity type extensions ─────────────────────────────────────────────────────
 # Format: [child_type, parent_type]  (parent must exist in base hierarchy or here)
 
+ontology:
+  id: telecom-oss
+  version: "1.0.0"
+  status: active
+  compatible_with: ">=1.0.0"
+  deprecated_types: []
+  deprecated_relations: []
+
 type_hierarchy:
   # Organizations
   - [OPERATOR,                  ORG]           # the telecom operator / carrier

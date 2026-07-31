@@ -38,6 +38,22 @@ Services have hard dependencies. Start in this order:
 python workers/combined_worker.py   # runs ingestion + query in one process
 ```
 
+### Scaling ingestion workers
+
+Ingestion workers are competing consumers of the same durable RabbitMQ queue.
+RabbitMQ is configured with `prefetch_count=1`, so one worker does not reserve a
+batch of documents ahead of the others. Scale the development stack with:
+
+```bash
+docker compose -f compose.dev.yaml up --scale ingestion_worker=3
+```
+
+The ingestion service deliberately has no fixed `container_name` or host port;
+its `/ready` probe remains available on port 8081 inside each container. In a
+production deployment, add replicas when queue depth stays above 100, ingestion
+lag exceeds 5 minutes, or p95 ingestion latency exceeds 30 seconds. Watch
+Neo4j write contention and entity-resolution latency before increasing further.
+
 ---
 
 ## 2. Health Checks
@@ -191,6 +207,45 @@ uvicorn api.main:app --port 8001
 Sample payloads live in `graphrag/dashboard/demo_data.py`.
 
 ---
+
+## Context Graph operations
+
+Context Graph reads and writes are exposed under `/context-graph` and require
+the normal `read` or `write` scope. Useful checks include:
+
+```bash
+# Validate a P0 trace
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/context-graph/traces/validate?tenant=default"
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/context-graph/wpp/campaign-placement"
+```
+
+Replay, correction, approval, exception, action, outcome, feedback, precedent,
+redaction-marker, and proactive policy-expiry operations are available through
+the Context Graph API. Live retention and corpus-level ranking validation are
+still required before production use.
+
+### Optional TimescaleDB KPI backend
+
+SQLite remains the default local backend. For durable time-series KPIs, set:
+
+```powershell
+$env:KPI_BACKEND = "timescale"
+$env:TIMESCALE_DB_URL = "postgresql+asyncpg://user:password@host:5432/graphrag"
+```
+
+Initialize the hypertable through the `TimescaleKPIStore` startup path before
+starting the dashboard or KPI workers. Keep SQLite for demos and isolated
+development environments.
+
+### Multimodal provenance
+
+Media bytes stay in object storage. Attachments are linked in Neo4j through
+`MediaAttachment`; OCR, transcript, caption, and visual-embedding outputs are
+recorded as `SourceArtifact` nodes via
+`MultiModalEntityService.record_transformation()`. Store the model version and
+output digest with every transformation so derived evidence can be audited.
 
 ## 5. Backup & Restore
 

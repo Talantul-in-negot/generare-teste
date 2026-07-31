@@ -35,6 +35,9 @@ _session_factory = None
 
 
 def _get_db_url() -> str:
+    timescale_url = os.getenv("TIMESCALE_DB_URL")
+    if timescale_url and os.getenv("KPI_BACKEND", "sqlite").lower() == "timescale":
+        return timescale_url
     db_path = Path(os.getenv("KPI_DB_PATH", "results/kpi_snapshots/kpis.db"))
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return f"sqlite+aiosqlite:///{db_path}"

@@ -7,6 +7,7 @@
 # Usage:
 #   docker compose -f compose.dev.yaml up
 #   docker compose -f compose.dev.yaml up api ingestion_worker   # subset
+#   docker compose -f compose.dev.yaml up --scale ingestion_worker=3
 #   docker compose -f compose.dev.yaml down -v                   # teardown + wipe volumes
 #
 # Credentials (dev only — do not use in production):
@@ -113,10 +114,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dev_ingestion_worker
     command: python workers/ingestion_worker.py
-    ports:
-      - "8081:8081"   # GET /ready health probe
     env_file: .env
     environment:
       <<: *worker-env
@@ -126,6 +124,7 @@ services:
     volumes:
       - .:/app
     healthcheck:
+      # Container-local health port keeps replicas from competing for a host port.
       test: ["CMD", "curl", "-f", "http://localhost:8081/ready"]
       interval: 10s
       timeout: 5s

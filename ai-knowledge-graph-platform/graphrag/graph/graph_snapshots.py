@@ -51,6 +51,8 @@ GraphSnapshot node properties
 from __future__ import annotations
 
 from uuid import uuid4
+import hashlib
+import json
 
 import structlog
 
@@ -130,6 +132,16 @@ class GraphSnapshotService:
                 log.warning("graph_snapshots.health_skipped", error=str(exc))
 
         snap_id = str(uuid4())
+        snapshot_payload = {
+            "tenant": tenant,
+            "label": label,
+            "stats": stats,
+            "health": health_data,
+            "schema_version": "graph-snapshot/v1",
+        }
+        snapshot_hash = hashlib.sha256(
+            json.dumps(snapshot_payload, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
         await self._neo4j.run(
             """
             CREATE (s:GraphSnapshot {
@@ -148,6 +160,8 @@ class GraphSnapshotService:
                 contradiction_rate: $contradiction_rate,
                 orphan_rate:      $orphan_rate,
                 community_coherence: $community_coherence,
+                schema_version:    $schema_version,
+                integrity_hash:     $integrity_hash,
                 recorded_at:      datetime(),
                 created_at:       datetime()
             })
@@ -167,6 +181,8 @@ class GraphSnapshotService:
             contradiction_rate=health_data.get("contradiction_rate", 0.0),
             orphan_rate=health_data.get("orphan_rate", 0.0),
             community_coherence=health_data.get("community_coherence", 0.0),
+            schema_version="graph-snapshot/v1",
+            integrity_hash=snapshot_hash,
         )
 
         log.info(
@@ -178,6 +194,36 @@ class GraphSnapshotService:
             edge_count=stats["edge_count"],
         )
         return snap_id
+
+    @staticmethod
+    def verify_integrity(snapshot: dict) -> bool:
+        """Verify a snapshot hash after export, restore, or transport."""
+        stored = snapshot.get("integrity_hash", "")
+        if not stored:
+            return False
+        payload = {
+            "tenant": snapshot.get("tenant", "default"),
+            "label": snapshot.get("label", ""),
+            "stats": {
+                "entity_count": snapshot.get("entity_count", 0),
+                "edge_count": snapshot.get("edge_count", 0),
+                "negative_count": snapshot.get("negative_count", 0),
+                "conflict_count": snapshot.get("conflict_count", 0),
+                "community_count": snapshot.get("community_count", 0),
+                "orphan_count": snapshot.get("orphan_count", 0),
+                "avg_confidence": snapshot.get("avg_confidence", 0.0),
+            },
+            "health": {
+                key: snapshot.get(key, 0.0)
+                for key in ("alias_coverage", "high_conf_rate", "contradiction_rate",
+                            "orphan_rate", "community_coherence")
+            },
+            "schema_version": snapshot.get("schema_version", "graph-snapshot/v1"),
+        }
+        expected = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+        return expected == stored
 
     # ── List / retrieve ────────────────────────────────────────────────────────
 

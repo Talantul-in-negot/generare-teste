@@ -1,0 +1,934 @@
+# PROCEDURA DE SISTEM
+
+**Cod:** PQ-07  
+**Titlu:** Calificarea și Reevaluarea Furnizorilor  
+**Rev.:** 3  
+**Aprobat de:** Director Calitate, Director General
+
+---
+
+## 1. SCOP SI OBIECTIVE MASURABILE
+
+**Scop:**  
+Scopul acestei proceduri este de a stabili cerințele pentru calificarea, reevaluarea și gestionarea furnizorilor, asigurându-se astfel că PlastiAuto SRL furnizează produse de calitate superioară către clientul său principal, AutoCorp GmbH. Procedura are ca obiectiv minimizarea riscurilor legate de calitate și asigurarea continuității lanțului de aprovizionare.
+
+**Obiective măsurabile:**  
+1. Obținerea a 95% din evaluările de furnizori favorabile în urma reevaluării semestriale.
+2. Reducerea numărului reclamațiilor de produs provenite de la furnizori la maximum 2% din totalul livrărilor anuale.
+3. Asigurarea completării auditurilor de evaluare a furnizorilor în termen de 30 zile de la semestru, conform programului stabilit.
+
+---
+
+## 2. DOMENIU DE APLICARE
+
+Această procedură se aplică tuturor furnizorilor de materiale, piese și servicii care contribuie la produsele fabricate de PlastiAuto SRL. Aceasta acoperă întregul ciclu de viață al furnizorilor, de la selecția acestora până la evaluarea periodică a performanței.
+
+---
+
+## 3. DEFINITII SI ABREVIERI
+
+1. **Furnizor** - Orice entitate care furnizează materii prime, componente sau servicii.
+2. **Calificare** - Procesul de evaluare inițială a unui furnizor.
+3. **Reevaluare** - Procesul de revizuire periodică a performanței unui furnizor activ.
+4. **KPI (Indicatori Cheie de Performanță)** - Măsuri utilizate pentru a evalua succesul unui furnizor.
+5. **SPC (Control Statistic al Procesului)** - Metodă utilizată pentru a monitoriza și controla un proces.
+6. **MSA (Analiza Sistemului de Măsurare)** - Proces de evaluare a preciziei sistemului de măsurare.
+7. **FAI (Inspecția în Primălinie)** - Evaluare a primului lot de produse livrate.
+8. **PPAP (Planul de Aprobarea Părților)** - Documentație necesară pentru aprobarea părților de către client.
+9. **FMEA (Analiza Modului și Efectului de Defecțiune)** - Metodă de analiză a potențialelor defecțiuni și a efectelor acestora.
+10. **Acuratețe** - Gradul de corectitudine al informațiilor furnizate de un furnizor.
+11. **Înregistrare** - Documente care atestă procesul de evaluare al furnizorilor.
+12. **Clasificare** - Procesul de împărțire a furnizorilor în categorii, în funcție de performanță.
+13. **Audit** - Revizuire a proceselor și sistemelor unui furnizor.
+14. **Politică de Calitate** - Angajamentul organizației față de calitate și îmbunătățire continuă.
+15. **Contract** - Acord formal între PlastiAuto SRL și furnizor despre livrările și serviciile prestate.
+
+---
+
+## 4. REFERINTE NORMATIVE SI INTERNE
+
+1. IATF 16949:2016 - Sistemul de management al calității pentru organizațiile din sectorul auto.
+2. ISO 9001:2015 - Sisteme de management al calității - Cerințe.
+3. PQ-01 - Politica de Calitate PlastiAuto SRL.
+4. PQ-02 - Procedura de Audit Intern.
+5. PQ-03 - Procedura de Control al Documentelor.
+6. PQ-04 - Procedura de Gestionare a Reclamațiilor.
+7. PQ-05 - Procedura de Evaluare a Performanței.
+8. PQ-06 - Procedura de Control al Schimbărilor.
+9. PQ-08 - Procedura de Planificare a Auditului de Calitate.
+10. PQ-09 - Procedura de Aprobarea Părților.
+11. PQ-10 - Procedura de Cerințe Legale și Regulatorii.
+12. PQ-11 - Procedura de Investigare a Incidentelor de Calitate.
+13. PQ-12 - Procedura de Colaborare cu Furnizorii.
+14. PQ-13 - Procedura de Formare și Conștientizare.
+15. PQ-14 - Procedura de Management al Riscurilor.
+
+---
+
+## 5. RESPONSABILITATI - matrice RACI
+
+| Activitate                               | Responsabil | Aprobat de         | Consultat        | Informate            |
+|-----------------------------------------|-------------|--------------------|-------------------|----------------------|
+| Calificarea Furnizorilor Noi            | Manager Calitate | Director General | Abordare Financiară | Toți angajații       |
+| Reevaluarea Furnizorilor Activii       | Manager Calitate | Director General | Abordare Financiară | Toți angajații       |
+| Gestionarea Performanței Slabe          | Manager Calitate | Director General | Direcția de Producție | Toți angajații      |
+| Implementarea KPI-urilor                 | Manager Calitate | Director General | Direcția Financiară | Toți angajații      |
+
+---
+
+## 6. CALIFICAREA FURNIZORILOR NOI
+
+### 7.1. Procesul de Calificare
+
+Pentru aprobarea oricărui furnizor nou, sunt obligatorii MINIMUM TREI (3) oferte competitive, indiferent de valoarea comenzii.
+
+#### 7.1.1. Cerințe pentru Furnizori
+
+Furnizorii propusi trebuie să îndeplinească următoarele criterii:
+- Certificare ISO 9001 sau echivalent.
+- Abilități și resurse tehnice adecvate.
+- Proceduri de control al calității documentate.
+- Capacitate de livrare conform specificațiilor.
+
+#### 7.1.2. Evaluarea Inițială
+
+Evaluarea furnizorilor noi se va efectua pe baza unui formular de evaluare care va include:
+- Istoricul companiei.
+- Capacitățile de producție.
+- Standardele de calitate aplicate.
+- Referințe din activitatea anterioară.
+
+#### 7.1.3. Auditul Furnizorului
+
+În funcție de complexitatea produselor sau serviciilor furnizate, se va efectua un audit al furnizorului înainte de aprobat, având în vedere:
+- Controlul procesului de producție.
+- Sistemele de gestionare a calității.
+
+#### 7.1.4. Aprobarea
+
+Decizia de aprobat un furnizor nou va fi luată de echipa de evaluare, incluzând Managerul de Calitate și Directorul General. 
+
+---
+
+### 7.2. Documentația Necesara
+
+Furnizorii trebuie să completeze următoarele documente:
+- Cerere de Calificare.
+- Declarație de conformitate.
+- Politica de calitate interna (dacă este cazul).
+- Certificat ISO 9001 sau echivalent.
+
+---
+
+### 7.3. Instruirea Angajaților
+
+Este esențial ca angajații implicați în procesul de calificare să fie instruiți corespunzător asupra procedurilor și cerințelor de calitate.
+
+---
+
+### 7.4. Concluzionarea Procesului de Calificare
+
+Odată ce furnizorul este aprobat, acesta va fi inclus într-o bază de date care va permite monitorizarea ulterioară a performanțelor sale.
+
+---
+
+## 8. REEVALUAREA FURNIZORILOR ACTIVI
+
+### 8.1. Frecvența Reevaluării
+
+Reevaluarea furnizorilor activi se realizeaza SEMESTRIAL.
+
+---
+
+### 8.2. Metodologia Reevaluării
+
+#### 8.2.1. Colectarea Datelor
+
+Performanța furnizorilor va fi evaluată pe baza următoarelor date:
+- Rapoartele de livrare.
+- Reclamațiile primite.
+- Rapoartele de audit.
+
+#### 8.2.2. Analiza Datelor
+
+Datele vor fi analizate pentru a determina tendințele și zonele de îmbunătățire, ținând cont de:
+- Timpul de livrare.
+- Calitatea produselor.
+- Costurile.
+
+---
+
+### 8.3. Acțiuni Corective
+
+În cazul identificării unor probleme, se vor întreprinde următoarele acțiuni corective:
+- Notificarea furnizorului.
+- Stabilirea unui plan de acțiune.
+- Monitorizarea implementării acțiunilor.
+
+---
+
+## 9. CLASIFICAREA FURNIZORILOR
+
+Furnizorii vor fi clasificați pe baza performanțelor lor în trei categorii:
+1. **A** - Performanță excelentă, fără nicio reclamație.
+2. **B** - Performanță bună, cu o reclamație acceptabilă.
+3. **C** - Performanță slabă, cu mai multe reclamații și necesitate de intervenție.
+
+---
+
+## 10. GESTIONAREA PERFORMANTEI SLABE
+
+Furnizorii care au performanțe slabe vor fi supuși unui plan de îmbunătățire care poate include:
+- Oferirea de asistență tehnică.
+- Reevaluarea periodică.
+- Evaluarea opțiunii de a continua relația comercială.
+
+---
+
+## 11. INDICATORI KPI cu valori target numerice
+
+| KPI                                   | Target         |
+|---------------------------------------|----------------|
+| Rata de livrare la timp               | ≥ 95%          |
+| Procentul de piese fără defecte       | ≥ 98%          |
+| Timpul mediu de răspuns la reclamații | ≤ 48 ore       |
+
+---
+
+## 12. INREGISTRARI SI TRASABILITATE
+
+Se va asigura păstrarea documentației relevante pentru fiecare furnizor pentru a permite trasabilitatea completă.
+Toate evaluările, rapoartele de audit și documentele de calificare vor fi stocate într-un sistem de documentare.
+
+---
+
+## 13. ISTORIC REVIZII
+
+- **Revizia 1**: Datum: 2021-09-01, Schimbări: Implementarea verificărilor KPI.
+- **Revizia 2**: Datum: 2022-06-01, Schimbări: Actualizarea procedurii de reevaluare.
+- **Revizia 3**: Datum: 2023-10-01, Schimbări: Introducerea cerinței pentru oferte competitive.
+
+---
+
+## Appendix A – Example Forms
+
+- Formular de Calificare Furnizor.
+- Raport de Evaluare Furnizor.
+- Formular de Audit Furnizor.
+
+---
+
+## Appendix B – KPI Scorecards
+
+- Scorecard pentru Rata de Livrare.
+- Scorecard pentru Procentul de Piese Fără Defecte.
+- Scorecard pentru Timpul Mediu de Răspuns.
+
+---
+
+## Appendix C – Audit Checklists
+
+- Checklist pentru Auditul Furnizorilor.
+- Checklist pentru Reevaluare Semestrială.
+
+---
+
+## Appendix D – Escalation Workflow
+
+- Flux de lucru pentru escaladarea problemelor legate de furnizori.
+- Pași de urmat pentru intervenții imediate.
+
+--- 
+
+Documentul complet contine un total de aproximativ 8000 de cuvinte. Toate sectiunile sunt detaliate conform cerintelor standardului IATF 16949, asigurându-se un proces clar și eficient pentru gestionarea furnizorilor în cadrul companiei PlastiAuto SRL.## 7. CALIFICAREA FURNIZORILOR NOI
+
+### 7.1. Procesul de Calificare
+Pentru aprobarea oricărui furnizor nou, sunt obligatorii MINIMUM TREI (3) oferte competitive, indiferent de valoarea comenzii.
+
+#### 7.1.1. Cerințe pentru Furnizori
+Furnizorii propusi trebuie să îndeplinească următoarele criterii:
+- Certificare ISO 9001 sau echivalent.
+- Abilități și resurse tehnice adecvate.
+- Proceduri de control al calității documentate.
+- Capacitate de livrare conform specificațiilor impuse de PlastiAuto SRL.
+
+#### 7.1.2. Evaluarea Inițială
+Evaluarea furnizorilor noi se va efectua pe baza unui formular de evaluare care va include:
+- Istoricul companiei, inclusiv vechimea de activitate și domeniul de expertiză.
+- Capacitățile de producție, analiza echipamentelor utilizate, tehnologiile implementate.
+- Standardele de calitate aplicate, inclusiv procesele interioare de control al calității.
+- Referințe din activitatea anterioară, care pot include clienți anteriori și feedback-ul acestora.
+
+#### 7.1.3. Auditul Furnizorului
+În funcție de complexitatea produselor sau serviciilor furnizate, se va efectua un audit al furnizorului înainte de aprobat, având în vedere:
+- Controlul procesului de producție, standardele și normele de igienă.
+- Sistemele de gestionare a calității, pentru a analiza conformitatea cu cerințele IATF 16949.
+- Capacitatea furnizorului de a face față cerințelor contractuale în timp și calitate.
+- Evaluarea resurselor umane și a infrastructurii disponibile.
+
+#### 7.1.4. Aprobarea
+Decizia de a aproba un furnizor nou va fi luată de echipa de evaluare, incluzând Managerul de Calitate și Directorul General. Această aprobat trebuie documentată, consemnând motivele aprobării și eventualele recomandări pentru monitorizarea ulterioară.
+
+### 7.2. Documentația Necesara
+Furnizorii trebuie să completeze următoarele documente:
+- Cerere de Calificare, care va include detalii despre companie și produsele/serviciile oferite.
+- Declarație de conformitate, în care furnizorul confirmă că respectă toate cerințele legale și de reglementare aplicabile.
+- Politica de calitate internă (dacă este cazul), care reflectă angajamentul furnizorului față de calitate.
+- Certificat ISO 9001 sau echivalent, document care trebuie menționat în raportul de evaluare.
+
+### 7.3. Instruirea Angajaților
+Este esențial ca angajații implicați în procesul de calificare să fie instruiți corespunzător asupra procedurilor și cerințelor de calitate. Acest lucru ar putea include:
+- Training-uri periodice despre standardele IATF 16949.
+- Workshop-uri despre evaluarea furnizorilor și metoda de colectare a datelor.
+- Instruire privind utilizarea instrumentelor IT pentru gestionarea documentației și urmăririi performanțelor furnizorilor.
+
+### 7.4. Concluzionarea Procesului de Calificare
+Odată ce furnizorul este aprobat, acesta va fi inclus într-o bază de date care va permite monitorizarea ulterioară a performanțelor sale. Baza de date va conține:
+- Datele de contact ale furnizorului.
+- Istoricul evaluărilor și auditurilor efectuate.
+- Clasificarea furnizorului și eventualele observații sau recomandări.
+
+## 8. REEVALUAREA FURNIZORILOR ACTIVI
+
+### 8.1. Frecvența Reevaluării
+Reevaluarea furnizorilor activi se realizează SEMESTRIAL.
+
+### 8.2. Metodologia Reevaluării
+
+#### 8.2.1. Colectarea Datelor
+Performanța furnizorilor va fi evaluată pe baza următoarelor date:
+- Rapoartele de livrare, care trebuie să includă punctualitatea livrărilor.
+- Reclamațiile primite, analizând trendul acestora și răspunsul furnizorului.
+- Rapoartele de audit, cu accent pe conformitatea cu standardele.
+
+#### 8.2.2. Analiza Datelor
+Datele vor fi analizate pentru a determina tendințele și zonele de îmbunătățire, ținând cont de:
+- Timpul de livrare, comparat cu termenele contractuale.
+- Calitatea produselor, respectarea specificațiilor tehnice și a standardelor interne.
+- Costurile, inclusiv posibilele penalizări pentru livrări întârziate sau produse neconforme.
+
+### 8.3. Acțiuni Corective
+În cazul identificării unor probleme, se vor întreprinde următoarele acțiuni corective:
+- Notificarea furnizorului despre problemele identificate.
+- Stabilirea unui plan de acțiune, care să includă termenii și condițiile de implementare.
+- Monitorizarea implementării acțiunilor, asigurându-se că furnizorul își respectă angajamentele.
+
+## 9. CLASIFICAREA FURNIZORILOR
+Furnizorii vor fi clasificați pe baza performanțelor lor în trei categorii:
+1. **A** - Performanță excelentă, fără nicio reclamație. Acești furnizori vor beneficia de un parteneriat pe termen lung și colaborări extinse.
+2. **B** - Performanță bună, cu o reclamație acceptabilă. Aceștia vor fi monitorizați mai atent pentru a îmbunătăți aspectele ce necesită atenție.
+3. **C** - Performanță slabă, cu mai multe reclamații și necesitate de intervenție. Acești furnizori vor fi supuși unei reevaluări stricte și a unui plan de îmbunătățire.
+
+## 10. GESTIONAREA PERFORMANȚEI SLABE
+Furnizorii care au performanțe slabe vor fi supuși unui plan de îmbunătățire care poate include:
+- Oferirea de asistență tehnică, cu scopul de a ajuta furnizorul să atingă standardele necesare.
+- Reevaluarea periodică, pentru a evalua progresele și eficiența măsurilor implementate.
+- Evaluarea opțiunii de a continua relația comercială, incluzând riscurile financiare și reputaționale asociate. Aceasta va necesita o analiză aprofundată a situației.
+
+## 11. INDICATORI KPI cu valori target numerice
+| KPI                                  | Target      |
+|--------------------------------------|-------------|
+| Rata de livrare la timp              | ≥ 95%      |
+| Procentul de piese fără defecte      | ≥ 98%      |
+| Timpul mediu de răspuns la reclamații| ≤ 48 ore   |
+| Frecvența reclamațiilor               | ≤ 2% din livrări |
+| Rata de satisfacție a clienților    | ≥ 90%      |
+| Numărul de audituri efectuate        | ≥ 2/an |
+
+## 12. INREGISTRARI SI TRASABILITATE
+Se va asigura păstrarea documentației relevante pentru fiecare furnizor pentru a permite trasabilitatea completă. Toate evaluările, rapoartele de audit și documentele de calificare vor fi stocate într-un sistem de documentare, să fie disponibile pentru inspecții și audituri externe. Înregistrările vor conține:
+- Detalii despre fiecare furnizor.
+- Rapoarte de performanță și evaluare.
+- Toate acțiunile corective efectuate și follow-up-urile realizate.
+
+## 13. ISTORIC REVIZII
+- **Revizia 1**: Datum: 2021-09-01, Schimbări: Implementarea verificărilor KPI.
+- **Revizia 2**: Datum: 2022-06-01, Schimbări: Actualizarea procedurii de reevaluare.
+- **Revizia 3**: Datum: 2023-10-01, Schimbări: Introducerea cerinței pentru oferte competitive.
+
+## Appendix A – Example Forms
+- Formular de Calificare Furnizor, care va include toate detaliile organizatorice necesare.
+- Raport de Evaluare Furnizor, care va sintetiza rezultatele auditurilor și evaluărilor.
+- Formular de Audit Furnizor, cu checklist-uri personalizate în funcție de tipul de produse/servicii.
+
+## Appendix B – KPI Scorecards
+- Scorecard pentru Rata de Livrare, care va urmări performanța în timp.
+- Scorecard pentru Procentul de Piese Fără Defecte, cu analize detaliate.
+- Scorecard pentru Timpul Mediu de Răspuns, documentând eficiența reacției furnizorului.
+
+## Appendix C – Audit Checklists
+- Checklist pentru Auditul Furnizorilor, axat pe identificarea conformităților și neconformităților.
+- Checklist pentru Reevaluare Semestrială, care va facilita procesul de examinare continuă a furnizorilor.
+
+## Appendix D – Escalation Workflow
+- Flux de lucru pentru escaladarea problemelor legate de furnizori, care va contura pașii de intervenție.
+- Pași de urmat pentru intervenții imediate, inclusiv atribuirea responsabilităților și termene limită.
+
+Acest document este conceput conform cerințelor IATF 16949 și asigură o gestionare eficientă a furnizorilor, contribuind astfel la menținerea standardelor de calitate ale PlastiAuto SRL și la satisfacerea nevoilor clientului principal, AutoCorp GmbH.## 14. PROCEDURI DE INSPECTIE SI CONTROL AL CALITATII FURNIZORILOR
+
+### 14.1. Politica de Inspectie
+Inspecțiile și controlul calității produselor livrate de furnizori au ca scop asigurarea conformității cu specificațiile tehnice și cerințele IATF 16949. Politica de inspectie va fi aplicată în mod uniform și se va aplica asupra tuturor livrărilor primite de la furnizori.
+
+### 14.2. Tipuri de Inspecție
+1. **Inspecție la primirea mărfii:** Se va efectua o inspecție inițială a tuturor produselor livrate, în care se va verifica conformitatea cantitativă și calitativă cu documentele de livrare.
+   - Verificarea cantității livrate comparativ cu comanda plasată.
+   - Inspectarea vizuală a produselor pentru a identifica defectele aparente.
+   - Testarea aleatorie a unor mostre pentru a evalua conformitatea cu standardele tehnice.
+
+2. **Inspecție de proces:** Odată ce livrările sunt acceptate, se pot efectua inspecții periodice ale proceselor de fabricație dezvoltat de furnizori, axate pe:
+   - Validarea procedurilor interne de control al calității.
+   - Monitorizarea respectării delocuirilor și normelor de fabricație.
+   - Analiza documentației referitoare la procesele de fabricație.
+
+3. **Inspecție finală:** Aceasta se va efectua pe loturile de produse înainte de livrarea către PlastiAuto SRL, incluzând:
+   - Confirmitatea cu standardele tehnice și de performanță stabilite în contract.
+   - Verificarea documentelor de conformitate și a rapoartelor de testare.
+
+### 14.3. Procedura de Inspecție
+1. **Notificarea Furnizorului:** Furnizorii vor fi informați asupra procedurii de inspecție programate.
+2. **Executarea Inspecției:** Echipa de inspecție va completa formularul de inspecție, documentând observațiile și rezultatele obținute.
+3. **Raportare:** Raportul de inspecție va fi întocmit și va conține detaliile inspecției, constatările, dar și eventualele acțiuni corective necesare.
+4. **Urmăririle Acțiunilor Corective:** Dacă se identifică neconformități, se va aloca un termen limită pentru furnizor de a lua măsurile corective, urmând monitorizarea progreselor.
+
+### 14.4. Înregistrarea Rezultatelor Inspecției
+Toate rezultatele inspecțiilor vor fi documentate și păstrate într-un sistem de gestionare a calității, asigurându-se trasabilitatea acestora. 
+
+### 14.5. Evaluarea Riscurilor
+Analiza riscurilor legate de furnizori va fi esențială în identificarea aspectelor ce necesită atenție extraordinară. Evaluările de risc vor fi realizate conform metodologiei FMEA (Failure Mode and Effects Analysis) care va include:
+- Identificarea potențialelor defecte.
+- Evaluarea severității riscurilor.
+- Stabilirea priorităților în funcție de nivelul de risc.
+
+## 15. METODA DE GESTIONARE A RECLAMAȚIILOR
+
+### 15.1. Politica de Gestionare a Reclamațiilor
+Pentru a menține relații productive cu furnizorii, PlastiAuto SRL va implementa o politică de gestionare a reclamațiilor. Această procedură va permite gestionarea eficientă a reclamațiilor primite de la clienți legate de produsele livrate.
+
+### 15.2. Procesul de Înregistrare a Reclamațiilor
+1. **Înregistrarea Reclamației:** Orice reclamație va fi documentată utilizând formularul standardizat de reclamație. Acesta va include:
+   - Detalii despre produsul contestat.
+   - Descrierea problemei semnalate.
+   - Datele de contact ale persoanei care a efectuat reclamația.
+
+2. **Analiza Reclamației:** Departamentul de calitate va analiza reclamația pentru a determina cauzele fundamentale. Analiza va include:
+   - Discutarea cu echipa de vânzări și logistica.
+   - Revizuirea documentelor și a rapoartelor de inspecție.
+   - Colectarea feedback-ului de la clienți pentru a determina impactul nonconformității.
+
+3. **Planificarea și Implementarea Soluțiilor:** Se va elabora un plan de acțiune pentru a remedia problema, incluzând:
+   - Identificarea responsabilului pentru rezolvarea problemei.
+   - Stabilirea termenului limită de implementare a soluțiilor.
+   - Comunicare continuă cu clientul despre stadiul reclamației.
+
+### 15.3. Urmărirea și Evaluarea Îmbunătățirii
+Voi fi înființate indicatori KPI pentru a măsura eficiența procesului de gestionare a reclamațiilor, inclusiv:
+- Timpul mediu de răspuns pentru reclamații.
+- Rata de satisfacție a clienților post-reclamare.
+- Numărul de reclamații repetate pe același subiect.
+
+## 16. REVIZUIREA SI IMPROVRAREA CONTINUA
+
+### 16.1. Politica de Îmbunătățire Continuă
+PlastiAuto SRL își asumă angajamentul în vederea îmbunătățirii continue a proceselor de calitate. Acest lucru se va realiza prin evaluarea constantă a performanței furnizorilor și stabilirea unor obiective de calitate mai ridicate.
+
+### 16.2. Review-ul Proceselor
+1. **Evaluările Periodice:** Procesul de revizuire a calității furnizorilor se va realiza anual, implicând o evaluare detaliată a tuturor procedurilor și a sistemului de management al calității.
+2. **Workshopuri de Îmbunătățire:** Se vor organiza workshop-uri periodice pentru angajați cu scopul de a discuta și a iniția idei de îmbunătățire a calității.
+
+### 16.3. Documentarea Îmbunătățirilor
+Toate propunerile și realizările privind îmbunătățirile vor fi consemnate într-un raport anual, ce va fi analizat de echipa de conducere și utilizat ca bază pentru localele strategii de dezvoltare.
+
+## 17. CONTROLUL DOCUMENTAȚIEI
+
+### 17.1. Politica de Control al Documentației
+Pentru a asigura conformitatea cu standardele ISO/IATF 16949, este necesar un control strict al documentației, stabilind principii pentru crearea, revizuirea, aprobarea și distribuirea documentelor.
+
+### 17.2. Crearea și Revizuirea Documentelor
+1. **Identificarea Necesității Documentelor:** Orice document nou propus va fi evaluat de către echipa de calitate pentru a verifica necesitatea acestuia.
+2. **Responsabilitatea Creării Documentelor:** Responsabilii desemnați vor crea documentele, utilizând un standarduri presetate pentru formatare și conținut.
+3. **Revizuirea Documentației:** Documentele existente vor fi implementate conform unui program de revizuire, asigurându-se că informațiile rămân actualizate și conforme cu evoluțiile din domeniu.
+
+### 17.3. Distribuirea și Păstrarea Documentelor
+Toate documentele vor fi distribuite angajaților impactați și arhivate digital, asigurându-se accesibilitatea acestora, dar și confidențialitatea informațiilor. 
+
+### 17.4. Anularea Documentelor
+Orice document care devine depășit va fi anulat formal, iar aceasta va fi documentată pentru a urmări istoricul versiunilor.
+
+## 18. FORMAREA PERSONALULUI
+
+### 18.1. Politica de Formare
+Pentru a asigura competențele necesare personalului, PlastiAuto SRL va dezvolta și implementa un program de formare continuă care să acopere toate aspectele necesare gestionării furnizorilor și a sistemelor de calitate.
+
+### 18.2. Planificarea și Derularea Formării
+1. **Evaluarea Necesităților de Formare:** Vor fi identificate competențele necesare și se va realiza o analiză a lacunelor de competențe.
+2. **Organizarea Cursurilor:** Vor fi organizate cursuri interne sau externe, în funcție de nevoile identificate.
+3. **Evaluarea Eficienței Formării:** Se va realiza o evaluare a eficienței cursurilor, prin teste de cunoștințe și feedback din partea participanților.
+
+### 18.3. Documentarea Formării
+Toate sesiunile de formare vor fi documentate, inclusiv listele de participanți, conținutul cursului, precum și evaluările post-formare.
+
+## 19. POLITICA DE CONFIDENȚIALITATE SI SECURITATEA DATELOR
+
+### 19.1. Politica de Confidențialitate
+PlastiAuto SRL se angajează să protejeze datele confidențiale ale clienților și furnizorilor, prin implementarea de măsuri adecvate de securitate. 
+
+### 19.2. Măsuri de Securitate
+1. **Acces Restricționat:** Accesul la informațiile sensibile va fi restricționat la personalul autorizat.
+2. **Formarea în privința Securității Datelor:** Angajații vor fi instruiți cu privire la importanța confidențialității și a securității datelor.
+3. **Monitorizarea Accesului:** Vor fi implementate procese de monitorizare a accesului la datele sensibile, pentru a preveni posibilele breșe de securitate.
+
+### 19.3. Respectarea Legislației
+PlastiAuto SRL se va asigura că toate practiciile de gestionare a datelor respectă legislația aplicabilă și standardele relevante.
+
+## 20. inregistrari si trasabilitate
+Toate inregistrarile legate de procesele de evaluare, audit si gestionare a furnizorilor vor fi stocate electronic si fizic, asigurându-se accessibilitate si confidentialitate. Acestea vor include:
+- Detalii despre evaluările efectuate, inclusiv datele si rezultatele obtinute.
+- Rapoartele de audit si toate documentele de suport.
+- Toate acțiunile corective și îmbunătățirile implementate subsequent.
+
+## 21. ISTORIC REVIZII
+- **Revizia1**: Data: 2021-09-01, Modificări: Introducerea indicelui de performanță.
+- **Revizia2**: Data: 2022-06-01, Modificări: Actualizarea procedurii de reevaluare.
+- **Revizia3**: Data: 2023-10-01, Modificări: Introducerea cerinței pentru oferte competitive.
+
+Acest document este conceput ca un ghid exhaustiv al practicii de gestionare a furnizorilor care se bazează pe standardele IATF 16949, asigurându-se astfel că PlastiAuto SRL răspunde cerințelor în continuă schimbare ale industriei auto și nevoilor clientului principal, AutoCorp GmbH.## 22. RESPONSABILITĂȚI - MATRICE RACI
+
+Matricea RACI definește clar responsabilitățile și rolurile angajaților implicați în managementul furnizorilor, asigurând o bună comunicare și o desfășurare eficientă a activităților. RACI este un acronim pentru: Responsabil (R), Aprobat (A), Consultat (C), și Informare (I). Structura responsabilităților stabilite este următoarea:
+
+| Activitate                     | R (Responsabil) | A (Aprobat)         | C (Consultat)     | I (Informare)           |
+|--------------------------------|-----------------|---------------------|--------------------|--------------------------|
+| Calificarea Furnizorilor Noi   | Departamentul Calitate | Director Calitate | Departamentul Achiziții | Management Superior     |
+| Reevaluarea Furnizorilor       | Departamentul Calitate | Director Calitate | Departamentul Achiziții | Management Superior     |
+| Monitorizarea Performanței     | Departamentul Calitate | Director General  | Departamentul Producție | Management Superior     |
+| Gestionarea Reclamațiilor      | Departamentul Calitate | Director Calitate | Departamentul Vânzări    | Management Superior     |
+| Formarea Personalului          | Departamentul HR  | Director General  | Departamentul Calitate | Toți angajații          |
+| Controlul Documentelor         | Departamentul Calitate | Director General  | Departamentul IT       | Toți angajații          |
+
+### 23. CALIFICAREA FURNIZORILOR NOI
+
+Procesul de calificare a furnizorilor noi este esențial pentru asigurarea conformității cu standardele IATF 16949 și pentru a satisface cerințele clientului principal, AutoCorp GmbH. Aceasta include evaluarea și selectarea furnizorilor care vor putea contribui la implementarea eficientă a sistemului de management al calității.
+
+#### 23.1. Cerințe Generale pentru Calificare
+Pentru ca un furnizor să fie considerat pentru calificare, acesta trebuie să demonstreze capacitatea de a livra produse sau servicii conforme cu specificațiile tehnice și cerințele de calitate.
+
+#### 23.2. Documentația Necesara
+Furnizorii sunt obligați să prezinte documentația care să confirme conformitatea cu cerințele din domeniul automotive, inclusiv:
+- Certificări ISO relevante.
+- Istoricul calității și performanței în livrări anterioare.
+- Capacitățile tehnice și de producție.
+
+#### 23.3. Evaluarea Furnizorilor
+Evaluarea furnizorilor se va face în urma completării unui chestionar de evaluare, ce va acoperi aspecte precum:
+- Capacitatea de producție.
+- Măsurile de control al calității.
+- Comportamentul etic și conformitatea cu legislația în vigoare.
+
+#### 23.4. Aprobarea Furnizorilor
+Pentru aprobarea oricărui furnizor nou, sunt obligatorii MINIMUM TREI (3) oferte competitive, indiferent de valoarea comenzii. Aceasta asigură transparența și concurența în alegerea partenerilor de afaceri.
+
+### 24. REEVALUAREA FURNIZORILOR ACTIVI
+
+Reevaluarea furnizorilor activi este un proces continuu care are ca scop asigurarea unei colaborări eficiente și performante, respectând cerințele standardului IATF 16949.
+
+#### 24.1. Frecvența Reevaluării
+Reevaluarea furnizorilor activi se realizează SEMESTRIAL.
+
+#### 24.2. Criteriile de Reevaluare
+Criteriile de reevaluare vor include, dar nu se vor limita la:
+- Performanța în livrări.
+- Rata de defecte a produselor livrate.
+- Evaluarea feedback-ului din partea utilizatorilor interni.
+
+#### 24.3. Procedura de Reevaluare
+1. **Prezentarea Raportului:** Fiecare furnizor va fi evaluat anual pe baza unui raport care analizează performanța acestuia în perioada respectivă.
+2. **Discuții cu Furnizorii:** Se vor organiza întâlniri pentru discutarea rezultatelor și pentru a identifica eventualele măsuri de îmbunătățire.
+3. **Monitorizarea Îmbunătățirilor:** Vor fi stabilite măsuri corective ce trebuie implementate de către furnizor pentru a atinge standardele necesare.
+
+### 25. CLASIFICAREA FURNIZORILOR
+
+Clasificarea furnizorilor se bazează pe performanțele lor în funcție de diferite criterii, precum:
+- Calitatea produselor livrate.
+- Timpul de livrare.
+- Flexibilitate și răspuns la cerințele clientului.
+
+Furnizorii vor fi clasificați în următoarele categorii:
+- **Furnizori Exceleanți**: Furnizori care îndeplinesc toate criteriile de performanță.
+- **Furnizori Acceptabili**: Furnizori care îndeplinesc majoritatea criteriilor, dar care necesită unele îmbunătățiri.
+- **Furnizori Neacceptabili**: Furnizori care nu îndeplinesc cerințele minime și care vor fi supuși unei evaluări suplimentare.
+
+### 26. GESTIONAREA PERFORMANȚEI SLABE
+
+Performanța slabă a furnizorilor va fi gestionată printr-o serie de pași specifici care vizează identificarea și remedierea problemelor. Această politică își propune să minimizeze riscurile în ceea ce privește livrările și calitatea produselor.
+
+#### 26.1. Identificarea Problemelor
+1. **Monitorizarea KPI-urilor**: Se vor urmări indicatorii de performanță, iar în cazul în care aceștia scad sub nivelul stabilit, va fi inițiat un proces de analiză.
+2. **Raportarea Problemelor**: Echipa de calitate va informa imediat managementul cu privire la problemele identificate.
+
+#### 26.2. Procedura de Corectare
+1. **Plan de Acțiune**: Se va elabora un plan de acțiune pentru a remedia problemele de performanță, stabilind termene clare și responsabili.
+2. **Implementarea Măsurilor Corective**: Furnizorul va trebui să implementeze măsurile corective, care ulterior vor fi monitorizate de echipa de calitate.
+
+#### 26.3. Evaluare Finală
+După implementarea măsurilor corective, furnizorul va fi supus unei reevaluări pentru a determina eficiența acelor măsuri. Dacă problemele persistă, se vor lua în considerare măsuri suplimentare, inclusiv posibila încheiere a colaborării.
+
+### 27. INDICATORI KPI CU VALORI TARGET NUMERICE
+
+Pentru a asigura o gestionare eficientă a furnizorilor, PlastiAuto SRL va stabili indicatori KPI (Key Performance Indicators) cu valori țintă. Acești indicatori vor fi regulați prin analiza periodică a performanței furnizorilor.
+
+#### 27.1. Exemples de KPI
+1. **Rata de conformitate a livrărilor**: Obiectiv 95% conformitate.
+2. **Timpul mediu de livrare**: Obiectiv 5 zile lucrătoare.
+3. **Numărul de reclamații primite**: Obiectiv max. 2 reclamații/lună per furnizor.
+4. **Rata defectelor în produse**: Obiectiv max. 0,5%.
+5. **Satisfacția clientului**: Obiectiv min. 90% satisfacție.
+
+#### 27.2. Monitorizarea și Raportarea KPI
+KPI-urile vor fi monitorizate continuu și va fi realizat un raport lunar care să includă analizele și propunerile de îmbunătățire. Aceste date vor fi discutate în cadrul ședințelor de management și vor contribui la deciziile strategice luate de conducerea PlastiAuto SRL.
+
+### 28. ÎNREGISTRĂRI ȘI TRASABILITATE
+
+Pentru a asigura o gestionare eficientă a documentelor și a proceselor de calitate, PlastiAuto SRL va implementa un sistem de înregistrări și trasabilitate riguros stabilit. Aceasta va include:
+
+1. **Documente de evaluare a furnizorilor**: Toate evaluările și analizele vor fi documentate și arhivate, asigurându-se că sunt disponibile pentru referințe viitoare.
+2. **Audituri și Rapoarte**: Toate rapoartele de audit și inspecție vor fi stocate digital și fizic, având grijă de confidențialitatea informațiilor.
+3. **Măsuri Corective**: Orice acțiuni corective aplicate furnizorilor vor fi documentate, împreună cu evaluările lor ulterioare.
+
+### 29. ISTORIC REVIZII
+
+Toate modificările şi revizuirile efectuate asupra acestei proceduri vor fi documentate în mod corespunzător, inclusiv data revizuirilor, tipul modificărilor și persoanele responsabile. Această practică va asigura trasabilitatea și transparența procesului de management a furnizorilor.
+
+- **Revizia 1**: Data: 2022-01-15, Modificări: Introducerea cerințelor suplimentare de evaluare a furnizorilor.
+- **Revizia 2**: Data: 2022-07-20, Modificări: Actualizarea KPI-urilor de performanță.
+- **Revizia 3**: Data: 2023-11-01, Modificări: Revizuirea procesuală a evaluării furnizorilor activi.
+
+### ANEXE
+
+**Anexa A – Exemple de Formulare**
+- Formular de evaluare a furnizorilor.
+- Formular de reclamă.
+- Raport de inspecție pentru produse.
+
+**Anexa B – Scorecard KPI**
+- Descriere detaliată a fiecărui indicator KPI, cu metodologie de măsurare și valori specifice.
+
+**Anexa C – Liste de Verificare pentru Audituri**
+- Liste de verificare pentru auditul provizional și final.
+- Ghiduri pentru audituri interne.
+
+**Anexa D – Fluxul de Escalție**
+- Procesul de escaladare a problemelor legate de furnizori, de la echipa de calitate până la conducerea superioară.
+
+Acest document continuă să fie un ghid important pentru PlastiAuto SRL, subliniind angajamentul firmei de a menține standarde ridicate de calitate în selecția și gestionarea furnizorilor, contribuind astfel la succesul pe termen lung în industria auto.## 30. GESTIONAREA RELAȚIEI CU FURNIZORII
+
+Gestionarea relației cu furnizorii este o parte esențială a strategiei de succes a PlastiAuto SRL. O relație bună cu furnizorii nu doar că sprijină continuitatea livrărilor, ci și îmbunătățește calitatea produselor și serviciilor, contribuind la satisfacția clientului. Această secțiune detaliază metodele prin care PlastiAuto SRL va gestiona și îmbunătăți aceste relații.
+
+### 30.1. Comunicare Regulară
+
+1. **Întâlniri Planificate:** Se vor organiza întâlniri periodice cu furnizorii pentru a discuta performanțele acestora, problemele întâmpinate și soluțiile posibile. Aceste întâlniri vor permite o conexiune directă, facilitând rezolvarea rapidă a problemelor.
+   
+2. **Canale de Comunicare:** PlastiAuto SRL va stabili canale de comunicare clare, cum ar fi e-mailuri, platforme de mesagerie și telefon, pentru a facilita schimbul rapid de informații. De asemenea, se vor utiliza platforme digitale pentru a partaja documentații și rapoarte relevante.
+
+### 30.2. Evaluarea Periodică a Relației
+
+1. **Feedback de la Furnizori:** PlastiAuto SRL va solicita periodic feedback din partea furnizorilor pentru a evalua percepțiile acestora asupra relației. Acest feedback va fi utilizat pentru a îmbunătăți procesele interne și interacțiunile.
+
+2. **Analiza Relației:** Se va efectua o analiză anuală a relației cu fiecare furnizor, evaluând aspecte precum colaborarea, rezolvarea problemelor și reacțiile la cerințele specifice.
+
+### 30.3. Incentivarea Performanței
+
+1. **Program de Recompensare:** PlastiAuto SRL va implementa un program de recompensare pentru furnizorii care depășesc standardele de performanță. Acest program va include evaluări anuale și premii pentru furnizorii care livrează cu un procent ridicat de calitate și onestitate.
+
+2. **Parteneriate Strategice:** Se va urmări dezvoltarea de parteneriate strategice pe termen lung cu furnizorii selectați, bazate pe încredere și beneficii mutuale.
+
+## 31. RISCURI ASOCIATE CU FURNIZORII
+
+Identificarea și gestionarea riscurilor asociate cu furnizorii sunt esențiale pentru a minimiza impacturile negative asupra operațiunilor companiei. PlastiAuto SRL va implementa o serie de măsuri pentru a evalua și gestiona aceste riscuri.
+
+### 31.1. Identificarea Riscurilor
+
+1. **Evaluarea Impactului**: Se va realiza o analiză a riscurilor pentru fiecare furnizor, evaluând impactul pe care o eventuală defecțiune a acestuia l-ar putea avea asupra proceselor interne.
+
+2. **Determinarea Probabilității**: Se va evalua probabilitatea apariției riscurilor identificate prin intermediul analizei istorice a performanței furnizorului.
+
+### 31.2. Plan de Management al Riscurilor
+
+1. **Planificarea Măsurilor de Atac**: Pentru fiecare risc identificat, se vor stabili măsuri proactive de reducere a impactului, inclusiv măsuri de mitigare și soluții alternative.
+
+2. **Monitorizarea Riscurilor**: Riscurile vor fi monitorizate permanent, iar evaluările se vor efectua periodic pentru a ajusta planul de management al riscurilor.
+
+### 31.3. Reacția în caz de Urgență
+
+1. **Plan de Continuitate**: Se va dezvolta un plan de continuitate a activității pentru a face față eventualelor întreruperi cauzate de furnizori. Acest plan va include strategii de backup, precum identificarea altor furnizori alternativi.
+
+2. **Simulări de Criză**: PlastiAuto SRL va efectua simulări și exerciții strategice pentru a se pregăti în caz de criză, asigurându-se că toți angajații implicați în gestionarea furnizorilor știu cum să reacționeze eficient.
+
+## 32. INTEGRAREA TEHNOLOGIEI ÎN MANAGEMENTUL FURNIZORILOR
+
+PlastiAuto SRL va adopta strategii digitale pentru a îmbunătăți gestionarea furnizorilor, contribuind la eficiența proceselor și la reducerea erorilor.
+
+### 32.1. Platforme Digitale de Gestionare
+
+1. **Sistem ERP**: Implementarea unui sistem ERP (planificarea resurselor întreprinderii) care să integreze informațiile despre furnizori, comenzile și livrările. Aceasta va permite un acces rapid la datele necesare și o vizibilitate sporita asupra întregului lanț de aprovizionare.
+
+2. **Portalul Furnizorilor**: Crearea unui portal online dedicat furnizorilor pentru a facilita schimbul rapid de informații, iluminând transparența și reducând timpul de răspuns.
+
+### 32.2. Analiza Datelor
+
+1. **Instrumente de Analiză**: Utilizarea instrumentelor de analiză a datelor pentru a evalua în mod constant performanța furnizorilor și pentru a anticipa eventualele probleme.
+
+2. **Dashboard-uri Performanță**: Crearea de dashboard-uri pentru vizualizarea KPI-urilor și a altor metrici relevante în real-time, permițând managementului să ia decizii rapide și eficiente.
+
+### 32.3. Automatizarea Proceselor
+
+1. **Automatizarea Comunicării**: Implementarea unor soluții automate de comunicare, care să notifice furnizorii cu privire la ordini, livrări sau reclamații.
+
+2. **Reducerea Birocrației**: Simplificarea proceselor administrative prin automatizarea documentării și a fluxurilor de lucru, astfel încât personalul să se poată concentra mai mult asupra îmbunătățirii relațiilor cu furnizorii.
+
+## 33. FORMAREA ȘI DEZVOLTAREA PERSONALULUI ÎN MANAGEMENTUL FURNIZORILOR
+
+Formarea continuă a personalului este esențială pentru asigurarea unei gestionări eficiente a relațiilor cu furnizorii. PlastiAuto SRL va investi în dezvoltarea abilităților angajaților pentru a menține standardele ridicate de calitate.
+
+### 33.1. Programe de Formare
+
+1. **Ateliere de Lucru**: Organizarea de ateliere de lucru pentru angajații din departamentele de achiziții și calitate pentru a-i familiariza cu procesele de evaluare și gestionare a furnizorilor.
+
+2. **Cursuri de Specialitate**: Participarea la cursuri de formare profesională, atât interne, cât și externe, pentru a îmbunătăți cunoștințele despre normele de calitate, legislația în domeniul automotive și managementul furnizorilor.
+
+### 33.2. Evaluarea Eficacității Formării
+
+1. **Feedback de la Participanți**: Colectarea feedback-ului de la angajați după fiecare sesiune de formare pentru a evalua eficiența și a identifica domeniile ce necesită îmbunătățiri.
+
+2. **Monitorizarea Performanței**: Evaluarea impactului formării asupra performanței angajaților prin KPI specifici, asigurându-se că abilitățile dobândite se reflectă în activitatea zilnică.
+
+### 33.3. Cultură de Îmbunătățire Continuă
+
+1. **Învățare Din Experiențe**: Crearea unei culturi organizaționale bazată pe învățarea din experiențele anterioare, inclusiv analiza cazurilor de succes și a celor eșuate.
+
+2. **Implicarea Angajaților**: Încurajarea angajaților să participe activ în procesul de îmbunătățire, oferind sugestii și soluții pentru problemele întâmpinate în gestionarea furnizorilor.
+
+## 34. TRANSPARENȚA ÎN GESTIONAREA FURNIZORILOR
+
+Principiile transparenței vor fi integrate în toate procesele de gestionare a furnizorilor pentru a asigura un climat de încredere și colaborare.
+
+### 34.1. Politica de Comunicări
+
+1. **Comunicarea Deschisă**: Stabilirea unor linii de comunicare deschise cu furnizorii, astfel încât să poată adresa întrebări și să partajeze feedback fără reticențe.
+
+2. **Raportare Clară**: Furnizarea de rapoarte clare și detaliate privind performanța furnizorilor, incluzând analize și recomandări pentru îmbunătățiri necesare.
+
+### 34.2. Audituri și Evaluări Publice
+
+1. **Transparența Auditului**: Rapoartele de audit privind furnizorii vor fi disponibile pentru consultare de către toate părțile interesate, promovând astfel o cultură de responsabilitate.
+
+2. **Feedback Public**: Crearea unor mecanisme prin care furnizorii să-și poată exprima opiniile și sugestiile cu privire la procesele interne ale PlastiAuto SRL.
+
+## 35. REVIZUIREA ȘI UPDATE-URILE PROCEDURII
+
+Această procedură va fi revizuită anual pentru a se asigura că rămâne relevantă și eficientă. Modificările vor fi implementate pe baza feedback-ului din parte angajaților, a rezultatelor auditurilor de calitate și a schimbărilor în mediul de afaceri.
+
+### 35.1. Responsabilitatea Revizuirii
+
+1. **Actualizări Periodice**: Departamentul Calitate va avea responsabilitatea de a coordona actualizările periodice ale procedurii, asigurându-se că toate modificările sunt bine documentate și comunicate tuturor angajaților.
+
+2. **Informarea Personalului**: Odată cu reviziile, personalul va fi informat prin sesiuni de formare și comunicate interne, având la dispoziție informații actualizate despre modificările procedurilor.
+
+### 35.2. Implementarea Schimbărilor
+
+1. **Testul de Validare**: Orice actualizare a procedurii vai fi testată și validată pentru a asigura efectivitatea și conformitatea acesteia cu standardele IATF 16949.
+
+2. **Feedback Continu**: Se va menține un sistem de feedback continuu din partea angajaților pentru a evalua impactul modificărilor implementate și pentru a adapta procedura în consecință.
+
+Aceste principii și practici vor ghida PlastiAuto SRL în menținerea unui sistem de management al furnizorilor eficient, contribuind astfel la succesul companiei pe piața automotive. Respectarea standardelor IATF 16949 nu doar că asigură conformitatea, dar și creează un mediu propice pentru inovație și îmbunătățire continuă.## 6. RESPONSABILITĂȚI - MATRICE RACI
+
+Pentru a asigura o gestionare eficientă a furnizorilor, este esențial să stabilim responsabilitățile în cadrul organizatiei. Utilizarea matricei RACI (Responsabil, Aprobat, Consultat, Informat) va ajuta la clarificarea rolurilor membrilor echipei și a responsabilităților legate de procesele de calificare, gestionare și evaluare a furnizorilor.
+
+| Activitate                      | R (Responsabil) | A (Aprobat) | C (Consultat) | I (Informat)   |
+|----------------------------------|------------------|-------------|----------------|-----------------|
+| Identificarea furnizorilor noi  | Manager Achiziții | Director Calitate | Departament Tehnic | Echipa de Vânzări |
+| Evaluarea inițială a furnizorilor | Manager Calitate  | Director General | Personal de Calitate | Presedinte |
+| Reevaluarea furnizorilor activi  | Manager Calitate  | Director Calitate | Departament Logistic | Toate departamentele |
+| Gestionarea performanței slabe   | ManagerAchiziții  | Director Calitate | Departament Tehnic | Echipa de Vânzări |
+| Comunicarea rezultatelor evaluărilor | Manager Calitate  | Director General | Personal Calitate | Toate departamentele |
+
+### 7. CALIFICAREA FURNIZORILOR NOI
+
+Calificarea furnizorilor noi este un proces esențial pentru asigurarea calității produselor și serviciilor oferite de PlastiAuto SRL. Aceasta va include o evaluare detaliată a capacităților furnizorilor și a conformității acestora cu standardele IATF 16949.
+
+#### 7.1. Procesul de Selectare
+
+1. **Criterii de Selectare**: PlastiAuto SRL va stabili criterii clare pentru selectarea furnizorilor, care vor include capacitatea tehnică, calitatea produselor, stabilitatea financiară, istoricul în livrări și conformitatea cu standardele de mediu.
+2. **Evaluarea Documentației**: Se va evalua documentația furnizorului prin examene de conformitate și evaluări externe. Documentele necesare pot include certificările ISO, rezultatele evaluărilor anterioare și rapoartele financiare.
+3. **Vizite la Fața Locului**: O echipă formată din membri ai departamentului de achiziții și calitate va efectua vizite la sediile furnizorilor pentru a evalua capacitățile acestora, procesul de producție și sistemul de management al calității.
+
+**C01**: "Pentru aprobarea oricărui furnizor nou, sunt obligatorii MINIMUM TREI (3) oferte competitive, indiferent de valoarea comenzii."
+
+#### 7.2. Evaluarea Proiectului
+
+1. **Analiza Proiectului**: Se va realiza o evaluare detaliată a proiectului propus de furnizor, inclusiv analiza fezabilității și a resurselor necesare.
+2. **Planuri de Calitate**: Furnizorii vor fi solicitați să prezinte planuri de calitate care să demonstreze modul în care se vor conforma cerințelor clientului și standardelor IATF 16949.
+3. **Evaluarea Riscurilor**: Se va finaliza o analiză a riscurilor pentru a anticipa potențialele probleme și a dezvolta strategii de mitigare. Aceasta va include analiza impactului asupra procesului de producție și livrare.
+
+#### 7.3. Testarea Produselor
+
+1. **Furnizarea de Mostre**: Toți furnizorii noi vor fi obligați să furnizeze mostre de produse pentru evaluare și testare.
+2. **Testare de Calitate**: PlastiAuto SRL va efectua teste de calitate asupra produselor primite, conform planului de testare aprobat.
+3. **Documentația Testelor**: Rezultatele testelor vor fi documentate și vor forma baza pentru decizia de aprobat sau respinge furnizorul.
+
+#### 7.4. Aprobatul Furnizorului
+
+1. **Decizia Finală**: După analiza completă a criteriilor de selecție, evaluarea proiectului și testarea produselor, echipa de evaluare va recomanda aprobarea sau respingerea furnizorului.
+2. **Certificarea Furnizorului**: Furnizorii aprobați vor fi incluși în lista furnizorilor calificați și vor primi un certificat de aprobat de la PlastiAuto SRL.
+3. **Informarea Furnizorului**: Toți furnizorii vor fi informați despre rezultatul procesului de calificare, inclusiv eventualele observații sau cerințe suplimentare.
+
+### 8. REEVALUAREA FURNIZORILOR ACTIVI
+
+Pentru a menține standarde ridicate de calitate, PlastiAuto SRL va implementa un proces de reevaluare a furnizorilor activi.
+
+#### 8.1. Frecvența Reevaluării
+
+**C03**: "Reevaluarea furnizorilor activi se realizează SEMESTRIAL."
+
+#### 8.2. Procesul de Reevaluare
+
+1. **Evaluarea Performanței**: Se va realiza o evaluare a performanței furnizorilor pe baza KPI-urilor stabilite, inclusiv livrările la timp, calitatea produselor și serviciile post-vânzare.
+2. **Identificarea Provocărilor**: Analiza detaliată a provocărilor întâmpinate în colaborarea cu furnizorii va fi efectuată pentru a identifica modalitățile de îmbunătățire.
+3. **Feedback de la Utilizatori**: Se va solicita feedback din partea departamentelor care utilizează produsele furnizorilor pentru a evalua satisfacția generală.
+
+#### 8.3. Decizia de Continuare a Colaborării
+
+1. **Raportul de Reevaluare**: Se va întocmi un raport de reevaluare care va include rezultatele analizei, observările și recomandările de acțiune.
+2. **Discuții cu Furnizorul**: Dacă se identifică probleme, se vor organiza întâlniri cu furnizorul pentru a discuta rezultatele reevaluării și eventualele măsuri corective necesare.
+3. **Decizia Finală**: În funcție de rezultatele reevaluării, PlastiAuto SRL va decide continuarea, suspendarea sau încetarea colaborării cu furnizorul respectiv.
+
+### 9. CLASIFICAREA FURNIZORILOR
+
+Clasificarea furnizorilor este un proces esențial pentru gestionarea relațiilor comerciale și pentru a asigura resursele necesare în funcție de importanța acestora în lanțul de aprovizionare. Furnizorii vor fi clasificați în următoarele categorii:
+
+1. **Furnizori Strategic**: Furnizori care oferă produse sau servicii esențiale pentru activitățile PlastiAuto SRL și au un impact semnificativ asupra performanței financiare a companiei.
+2. **Furnizori Tactici**: Furnizori care contribuie la atingerea obiectivelor pe termen mediu și care sunt importanți dar nu esențiali în toate situațiile.
+3. **Furnizori Operaționali**: Furnizori care contribuie la funcționarea de zi cu zi a companiei, dar nu afectează semnificativ rezultatele financiare sau strategice.
+
+### 10. GESTIONAREA PERFORMANȚEI SLABE
+
+Gestionarea performanței slabe a furnizorilor este crucială pentru menținerea standardelor de calitate. PlastiAuto SRL va implementa următoarele măsuri în cazul în care un furnizor nu respectă cerințele de calitate.
+
+1. **Evaluarea Cauzelor**: Se va efectua o analiză a cauzelor care au dus la performanțele slabe, utilizând metode precum analiza cauzelor rădăcină (RCA).
+2. **Plan de Acțiune**: Se va elabora un plan de acțiune corectivă împreună cu furnizorul pentru a aborda problemele identificate. Acest plan va include termene limita și responsabilități clare.
+3. **Monitorizarea Implementării**: Implementarea planului de acțiune va fi monitorizată îndeaproape pentru a se asigura respectarea termenelor și eficienței propunerilor.
+4. **Evaluarea Rezultatelor**: După o perioadă de implementare a măsurilor corective, se va efectua o reevaluare a furnizorului pentru a determina îmbunătățirile și pentru a decide asupra continuării colaborării.
+
+### 11. INDICATORI KPI CU VALORI TARGET NUMERIC
+
+PlastiAuto SRL va implemeta un set de indicatori cheie de performanță (KPI) pentru a evalua performanța furnizorilor. Astfel, se va asigura o monitorizare constantă și obiectivă a livrărilor și servirii.
+
+| KPI                              | Valoare Target       | Frecvență de Măsurare | Descriere                                |
+|----------------------------------|----------------------|-----------------------|------------------------------------------|
+| Rata Livrărilor la Timp         | 95%                  | Lună                  | Procentajul comenzilor livrate conform planificării |
+| Calitatea Produselor             | 99% fără reclamații  | Trimestrial           | Procentajul produselor fără deficiențe la livrare |
+| Comunicări Eficiente             | 90% Răspunsuri la 24h| Lună                  | Procentajul comunicărilor soluționate într-o zi |
+| Respectarea Standardelor          | 100%                 | Anual                 | Procentajul furnizorilor care respectă cerințele IATF 16949 |
+| Costul Total Total Aprovizionare  | ≤ 5% creștere       | Anual                 | O monitorizare a creșterilor anuale ale costurilor de aprovizionare |
+
+### 12. ÎNREGISTRĂRI ȘI TRASABILITATE
+
+PlastiAuto SRL va menține o documentație riguroasă pentru a asigura trasabilitatea și integritatea proceselor de calificare și evaluare a furnizorilor.
+
+1. **Întreținerea Documentației**: Toate înregistrările referitoare la furnizori, inclusiv evaluațiile, istoricul livrărilor și documentele de calitate, vor fi păstrate în conformitate cu politica de control al documentației.
+2. **Accesibilitate**: Înregistrările vor fi ușor accesibile angajaților autorizați pentru a facilita procesele de audit și revizuiri.
+3. **Termeni de Păstrare**: Documentele vor fi păstrate pentru o perioadă de minimum 5 ani sau conform cerințelor legale și standardelor specifice Industriei Automotive.
+
+### 13. ISTORIC REVIZII
+
+Această secțiune este destinată să documenteze toate reviziile și actualizările procedurii, incluzând data, descrierea modificărilor și persoana responsabilă de revizie.
+
+| Data        | Revizia       | Descriere             | Responsabil        |
+|-------------|---------------|-----------------------|--------------------|
+| 2022-01-15  | Revizia 1     | Implementare inițială | Director Calitate   |
+| 2022-06-10  | Revizia 2     | Actualizare KPI       | Manager Achiziții   |
+| 2023-10-01  | Revizia 3     | Revizuirea procesului de evaluare a furnizorilor | Director General    |
+
+**Appendix A – Example Forms**
+
+- Formular pentru calificararea furnizorilor
+- Formular pentru evaluarea performanței furnizorului
+- Formular pentru feedback-ul furnizorilor
+
+**Appendix B – KPI Scorecards**
+
+- Exemplu de fișă de scor pentru monitorizarea KPI-urilor
+- Formular de raportare pentru evaluarea furnizorilor
+
+**Appendix C – Audit Checklists**
+
+- Lista de verificare pentru auditul furnizorilor
+- Lista de verificare pentru evaluarea performanței lunare a furnizorilor
+
+**Appendix D – Escalation Workflow**
+
+- Diagramă de flux pentru escaladarea problemelor întâmpinate cu furnizorii
+- Proceduri de escaladare pentru performanțe slabe ale furnizorilor
+
+*Aceste documente și procese vor sprijini stabilirea și menținerea unei relații de încredere cu furnizorii și vor asigura respectarea standardelor de calitate esențiale pentru succesul PlastiAuto SRL.*### 12. ÎNREGISTRĂRI ȘI TRASABILITATE
+
+PlastiAuto SRL se angajează să mențină un sistem riguros de înregistrare și trasabilitate, esențial pentru asigurarea transparenței în relațiile cu furnizorii. Aceasta include documentarea completă a tuturor interacțiunilor și evaluărilor referitoare la furnizori, permițând astfel o verificare eficientă și o analiză detaliată a performanței în timp.
+
+1. **Întreținerea Documentației**: Întreaga documentație aferentă furnizorilor, incluzând evaluările, fișele de performanță, rapoartele de audit și informațiile despre livrări, va fi păstrată într-un sistem centralizat de gestionare a documentelor. Aceste documente vor fi supuse controalelor periodice pentru a elimina informațiile învechite, asigurând astfel acuratețea și relevanța datelor.
+
+2. **Accesibilitate**: Toate înregistrările vor fi organizate în manner digital și fizic, astfel încât angajații autorizați să poată accesa informațiile în mod rapid și eficient. Accesul va fi reglementat prin politici specifice de securitate, iar angajații vor trebui să respecte procedurile de confidențialitate impuse.
+
+3. **Termeni de Păstrare**: Înregistrările vor fi păstrate timp de minimum 5 ani de la data ultimei interacțiuni cu furnizorul, sau conform cerințelor legale applicable și normelor de standardizare din industry. La expirarea acestui termen, documentele vor fi evaluate și eliminate conform procedurilor de arhivare și distrugere a informațiilor sensibile.
+
+4. **Audituri și Revizii**: Înregistrările vor fi supuse unui program de audit anual pentru a verifica integritatea sistemului de gestionare a documentelor și conformitatea cu cerințele IATF 16949. Orice neconformitate identificată va fi adresată imediat prin măsuri corective.
+
+5. **Trasabilitate**: În cazul în care se identifică deficiențe în produsele livrate sau în serviciile prestate de furnizori, PlastiAuto SRL va asigura trasabilitatea completă a produselor și proceselor de la furnizor până la client. Aceasta implică documentarea detaliată a loturilor de produse, numerotarea de serie și istoricul livrărilor, pentru a facilita eventualele retrageri sau acțiuni corective.
+
+### 13. ISTORIC REVIZII
+
+Această secțiune oferă o evidență completă a tuturor reviziilor și modificărilor privind procedura de evaluare a furnizorilor. Documentarea acestui istoric este esențială pentru transparența și continuitatea proceselor interne.
+
+| Data       | Revizia     | Descriere                                       | Responsabil          |
+|------------|-------------|-------------------------------------------------|----------------------|
+| 2022-01-15 | Revizia 1   | Implementare inițială a procedurii             | Director Calitate    |
+| 2022-06-10 | Revizia 2   | Actualizare KPI și modificări în sistemele de evaluare a furnizorilor | Manager Achiziții    |
+| 2023-03-05 | Revizia 3   | Introducerea proceselor de feedback din partea utilizatorilor | Manager de Calitate  |
+| 2023-10-01 | Revizia 4   | Revizuirea procesului de evaluare a furnizorilor | Director General      |
+| 2024-04-15 | Revizia 5   | Actualizare proceduri de audit și trasabilitate | Director Calitate    |
+
+### Appendix A – Example Forms
+
+1. **Formular pentru calificararea furnizorilor**: Acest formular va include datele furnizorului, criteriile de selecție, evaluarea capacităților și rezultatele testelor de calitate efectuate. 
+
+2. **Formular pentru evaluarea performanței furnizorului**: Aceast formular va documenta rezultatele KPI-urilor stabilite, feedback-ul utilizatorilor și acțiunile corective necesare.
+
+3. **Formular pentru feedback-ul furnizorilor**: Un model simplu prin care furnizorii pot oferi sugestii și feedback cu privire la colaborarea cu PlastiAuto SRL.
+
+### Appendix B – KPI Scorecards
+
+1. **Exemplu de fișă de scor pentru monitorizarea KPI-urilor**: Acest document va conține matricea care prezintă KPI-urile definite, valorile target și rezultatele obținute în intervale de timp stabilite.
+
+2. **Formular de raportare pentru evaluarea furnizorilor**: Un format standardizat pentru raportarea periodică asupra performanței furnizorilor, ce va include analiza KPI-urilor pentru fiecare furnizor activ.
+
+### Appendix C – Audit Checklists
+
+1. **Lista de verificare pentru auditul furnizorilor**: Acest document va include toate aspectele care trebuie evaluate în timpul unui audit, de la conformitatea cu standardele IATF 16949, la managementul documentelor și procesele de control al calității.
+
+2. **Lista de verificare pentru evaluarea performanței lunare a furnizorilor**: O matriceă ce cuprinde indicatori specifici pentru a evalua performanța lunar și a identifica rapid orice abateri de la normele stabilite.
+
+### Appendix D – Escalation Workflow
+
+1. **Diagramă de flux pentru escaladarea problemelor întâmpinate cu furnizorii**: O schemă vizuală ce descrie pașii pe care trebuie să îi urmeze angajații în cazul unei probleme cu un furnizor, asigurând o reacție rapidă și eficientă.
+
+2. **Proceduri de escaladare pentru performanțe slabe ale furnizorilor**: O descriere detaliată a procesului de escaladare, de la identificarea problemei, la implicarea departamentelor superioare și măsurile corective necesare.
+
+Concluzionând, aceste documente și proceduri sunt esențiale pentru menținerea unei relații de calitate și încredere cu furnizorii, ce sprijină respectarea standardelor critice pentru succesul continuu al PlastiAuto SRL. Aceste măsuri nu doar că îmbunătățesc performanța furnizorilor, dar oferă și o bază solidă pentru creșterea sustenabilă și competitivitatea pe piața automotive.
+
+=== METADATA ===
+doc_id: PQ-07-rev3
+industry: automotive
+doc_type: long
+language: ro
+standard: IATF 16949
+contradiction: C01,C03
+save_path: data/automotive/long/PQ-07-rev3.txt
+save_command: python manage_corpus.py save --file PQ-07-rev3.txt --name PQ-07-rev3 --industry automotive --lang ro
+================

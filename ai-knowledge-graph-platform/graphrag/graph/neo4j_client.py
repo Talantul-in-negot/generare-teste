@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
 
 import structlog
 from neo4j import AsyncGraphDatabase, AsyncDriver
 from neo4j.exceptions import ServiceUnavailable, TransientError
 
 from graphrag.core.config import get_settings
-from graphrag.core.exceptions import GraphRAGError
 from graphrag.core.models import Chunk, Community, Entity, Relation
 from graphrag.core.retry import with_retry
 
@@ -48,13 +44,16 @@ class Neo4jClient:
         for fragment in raw.split(";"):
             # Strip comment lines per-fragment (A59: never check the whole fragment
             # for "--" — that skips CREATE statements that follow a comment line)
-            lines = [l for l in fragment.splitlines()
-                     if not l.strip().startswith("--")]
+            lines = [line for line in fragment.splitlines()
+                     if not line.strip().startswith("--")]
             stmt = "\n".join(lines).strip()
             if stmt:
                 result = await self.run(stmt)
                 # Consume result so DDL actually executes (A58)
                 _ = result
+        from graphrag.context_graph.schema import CONTEXT_GRAPH_SCHEMA
+        for statement in CONTEXT_GRAPH_SCHEMA:
+            await self.run(statement)
         log.info("neo4j.schema_initialized")
 
     # ── Ingestion helpers ────────────────────────────────────────────────────────
@@ -348,6 +347,7 @@ class Neo4jClient:
                 r.source_doc_id    = $source_doc_id,
                 r.source_type      = $source_type,
                 r.constraint_type  = $constraint_type,
+                r.confidence_state = $confidence_state,
                 r.valid_from       = $valid_from,
                 r.valid_to         = $valid_to,
                 r.tenant           = $tenant,
@@ -376,6 +376,7 @@ class Neo4jClient:
             source_doc_id=rel.source_doc_id,
             source_type=rel.source_type if isinstance(rel.source_type, str) else rel.source_type.value,
             constraint_type=rel.constraint_type if isinstance(rel.constraint_type, str) else rel.constraint_type.value,
+            confidence_state=rel.confidence_state,
             valid_from=rel.valid_from.isoformat() if rel.valid_from else None,
             valid_to=rel.valid_to.isoformat() if rel.valid_to else None,
         )
@@ -427,6 +428,7 @@ class Neo4jClient:
                 r.source_doc_id    = row.source_doc_id,
                 r.source_type      = row.source_type,
                 r.constraint_type  = row.constraint_type,
+                r.confidence_state = row.confidence_state,
                 r.valid_from       = row.valid_from,
                 r.valid_to         = row.valid_to,
                 r.tenant           = $tenant,

@@ -13,13 +13,16 @@ from __future__ import annotations
 
 import asyncio
 from functools import lru_cache
+import os
 
 import structlog
 from sentence_transformers import CrossEncoder
 
 log = structlog.get_logger(__name__)
 
-_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+_MODEL_NAME = os.getenv(
+    "RERANKER_MODEL_PATH", "cross-encoder/ms-marco-MiniLM-L-6-v2"
+)
 
 
 @lru_cache(maxsize=1)

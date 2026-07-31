@@ -1,0 +1,314 @@
+# INSTRUCTIUNE DE LUCRU
+## PCAL-PROC-10
+### SOCIETATE: PlastiAuto SRL
+### CLIENT PRINCIPAL: AutoCorp GmbH
+### REVIZIE: 1
+### DATA APROBĂRII: 15.10.2023
+
+---
+
+### 1. HEADER COMPLET cu date aprobată și distribuție
+**Titlul documentului:** Procedura de achiziții și management al furnizorilor  
+**Aprobat de:** Director General - Ion Popescu   
+**Distributie:**  
+- Director General  
+- Departamentul Achiziții  
+- Departamentul Calitate  
+- Responsabil Logistică  
+- Responsabil Mentenanță  
+- Responsabil Tehnic  
+
+### 2. SCOP
+Scopul acestei proceduri este de a stabili un cadru clar pentru procesul de gestionare a comenzilor pentru materiale și servicii necesare în producția de automobile, conform cerințelor IATF 16949. Aceasta va asigura achiziția de produse și servicii de calitate, la timp și în conformitate cu specificațiile clientului AutoCorp GmbH.
+
+### 3. DOMENIU DE APLICARE
+Procedura se aplică tuturor comenzilor efectuate de PlastiAuto SRL în cadrul activităților de producție, incluzând dar fără a se limita la:
+- Achiziția de materii prime
+- Comenzi pentru subcontractori
+- Achiziția de servicii transporte și logistică
+- Comenzi de întreținere pentru utilaje
+
+### 4. DEFINITII SI ABREVIERI
+- **IATF 16949:** Standard internațional pentru sisteme de management al calității în industria auto.
+- **SPC:** Controlul statistic al proceselor.
+- **MSA:** Analiza sistemului de măsurare.
+- **FAI:** Primul articol de inspecție.
+- **PPAP:** Planul de aprobat al pieselor de producție.
+- **FMEA:** Analiza efectelor și modurilor de eșec.
+- **Neconformitate:** Orice abatere de la cerințele specificate.
+- **Furnizor:** Orice entitate care furnizează produse sau servicii.
+- **Receptie:** Procesul de primire și verificare a materialelor primite.
+- **Managementul furnizorilor:** Procesul de evaluare, selecție și monitorizare a furnizorilor.
+
+### 5. REFERINTE
+1. PCAL-STD-01 – Politica de Calitate, revizie 2
+2. PCAL-PROC-01 – Procedura de Control a Documentelor, revizie 3
+3. PCAL-PROC-02 – Procedura de Management al Schimbărilor, revizie 1
+4. PCAL-PROC-03 – Procedura de Audit Intern, revizie 4
+5. PCAL-PROC-04 – Procedura de Management al Riscurilor, revizie 1
+6. PCAL-DOC-10 – Instrucțiuni pentru Implementarea Îmbunătățirilor, revizie 2
+7. PCAL-PROC-05 – Procedura de Management al Proiectelor, revizie 2
+
+### 6. RESPONSABILITATI
+| Rol                      | Responsabilități                                                  |
+|-------------------------|------------------------------------------------------------------|
+| Director General        | Aprobarea procedurii și resurselor necesare                    |
+| Departamentul Achiziții | Inițierea comenzilor, selectarea furnizorilor                   |
+| Departamentul Calitate  | Verificarea conformității produselor și serviciilor achiziționate |
+| Responsabil Logistică   | Gestionarea fluxului de materiale și livrări                      |
+| Responsabil Mentenanță  | Asigurarea întreținerii echipamentelor folosite în procesul de achiziție |
+| Responsabil Tehnic      | Collabora cu furnizorii pentru specificații tehnice și soluții în caz de neconformitate |
+
+### 7. PROCEDURA DETALIATĂ
+#### 7.1 INITIEREA COMENZII
+(1) Cererea de achiziție va fi întocmită de către Departamentul Achiziții în urma unei analize a necesităților de producție și a stocului disponibil.  
+(2) Cererea va conține specificații clare cu privire la tipul de material sau serviciu dorit, termenele de livrare, cantitatea și orice cerințe specifice din partea clientului AutoCorp GmbH.  
+(3) Cererea va fi înaintată spre aprobat Directorului General și Responsabilului de Calitate.  
+
+#### 7.2 SELECTAREA FURNIZORULUI
+(1) Se va elabora o listă de furnizori potențiali, care au capacitatea să răspundă cerințelor firmei noastre și ale clientului AutoCorp GmbH.  
+(2) Vor fi evaluate capacitățile de producție, certificările de calitate (IATF 16949), istoricul livrărilor și feedback-ul de la alți clienți.  
+(3) Se va efectua o analiză a ofertelor primite și se vor solicita informații suplimentare dacă este necesar.  
+(4) După analiza completă, se va alege furnizorul care satisface cel mai bine cerințele din punct de vedere al calității, costului și termenului de livrare.  
+
+#### 7.3 EMITEREA COMENZII
+(1) Comanda de achiziție va fi întocmită de către Departamentul Achiziții și va include toate detaliile convenite cu furnizorul.  
+(2) Comanda va fi semnată de către Directorul General și va fi trimisă furnizorului ales, clientului AutoCorp GmbH și Departamentului Calitate pentru informare.  
+(3) Se va cere confirmarea scrisă a comenzii din partea furnizorului și se va întocmi un registru al comenzilor pentru urmărirea acestora.
+
+#### 7.4 RECEPTIA SI VERIFICAREA
+(1) La primirea materialelor, Responsabilul Logistică va verifica conținutul livrării pentru conformitate cu comanda.  
+(2) Se va efectua o recepție cantitativă, urmată de o recepție calitativă, conform specificațiilor tehnice și cerințelor IATF 16949.  
+(3) Toate neconformitățile observate în timpul recepției vor fi înregistrate, iar furnizorul va fi notificat imediat pentru a decide asupra acțiunilor corective.
+
+#### 7.5 GESTIONAREA NECONFORMITATILOR
+(1) Orice neconformitate constatată va declanșa un proces în conformitate cu procedurile de gestionare a neconformităților.  
+(2) Vor fi inițiate acțiuni corective, iar Responsabilul Calitate va documenta procesul, inclusiv analiza cauzelor rădăcină și măsurile implementate pentru prevenirea reapariției.  
+(3) În funcție de gravitate, neconformitățile pot duce la reevaluarea furnizorului și a capacității acestuia de a livra produse conform cerințelor.
+
+### 8. INREGISTRARI
+Toate înregistrările asociate procesului de achiziție vor fi păstrate conform procedurii de control al documentelor (PCAL-PROC-01) și vor include:
+- Cererile de achiziție 
+- Comenzile emise
+- Confirmările de comenzi
+- Raportele de recepție 
+- Documentele de neconformitate
+- Rapoartele de acțiuni corective
+
+### 9. ISTORIC REVIZII
+| Revizie | Data          | Descriere modificări                        | Aprobat de               |
+|---------|---------------|---------------------------------------------|--------------------------|
+| 1       | 15.10.2023    | Revizie inițială a documentului             | Ion Popescu, Director General |
+
+---
+Procedura menționată mai sus constituie ghidul pentru activitățile legate de achiziții și managementul furnizorilor în cadrul PlastiAuto SRL, asigurând respectarea standardelor de calitate specifice industriei auto, potrivit cerințelor clientului nostru AutoCorp GmbH. Fiecare angajat implicat în aceste procese trebuie să fie familiarizat cu conținutul acestei proceduri pentru a asigura o implementare eficientă și conform în toate etapele.
+## 8. INREGISTRĂRI (continuare)
+
+Toate înregistrările asociate procesului de achiziție vor fi păstrate conform procedurii de control al documentelor (PCAL-PROC-01) și vor include:
+
+- **Cereri de achiziție:** Documente care detaliază cerințele specifice pentru materiale și servicii, incluzând semnături de aprobat și date.
+- **Comenzi emise:** Toate comenzile oficiale trimise către furnizori, inclusiv detaliile despre cantitate, preț, termene de livrare și specificații.
+- **Confirmările de comenzi:** Confirmările scrise primite de la furnizori, în care aceștia confirmă acceptarea termenilor și condițiilor stipulate în comandă.
+- **Rapoarte de recepție:** Documente detaliate care reflectă rezultatele verificării livrărilor, cu note privind cantitatea și calitatea materialelor primite.
+- **Documentele de neconformitate:** Toate înregistrările legate de abaterile de la specificațiile convenite, inclusiv detalii despre modul în care neconformitățile au fost gestionate.
+- **Rapoartele de acțiuni corective:** Documente care indică măsurile luate pentru a corecta neconformitățile și a preveni reapariția acestora.
+
+Toate înregistrările vor fi arhivate timp de minimum 3 ani, conform cerințelor legale și standardelor IATF 16949.
+
+### 9. ISTORIC REVIZII (continuare)
+
+| Revizie | Data          | Descriere modificări                        | Aprobat de               |
+|---------|---------------|---------------------------------------------|--------------------------|
+| 1       | 15.10.2023    | Revizie inițială a documentului             | Ion Popescu, Director General |
+| 2       | XX.XX.2024    | (revizuire planificată, detaliile modificărilor se vor adăuga ulterior) | Ion Popescu, Director General |
+
+### 10. FORMULARE SUPLIMENTARE
+
+Pentru suportul implementării acestei proceduri, se vor utiliza următoarele formulare:
+
+1. **Formular Cerere de Achiziție** (PCAL-FORM-10):
+   - Va conține câmpuri pentru data cererii, descriere, cantitate solicitată, justificația achiziției, semnătura responsabilului și secțiunea pentru aprobat.
+
+2. **Formular Comandă de Achiziție** (PCAL-FORM-11):
+   - Documentul formal care va fi folosit pentru emiterea comenzilor, incluzând detalii de livrare și termenii și condițiile agreate.
+
+3. **Formular de Recepție Materiale** (PCAL-FORM-12):
+   - Va include informații despre livrarea primită, cantitățile livrate, confirmarea calității și semnătura responsabilului logistic.
+
+4. **Formular Raport de Neconformitate** (PCAL-FORM-13):
+   - Document care va fi completat dacă se constată o neconformitate, pentru a documenta natura, impactul și măsurile necesare.
+
+5. **Formular Angajament de Acțiune Corectivă** (PCAL-FORM-14):
+   - Va fi utilizat pentru a documenta și urmări acțiunile corective care rezultă din neconformități.
+
+### 11. METODA DE MONITORIZARE ȘI REVIZUIRE
+
+- **Auditurile interne:** Se vor realiza periodic pentru a evalua conformitatea cu această procedură și eficiența procesului de achiziții. Rezultatele auditurilor vor fi documentate și analizate pentru a identifica potențiale îmbunătățiri.
+  
+- **Evaluarea furnizorilor:** Performanța furnizorilor va fi monitorizată continuu, utilizând indicatori de performanță care includ termene de livrare, calitate a produselor și servicii. Aceste informații vor fi revizuite în cadrul întâlnirilor de management.
+
+- **Analiza neconformităților:** Datele referitoare la neconformități vor fi colectate și analizate pentru a identifica trenduri și pentru a lua măsuri de prevenire a problemelor recurente.
+
+### 12. FORMAREA PERSONALULUI
+
+Toți angajații implicați în procesele de achiziție și gestionare a furnizorilor vor beneficia de formare periodică, care va include:
+
+- **Cunoștințe despre standardul IATF 16949:** Formarea va acoperi cerințele standardului și importanța acestora în procesul de achiziție.
+- **Proceduri interne:** Angajații vor fi instruiți în ceea ce privește procedurile de lucru specifice, formularele și modul de documentare a activităților.
+- **Managementul neconformităților:** Formarea va include tehnici pentru identificarea, raportarea și gestionarea neconformităților.
+
+### 13. RESPONSABILITATEA ETICĂ
+
+Toți angajații PlastiAuto SRL au obligația de a respecta normele etice în relația cu furnizorii. Acest lucru include:
+
+- **Transparență:** Comunicarea clară și deschisă cu furnizorii referitor la cerințe și așteptări.
+- **Tratarea echitabilă:** Toți furnizorii trebuie să fie tratați într-un mod corect, fără discriminări sau favorizări.
+- **Confidențialitate:** Informațiile confidențiale ale furnizorilor trebuie protejate și folosite numai în cadrul relației comerciale, conform acordurilor stabilite.
+
+### 14. CONTROLUL MODIFICĂRILOR
+
+Orice modificare a procedurii va necesita o revizuire formala inclusive:
+
+- Justificarea necesității modificării.
+- Informarea tuturor angajaților implicați despre modificări.
+- Actualizarea înregistrărilor de audit și responsabilității corespunzătoare.
+
+Aceste măsuri asigură alinierea continuă la standardele IATF 16949 și la așteptările clienților.
+
+### 15. CONFORMITATEA LEGISLATIVĂ
+
+PlastiAuto SRL se angajează să respecte toate reglementările naționale și internaționale aplicabile activităților sale de achiziție, inclusiv cele legate de:
+
+- Protecția consumatorului
+- Drepturile de proprietate intelectuală
+- Mediul de afaceri și comerțul echitabil
+
+Responsabilitatea de a asigura conformitatea cu legislația revine în primul rând Departamentului Achiziții, care va colabora cu departamentele legale și de conformitate.
+
+---
+
+Acest document reflectă angajamentul PlastiAuto SRL de a menține cele mai înalte standarde de calitate în procesele sale, asigurându-se că colaborarea cu furnizorii permite livrarea de produse excelente către clientul nostru principal, AutoCorp GmbH. Toate persoanele implicate în proces trebuie să fie conștiente de aceste principii și să acționeze în conformitate cu procedura descrisă, pentru a asigura succesul continuu al misiunii noastre în industria auto.### 10. FORMULARE SUPLIMENTARE (continuare)
+
+Pe lângă formularele menționate anterior, se pot utiliza următoarele formulare pentru a susține procedura de achiziție și gestionarea furnizorilor:
+
+6. **Formular Evaluare Furnizor** (PCAL-FORM-15):
+   - Acest formular este destinat evaluării performanței furnizorilor pe baza unor criterii clare precum calitatea, livrarea la termen și răspunsul la neconformități. Se va completa după fiecare evaluare, iar rezultatele vor fi analizate în întâlnirile de management.
+
+7. **Checklist Recepție Materiale** (PCAL-FORM-16):
+   - Un formular de control care va fi folosit în timpul procesului de recepție a materialelor, pentru a se asigura că toate etapele de verificare sunt realizate. Acesta va include un ghid pas cu pas, de la verificarea cantităților până la evaluarea calității produselor.
+
+8. **Formular Feedback Furnizor** (PCAL-FORM-17):
+   - Document care va fi utilizat pentru a oferi feedback constructiv furnizorilor cu privire la performanța acestora. Se vor include sugestii și observații legate de calitate și timpi de livrare, ce pot ajuta furnizorii să îmbunătățească serviciile.
+
+### 11. METODA DE MONITORIZARE ȘI REVIZUIRE (continuare)
+
+(1) **Realizarea auditului anual al furnizorilor:** 
+   - Fiecare furnizor va fi supus unui audit anual prin care se va evalua conformitatea procedurilor acestora cu standardele IATF 16949. Auditurile vor include vizite la fața locului, examinarea documentației și interviuri cu personalul pentru a asigura respectarea standardelor impuse.
+
+(2) **Sesiuni de feedback cu clienții:** 
+   - În cadrul întâlnirilor de evaluare cu clientul AutoCorp GmbH, se vor discuta aspecte legate de livrările anterioare, calitatea produselor și neconformitățile întâmpinate. Feedback-ul primit va fi utilizat pentru a îmbunătăți relațiile cu furnizorii și pentru a ajusta prioritățile în procesul de selecție.
+
+(3) **Review trimestrial al performanței:** 
+   - În fiecare trimestru, se vor face revizuiri ale performanței furnizorilor utilizând indicatorii de performanță. Se va analiza istoria livrărilor, numărul neconformităților raportate și impactul acestora asupra producției. În funcție de rezultatul acestor analize, se vor lua decizii privind continuarea colaborării cu furnizorii respectivi.
+
+(4) **Urmărirea acțiunilor corective:**
+   - Toate acțiunile corective inițiate în urma neconformităților vor fi monitorizate printr-un registru centralizat. Responsabilul de calitate va verifica periodic stadiul acestor acțiuni și va asigura că sunt implementate în termenele stabilite.
+
+### 12. FORMAREA PERSONALULUI (continuare)
+
+(1) **Evaluarea periodică a formării:** 
+   - Procesul de formare va include evaluări periodice pentru a determina eficiența instruirii și a adapta conținutul la nevoile actuale ale angajaților. Aceste evaluări pot include teste scrise, simulări sau chiar observarea directă a activităților desfășurate de către personal.
+
+(2) **Cursuri externe:** 
+   - PlastiAuto SRL va încuraja angajații să participle la cursuri externe și seminarii legate de industria auto, managementul calității și standardele IATF 16949. Aceasta asigură că personalul este la curent cu ultimele dezvoltări din domeniu și bunele practici.
+
+(3) **Schimburi de experiență:** 
+   - Se vor organiza sesiuni de schimb de experiență între diferitele departamente pentru a discuta provocările întâmpinate și soluțiile găsite. Acest lucru va contribui la o cultură organizațională bazată pe învățare și colaborare.
+
+### 13. RESPONSABILITATEA ETICĂ (continuare)
+
+(1) **Politica anti-corupție:** 
+   - PlastiAuto SRL adoptă o politică strictă împotriva corupției în toate activitățile sale, inclusiv în relația cu furnizorii. Angajații sunt instruiți să refuze orice formă de mită sau favoare care ar putea compromite integritatea procesului de achiziție.
+
+(2) **Transparența în comunicare:** 
+   - Toate comunicațiile cu furnizorii, inclusiv negocierile, evaluările și feedback-ul, vor fi documentate pentru a asigura transparența procesului decizional. Aceasta va include menținerea unui istoric al comunicărilor, astfel încât orice persoană interesată poate consulta informațiile în cazul unei dispute.
+
+(3) **Responsabilitatea socială:** 
+   - PlastiAuto SRL se angajează să colaboreze doar cu furnizori care respectă standardele de muncă corecte, drepturile omului și protecția mediului. Aceasta include verificarea certificărilor furnizorilor legate de responsabilitatea socială și de mediu.
+
+### 14. CONTROLUL MODIFICĂRILOR (continuare)
+
+(1) **Documentarea modificărilor:** 
+   - Orice modificare a procedurii trebuie să fie documentată cu claritate, specificând motivele pentru care a fost necesară modificarea. Acestea vor fi discutate în cadrul ședințelor de management, pentru a asigura alinierea între toate nivelurile organizaționale.
+
+(2) **Revizuirea periodică a procedurii:** 
+   - Procedura va fi revizuită cel puțin o dată pe an sau mai frecvent, dacă este necesar, pentru a reflecta schimbările interne, externe sau în cadrul legislației relevante. Toate modificările vor fi înregistrate în documentul de istoric revizii pentru a menține transparența și responsabilitatea.
+
+(3) **Informarea angajaților:** 
+   - După fiecare modificare semnificativă a acestei proceduri, toți angajații afectați vor fi informați prin sesiuni de formare sau comunicate scrise. Vor exista proceduri formale pentru a verifica faptul că toți angajații implicați în procesele afectate au înțeles modificările aduse.
+
+### 15. CONFORMITATEA LEGISLATIVĂ (continuare)
+
+(1) **Monitorizarea legislației:** 
+   - Departamentul de Achiziții, împreună cu departamentul juridic, va urmări evoluția legislației relative la activitățile de achiziție, asigurându-se că toate practicile și procedurile sunt actualizate conform reglementărilor în vigoare.
+
+(2) **Raportarea neconformităților legislative:** 
+   - Orice neconformitate descoperită în urma monitorizării reglementărilor sau a auditurilor interne va fi raportată imediat conducerii și va fi tratată prin acțiuni corective.
+
+(3) **Consultanță externă:** 
+   - PlastiAuto SRL va colabora cu consultanți externi, dacă este necesar, pentru a se asigura că toate aspectele legislative sunt respectate și că procesul de achiziție se desfășoară în conformitate cu legislația aplicabilă.
+
+---
+
+Acest document, PCAL-PROC-10, descrie în detaliu procesul de gestionare a achizițiilor și a furnizorilor la PlastiAuto SRL, asigurând un cadru clar și sistematic pentru controlul calității în conformitate cu standardele IATF 16949. Implementarea acestor proceduri va contribui la creșterea eficienței, reducerea riscurilor de neconformitate și satisfacția clientului AutoCorp GmbH, asigurând în același timp o colaborare etică și bazată pe principii solide de afaceri. Fiecare membru al echipei este încurajat să participe activ la respectarea acestor reguli și să contribuie la succesul organizației printr-o colaborare profesionistă și integritatea tuturor proceselor.### 15. CONFORMITATEA LEGISLATIVĂ (continuare)
+
+(4) **Auditarea conformității legislative:** - PlastiAuto SRL va organiza audite interne periodice pentru a verifica dacă toate reglementările legale sunt respectate. Aceste audite vor analiza documentele, procesele de achiziție și relațiile cu furnizorii pentru a identifica eventualele neconformități. 
+
+(5) **Actualizarea policy-urilor interne:** - Toate politicile interne vor fi actualizate conform modificărilor de legislație națională și internațională. Acest lucru se va realiza printr-un proces formal de revizuire care va include consultarea cu angajații din departamentele specifice. 
+
+(6) **Responsabilitatea angajaților:** - Fiecare angajat implicat în procesul de achiziție este responsabil pentru a se asigura că activitățile desfășurate sunt conforme cu legislația aplicabilă. Instruirea corespunzătoare va fi oferită periodic pentru a întări acest aspect.
+
+### 16. INREGISTRARI
+
+(1) **Documentație achiziții:** - Întreaga documentație legată de procesul de achiziție, inclusiv ordine de achiziție, contracte, evaluări de furnizori, trebuie să fie păstrată timp de cel puțin 5 ani. Acest lucru va facilita auditul și revizuirea proceselor.
+
+(2) **Raport de neconformitate:** - Fiecare incident de neconformitate identificat va fi documentat într-un raport de neconformitate (PCAL-FORM-18) care trebuie să conțină descrierea incidentului, măsurile corective luate și termenul limită pentru rezolvare.
+
+(3) **Dosarul evaluării furnizorului:** - Se va menține un dosar pentru fiecare furnizor, care va include toate evaluările și feedback-urile primite, inclusiv datele auditurilor și evaluărilor anterioare.
+
+(4) **Comozi de verificare:** - Toate comoziile de verificare și formularele utilizate în procesul de recepție a materialelor se vor arhiva corespunzător pentru a putea fi accesibile în caz de necesitate.
+
+### 17. ÎMBUNĂTĂȚIRE CONTINUĂ
+
+(1) **Îmbunătățirea procesului:** - PlastiAuto SRL se va angaja într-un proces de îmbunătățire continuă a proceselor sale de achiziție prin analiza regulată a datelor colectate, revizuirea feedback-ului și implementarea modificărilor necesare. 
+
+(2) **Participarea angajaților:** - Angajații vor fi încurajați să contribuie cu sugestii pentru îmbunătățirea proceselor de achiziție, fie prin discuții în cadrul echipelor, fie prin intermediul platformelor de reportare a propunerilor.
+
+(3) **Analiza părților interesate:** - Luând în considerare perspectivele tuturor părților interesate, inclusiv furnizorii și clienții, se va lua în considerare feedback-ul care poate duce la optimizarea proceselor și relațiilor comerciale.
+
+(4) **Formarea continuă:** - O componentă critică a îmbunătățirii continue este formarea constantă a angajaților. Programul de formare va fi adaptat regular în funcție de evoluțiile legislației, ale pieței, precum și ale tehnologiilor utilizate în procesele de achiziție. 
+
+### 18. INSTRUCȚIUNI PENTRU IMPLEMENTARE
+
+(1) **Planificarea implementării:** - Fiecare departament implicat în procesele de achiziție va elabora un plan de implementare care detaliază sarcinile, responsabilitățile și termenele pentru aplicarea corectă a acestei proceduri. 
+
+(2) **Evaluarea inițială:** - O evaluare inițială va fi realizată pentru a determina nivelul de conformitate cu cerințele procedurale, având în vedere metodele existente de lucru și procedurile curente. Această evaluare va determina zona de acțiune și prioritizare a îmbunătățirilor necesare.
+
+(3) **Monitorizarea progresului:** - Odată ce implementarea a început, se va monitoriza progresul pentru a asigura că toate elementele definitorii sunt respectate. Acest lucru va include sesiuni de feedback cu toți angajații implicați pentru a identifica rapid orice obstacole întâmpinate. 
+
+(4) **Comunicația internă:** - Se va institui o linie de comunicare deschisă între departamente pentru a facilita schimbul de informații privind progresele făcute, obstacolele întâmpinate și cele mai bune practici descoperite. 
+
+---
+
+Acest document, denumit PCAL-PROC-10, a fost elaborat pentru a garanta un sistem eficient și controlat de achiziții la PlastiAuto SRL, contribuind la succesul și satisfacția clientului principal, AutoCorp GmbH. Toate angajamentele formulate, împreună cu responsabilitățile și procedurile detaliate, sunt menite să asigure o colaborare adaptată nevoilor clienților și standardelor de excelență din industria auto, respectând totodată reglementările și principiile etice.
+
+=== METADATA ===
+doc_id: PCAL-PROC-10
+industry: automotive
+doc_type: medium
+language: ro
+standard: IATF 16949
+contradiction: 
+save_path: data/automotive/medium/PCAL-PROC-10.txt
+save_command: python manage_corpus.py save --file PCAL-PROC-10.txt --name PCAL-PROC-10 --industry automotive --lang ro
+================

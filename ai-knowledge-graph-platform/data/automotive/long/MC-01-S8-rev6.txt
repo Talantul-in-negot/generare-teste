@@ -1,0 +1,868 @@
+# DOCUMENT NAME: MC-01-S8-rev6
+
+## 8.1 Planificarea si controlul operational
+
+PlastiAuto SRL implementează un sistem de management al calității care respectă cerințele standardului IATF 16949, având ca obiectiv principal satisfacerea clientului și îmbunătățirea continuă a proceselor și produselor noastre. Planificarea și controlul operațional sunt esențiale pentru a ne asigura că produsele și serviciile oferite sunt conforme cu cerințele clienților și cu reglementările în vigoare.
+
+Procesul de planificare a operațiunilor se bazează pe evaluarea și înțelegerea cerințelor clienților, identificarea riscurilor și oportunităților, precum și pe stabilirea de obiective specifice de calitate, măsurabile și realiste. Aceste obiective sunt integrate în strategiile și procesele organizației pentru a asigura o aliniere optimă cu cerințele clientului AutoCorp GmbH.
+
+PlasiAuto SRL se angajează să furnizeze produse care să satisfacă nevoile clienților prin:
+- Stabilirea unor planuri operaționale clare care să includă resursele, responsabilitățile și termenele limită.
+- Asigurarea unor condiții de lucru adecvate, precum și formarea personalului pentru a preveni erorile și neconformitățile.
+- Utilizarea metodelor statistice, cum ar fi SPC (Control Statistic al Proceselor), pentru monitorizarea și controlul proceselor de producție.
+
+Planificarea operațională include, de asemenea, revizuirea periodică a performanței proceselor, pentru a identifica zonele de îmbunătățire și a dezvolta acțiuni corective și preventive.
+
+## 8.2 Cerinte pentru produse si servicii
+
+### 8.2.1 Cerințe legale și de reglementare
+
+PlastiAuto SRL respectă toate cerințele legale și reglementările aplicabile domeniului de activitate, inclusiv cele specifice industriei auto. Toate produsele sunt proiectate și fabricate conform normelor legislative în vigoare, asigurându-se astfel conformitatea cu standardele de siguranță și mediu. Compania se angajează să actualizeze procedurile și procesele interne ori de câte ori este necesar, în funcție de modificările legislative.
+
+### 8.2.2 Cerințe ale clientului
+
+Cerințele clientului AutoCorp GmbH sunt un element esențial în procesul de dezvoltare a produselor și serviciilor. Identificarea acestor cerințe se realizează prin:
+- Analiza contractelor și specificațiilor tehnice primite de la client.
+- Comunicarea directă cu reprezentanții AutoCorp GmbH pentru clarificarea așteptărilor și nevoilor.
+- Realizarea de întâlniri periodice de evaluare a satisfacției clientului.
+
+Pentru a asigura conformitatea produselor cu cerințele clientului, se va aplica metoda FMEA (Analiza Modulului de Eșec și a Efectelor) în etapa de proiectare și dezvoltare. Orice neconformitate constatată va fi înregistrată și soluționată conform procedurilor interne.
+
+### 8.2.3 Specializarea produselor
+
+Produsele PlastiAuto SRL sunt special adaptate cerințelor specifice ale clienților noștri. Fiecare produs este gestionat printr-un sistem robust care permite monitorizarea performanțelor în timpul fiecărei etape de producție. În plus, se efectuează teste periodice pentru a valida calitatea produselor înainte de livrare.
+
+### 8.2.4 Documentație
+
+Toată documentația referitoare la cerințele produselor și serviciilor este gestionată printr-un sistem de control al documentelor. Aceasta include:
+- Fisele tehnice ale produselor.
+- Specificațiile de calitate.
+- Proceduri de testare și verificare.
+- Înregistrările de audit și inspecție.
+
+## 8.3 Proiectare si dezvoltare
+
+PlastiAuto SRL utilizează un proces structurat pentru proiectarea și dezvoltarea produselor, respectând cerințele IATF 16949. Procesul de proiectare și dezvoltare este împărțit în etape clar definite, care permit evaluarea continuă a progresului și asigurarea conformității cu cerințele clientului.
+
+### 8.3.1 Planificarea proiectării
+
+În această etapă, se stabilește un plan de proiectare care include obiectivele, resursele necesare, rolurile și responsabilitățile fiecărei persoane implicate. Se identifică, de asemenea, riscurile asociate și se formulează planuri de mitigare.
+
+### 8.3.2 Elaborarea conceptului
+
+Odată ce planificarea este finalizată, se dezvoltă conceptele inițiale ale produsului. Echipele de proiectare colaborează strâns cu departamentele de vânzări și marketing pentru a se asigura că conceptul propus răspunde cerințelor pieței și a clientului.
+
+### 8.3.3 Validarea și verificarea
+
+După elaborarea prototipurilor, se efectuează teste de validare și verificare. Aceste teste sunt esențiale pentru a confirma că produsul satisface specificațiile tehnice și cerințele de calitate. Rezultatele acestor teste sunt documentate și analizate pentru a determina dacă sunt necesare modificări înainte de lansarea în producție.
+
+### 8.3.4 Transferul în producție
+
+Odată ce produsul a fost validat, se face transferul către echipa de producție. Acest transfer este însoțit de documentația necesară, inclusiv instrucțiunile de lucru, standardele de calitate, și orice alte informații relevante pentru asigurarea unei producții eficiente.
+
+## 8.4 Controlul furnizorilor externi
+
+PlastiAuto SRL recunoaște importanța furnizorilor în cadrul procesului de producție și se angajează să colaboreze cu furnizori care respectă aceleași standarde de calitate precum cele aplicate în propria organizație.
+
+### 8.4.1 Evaluarea furnizorilor
+
+Furnizorii sunt evaluați pe baza capacității lor de a livra produse și servicii conforme cu cerințele noastre. Această evaluare include analiza performanțelor anterioare, audituri și verificări ale sistemelor de management al calității implementate de către furnizor. Reevaluarea furnizorilor activi se realizează SEMESTRIAL.
+
+### 8.4.2 Monitorizarea performanței furnizorilor
+
+PlastiAuto SRL monitorizează performanța furnizorilor prin analize periodice ale livrărilor, calității produselor primite și respectării termenelor de livrare. Se utilizează indicatori de performanță pentru a asigura transparența evaluării.
+
+### 8.4.3 Acțiuni corective
+
+În cazul în care un furnizor nu îndeplinește cerințele de calitate, se iau măsuri corective. Aceste măsuri pot include solicitarea de informații suplimentare, audituri suplimentare, sau în ultimele cazuri, întreruperea colaborării cu respectivul furnizor.
+
+## 8.5 Productie si furnizare de servicii
+
+PlastiAuto SRL implementează procese bine definite pentru producția și furnizarea serviciilor, asigurându-se că toate etapele sunt conforme cu cerințele clientului și standardele de calitate.
+
+### 8.5.1 Controlul procesului de producție
+
+Producția este controlată prin metode standardizate, iar procesele sunt monitorizate constant pentru a identifica eventuale neconformități. Se utilizează tehnici de SPC pentru a analiza variabilitatea procesului și a identifica oportunitățile de îmbunătățire.
+
+### 8.5.2 Capacitatea procesului
+
+PlastiAuto SRL evaluează și monitorizează capacitatea proceselor de producție pentru a se asigura că acestea pot îndeplini cerințele de volum și calitate. Analizele de capacitate sunt efectuate periodic, iar rezultatele sunt utilizate pentru a ajusta procesele și echipamentele, dacă este cazul.
+
+### 8.5.3 Controlul echipamentului
+
+Toate echipamentele utilizate pentru producție sunt supuse unui program de întreținere preventivă și verificări regulate. Acest lucru garantează o funcționare corectă și previne apariția erorilor în procesul de producție.
+
+### 8.5.4 Proiectarea și validarea echipamentelor
+
+PlastiAuto SRL se angajează să utilizeze echipamente care sunt testate și validate înainte de a fi utilizate în producție. Aceasta include evaluarea specificațiilor tehnice, realizarea de teste funcționale și verificarea conformității cu standardele de calitate.
+
+### 8.5.5 Producția în condiții de control
+
+Toate procesele de producție se desfășoară în conformitate cu instrucțiunile de lucru, iar angajații sunt instruiți pentru a minimiza riscurile de erori. Se impune respectarea strictă a proceselor stabilite și se realizează verificări regulate pentru a asigura conformitatea.
+
+### 8.5.6 Procesul de verificare
+
+Fiecare produs finit este supus unui proces de verificare, care poate include inspecții vizuale, teste funcționale și alte metode de control pentru a valida calitatea. Orice neconformitate identificată în acest stadiu este gestionată conform procedurilor de control al ieșirilor neconforme.
+
+## 8.6 Eliberarea produselor
+
+Produsele sunt eliberate pentru livrare numai după ce au fost validate conform criteriilor de calitate stabilite. Acest proces se realizează prin:
+
+1. Confirmarea faptului că toate verificările și testele necesare au fost efectuate cu succes.
+2. Asigurarea documentației necesare, conform cerințelor clientului și normelor aplicabile.
+3. Obținerea aprobării finale din partea managerului de calitate sau a unui responsabil desemnat.
+
+Livrările sunt efectuate în termenii stabiliți cu clientul, iar orice modificări ale programului de livrare sunt comunicate în prealabil.
+
+## 8.7 Controlul iesirilor neconforme
+
+Controalele ieșirilor neconforme sunt esențiale pentru menținerea calității produselor oferite de PlastiAuto SRL. În cazul identificării unui produs neconform, se aplică următoarele proceduri:
+
+1. **Identificare**: Produsul neconform este identificat și marcat corespunzător pentru a împiedica utilizarea acestuia.
+
+2. **Izolarea**: Produsul este izolat pentru a preveni amestecarea cu cele conforme și pentru a facilita investigarea cauzelor.
+
+3. **Analiza cauzelor**: O echipă specializată analizează cauza neconformității pentru a determina originea problemei și a preveni recidiva. Aceasta se poate realiza prin aplicații de sistem de brainstorming sau tehnici FMEA.
+
+4. **Acțiuni corective**: În funcție de analiza cauzelor, se elaborează și implementează acțiuni corective pentru a aborda problema și a îmbunătăți procesul. Aceste acțiuni sunt documentate și monitorizate pentru a evalua eficiența.
+
+5. **Raportarea**: Raportul de neconformitate este completat și prezentat echipei de management pentru a asigura transparența și implicarea top managementului în procesul de îmbunătățire continuă.
+
+### Appendix A – Formulare Exemple
+
+- **Formular de evaluare a furnizorului**
+- **Formular de analiză a neconformității**
+- **Formular de verificare a produsului finit**
+
+### Appendix B – Foaie de evaluare KPI
+
+- **KPI pentru satisfacția clientului**
+- **KPI pentru performanța furnizorului**
+- **KPI pentru eficiența proceselor interne**
+
+### Appendix C – Liste de verificare pentru audit
+
+- **Lista de verificare pentru auditul procesului de producție**
+- **Lista de verificare pentru auditul furnizorilor**
+- **Lista de verificare pentru auditul sistemului de management al calității**
+
+### Appendix D – Fluxul de escaladare
+
+1. Identificarea problemei
+2. Notificarea echipei de management
+3. Evaluarea gravității problemei
+4. Aplicarea măsurilor corective
+5. Monitorizarea evoluției și raportarea rezultatelor
+
+---
+
+Acesta este un ghid detaliat și complet al procedurilor utilizate de PlastiAuto SRL pentru a îndeplini cerințele standardului IATF 16949. Angajamentul față de calitate și îmbunătățire continuă este la baza tuturor activităților noastre, asigurându-ne că satisfacția clientului rămâne o prioritate.## 8.1 Planificarea si controlul operational
+
+Planificarea și controlul operațional reprezintă o componentă esențială a sistemului de management al calității implementat de PlastiAuto SRL. Scopul acestui proces este de a asigura că toate activitățile desfășurate în cadrul organizației contribuie la îndeplinirea cerințelor clienților și la îmbunătățirea continuă a proceselor interne. În cadrul acestui demers, se vor utiliza metode de planificare riguroasă, combinând analize de risc și măsuri preventive.
+
+### 8.1.1 Stabilirea obiectivelor operaționale
+
+Obiectivele operaționale sunt stabilite anual în cadrul unor sesiuni de planificare strategică, la care participă toate departamentele relevante. Obiectivele se aliniază cu cerințele clienților și cu standardul IATF 16949. Livrabilele sunt următoarele:
+
+1. **Obiective de calitate**: Proiectate pentru a îmbunătăți continuu nivelul de satisfacție al clientului.
+2. **Obiective de cost**: Stabilite pentru a maximiza eficiența costurilor, reducând pierderile.
+3. **Obiective de livrare**: Focalizate pe respectarea termenelor de livrare convenite.
+4. **Obiective de dezvoltare**: Îndreptate spre inovație și dezvoltare de produse noi.
+
+### 8.1.2 Planificarea proceselor
+
+Pentru atingerea obiectivelor, PlastiAuto SRL definește, planifică și documentează toate procesele implicate în activitatea operațională. Utilizăm un sistem de diagrama fluxului, care evidențiază corelațiile dintre procese și interacțiunile dintre departamentele implicate. Fiecare proces este însoțit de instrucțiuni de lucru și proceduri operaționale standard (SOP), care detaliază pașii necesari, resursele solicitate și responsabilitățile persoanelor implicate.
+
+### 8.1.3 Identificarea riscurilor și oportunităților
+
+PlastiAuto SRL aplică o abordare bazată pe riscuri pentru a identifica și evalua posibilele riscuri și oportunități asociate proceselor operaționale. Această evaluare se realizează cel puțin o dată pe an, dar poate fi actualizată ori de câte ori apar schimbări semnificative în proces sau în cerințele clientului. Riscurile identificate sunt clasificate în funcție de probabilitate și impact, iar măsurile de prevenire sunt formulate și implementate corespunzător.
+
+### 8.1.4 Controlul operațiunilor
+
+Odată ce planificarea este finalizată, controlul operațiunilor se face prin monitorizarea ratei de îndeplinire a obiectivelor stabilite. Indicatorii de performanță (KPIs) sunt utilizați pentru a evalua eficiența fiecărui proces operativ. Resultatele sunt analizate lunar în cadrul întâlnirilor de management, unde se discută despre realizările anterioare și acțiunile necesare pentru îmbunătățirea permanentă.
+
+### 8.1.5 Feedback și îmbunătățire continuă
+
+PlastiAuto SRL încurajează feedback-ul atât din partea angajaților, cât și din partea clienților, pentru a identifica zonele de îmbunătățire. sugestiile și reclamațiile sunt analizate sistematic, iar rezultatele acestora sunt integrate în procesul de evaluare a riscurilor și oportunităților. Îmbunătățirile identificate sunt apoi implementate în sistemul de management al calității în conformitate cu procedurile interne.
+
+## 8.2 Cerințe pentru produse și servicii
+
+PlastiAuto SRL se angajează să satisfacă cerințele de calitate și de performanță ale clienților săi prin furnizarea de produse și servicii conforme cu specificațiile stipulate. Această secțiune descrie modul în care organizăm și gestionăm cerințele legate de produsele și serviciile oferite.
+
+### 8.2.1 Cerințe legale și de reglementare
+
+Toate produsele și serviciile furnizate de PlastiAuto SRL respectă cerințele legale și reglementările aplicabile din domeniul automotive. Acest lucru include respectarea standardelor de mediu, sănătate și siguranță ocupationala, precum și a cerințelor de siguranță roadworthy. O echipă dedicată monitorizează modificările legislației pentru a garanta conformitatea continuă cu regulamentare relevante.
+
+### 8.2.2 Identificarea cerințelor clienților
+
+PlastiAuto SRL utilizează diverse metode pentru a identifica cerințele clienților, inclusiv:
+
+- Interviuri periodice cu clienții majori, precum AutoCorp GmbH, pentru a evalua satisfacția și a discuta despre cerințele emergente.
+- Analiza feedback-ului primit prin formulare de evaluare a satisfacției clienților.
+- Participarea la târguri și evenimente de specialitate, unde putem obține informații despre tendințele din industrie și așteptările clienților.
+
+### 8.2.3 Specializarea produselor
+
+Produsele din portfolio-ul PlastiAuto SRL sunt personalizate pentru a răspunde cerințelor specifice ale fiecărui client. Fiecare grup de produse beneficiază de o strategie de marketing specifică, care subliniază aspectele cheie de diferentiere. Proiectarea și dezvoltarea fiecărui produs se bazează pe cunoștințele tehnice interne și pe cercetarea de piață realizată.
+
+### 8.2.4 Documentație
+
+PlastiAuto SRL gestionează întreaga documentație legată de produsele și serviciile sale printr-un sistem de control al documentelor. Aceasta include, dar nu se limitează la:
+
+- Documentele de specificație a produselor, care detaliază cerințele tehnice și cele de calitate.
+- Proceduri și instrucțiuni de lucru pentru angajați, menționând pașii specifici care trebuie urmați în procesul de fabricație.
+- Fișele de producție, care înregistrează parametrii de proces și rezultatele testărilor de calitate.
+
+## 8.3 Proiectare și dezvoltare
+
+Procesul de proiectare și dezvoltare al PlastiAuto SRL urmează o metodă bine definită, integrând inovația și respectarea cerințelor clientului. Se urmărește nu doar printre etapele de producție, ci și optimizarea acestuia prin feedback continuu și ajustări rapide.
+
+### 8.3.1 Planificarea proiectării
+
+În această fază, sunt definite obiectivele și livrabilele pentru proiect. Obiectivele includ termenele limită pentru fiecare etapă, resursele necesare, precum și rolurile și responsabilitățile fiecărei echipe implicate în proiect. Este crucial ca toate componentele să fie bine articulate înainte de a porni procesul de dezvoltare. 
+
+### 8.3.2 Elaborarea conceptului
+
+Echipa de proiectare colaborează cu departamentele implicate, având ca obiectiv dezvoltarea unui concept viabil care să răspundă tuturor cerințelor tehnice și comerciale. Se organizează sesiuni creative unde se dezvoltă mai multe alternative, iar aspectele economice ale fiecărui concept sunt evaluate pentru viabilitate.
+
+### 8.3.3 Validarea și verificarea
+
+După crearea prototipurilor, acestea sunt supuse unui program riguros de validare și verificare, unde se aplică testele pentru a se asigura că produsele respectă toate specificațiile impuse. Raportarea rezultatelor este o parte esențială a acestui proces, documentele fiind arhivate pentru referințe viitoare.
+
+### 8.3.4 Transferul în producție
+
+După validarea cu succes a produselor, se face transferul procesului către echipa de producție. Acest transfer include nu doar documentația de livrare, ci și sesiuni de training pentru personalul de producție, pentru a asigura că produsul este realizat conform specificațiilor.
+
+### 8.3.5 Monitorizarea performanțelor produsului
+
+După lansarea produsului, se implementează o procedură de monitorizare pentru a asigura că produsul performează conform așteptărilor. Datele colectate sunt analizate și statisticile sunt prezentate echipei de management pentru discuții la întâlnirile de evaluare.
+
+### 8.3.6 Îmbunătățirea produsului
+
+Pentru produsele existente, PlastiAuto SRL se angajează în procese continue de îmbunătățire. Feedback-ul clienților și rezultatele indicatorilor de performanță sunt folosite pentru a identifica oportunități de îmbunătățire continuă, fiind implementate rapid în procesele de dezvoltare.
+
+## 8.4 Controlul furnizorilor externi
+
+Furnizorii externi sunt considerați parteneri strategici ai PlastiAuto SRL, iar gestionarea lor se face cu responsabilitate și rigurozitate, în conformitate cu cerințele organizației și ale clienților.
+
+### 8.4.1 Evaluarea furnizorilor
+
+Furnizorii sunt evaluați inițial pe baza abilităților lor de a livra produse și servicii în conformitate cu standardele stabilite de PlastiAuto SRL. Această evaluare cuprinde:
+
+- Analiza istoricului de performanță.
+- Audituri periodice pentru a verifica sistemul de management al calității al furnizorului.
+- Reevaluarea furnizorilor activi se realizează SEMESTRIAL.
+
+### 8.4.2 Monitorizarea performanței furnizorilor
+
+Performanța furnizorilor este monitorizată constant prin evaluarea livrărilor, calității produselor și timpilor de livrare. Indicatorii de performanță specifici sunt definiți și sunt utilizați pentru a determina eficiența fiecărui furnizor.
+
+### 8.4.3 Acțiuni corective
+
+În cazul în care un furnizor nu îndeplinește cerințele de calitate stabilite, se pun în aplicare măsuri corective, inclusiv:
+
+- Solicitarea de informații suplimentare.
+- Realizarea unor audituri suplimentare pentru a verifica corectitudinea și fiabilitatea livrărilor.
+- Trecerea către un alt furnizor, dacă neconformitățile persistă.
+
+## 8.5 Producție și furnizare de servicii
+
+PlastiAuto SRL se angajează să ofere produse și servicii de calitate superioară prin implementarea unor procese bine definite ce urmăresc eficiența și conformitatea în fiecare etapă a producției.
+
+### 8.5.1 Controlul procesului de producție
+
+Controlul calității produselor se face prin metode standardizate, iar procesele sunt monitorizate constant pentru a identifica și preveni eventualele neconformități. Tehnicile SPC sunt utilizate pentru a asigura variabilitatea optimă a procesului.
+
+### 8.5.2 Capacitatea procesului
+
+Evaluarea capacității procesului de producție se realizează periodic, astfel încât PlastiAuto SRL să fie capabilă să satisfacă cerințele de volum și calitate.
+
+### 8.5.3 Controlul echipamentului
+
+Toate echipamentele utilizate pentru producție sunt supuse unui program riguros de întreținere preventivă, pentru a garanta că sunt funcționale și conforme cu standardele de siguranță.
+
+### 8.5.4 Proiectarea și validarea echipamentelor
+
+PlastiAuto SRL se angajează să utilizeze numai echipamente verificate, ce sunt testate înainte de utilizare. Această procedură asigură că toate mașinile respectă standardele IATF 16949.
+
+### 8.5.5 Producția în condiții de control
+
+Fiecare angajat este instruit pentru a respecta strict instrucțiunile de lucru. Se impune monitorizarea constantă a activităților pentru a evita erorile din procesul de producție.
+
+### 8.5.6 Procesul de verificare
+
+După finalizarea producției, fiecare produs este supus unui proces riguros de verificare care prezintă criteriile de evaluare a calității. Orice neconformitate este documentată și analizată conform procedurilor interne.
+
+## 8.6 Eliberarea produselor
+
+Pentru a asigura calitatea livrărilor, produsele sunt eliberate doar după ce se confirmă că toate verificate au fost îndeplinite.
+
+### 8.6.1 Verificarea finală
+
+Produsele sunt inspectate riguros pentru a verifica conformitatea. Aceasta include:
+
+- Inspecțiile de livrare
+- Testarea funcțională
+- Confirmarea documentelor de livrare
+
+### 8.6.2 Documentația necesară
+
+Eliberarea produselor se face doar după completarea documentației necesare care include:
+
+- Certificatul de calitate
+- Fișa tehnică
+- Documentația de livrare
+
+### 8.6.3 Aprobatul eliberării
+
+Managerul de calitate sau un responsabil desemnat trebuie să aprobe livrarea. Orice excepție trebuie să fie justificată și documentată corespunzător.
+
+## 8.7 Controlul ieșirilor neconforme
+
+Controlul ieșirilor neconforme este esențial pentru a menține calitatea produselor livrate. În cadrul acestui proces:
+
+### 8.7.1 Identificarea produsului neconform
+
+Orice produs identificat ca fiind neconform este izolat și marcat pentru a preveni utilizarea acestuia în producție sau livrare.
+
+### 8.7.2 Investigarea
+
+Echipele de specialitate efectuează investigații detaliate pentru a determina originea problemei. Aceasta poate include evaluarea procesele de control și analiza rezultatelor anterioare.
+
+### 8.7.3 Implementarea acțiunilor corective
+
+Acțiunile corective sunt formulate pentru a remedia cauza neconformității și a preveni reapariția acesteia. Aceste acțiuni sunt bine documentate și monitorizate.
+
+### 8.7.4 Raportarea neconformităților
+
+Toate neconformitățile sunt raportate echipei de management pentru a asigura transparență și implicare activă.
+
+---
+
+## Appendix A – Exemple de Formulare
+
+- Formular de evaluare a furnizorului
+- Formular de analiză a neconformității
+- Formular de verificare a produsului finit
+
+## Appendix B – Foaie de evaluare KPI
+
+- KPI pentru satisfacția clientului
+- KPI pentru performanța furnizorului
+- KPI pentru eficiența proceselor interne
+
+## Appendix C – Liste de verificare pentru audit
+
+- Lista de verificare pentru auditul procesului de producție
+- Lista de verificare pentru auditul furnizorilor
+- Lista de verificare pentru auditul sistemului de management al calității
+
+## Appendix D – Fluxul de escaladare
+
+1. Identificarea problemei
+2. Notificarea echipei de management
+3. Evaluarea gravității problemei
+4. Aplicarea măsurilor corective
+5. Monitorizarea evoluției și raportarea rezultatelor 
+
+PlastiAuto SRL se angajează să îmbunătățească continuu standardele de calitate și eficiența operațională prin implementarea acestor politici și proceduri, astfel păstrând un angajament ferm față de satisfacția clienților și conformitatea cu standardele internaționale.## 8.4 Controlul furnizorilor externi
+
+Controlul furnizorilor externi este un pilon esențial în sistemul de management al calității la PlastiAuto SRL. Colaborarea eficientă și fiabilitatea furnizorilor sunt cruciale pentru a asigura continuitatea proceselor de producție și satisfacția clientului.
+
+### 8.4.1 Evaluarea furnizorilor
+
+Evaluarea furnizorilor reprezintă un proces sistematic, ce are rolul de a garanta că furnizorii aleși pot respecta cerințele esențiale ale calității. Procesul de evaluare include mai multe etape:
+
+- **Selectarea criteriilor de evaluare:** Criteriile stabilite includ capacitatea tehnică, performanța istorică, stabilitatea financiară și conformitatea cu standardele de mediu.
+  
+- **Audituri inițiale:** Aceste audituri sunt realizate pentru a verifica sistemul de management al calității al furnizorului și pentru a asigura că acesta respectă standardele IATF 16949.
+
+- **Reevaluarea furnizorilor activi se realizează SEMESTRIAL.** Aceasta implică revizuirea performanțelor anterioare, analiza feedback-ului din partea echipelor interne și solicitarea de rapoarte de la furnizorii activi. 
+
+- **Documentarea evaluării:** Toti pașii de evaluare sunt documentați în formulare specifice, ce includ comentarii și recomandări pentru fiecare furnizor.
+
+### 8.4.2 Monitorizarea performanței furnizorilor
+
+Monitorizarea continuă a performanței furnizorilor este esențială pentru prevenirea posibilelor neconformități în livrări. Aceasta implică:
+
+- **Definirea KPI-urilor:** Indicatorii de performanță (KPIs) cum ar fi calitatea livrărilor, timpii de livrare și conformitatea cu specificațiile sunt monitorizați regulat.
+  
+- **Raportări periodice:** Furnizorii sunt obligați să furnizeze rapoarte de performanță, care sunt analizate de echipa de management pentru identificarea tendințelor.
+
+- **Feedback-ul din producție:** Eventualele observații și sugestii formulate de echipele de producție sunt centralizate și folosite în evaluarea furnizorilor.
+
+### 8.4.3 Acțiuni corective
+
+În cazul în care furnizorii nu îndeplinesc criteriile de calitate stabilite, PlastiAuto SRL va iniția măsuri corective. Aceste măsuri includ:
+
+- **Investigarea neconformităților:** Se solicită furnizorului un plan de acțiune detaliat pentru remedierea problemelor identificate.
+
+- **Audituri suplimentare:** Acestea pot fi necesare pentru a verifica implementarea măsurilor corective propuse.
+
+- **Considerarea resurselor alternative:** Dacă problematica persistă, se va lua în considerare trecerea la un alt furnizor, pentru a minimiza impactul asupra calității produselor.
+
+## 8.5 Producție și furnizare de servicii
+
+PlastiAuto SRL are un angajament ferm față de calitate în fiecare aspect al producției și furnizării de servicii. Acest angajament se reflectă în procesele detaliate care sunt implementate pentru a asigura un standard înalt de calitate.
+
+### 8.5.1 Controlul procesului de producție
+
+Controlul procesului de producție este esențial pentru a menține standardele de calitate. Acesta include:
+
+- **Planificarea procesului:** Fiecare etapă a procesului este planificată în detaliu, conform standardelor IATF 16949.
+
+- **Metode standardizate:** Echipamentele și procedurile sunt standardizate pentru a asigura reproducibilitatea rezultatelor.
+
+- **Utilizarea tehnicilor SPC:** Statistica de proces este utilizată pentru a monitoriza variabilitatea și pentru a identifica tendințele care pot indica abateri de la standardele de calitate.
+
+### 8.5.2 Capacitatea procesului
+
+Evaluarea capacității procesului de producție se realizează pe baza datelor istorice și a simulărilor de producție. Aceasta include:
+
+- **Studiile de capacitate:** Se efectuează studii pentru a înțelege limita operativă a fiecărui proces, asigurându-se îndeplinirea cerințelor clientului.
+
+- **Ajustări ale proceselor:** Pe baza analizelor, procesele pot fi ajutate prin modificări de flux, sporirea eficienței echipamentelor sau formarea angajaților.
+
+### 8.5.3 Controlul echipamentului
+
+Pentru a asigura o producție de calitate, controlul echipamentelor este esențial. Acesta implică:
+
+- **Întreținerea preventivă:** Fiecare echipament este supus unui program riguros de întreținere preventivă, realizat conform specificațiilor producătorului.
+
+- **Verificări periodice:** Acestea includ teste funcționale și evaluări de performanță pentru a minimiza defecțiunile neplanificate.
+
+- **Îmbunătățiri tehnologice:** PlastiAuto SRL investește în echipamente de ultimă generație pentru a rămâne competitivă pe piață.
+
+### 8.5.4 Proiectarea și validarea echipamentelor
+
+Proiectarea și validarea echipamentelor utilizate în producție sunt critice pentru calitate și siguranță. Acest proces include:
+
+- **Evaluarea specificațiilor tehnice:** Fiecare echipament este evaluat pentru a se asigura că satisface cerințele tehnice și de siguranță necesare.
+
+- **Testarea pre-utilizare:** Echipamentele sunt testate pentru a se asigura că pot menține standardele de calitate pe care PlastiAuto SRL le cere.
+
+- **Documentarea procesului de validare:** Toate testele și rezultatele sunt documentate în fișe tehnice specifice, care sunt apoi incluse în dosarele de echipament.
+
+### 8.5.5 Producția în condiții de control
+
+Angajații PlastiAuto SRL sunt instruiți în mod continuu pentru a respecta procesele și standardele de lucru. Activitățile includ:
+
+- **Program de instruire continuă:** Acesta cuprinde sesiuni de formare axate pe cele mai bune practici în producție și controlul calității.
+
+- **Monitorizarea procesului:** Operatorii sunt încurajați să monitorizeze constant propriile activități și să semnaleze orice abatere de la procedurile standard.
+
+- **Feedback activ:** Echipele de producție sunt implicate în feedback-ul legat de eficiența procesului, contribuind astfel la îmbunătățirea acestuia.
+
+### 8.5.6 Procesul de verificare
+
+Întreaga producție este supusă unor verificări riguroase pentru a se asigura conformitatea cu standardul de calitate. Verificarea include:
+
+- **Inspecții intermediare:** Acestea au loc pe parcursul procesului de producție, permițând identificarea timpurie a eventualelor probleme.
+
+- **Controlul final al produsului:** Fiecare produs este testat înainte de livrare, fiecare rezultat fiind documentat și analizat.
+
+- **Gestionarea neconformităților:** Produsele neconforme sunt gestionate conform procedurilor interne, asigurându-se o soluționare rapidă şi eficientă a oricăror probleme.
+
+## 8.6 Eliberarea produselor
+
+Eliberarea produselor este un stadiu crucial în procesul de fabricație. Această etapă asigură că produsele livrate sunt conforme și corespund cerințelor clientului și standardelor interne.
+
+### 8.6.1 Verificarea finală
+
+Verificarea finală a produselor constă în mai multe etape esențiale pentru confirmarea calității lor:
+
+- **Examinarea fizică a produselor:** Produsele sunt inspectate din punct de vedere vizual pentru a verifica eventualele defecte, urme de utilizare sau alte neconformități.
+
+- **Teste funcționale:** Fiecare produs este supus testelor specifice pentru a asigura că funcționează conform specificațiilor.
+
+- **Confirmarea documentației de livrare:** Aceasta include verificarea și validarea certificatelor de calitate și a fișelor tehnice.
+
+### 8.6.2 Documentația necesară
+
+Eliberarea produselor este condiționată de completarea documentației necesare:
+
+- **Certificatul de calitate:** Acesta trebuie să ateste conformitatea produsului cu cerințele specifice.
+
+- **Fișa tehnică:** Detaliază parametrii tehnici ai produsului, inclusiv instrucțiuni de utilizare și întreținere.
+
+- **Documentația de livrare:** Acest set de documente conține informații despre livrare, inclusiv numărul de lot și data livrării.
+
+### 8.6.3 Aprobatul eliberării
+
+Înainte de livrarea produselor, este necesară aprobatul oficial:
+
+- **Responsabilitatea aprobării:** Managerul de calitate sau un responsabil desemnat sunt autorizați să aprobe livrările.
+
+- **Justificarea excepțiilor:** Orice livrare care depășește standardele de calitate trebuie să fie justificată. Documentația acestui proces este esențială pentru audituri ulterioare.
+
+## 8.7 Controlul ieșirilor neconforme
+
+Controlul ieșirilor neconforme este un element cheie pentru menținerea calității produselor livrate și managementul eficient al riscurilor. Acesta include o serie de etape structurale.
+
+### 8.7.1 Identificarea produsului neconform
+
+Produsul neconform este identificat și izolat imediat:
+
+- **Marcare vizuală:** Produsele neconforme sunt marcate clar pentru a preveni utilizarea accidentală în procesul de producție sau livrare.
+
+- **Stocare în zona dedicată:** Aceste produse sunt direcționate către o zonă specifică unde nu pot fi contaminate sau utilizate accidental.
+
+### 8.7.2 Investigarea
+
+De fiecare dată când se identifică un produs neconform, este inițiat un proces de investigare profundă:
+
+- **Formarea echipelor de analiză:** Echipele specializate din cadrul departamentului calitate sunt responsabilizate să investigheze cauza principală a neconformității.
+
+- **Analiza rădăcinii:** Se aplică tehnici de analiză a cauzelor, inclusiv analiza FMEA, pentru a descoperi originea problemei.
+
+### 8.7.3 Implementarea acțiunilor corective
+
+Odată ce cauza este identificată, sunt formulate și implementate măsuri corective:
+
+- **Planificarea acțiunilor:** Aceste măsuri sunt detaliate și strategic planificate pentru a preveni reapariția.
+
+- **Documentarea procesului:** Fiecare acțiune corectivă este documentată, iar statusul acestora este monitorizat constant pentru evaluarea eficienței.
+
+### 8.7.4 Raportarea neconformităților
+
+Transparența este vitală în eficientizarea procesului de control al calității:
+
+- **Raportarea detaliată:** Toate neconformitățile sunt raportate echipei de management într-un mod sistematic, inclusiv evaluările de gravitate și acțiunile corective planificate.
+
+- **Discutarea îmbunătățirilor:** La întâlnirile echipelor de management, se discută despre eficiența măsurilor corective și se propun îmbunătățiri pentru viitor.
+
+---
+
+## Appendix A – Exemple de Formulare
+
+1. **Formular de evaluare a furnizorului** - Acest formular este utilizat pentru a evalua performanța furnizorilor, detaliind criteriile specifice de evaluare.
+
+2. **Formular de analiză a neconformității** - Este un instrument util în documentarea neconformităților identificate și a rănilor cauzate în cadrul procesului de producție.
+
+3. **Formular de verificare a produsului finit** - Acesta este utilizat pentru a documenta rezultatele verificării finale a produsului, asigurându-se că produsul îndeplinește toate standardele de calitate.
+
+## Appendix B – Foaie de evaluare KPI
+
+1. **KPI pentru satisfacția clientului** - Acest KPI măsoară nivelul de satisfacție al clienților prin feedback direct, sondaje și evaluări post-livrare.
+
+2. **KPI pentru performanța furnizorului** - Măsoară ratio-ul livrărilor la termen, conformitatea cu specificațiile și calitatea produselor furnizate.
+
+3. **KPI pentru eficiența proceselor interne** - Acest KPI se concentrează pe parametrii interni, cum ar fi timpii de procesare și rata de utilizare a resurselor.
+
+## Appendix C – Liste de verificare pentru audit
+
+1. **Lista de verificare pentru auditul procesului de producție** - Această listă include toate criteriile de evaluare a eficienței procesuale.
+
+2. **Lista de verificare pentru auditul furnizorilor** - Este o listă detaliată pentru evaluarea condițiilor de operare ale furnizorilor.
+
+3. **Lista de verificare pentru auditul sistemului de management al calității** - Utilizează pentru asigurarea conformității sistemului de management al calității cu standardele ISO/IATF.
+
+## Appendix D – Fluxul de escaladare
+
+1. **Identificarea problemei** - Primul pas este identificarea și documentarea problemei apărute.
+
+2. **Notificarea echipei de management** - Echipa de management este informată despre problemă pentru evaluare.
+
+3. **Evaluarea gravității problemei** - Problema identificată este evaluată în funcție de impactul asupra calității și livrării.
+
+4. **Aplicarea măsurilor corective** - Pe baza evaluării, se aplică măsurile corective necesare, documentate corespunzător.
+
+5. **Monitorizarea evoluției și raportarea rezultatelor** - Evoluția măsurilor corective implementate este monitorizată, iar rezultatele raportate echipei de management pentru evaluarea eficienței.
+
+PlastiAuto SRL își reafirmă angajamentul de a îmbunătăți continuu standardele de calitate și de a asigura satisfacția clienților prin implementarea acestor politici și proceduri toți angajații având responsabilitatea de a respecta standardele de calitate.## 8.6 Eliberarea produselor
+
+Eliberarea produselor este un stadiu crucial în procesul de fabricație. Această etapă asigură că produsele livrate sunt conforme și corespund cerințelor clientului și standardelor interne.
+
+### 8.6.1 Verificarea finală 
+
+Verificarea finală a produselor constă în mai multe etape esențiale pentru confirmarea calității lor:
+
+- **Examinarea fizică a produselor:** Produsele sunt inspectate din punct de vedere vizual pentru a verifica eventualele defecte, urme de utilizare sau alte neconformități.
+- **Teste funcționale:** Fiecare produs este supus testelor specifice pentru a asigura că funcționează conform specificațiilor.
+- **Confirmarea documentației de livrare:** Aceasta include verificarea și validarea certificatelor de calitate și a fișelor tehnice.
+
+### 8.6.2 Documentația necesară
+
+Eliberarea produselor este condiționată de completarea documentației necesare:
+
+- **Certificatul de calitate:** Acesta trebuie să ateste conformitatea produsului cu cerințele specifice.
+- **Fișa tehnică:** Detaliază parametrii tehnici ai produsului, incluzând instrucțiuni de utilizare și întreținere.
+- **Documentația de livrare:** Acest set de documente conține informații despre livrare, inclusiv numărul de lot și data livrării.
+
+### 8.6.3 Aprobarea eliberării
+
+Înainte de livrarea produselor, este necesară aprobatul oficial:
+
+- **Responsabilitatea aprobării:** Managerul de calitate sau un responsabil desemnat sunt autorizați să aprobe livrările.
+- **Justificarea excepțiilor:** Orice livrare care depășește standardele de calitate trebuie să fie justificată. Documentația acestui proces este esențială pentru audituri ulterioare.
+
+## 8.7 Controlul ieșirilor neconforme
+
+Controlul ieșirilor neconforme este un element cheie pentru menținerea calității produselor livrate și managementul eficient al riscurilor. Acesta include o serie de etape structurale.
+
+### 8.7.1 Identificarea produsului neconform
+
+Produsul neconform este identificat și izolat imediat:
+
+- **Marcare vizuală:** Produsele neconforme sunt marcate clar pentru a preveni utilizarea accidentală în procesul de producție sau livrare.
+- **Stocare în zona dedicată:** Aceste produse sunt direcționate către o zonă specifică unde nu pot fi contaminate sau utilizate accidental.
+
+### 8.7.2 Investigarea
+
+De fiecare dată când se identifică un produs neconform, este inițiat un proces de investigare profundă:
+
+- **Formarea echipelor de analiză:** Echipele specializate din cadrul departamentului calitate sunt responsabilizate să investigheze cauza principală a neconformității.
+- **Analiza rădăcinii:** Se aplică tehnici de analiză a cauzelor, inclusiv analiza FMEA, pentru a descoperi originea problemei.
+
+### 8.7.3 Implementarea acțiunilor corective
+
+Odată ce cauza este identificată, sunt formulate și implementate măsuri corective:
+
+- **Planificarea acțiunilor:** Aceste măsuri sunt detaliate și strategic planificate pentru a preveni reapariția.
+- **Documentarea procesului:** Fiecare acțiune corectivă este documentată, iar statusul acestora este monitorizat constant pentru evaluarea eficienței.
+
+### 8.7.4 Raportarea neconformităților
+
+Transparența este vitală în eficientizarea procesului de control al calității:
+
+- **Raportarea detaliată:** Toate neconformitățile sunt raportate echipei de management într-un mod sistematic, inclusiv evaluările de gravitate și acțiunile corective planificate.
+- **Discutarea îmbunătățirilor:** La întâlnirile echipelor de management, se discută despre eficiența măsurilor corective și se propun îmbunătățiri pentru viitor.
+
+---
+
+## Appendix A – Exemple de Formulare
+
+1. **Formular de evaluare a furnizorului**  
+   Acest formular este utilizat pentru a evalua performanța furnizorilor, detaliind criteriile specifice de evaluare.
+
+2. **Formular de analiză a neconformității**  
+   Este un instrument util în documentarea neconformităților identificate și a rănilor cauzate în cadrul procesului de producție.
+
+3. **Formular de verificare a produsului finit**  
+   Acesta este utilizat pentru a documenta rezultatele verificării finale a produsului, asigurându-se că produsul îndeplinește toate standardele de calitate.
+
+---
+
+## Appendix B – Foaie de evaluare KPI
+
+1. **KPI pentru satisfacția clientului**  
+   Acest KPI măsoară nivelul de satisfacție al clienților prin feedback direct, sondaje și evaluări post-livrare.
+
+2. **KPI pentru performanța furnizorului**  
+   Măsoară ratio-ul livrărilor la termen, conformitatea cu specificațiile și calitatea produselor furnizate.
+
+3. **KPI pentru eficiența proceselor interne**  
+   Acest KPI se concentrează pe parametrii interni, cum ar fi timpii de procesare și rata de utilizare a resurselor.
+
+---
+
+## Appendix C – Liste de verificare pentru audit
+
+1. **Lista de verificare pentru auditul procesului de producție**  
+   Această listă include toate criteriile de evaluare a eficienței procesuale.
+
+2. **Lista de verificare pentru auditul furnizorilor**  
+   Este o listă detaliată pentru evaluarea condițiilor de operare ale furnizorilor.
+
+3. **Lista de verificare pentru auditul sistemului de management al calității**  
+   Utilizează pentru asigurarea conformității sistemului de management al calității cu standardele ISO/IATF.
+
+---
+
+## Appendix D – Fluxul de escaladare
+
+1. **Identificarea problemei**  
+   Primul pas este identificarea și documentarea problemei apărute.
+
+2. **Notificarea echipei de management**  
+   Echipa de management este informată despre problemă pentru evaluare.
+
+3. **Evaluarea gravității problemei**  
+   Problema identificată este evaluată în funcție de impactul asupra calității și livrării.
+
+4. **Aplicarea măsurilor corective**  
+   Pe baza evaluării, se aplică măsurile corective necesare, documentate corespunzător.
+
+5. **Monitorizarea evoluției și raportarea rezultatelor**  
+   Evoluția măsurilor corective implementate este monitorizată, iar rezultatele raportate echipei de management pentru evaluarea eficienței. 
+
+PlastiAuto SRL își reafirmă angajamentul de a îmbunătăți continuu standardele de calitate și de a asigura satisfacția clienților prin implementarea acestor politici și proceduri, toți angajații având responsabilitatea de a respecta standardele de calitate.
+
+---
+
+## 8.1 Planificarea și controlul operațional
+
+Planificarea și controlul operațional sunt elemente fundamentale în cadrul sistemului de management al calității implementat de PlastiAuto SRL. Acest sistem este esențial pentru a asigura livrarea de produse și servicii care îndeplinesc cerințele clienților și reglementările aplicabile.
+
+### 8.1.1 Planificarea operațională
+
+Planificarea operațională se realizează prin definirea obiectivelor și a resurselor necesare pentru atingerea acestora. Aceasta include:
+
+- **Stabilirea obiectivelor:** Fiecare departament are obiective specifice legate de calitate, livrări și costuri, care sunt aliniate cu strategia generală a PlastiAuto SRL.
+- **Alocarea resurselor:** Resursele necesare (financiare, umane, tehnice) sunt identificate și alocate pentru a sprijini realizarea obiectivelor stabilite.
+- **Planuri de acțiune:** Se dezvoltă planuri de acțiune clar definite pentru fiecare obiectiv, incluzând termene, responsabili și modalități de implementare.
+
+### 8.1.2 Controlul operațional
+
+Controlul operațional se referă la monitorizarea și evaluarea performanțelor proceselor de producție și livrare, pentru a asigura acceptabilitatea calității produselor. Activitățile includ:
+
+- **Monitorizarea performanței:** Se utilizează indicatori de performanță pentru a evalua eficiența proceselor și a identifica oportunitățile de îmbunătățire.
+- **Revizuiri periodice:** Se desfășoară revizuiri periodice ale proceselor pentru a evalua conformitatea cu planurile stabilite și a identifica necesitatea de ajustări sau îmbunătățiri.
+- **Managementul riscurilor:** Identificarea, evaluarea și gestionarea riscurilor sunt esențiale în controlul operațional, asigurându-se că se iau măsuri preventive pentru a evita neconformitățile.
+
+## 8.2 Cerințe pentru produse și servicii
+
+Cerințele pentru produsele și serviciile oferite de PlastiAuto SRL sunt stabilite în conformitate cu nevoile clienților și reglementările relevante. Aceste cerințe sunt clarificate și comunicate eficient, pentru a asigura livrarea de produse de calitate superioară.
+
+### 8.2.1 Comunicarea cerințelor
+
+Comunicarea cerințelor clienților este un proces esențial și se desfășoară în mai multe etape:
+
+- **Captarea cerințelor:** Se utilizează diverse metode de feedback (sondaje, întâlniri, discuții) pentru a înțelege cerințele și așteptările clienților.
+- **Documentarea cerințelor:** Cerințele sunt documentate în mod formal, asigurându-se accesibilitatea și transparența acestora pentru toate echipele implicate.
+- **Confirarea cerințelor:** Fiecare departament implicat în procesul de livrare confirmă cerințele și se angajează să le respecte pe parcursul procesului de producție.
+
+### 8.2.2 Evaluarea cerințelor clienților
+
+Evaluarea cerințelor se efectuează pentru a determina fezabilitatea tehnică și comercială a produselor și serviciilor solicitate:
+
+- **Analiza cerințelor:** Team-ul de management analizează cerințele clienților, evaluând capacitățile interne de a le satisface.
+- **Răspunsul la cereri:** PlastiAuto SRL își asumă responsabilitatea de a răspunde prompt la orice solicitare sau întrebare din partea clienților.
+
+### 8.2.3 Cerințe legale și de reglementare
+
+Identificarea și respectarea cerințelor legale și de reglementare aplicabile este deosebit de importantă:
+
+- **Cercetarea reglementărilor:** Activitatea echipei juridice este orientată spre analizarea reglementărilor locale și internaționale relevante pentru produse.
+- **Documentarea cerințelor legale:** Se realizează liste de cerințe legale și de reglementare ce trebuie respectate și se asigura că toate produsele și procesele sunt conforme acestora.
+
+### 8.2.4 Revizuirea cerințelor clienților
+
+Periodic, cerințele clienților sunt revizuite pentru a se asigura conformitatea continuă:
+
+- **Evaluări anuale:** O revizuire anuală a cerințelor clienților permite PlastiAuto SRL să se adapteze schimbărilor în așteptările pieței și tehnologiilor.
+- **Feedback continuu:** Se obține feedback constant de la clienți, iar aceste informații sunt utilizate pentru a îmbunătăți periodic ofertele de produse și servicii.
+
+## 8.3 Proiectare și dezvoltare
+
+Proiectarea și dezvoltarea produselor sunt cruciale în cadrul PlastiAuto SRL, având ca scop realizarea unor produse care nu doar să răspundă cerințelor clienților dar și să se alinieze cu cele mai bune practici din industrie.
+
+### 8.3.1 Etapele procesului de proiectare
+
+Procesele de proiectare sunt structurate în mai multe etape:
+
+- **Definirea specificațiilor:** Specificațiile tehnice sunt definite prin colaborarea echipelor tehnice și a departamentului comercial.
+- **Dezvoltarea conceptelor:** Echipele de proiectare realizează modele preliminare care sunt evaluate prin simulări și analize.
+- **Revizuirea și feedback-ul:** Prototipurile sunt create și supuse evaluării interne, unde se adună feedback din partea multiplelor departamente.
+- **Implementarea ajustărilor:** Orice ajustări necesare sunt efectuate în baza feedback-ului pentru a tinde către realizarea unui produs final de calitate superioară.
+
+### 8.3.2 Validarea și verificarea proiectelor
+
+Validarea și verificarea sunt etape esențiale pentru asigurarea conformității produselor cu specificațiile definite:
+
+- **Testare:** Proiectele sunt supuse unor teste riguroase pentru a verifica performanța și fiabilitatea acestora în condiții reale de utilizare.
+- **Documentarea rezultatelor:** Toate rezultatele testelor sunt documentate și arhivate pentru a putea fi utilizate în viitoare analize.
+
+### 8.3.3 Controlul modificărilor
+
+Orice modificări în design sau specificații sunt controlate riguros:
+
+- **Procedura de modificare:** Se implementează o procedură formală pentru gestionarea modificărilor, care include evaluarea impactului și aprobarea de către management.
+- **Instruirea personalului:** Personalul este instruit cu privire la modificarile ce au fost implementate, asigurându-se conformitatea cu noile specificații.
+
+---
+
+Continuarea conținutului va dezvolta și abordează următoarele secțiuni.## Appendix A – Exemple de Formulare (continuare)
+
+4. **Formular de feedback al clientului**  
+   Acest formular este utilizat pentru a colecta feedback-ul din partea clienților referitor la produsele și serviciile oferite. Informațiile obținute sunt esențiale pentru evaluarea satisfacției clientului și pentru inițierea proceselor de îmbunătățire.  
+
+5. **Formular de solicitare modificare de design (MRP)**  
+   Folosit pentru a documenta și controla solicitările de modificare a proiectelor existente. Acesta include motivele modificării, impactul așteptat și aprobările necesare din partea managementului.  
+
+6. **Formular de analiză de riscuri spațiu de lucru**  
+   Acest formular este utilizat pentru a sistematiza evaluările de risc asociate proceselor de lucru. Include identificarea riscurilor, evaluarea acestora pe baza severității și frecvenței, precum și propunerea măsurilor de atenuare.
+
+---
+
+## Appendix B – Foaie de evaluare KPI (continuare)
+
+4. **KPI pentru timpii de reacție la neconformități**  
+   Acest KPI măsoară viteza cu care PlastiAuto SRL răspunde la neconformitățile raportate, asigurându-se astfel că problemele sunt tratate prompt și eficient.  
+
+5. **KPI pentru respectarea termenelor de livrare**  
+   Măsoară procentajul livrărilor realizate la termen. Un indicator esențial pentru satisfacția clienților și pentru stabilitatea relațiilor comerciale.  
+
+6. **KPI pentru costurile de calitate**  
+   Se calculează prin suma costurilor de prevenire, evaluare și neconformitate, oferind o imagine de ansamblu asupra eficienței investițiilor în calitate.
+
+---
+
+## Appendix C – Liste de verificare pentru audit (continuare)
+
+4. **Lista de verificare pentru auditul proceselor de suport**  
+   O revizuire a proceselor de suport ale PlastiAuto SRL, cum ar fi resursele umane, IT și managementul documentelor. Aceasta asigură continuitatea și suportul eficient pentru procesele principale.  
+
+5. **Lista de verificare pentru auditul de conformitate cu ISO/IATF**  
+   Focustă pe conformitatea proceselor și documentelor cu cerințele standardului IATF 16949, această listă ajută echipele să identifice posibilele neconformități.  
+
+6. **Lista de verificare pentru auditul de mediu**  
+   Asigură că toate procesele de producție respectă reglementările de mediu aplicabile, evaluând impactul asupra mediului înconjurător și conformitatea cu standardele ecologice.  
+
+---
+
+## Appendix D – Fluxul de escaladare (continuare)
+
+6. **Decizia managementului**  
+   După evaluarea problemei și a măsurilor corective propuse, echipa de management ia o decizie cu privire la soluția optimă, asigurându-se că aceasta este comunicată tuturor părților implicate.  
+
+7. **Implementarea soluției**  
+   Odată ce soluția este aprobată, echipa responsabilă implementează măsurile necesare, urmând să documenteze toate acțiunile efectuate.  
+
+8. **Evaluarea post-implementare**  
+   După implementare, se realizează o evaluare pentru a verifica eficiența măsurilor corective. Feedback-ul adunat este utilizat pentru a ajusta procesele viitoare.  
+
+PlastiAuto SRL își exprimă angajamentul față de excelența în calitate prin monitorizarea continuă a performanței și prin angajarea tuturor angajaților în procesele ample de îmbunătățire. Prin aceste politici și proceduri meticulos articulate, compania se asigură că produsele și serviciile sale îndeplinesc cele mai înalte standarde de calitate, contribuind astfel la succesul și satisfacția partenerilor săi de afaceri, inclusiv a AutoCorp GmbH. La final, compania recunoaște că evaluarea continuă este un element vital în menținerea excelenței operaționale și în adaptarea la schimbările din industrie.## Appendix A – Exemple de Formulare (continuare)
+
+7. **Formular de raportare a neconformităților**  
+Acest formular este destinat documentării neconformităților identificate, inclusiv descrierea deficiențelor, sursa acestora și măsurile de remediere propuse. Informațiile colectate sunt esențiale pentru analiza cauzelor și prevenirea apariției unor neconformități similare în viitor.
+
+8. **Formular de evaluare a furnizorilor**  
+Utilizat pentru a evalua performanța furnizorilor pe baza unor criterii stabilite, inclusiv calitate, livrare și costuri. Datele sunt analizați la fiecare revizuire semestrială pentru a asigura respectarea criteriilor de selecție.
+
+## Appendix B – Foaie de evaluare KPI (continuare)
+
+7. **KPI pentru evaluarea satisfacției clienților**  
+Acest KPI măsoară nivelul de satisfacție al clienților prin sondaje și feedback, oferind o indicatie asupra percepției acestora față de produsele și serviciile oferite de PlastiAuto SRL.
+
+8. **KPI pentru eficiența procesului de producție**  
+Acest indicator evaluează eficiența proceselor de producție prin raportarea costurilor de producție față de volumul de produse realizate, ajutând la identificarea potențialelor zone de reducere a costurilor.
+
+## Appendix C – Liste de verificare pentru audit (continuare)
+
+7. **Lista de verificare pentru auditul de gestionare a documentelor**  
+Această listă evaluează conformitatea sistemului de gestionare a documentelor cu cerințele standardului IATF 16949, inclusiv accesibilitatea, actualizarea și păstrarea documentației.
+
+8. **Lista de verificare pentru auditul de formare și competențe**  
+Focustă pe competențele angajaților, această listă se asigură că tot personalul este instruit corespunzător în conformitate cu cerințele locului de muncă și a standardelor de calitate.
+
+## Appendix D – Fluxul de escaladare (continuare)
+
+9. **Documentarea soluției**  
+Pentru fiecare problemă escaladată, soluția adoptată este documentată în detail, incluzând procedurile urmate, persoanele implicate și rezultatele obținute. Această documentație servește ca bază de învățare pentru viitoare inițiative.
+
+10. **Reevaluarea procesului**  
+După finalizarea soluției, procesul este reevaluat pentru a determina eficiența măsurilor implementate și pentru a identifica și alte zone care ar putea beneficia de îmbunătățiri suplimentare. Rapoartele rezultate sunt discutate în cadrul întâlnirilor de management.
+
+Prin consolidarea continuă a proceselor interne și a evaluării periodice a furnizorilor, PlastiAuto SRL se angajează să îmbunătățească constant performanța generală a organizației și satisfacția clientului. Această abordare asigură nu doar respectarea standardului IATF 16949, ci și menținerea unei bune relații cu partenerii de afaceri, cum ar fi AutoCorp GmbH, demonstrând astfel angajamentul PlastiAuto SRL față de excelența calității.
+
+=== METADATA ===
+doc_id: MC-01-S8-rev6
+industry: automotive
+doc_type: long
+language: ro
+standard: IATF 16949
+contradiction: C03
+save_path: data/automotive/long/MC-01-S8-rev6.txt
+save_command: python manage_corpus.py save --file MC-01-S8-rev6.txt --name MC-01-S8-rev6 --industry automotive --lang ro
+================

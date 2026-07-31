@@ -29,12 +29,13 @@ The graph is not a RAG index. It is a formally modeled knowledge base:
 | **Domain ontologies** | Config-driven domain overlays (see `config/ontologies/aerospace_regulatory.yml`) — extend type hierarchy and relation schema without code changes; `generate_synthetic_ontology.py` benchmarks at 500 types, 170k relations/sec |
 
 **Further reading:**
+- [`docs/roadmap.md`](docs/roadmap.md) — current implementation status, Context Graph evaluation gate, and scaling path
+- [`docs/adr/ADR-Context-Graph-Decision-Trace.md`](docs/adr/ADR-Context-Graph-Decision-Trace.md) — decision trace, manifest, governance, and integrity contract
 - [`docs/knowledge-graph-architecture.md`](docs/knowledge-graph-architecture.md) — architectural decisions, data model, LLM routing, cross-process result store
 - [`docs/ontology-model.md`](docs/ontology-model.md) — formal type hierarchy, relation schema, inference rules, design decisions
 - [`docs/entity-resolution.md`](docs/entity-resolution.md) — 4-stage resolution pipeline with examples
 - [`docs/cypher-patterns.md`](docs/cypher-patterns.md) — 6 production Cypher patterns: multi-hop traversal, bitemporal as-of, transitive supersession, contradiction scan, community ANN search, entity resolution audit
 - [`docs/runbook.md`](docs/runbook.md) — operations: startup order, common failures, backup/restore, schema migration
-- [`docs/roadmap.md`](docs/roadmap.md) — current state, scaling limits, near/medium/long-term roadmap
 - [`docs/graphrag-terminology.md`](docs/graphrag-terminology.md) — every GraphRAG term defined, with examples and file references
 - [`docs/performance-metrics-inventory.md`](docs/performance-metrics-inventory.md) — all 16 metrics (KPI events, graph health, calibration, retrieval stages); storage, access, interpretation, pitch guidance
 - [`docs/defensibility-drill.md`](docs/defensibility-drill.md) — 15 hard CTO questions with model answers; preparation checklist
@@ -60,6 +61,26 @@ Runs a 6-step aerospace regulatory workflow end-to-end — ontology loading, dom
 python scripts/demo_regulatory.py --live
 ```
 Ingests two genuinely conflicting documents, runs the real inference engine, and lets the contradiction detector find the IS_AIRWORTHY / IS_UNAIRWORTHY conflict. Data persists in Neo4j — query it in the browser at `http://localhost:7474`.
+
+---
+
+## Context Graph Layer
+
+The platform now includes the P0 foundation for a tenant-scoped Context Graph.
+It persists `CGCase`, `CGAgentRun`, `CGToolCall`, `CGObservation`,
+`CGContextManifest`, `CGDecision`, `CGOption`, `CGPolicyVersion`, and
+`CGPolicyEvaluation` in Neo4j.
+
+Available under `/context-graph`:
+
+- trace creation and validation;
+- immutable manifest persistence with deterministic SHA-256 integrity hashing;
+- the WPP marketing campaign-placement governed decision flow.
+
+The Context Graph stores structured evidence and rationale only; hidden
+chain-of-thought is not persisted. P1 replay/governance, P2
+outcomes/precedents, and P3 proactive intelligence contracts are implemented;
+live Neo4j and corpus validation remain the release gate.
 
 ---
 
@@ -99,8 +120,8 @@ Ingests two genuinely conflicting documents, runs the real inference engine, and
                   └────────────────────────────────────────────┘
                                        │
                   ┌────────────────────▼───────────────────────┐
-                  │           TimescaleDB  :5432                │
-                  │              KPI Events Store               │
+                  │     Optional TimescaleDB  :5432            │
+                  │       KPI Events Store (SQLite default)    │
                   └────────────────────────────────────────────┘
                                        │
                   ┌────────────────────▼───────────────────────┐
@@ -143,6 +164,8 @@ Ingests two genuinely conflicting documents, runs the real inference engine, and
 | **Worker health probes** | `GET /ready` + `GET /live` on each worker (`WORKER_HEALTH_PORT`); aiohttp server in `graphrag/workers/health_server.py`; compose.dev.yaml and Kubernetes readiness probes use `/ready` |
 | **Structured DLQ** | Failed messages carry `exception_type`, `error`, `retry_count`, `queue`, `message_id`, `payload_summary` — full JSON envelope for automated triage |
 | **Async pipeline** | RabbitMQ decouples ingestion, query, and evaluation workers with structured DLQ; `compose.dev.yaml` starts the full stack in one command |
+| **Context Graph P0** | Tenant-scoped cases, agent runs, tool observations, manifests, policy evaluations, options, and decisions under `/context-graph` |
+| **Multimodal provenance** | Media attachments plus OCR, transcript, caption, and visual-embedding transformation links; media bytes remain in object storage |
 
 ---
 
@@ -198,7 +221,7 @@ The cross-encoder scores text similarity. It doesn't know that *Falcon 9* and *S
 | Graph DB | Neo4j 5.20 |
 | Session Store | Redis 7 |
 | Message Queue | RabbitMQ 3.13 |
-| KPI Store | TimescaleDB (PostgreSQL 16) |
+| KPI Store | SQLite by default; optional TimescaleDB via `KPI_BACKEND=timescale` |
 | Embeddings | `text-embedding-3-large` (3072d) via OpenAI |
 | LLM | DeepSeek `deepseek-v4-pro` (primary generation, via `get_llm()`) + Groq `llama-3.1-8b-instant` (fast routing, via `get_fast_llm()`; also available as opt-in dev override for generation) |
 | Reranker | `cross-encoder/ms-marco-MiniLM-L-6-v2` (sentence-transformers) |
@@ -324,7 +347,7 @@ Full end-to-end test completed 2026-03-21 (updated 2026-05-31 with Groq integrat
 
 | Step | Component | Result |
 |------|-----------|--------|
-| Infrastructure | Neo4j + RabbitMQ + TimescaleDB + Redis | ✅ Healthy |
+| Infrastructure | Neo4j + RabbitMQ + Redis; optional TimescaleDB | ✅ Core stack healthy; TimescaleDB deployment-specific |
 | API | FastAPI + OAuth + lifespan hook | ✅ Running on :8000 |
 | Ingestion | doc → chunk → embed (OpenAI text-embedding-3-large 3072d) → extract (DeepSeek default; Groq opt-in dev override) → graph | ✅ |
 | Schema | Vector indexes + BM25 fulltext indexes (6 total, all ONLINE) | ✅ |
@@ -334,7 +357,7 @@ Full end-to-end test completed 2026-03-21 (updated 2026-05-31 with Groq integrat
 | GNN scoring | GAT 2-layer; α=0.9 text + β=0.1 graph | ✅ |
 | Answer synthesis | DeepSeek (`get_llm()` default); citations included | ✅ |
 | Session context | Redis-backed; turn recorded after answer | ✅ |
-| RAGAS | 20% sampling; metrics stored in TimescaleDB | ✅ |
+| RAGAS | 20% sampling; metrics stored in the configured KPI backend | ✅ |
 | Dashboard | Live KPI charts at /dashboard/ | ✅ |
 
 ---
@@ -383,8 +406,9 @@ RABBITMQ_URL=amqp://graphrag:graphrag_dev@localhost:5672/
 # Redis (session context + cross-process query results)
 REDIS_URL=redis://localhost:6379/0
 
-# TimescaleDB
-TIMESCALE_URL=postgresql+asyncpg://graphrag:graphrag_dev@localhost:5432/graphrag_kpis
+# Optional TimescaleDB KPI backend (SQLite is the default)
+KPI_BACKEND=timescale
+TIMESCALE_DB_URL=postgresql+asyncpg://graphrag:graphrag_dev@localhost:5432/graphrag_kpis
 
 # OAuth 2.0
 JWT_SECRET_KEY=<run: python -c "import secrets; print(secrets.token_hex(32))">
@@ -791,8 +815,9 @@ uvicorn api.main:app                              # → http://localhost:8000/ad
 
 ### Business Matrix — `/dashboard/`
 
-Query-level KPIs from the local SQLite store: status-coloured tiles (queries, avg/p95
-latency, faithfulness, context recall) + branded metric trend with alert threshold.
+Query-level KPIs from the configured store (SQLite by default; optional TimescaleDB):
+status-coloured tiles (queries, avg/p95 latency, faithfulness, context recall) plus
+a branded metric trend with alert threshold.
 
 ```bash
 python graphrag/business_matrix/dashboard_server.py   # → http://localhost:8050/dashboard/

@@ -86,6 +86,7 @@ class Relation(BaseModel):
     relation: str
     weight: float = 1.0
     confidence: float = 1.0
+    confidence_state: str = "ASSERTED"  # ASSERTED | INFERRED | DISPUTED | RETRACTED | APPROVED
     extracted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source_chunk_id: str = ""
     source_doc_id: str = ""

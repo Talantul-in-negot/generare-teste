@@ -1,0 +1,60 @@
+# FISA DE PROCES
+
+## 1. HEADER
+**Cod:** FP-INJ-03  
+**Titlu:** Procesul de Injecție Plastică  
+**Revizie:** 01  
+**Data:** 01.10.2023  
+**Responsabil:** Ing. Ion Popescu  
+
+## 2. SCOP SI DOMENIU
+Scopul acestui document este de a descrie procesul de injecție plastică utilizat în cadrul companiei PlastiAuto SRL pentru a satisface cerințele clientului AutoCorp GmbH. Procesul se aplică tuturor activităților legate de producția componentelor plastice destinate industriei auto.
+
+## 3. REFERINTE DOCUMENTE
+1. **PDU-001** - Procedură pentru gestionarea documentelor, Revizii 02  
+2. **MPR-002** - Manualul de Proceduri, Revizia 01  
+3. **FMEA-003** - Analiza Modului și Efectului de Cercetare, Revizia 03  
+4. **PPAP-004** - Planul de aprobat al pieselor, Revizia 01  
+5. **C02** - Auditul on-site la sediul furnizorului este OBLIGATORIU și trebuie finalizat înainte de orice aprobat al unui furnizor nou.
+
+## 4. DESCRIERE PROCES
+1. **Primirea materialelor**: Verificarea cantității și calității materialelor plastice conforme cu specificațiile tehnice primite de la AutoCorp GmbH.
+2. **Prepararea materialelor**: Adecvarea materialului prin spălare, uscare și măcinare, după necesitate.
+3. **Configurarea mașinilor**: Setarea parametrilor de injecție pe mașinile de injectat, conform specificațiilor tehnice și validării anterioare.
+4. **Injecția preformelor**: Realizarea injecției plastice, monitorizată prin SPC (Statistical Process Control) pentru a asigura calitatea procesului.
+5. **Răcirea pieselor**: Perioada de răcire este gestionată pentru a permite solidificarea corectă a pieselor injectate.
+6. **Verificarea calității**: Efectuarea controlului calității pieselor rezultate, inclusiv teste MSA (Measurement System Analysis) și verificări de conformitate cu FAI (First Article Inspection).
+7. **Ambalarea**: Piesele aprobate sunt ambalate conform cerințelor clientului pentru a preveni deteriorarea în timpul transportului.
+8. **Livrarea**: Piesele sunt livrate către AutoCorp GmbH, în conformitate cu programul stabilit, inclusiv documentația necesară.
+
+## 5. PARAMETRI DE CONTROL
+| Parametru         | Target                    | Limite                     | Frecvență             |
+|--------------------|---------------------------|----------------------------|-----------------------|
+| Presiune Injecție  | 700 - 800 bar             | < 700 bar / > 800 bar     | La fiecare ciclu      |
+| Temperatură        | 220 ± 5°C                 | < 215°C / > 225°C         | La fiecare ciclu      |
+| Timp de Răcire     | 30 - 40 secunde           | < 30 sec / > 40 sec       | La fiecare ciclu      |
+| Control Dimensiune  | ± 0.02 mm                 | < -0.02 mm / > +0.02 mm   | La fiecare 10 piese   |
+| Teste de calificare | 100% conformitate         | -                          | La fiecare lot        |
+
+## 6. INREGISTRARI GENERATE
+- Raportul de recepție a materialelor.
+- Fișa de configurare a mașinilor.
+- Raportul de verificare a calității produsului finit.
+- Dovada de ambalare.
+- Documentația de livrare.
+
+## 7. ISTORIC REVIZII
+1. **Revizia 01** - Document creat, data: 01.10.2023
+2. **Revizia 00** - Document inițial, data: n/a
+3. **Revizia 00** - Document creat, data: n/a
+
+=== METADATA ===
+doc_id: FP-INJ-03
+industry: automotive
+doc_type: short
+language: ro
+standard: IATF 16949
+contradiction: C02
+save_path: data/automotive/short/FP-INJ-03.txt
+save_command: python manage_corpus.py save --file FP-INJ-03.txt --name FP-INJ-03 --industry automotive --lang ro
+================
