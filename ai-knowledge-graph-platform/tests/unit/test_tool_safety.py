@@ -131,7 +131,9 @@ class TestUnsafeToolDenied:
         assert "gdpr_officer" in result.detail
 
     def test_high_risk_tool_allowed_with_full_scopes(self):
-        p = _make_policy(scopes=["read", "write", "ingest"])
+        # A149: write/restricted tools also require an explicit tenant:
+        # scope now — "full scopes" here means read+write+ingest+tenant.
+        p = _make_policy(scopes=["read", "write", "ingest", "tenant:aerospace"])
         result = asyncio.run(p.call(
             "ingest_document",
             {"entity_name": "doc_001", "entity_type": "Document",
@@ -141,7 +143,7 @@ class TestUnsafeToolDenied:
         assert result.get("status") == "done"
 
     def test_erase_allowed_with_full_scopes(self):
-        p = _make_policy(scopes=["write", "admin", "gdpr_officer"])
+        p = _make_policy(scopes=["write", "admin", "gdpr_officer", "tenant:aerospace"])
         result = asyncio.run(p.call(
             "erase_entity",
             {"entity_name": "Boeing", "entity_type": "ORG",
@@ -243,15 +245,42 @@ class TestCrossTenantDenied:
         ))
         assert isinstance(result, dict)
 
-    def test_no_tenant_scope_passes_all_tenants(self):
-        """When caller has no tenant: scope, no cross-tenant check is applied."""
+    def test_no_tenant_scope_denied(self):
+        """A caller with no tenant: scope at all must be denied on any tool
+        that accepts a `tenant` argument (A149) — there is no "unscoped =
+        all tenants" tier for tools that can write or destroy data. Prior
+        behavior (silently trusting whatever tenant the caller claimed) was
+        a real gap if this caller were ever an LLM agent rather than a
+        human/ops process."""
         p = _make_policy(scopes=["read", "write", "ingest"])
         result = asyncio.run(p.call(
             "ingest_document",
             {"entity_name": "Goldman", "entity_type": "ORG",
              "tenant": "banking", "doc_type": "internal"},
         ))
+        assert isinstance(result, DeniedAction)
+        assert result.reason == "invalid_arg"
+        assert "tenant scope" in result.detail
+
+    def test_tenant_scoped_caller_still_allowed_for_own_tenant(self):
+        """Regression guard: a caller WITH a tenant: scope keeps working
+        exactly as before — this fix only closes the no-scope-at-all gap,
+        it doesn't touch the existing scope-mismatch path."""
+        p = _make_policy(scopes=["read", "write", "ingest", "tenant:aerospace"])
+        result = asyncio.run(p.call(
+            "ingest_document",
+            {"entity_name": "FAA", "entity_type": "REGULATOR",
+             "tenant": "aerospace", "doc_type": "regulatory"},
+        ))
         assert isinstance(result, dict)
+
+        denied = asyncio.run(p.call(
+            "ingest_document",
+            {"entity_name": "Goldman", "entity_type": "ORG",
+             "tenant": "banking", "doc_type": "internal"},
+        ))
+        assert isinstance(denied, DeniedAction)
+        assert "cross-tenant" in denied.detail
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -282,7 +311,10 @@ class TestInvalidArgsDenied:
 
     def test_bad_enum_value_denied(self):
         """doc_type must be one of the allowed set."""
-        p = _make_policy(scopes=["read", "write", "ingest"])
+        # tenant: scope granted so the A149 tenant-scope check (which runs
+        # earlier in the same arg_schema loop) doesn't short-circuit before
+        # reaching the doc_type enum check this test is actually about.
+        p = _make_policy(scopes=["read", "write", "ingest", "tenant:aerospace"])
         result = asyncio.run(p.call(
             "ingest_document",
             {"entity_name": "FAA", "entity_type": "ORG",
@@ -511,7 +543,11 @@ class TestTenantForcedForSchemalessTools:
             tools=[ToolSpec("write_probe", _capture, scopes=["write"], risk="high",
                              arg_schema={"entity_name": {"type": str, "required": True},
                                          "tenant": {"type": str, "required": True}})],
-            caller_scopes=["write"],
+            # A149: write-shaped tools require an explicit tenant: scope —
+            # granted for aerospace here so the call reaches execution and
+            # this test can assert on the value the function actually
+            # received (the point of this test).
+            caller_scopes=["write", "tenant:aerospace"],
         )
         await p.call("write_probe", {"entity_name": "Boeing", "tenant": "aerospace"},
                       tenant="unrelated-call-tenant")

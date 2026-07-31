@@ -5457,3 +5457,63 @@ multiplier at larger `top_k`, same two-case shape as A146's tests) and 2 in
 in both methods' Cypher, and that the old `, 5, `/`, 10, ` literal is
 gone — a regression guard on the query text, not just the parameter dict).
 Full suite: 644 passed, 0 failed.
+
+## A149 — Closing the tenant-isolation thread (A146→A149): a "no tenant scope" escape hatch that was deliberately tested, not accidental — closed anyway because it's unsafe the moment an LLM agent holds those scopes
+
+Last item from the tenant-isolation investigation started at A146.
+`ToolPolicy._validate_args` (`graphrag/agents/tool_policy.py`) has a
+cross-tenant guard: for any tool whose `arg_schema` declares `tenant`
+(today the write/restricted tools — `ingest_document`, `quarantine_entity`,
+`erase_entity`), if the caller's `caller_scopes` include a `tenant:X`
+marker, agent-supplied `args["tenant"]` must be in that set or the call is
+denied. Direct read confirmed this check **only fires when the caller
+holds at least one `tenant:` scope** — with zero, it silently no-oped and
+trusted whatever tenant the agent claimed.
+
+**This one wasn't a bug hiding in plain sight — it was a documented,
+deliberately tested design choice.** `test_no_tenant_scope_passes_all_tenants`
+existed specifically to assert this behavior: an unscoped-by-tenant caller
+could act on any tenant. That's legitimate for a genuinely trusted,
+non-agent caller (an ops script, a human admin operating across all
+tenants) — the actual risk is narrower than "the mechanism has a hole":
+it's that the same `caller_scopes` set, if ever handed to an LLM agent
+instead of a human/ops process, gives a prompt-injected agent unrestricted
+write/erase power across every tenant. Worth naming as its own small
+lesson: not every finding in a security investigation is a mistake to
+fix silently — this one required surfacing the tradeoff to the user
+(AskUserQuestion) before touching it, because closing it means reversing
+tested, intentional behavior, not just patching an oversight.
+
+**A design option considered and rejected**: forcing
+`args["tenant"] == ToolPolicy.call()`'s own `tenant` parameter — the same
+pattern A147 used for read tools. Looked consistent on paper, but broke
+`test_same_tenant_allowed`, which deliberately calls `.call()` without a
+`tenant=` kwarg at all and relies purely on scope-based validation — a
+second, equally-legitimate calling convention already exercised in the
+same test suite. Adopting it would have silently narrowed a real,
+in-use API contract rather than fixing the actual gap. Chose the narrower,
+correct fix instead: deny outright when a tool's schema declares `tenant`
+and the caller holds **zero** `tenant:X` scopes — no third "unscoped =
+superuser" tier for tools that can write or destroy data.
+
+**Fix**: in `_validate_args`, folded the old `if ... and self._scopes:`
+short-circuit into an explicit deny-if-empty branch, right next to the
+existing mismatch check it's closing a gap beside — same loop, same
+`arg_name == "tenant"` guard, no new branch structure.
+
+**Collateral, expected and fixed**: four existing tests (including one of
+my own from A147) implicitly relied on the old permissive behavior without
+being *about* it — two "full scopes → allowed" tests, one enum-validation
+test whose expected denial reason got shadowed by the new earlier-firing
+tenant check (dict iteration order over `arg_schema` matters here — tenant
+is declared before `doc_type` in `ingest_document`'s schema), and my own
+`test_schema_declared_tenant_tool_keeps_agent_supplied_value` test. All
+four fixed by granting a `tenant:X` scope so they reach the behavior they
+were actually testing — not evidence the fix was wrong, just the expected
+shape of tightening a permissive default.
+
+Tests: `test_no_tenant_scope_passes_all_tenants` renamed to
+`test_no_tenant_scope_denied` and flipped (asserts `DeniedAction`, not
+success); added `test_tenant_scoped_caller_still_allowed_for_own_tenant`
+as an explicit regression guard that the unchanged mismatch path still
+works. Full suite: 645 passed, 0 failed.

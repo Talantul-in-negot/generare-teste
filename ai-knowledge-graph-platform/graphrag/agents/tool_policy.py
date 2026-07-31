@@ -255,16 +255,25 @@ class ToolPolicy:
                 return f"argument '{arg_name}' exceeds maximum {rule['max']}"
             if "min" in rule and isinstance(value, (int, float)) and value < rule["min"]:
                 return f"argument '{arg_name}' below minimum {rule['min']}"
-            # Tenant cross-access guard: if an argument is named 'tenant' and the
-            # caller's tenant is known, reject calls that reference a different one.
-            if arg_name == "tenant" and value and self._scopes:
-                # Scopes carry tenant context as "tenant:<name>"; if present, enforce
+            # Tenant cross-access guard: any tool whose schema declares a
+            # 'tenant' argument lets the caller name a target tenant to
+            # write/erase — the caller must hold an explicit tenant:<name>
+            # scope for at least one tenant. No "unscoped = all tenants"
+            # tier for tools that can write or destroy data: without this,
+            # a caller granted write/admin scopes but no tenant: scope
+            # would be trusted on whatever tenant it claims in args, which
+            # is unsafe the moment that caller is an LLM agent rather than
+            # a human/ops process. See tasks/lessons.md A149.
+            if arg_name == "tenant" and value:
                 tenant_scopes = [s for s in self._scopes if s.startswith("tenant:")]
-                if tenant_scopes:
-                    allowed_tenants = [s.split(":", 1)[1] for s in tenant_scopes]
-                    if value not in allowed_tenants:
-                        return (f"cross-tenant access denied: caller tenant(s) "
-                                f"{allowed_tenants} cannot access tenant '{value}'")
+                if not tenant_scopes:
+                    return (f"no tenant scope granted — tools that accept a "
+                            f"'tenant' argument require an explicit "
+                            f"tenant:<name> scope")
+                allowed_tenants = [s.split(":", 1)[1] for s in tenant_scopes]
+                if value not in allowed_tenants:
+                    return (f"cross-tenant access denied: caller tenant(s) "
+                            f"{allowed_tenants} cannot access tenant '{value}'")
         return None
 
     # ── Factory ────────────────────────────────────────────────────────────────
