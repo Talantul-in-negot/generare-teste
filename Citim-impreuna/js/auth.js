@@ -112,5 +112,13 @@ const Auth = (() => {
     }
   }
 
-  return { init, signIn, signUp, signOut, currentUser, isLoggedIn, getAccessToken };
+  // uid-ul Supabase (auth.uid()) al utilizatorului logat — trimis explicit la
+  // scrierile din events/scores, pentru că DEFAULT auth.uid() pe coloană nu
+  // se completează fiabil la inserare (confirmat empiric); politicile RLS
+  // verifică user_id = auth.uid(), deci fără el scrisul e respins mereu (403).
+  function getUserId() {
+    return _session?.user?.id || null;
+  }
+
+  return { init, signIn, signUp, signOut, currentUser, isLoggedIn, getAccessToken, getUserId };
 })();

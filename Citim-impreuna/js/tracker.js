@@ -60,6 +60,11 @@ const Tracker = (() => {
     if (batch.length === 0) return;
     flushing = true;
     let sent = false;
+    // user_id trimis explicit — DEFAULT auth.uid() pe coloană nu se completează
+    // fiabil la inserare (RLS respinge scrierea, 42501, chiar dacă auth.uid()
+    // e corect peste tot altundeva); politica cere user_id = auth.uid().
+    const userId = typeof Auth !== "undefined" && Auth.getUserId ? Auth.getUserId() : null;
+    const payload = batch.map((evt) => ({ ...evt, user_id: userId }));
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/events`, {
         method: "POST",
@@ -67,7 +72,7 @@ const Tracker = (() => {
           "Content-Type": "application/json",
           Prefer: "return=minimal",
         }),
-        body: JSON.stringify(batch),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         // golește doar ce s-a trimis; evenimente sosite între timp rămân în coadă
@@ -152,6 +157,8 @@ const Tracker = (() => {
   async function upsertScore(userName, points) {
     if (!enabled || !userName) return;
     try {
+      // user_id trimis explicit — vezi explicația din flush() mai sus.
+      const userId = typeof Auth !== "undefined" && Auth.getUserId ? Auth.getUserId() : null;
       await fetch(`${SUPABASE_URL}/rest/v1/scores`, {
         method: "POST",
         headers: await authHeaders({
@@ -159,7 +166,7 @@ const Tracker = (() => {
           Prefer: "resolution=merge-duplicates,return=minimal",
         }),
         body: JSON.stringify([
-          { user_name: userName, points, updated_at: new Date().toISOString() },
+          { user_name: userName, points, user_id: userId, updated_at: new Date().toISOString() },
         ]),
       });
     } catch {
