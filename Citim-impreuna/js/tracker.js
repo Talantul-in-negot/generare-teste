@@ -152,22 +152,22 @@ const Tracker = (() => {
   }
 
   // Scrie scorul canonic al utilizatorului (calculat de client cu
-  // computePointsForUser) în tabelul `scores`. Upsert pe cheia user_name.
+  // computePointsForUser) în tabelul `scores`, via funcția RPC
+  // upsert_own_score — un simplu upsert direct pe tabel (INSERT ... ON
+  // CONFLICT DO UPDATE) eșua mereu sub RLS (bug confirmat empiric: WITH
+  // CHECK-ul politicii de INSERT nu trece pe ramura de conflict/UPDATE,
+  // deși valorile sunt identic corecte); funcția face upsert-ul intern,
+  // cu propria verificare de proprietate (user_id = auth.uid()).
   // Fire-and-forget: eșecul nu blochează jocul.
   async function upsertScore(userName, points) {
     if (!enabled || !userName) return;
     try {
-      // user_id trimis explicit — vezi explicația din flush() mai sus.
-      const userId = typeof Auth !== "undefined" && Auth.getUserId ? Auth.getUserId() : null;
-      await fetch(`${SUPABASE_URL}/rest/v1/scores`, {
+      await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_own_score`, {
         method: "POST",
         headers: await authHeaders({
           "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates,return=minimal",
         }),
-        body: JSON.stringify([
-          { user_name: userName, points, user_id: userId, updated_at: new Date().toISOString() },
-        ]),
+        body: JSON.stringify({ p_user_name: userName, p_points: points }),
       });
     } catch {
       // offline sau tabel lipsă — se reîncearcă la următoarea schimbare de scor
