@@ -1,234 +1,137 @@
-# Context Graph — E2E Video Script
+# Context Graph - Live Retrieval Video Script
 
-> **Runtime:** 3:00–3:30  
-> **Scenario:** determine whether a governed business action is allowed  
-> **Audience:** product, data governance, and AI architecture stakeholders  
-> **Tone:** cinematic, precise, quietly confident
+> **Runtime:** 4:01 in the current capture
+> **Scenario:** WPP marketing retrieval with an unresolved policy conflict
+> **Audience:** engineering, product, governance, and AI architecture stakeholders
+> **Source:** live `HybridRetriever.retrieve_and_answer()` execution on tenant `marketing`
 
-This section is designed to drop into any domain demo after the knowledge graph
-and retrieval scenes. The WPP campaign-placement scenario is the reference
-example, but the same script works for automotive quality, aerospace compliance,
-privacy, or financial policy decisions. It demonstrates the Context Graph as the
-memory of a governed decision, not as another search screen.
+This movie is generated from `docs/presentation/context_graph_movie_trace.json`. The
+trace is created by the live retrieval path with a stable query ID, a second
+identical request proves the governed Redis answer cache, then the trace is
+loaded back through `ContextGraphRepository` using the tenant-scoped API shape.
 
-## Before Recording
+## Captured Run
 
-Open these tabs:
+- Question: Is the Nova Beverages EU Q3 campaign placement alongside sports-betting app promotional content allowed under the applicable privacy policy and campaign rules?
+- Cold query ID: `movie-live-wpp-20260801-v4`
+- Repeat query ID: `movie-live-wpp-20260801-v4-repeat`
+- Retrieval mode selected by the planner: `local`
+- Model returned by the live configuration: `llama-3.1-8b-instant`
+- Evidence: 14 chunks from 4 documents
+- Citations: Brand Guideline, Campaign Brief, Data Privacy Policy, and SOW
+- Result: the privacy policy does not address sports-betting placements; SOW and campaign adjacency rules conflict
+- Context Graph trace: `decision-query-aa6086b8b66cb06cd5a2`
+- Manifest hash: `7cfa3b3e50bd46c7c33214073ae31c578aecfb72c1bc0cdbc2da76e826d0c9fc`
+- Cache proof: the repeat query gets a new query ID, `cache_hit=true`, and points back to the cold trace
+- Local timing in this capture: cold run `29,312 ms`; cache hit `<1 ms`
+- Cache key tail shown on screen: `...2ee57394aaed6c7eec75`
 
-1. The domain demo UI at `http://localhost:8000/demo`.
-2. Neo4j Browser at `http://localhost:7474`.
-3. The generated movie at `docs/presentation/context_graph_e2e_narrated.mp4`.
-4. The Context Graph API documentation or trace response.
+## Scene 0 - Live Retrieval Starts with Indexed Evidence [0:00-0:20]
 
-Have the following data ready in the selected tenant:
+**Screen:** A real tenant snapshot: four documents, 24 chunks, 66 entities, 51 edges, and zero open conflicts from Neo4j. Show the query request identity and the retrieval mode returned by the live result.
 
-- A domain document statement describing the proposed action.
-- A policy statement describing the controlling restriction.
-- The applicable policy version, for example `privacy-v4.2`.
-- Three options: allow, deny, escalate for human review.
-- One completed trace with a manifest hash and linked observations.
-
-Do not display API keys, hidden chain-of-thought, or fabricated live counts.
-
-## Scene 0 — Ingestion Completes the Workflow [0:00–0:25]
-
-**On screen:** A short, pre-recorded terminal segment showing the real repository
-ingestion command completing. Keep the final file and chunk summary visible, but
-do not show configuration or environment values.
-
-```powershell
-python scripts/ingest_corpus.py --tenant marketing --commit
-```
+**Action:** Hold the tenant snapshot still, then reveal the request identity and retrieval mode. Use the generated frame `scene_01.png`; do not animate the screenshot itself.
 
 **Voiceover:**
 
-> "The workflow starts before the question. Documents enter the knowledge graph
-> through the ingestion pipeline. The pipeline chunks source material, extracts
-> entities and relationships, creates embeddings, and preserves document and
-> chunk identity so later retrieval can verify exactly where an answer came from."
+> "The live request starts from an already indexed tenant. Marketing contains four documents and twenty-four chunks. The query enters the same retrieval path used by the application, with no hand-selected evidence in the movie."
 
-**Action:** Show the terminal completion summary and a final document/chunk count.
-Then transition from the Knowledge Graph evidence layer into the Context Graph
-decision layer.
+## Scene 1 - The Question Enters the API [0:20-0:40]
 
-**Accuracy note:** The GitHub command `python -m app.ingest ... --subdir` is not
-an entry point in this repository. Use the repository command above, or show an
-equivalent local corpus ingestion recording.
+**Screen:** Show the exact question, tenant, stable query ID, and completed response state.
 
-## Scene 1 — The Question Becomes a Case [0:25–0:50]
-
-**On screen:** Domain title card. Fade into the governed-action question.
+**Action:** Reveal the question first, then the tenant and cold query ID `movie-live-wpp-20260801-v4`. Keep the completed response state visible through the transition.
 
 **Voiceover:**
 
-> "A normal RAG answer ends when the model returns text. In a governed
-> environment, that is where the important part begins. We start with a case:
-> determine whether this action is allowed under the current policy."
+> "The question asks whether a Nova Beverages EU Q3 placement beside sports-betting promotional content is allowed. The application assigns a stable query identity so the answer and its decision trace can be found again."
 
-**Action:** Enter or reveal the question in the domain demo UI. Show the tenant
-and case identifier. Do not pause on raw prompt text.
+## Scene 2 - Retrieval Captures Its Evidence [0:40-1:05]
 
-## Scene 2 — The Agent Run Is Captured [0:50–1:15]
+**Screen:** Show all four document filenames flowing into the manifest: Campaign Brief, Statement of Work, Data Privacy Policy, and Brand Guideline. Show 14 chunks and three answer citations.
 
-**On screen:** Transition from the answer UI to the Context Graph movie or a
-Neo4j view showing `CGCase` connected to `CGAgentRun`.
+**Action:** Highlight the four document cards, then the 14-chunk count and the three citations returned by the live response. Do not imply that the movie manually selected these sources.
 
 **Voiceover:**
 
-> "The system opens a durable case and starts an agent run. This gives the
-> request an identity, a tenant boundary, and a lifecycle. The run can now be
-> connected to the context it used, the tools it called, and the decision it
-> eventually produced."
+> "The live retriever returns the exact chunks behind the answer. They include the Campaign Brief, the Statement of Work, the Data Privacy Policy, and the global Brand Guideline. Their document lineage is captured in the Context Graph manifest."
 
-**Action:** Highlight:
+## Scene 3 - The Graph Expands and Reranks Context [1:05-1:30]
 
-```text
-CGAgentRun -[:ADDRESSES]-> CGCase
-```
+**Screen:** Show the actual stages reported by the live retrieval path: planner selects local mode, lexical and vector search, two-hop graph expansion, GNN scoring, and cross-encoder reranking.
 
-Show status moving from `running` to `completed` only later in the story.
-
-## Scene 3 — Evidence Is Assembled [1:15–1:45]
-
-**On screen:** Show the Campaign Brief and Data Privacy Policy flowing into a
-manifest. Animate statement, chunk, and document nodes joining the graph.
+**Action:** Reveal the stages from left to right and finish on the ranked evidence set. Keep the retrieval configuration readable long enough to establish that it came from the captured manifest.
 
 **Voiceover:**
 
-> "Retrieval finds the evidence: the source document, the policy statement, and
-> the exact document and chunk versions behind them. The Context Graph records
-> those references explicitly. It does not merely say that the model searched;
-> it records what was available to the model at decision time."
+> "The planner selects local retrieval for this fact question. The path then applies vector and lexical search, two-hop graph expansion, GNN scoring, and reranking. The manifest records the retrieval mode and configuration used for this run."
 
-**Action:** Highlight:
+## Scene 4 - The API Returns a Grounded Answer [1:30-2:00]
 
-```text
-CGContextManifest -[:INCLUDED_STATEMENT]-> Statement
-CGContextManifest -[:INCLUDED_CHUNK]-> Chunk
-CGContextManifest -[:INCLUDED_DOCUMENT]-> Document
-```
+**Screen:** Show the exact returned answer, citations, model version, retrieval mode, and measured latency. Do not paraphrase the answer on screen.
 
-Call out provenance, valid-time, transaction-time, ontology version, retrieval
-mode, and model/prompt version in the manifest panel.
-
-## Scene 4 — The Manifest Locks the Moment [1:45–2:10]
-
-**On screen:** Zoom into the manifest. Reveal the SHA-256 hash resolving from
-the canonical serialized content.
+**Action:** Show the answer response first, then mark the conflicting SOW and Campaign Brief passages. Keep `llama-3.1-8b-instant`, `local`, and the cold latency visible as response metadata.
 
 **Voiceover:**
 
-> "This is the key difference between context and a loose conversation log.
-> The manifest captures the inference moment: evidence, policy versions,
-> retrieval configuration, model version, prompt version, temporal boundaries,
-> and tool observations. Its canonical content produces an integrity hash.
-> Reconstruct the same context, and the hash must match. Change a material
-> input, and it must not."
+> "The answer does not hide the conflict. The Statement of Work excludes gambling and sports-betting placements, while the Campaign Brief lists a sports-betting companion-app adjacency. Because the privacy provisions are not present in the retrieved context, the system says that permissibility cannot be determined."
 
-**Action:** Show a compact manifest summary, then animate:
+## Scene 5 - The Manifest Locks the Inference Moment [2:00-2:25]
 
-```text
-manifest content -> canonical JSON -> SHA-256 -> integrity_hash
-```
+**Screen:** Show manifest fields from the trace: tenant, model, prompt, retrieval mode, ontology, `corpus_revision`, `cache_schema_version`, evidence counts, canonical JSON byte count, the SHA-256 integrity hash, and `INTEGRITY VALID`.
 
-**Voiceover emphasis:**
-
-> "Structured rationale is stored. Hidden chain-of-thought is not."
-
-## Scene 5 — Tools Produce Auditable Observations [2:10–2:30]
-
-**On screen:** Show a tool call for policy evaluation, followed by a structured
-observation node.
+**Action:** Zoom from the manifest summary into the hash field, then show the canonical JSON byte count and the integrity check. Do not show raw environment values or secrets.
 
 **Voiceover:**
 
-> "When the agent uses a tool, the call and its observation become part of the
-> trace. We preserve the auditable result, not private internal reasoning:
-> which policy was evaluated, what rule controlled, and what constraint was
-> returned."
+> "The manifest captures the question, chunks, documents, retrieval configuration, model, prompt version, ontology, and temporal boundaries. Canonical content is hashed with SHA-256. Reconstructing the same context produces the same hash."
 
-**Action:** Highlight:
+## Scene 6 - A Repeat Question Hits Governed Cache [2:25-2:53]
 
-```text
-CGAgentRun -[:MADE_TOOL_CALL]-> CGToolCall
-CGToolCall -[:PRODUCED]-> CGObservation
-```
+**Screen:** Show cold run latency (`29,312 ms`), repeat-run latency (`<1 ms`), `cache_hit=true`, the tail of the Redis cache key (`...2ee57394aaed6c7eec75`), corpus revision `0`, speedup as greater than the cold-run millisecond count, and the original `source_trace_id`.
 
-## Scene 6 — Alternatives Make the Decision Governed [2:30–3:00]
-
-**On screen:** Three option nodes appear: `ALLOW`, `DENY`, `ESCALATE`.
-The policy node illuminates `DENY`; rejected options retain reason codes.
+**Action:** Compare the cold and repeat request rows side by side. Highlight that the repeat has a new query ID but the same cache key and `source_trace_id`. Keep the speedup explicitly labelled as a local demo measurement.
 
 **Voiceover:**
 
-> "The agent does not write an unexplained verdict. It records the alternatives
-> it considered. Allow is rejected because the controlling policy rule is not
-> satisfied. Escalation is retained as a possible path, but the available
-> evidence is sufficient for a policy decision. Deny is selected, with a concise
-> structured rationale and explicit reason codes for the alternatives."
+> "The second identical request does not rerun retrieval or the language model. Redis returns the completed answer only because the tenant, normalized question, model route, retrieval settings, ontology, prompt version, and corpus revision match the governed cache key. The new query keeps a fresh identity and points back to the original trace."
 
-**Action:** Show:
+## Scene 7 - The Answer Becomes a Decision Trace [2:53-3:18]
 
-```text
-CGDecision -[:CONSIDERED]-> CGOption
-CGDecision -[:SELECTED]-> CGOption
-CGDecision -[:REJECTED]-> CGOption
-CGDecision -[:SUPPORTED_BY]-> Statement
-```
+**Screen:** Show `CGCase`, `CGAgentRun`, and `CGDecision`, with the actual `ADDRESSES` and `PRODUCED_DECISION` relationships. Show the selected option `answer` and reason `retrieved_evidence`.
 
-## Scene 7 — Policy Evaluation Is Linked [3:00–3:20]
-
-**On screen:** Animate the applicable policy version and its evaluation result into the
-decision. Show the policy version beside the selected option.
+**Action:** Traverse case -> run -> decision, then connect the decision to the manifest, evidence, and policy evaluation. Keep the selected option and reason code visible; do not add an unrecorded approval workflow.
 
 **Voiceover:**
 
-> "The decision is also linked to the exact policy version and its evaluation.
-> That matters when the policy changes. A later run can use a newer version and
-> produce a different result without rewriting what happened here. The history
-> remains append-only."
+> "The live retrieval path records the answer as the selected option of a governed decision. The trace keeps the case, agent run, evidence, policy evaluation, and structured rationale together. It stores the answer, not hidden chain-of-thought."
 
-**Action:** Highlight:
+## Scene 8 - Replay Through the Tenant-Scoped API [3:18-3:43]
 
-```text
-CGDecision -[:APPLIED_POLICY]-> CGPolicyVersion
-CGDecision -[:HAS_POLICY_EVALUATION]-> CGPolicyEvaluation
-```
+**Screen:** Show the actual GET path with `tenant=marketing`. Draw the real topology: case to run, run to manifest and decision, and manifest to evidence. Show selected option, policy version, tenant, and hash validation.
 
-## Scene 8 — Replay the Trace [3:20–3:45]
-
-**On screen:** Neo4j Browser or trace API response. Traverse case → run →
-manifest → evidence/policy → options → decision.
+**Action:** Load the trace response using the tenant-scoped API shape, expand the evidence and policy sections, and finish on the valid integrity hash. Keep the response readable rather than scrolling through raw JSON.
 
 **Voiceover:**
 
-> "Now we can answer the questions an enterprise actually asks: what case was
-> handled, which run handled it, what evidence was available, which policy
-> applied, which alternatives were considered, why they were rejected, which
-> observations contributed, and whether the reconstructed manifest still
-> matches its hash."
+> "A later request can load the same trace through the Context Graph API. The tenant is explicit, the evidence references are visible, and the reconstructed manifest still matches its integrity hash. The decision can be audited without rerunning the model."
 
-**Action:** Run a tenant-scoped trace query. Keep the result readable and show
-the final `selected_option`, `reason_codes`, `policy_version`, and
-`integrity_hash_valid: true`.
+## Scene 9 - From Answer to Accountable Decision [3:43-4:01]
 
-## Scene 9 — Closing Image [3:45–3:55]
+**Screen:** Return to the connected trace with the case, run, manifest, evidence, and decision. Keep the final statement visible.
 
-**On screen:** Return to the animated graph. The decision node settles into a
-calm gold state; evidence and policy remain visibly connected.
+**Action:** Hold the complete trace, then settle on the relationship between Knowledge Graph evidence and the Context Graph decision. End on the accountable-decision message, not on a generic product title card.
 
 **Voiceover:**
 
-> "The Knowledge Graph helps the system find what is true. The Context Graph
-> records what the system knew, what it considered, and why it acted. That is
-> the difference between an answer and an accountable decision."
+> "The Knowledge Graph finds the evidence. The Context Graph records what the system retrieved, what it answered, and why it refused to overstate the result. That is the difference between a fast answer and an accountable decision."
 
 ## Recording Notes
 
-- Use a slow zoom and avoid fast cursor movement.
-- Keep the graph animation under the voiceover, not competing with it.
-- Use one tenant and one domain scenario consistently throughout the scene.
-- Never claim production scale from this demo; say "live-validated locally" when
-  discussing infrastructure verification.
-- If Neo4j is unavailable, use the generated MP4 and a deterministic saved trace
-  response rather than inventing a live result.
+- The movie is a generated presentation layer over a real live retrieval capture. It is not a screen recording of the Neo4j Browser.
+- The rendered scene files are still PNG frames with voiceover audio; there is no artificial camera motion over the screenshots.
+- The capture script flushes the marketing tenant's answer cache, runs `HybridRetriever.retrieve_and_answer()` once to produce a governed trace, runs it again with the same question and a new query ID to prove cache reuse, then loads the persisted trace from Neo4j.
+- All document IDs in the manifest are derived from the retrieved chunk parents.
+- The API path includes the tenant query parameter because the Context Graph endpoint is tenant-scoped.
+- Cache speedup is a demo measurement from the current local environment. Do not present it as a production benchmark.
+- Never display API keys, hidden chain-of-thought, or unsupported claims about production scale.
