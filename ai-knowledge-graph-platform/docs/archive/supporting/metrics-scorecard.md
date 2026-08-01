@@ -44,7 +44,7 @@ confidence calibration. *(Screenshots generated reproducibly by
 
 ## 🎯 Answer Quality (RAGAS, LLM-judged)
 
-Evaluated on 23 sampled queries out of 104 total runs. Judge: llama-3.3-70b via Groq.
+Evaluated on 23 sampled queries out of 104 total runs. Historical judge: llama-3.3-70b via Groq; current RAGAS routing is DeepSeek first, Groq fallback, Gemini last resort.
 
 | Metric | Value | What it means | Target |
 |---|---|---|---|
@@ -58,8 +58,8 @@ Measured across all 104 query runs. p95 computed from real timing data in `resul
 
 | Path | p95 | n | Notes |
 |---|---|---|---|
-| **Hybrid retrieval** | **2.2s** | 94 | 6-stage pipeline: vector ANN → BM25 → cross-encoder → multi-hop → GNN → 70B synthesis |
-| **Agentic (IRCoT)** | **3.4s** | 10 | Fires on ~10% of hard multi-hop queries; two-model design (8B routing + 70B synthesis) |
+| **Hybrid retrieval** | **2.2s** | 94 | 6-stage pipeline: vector ANN → BM25 → cross-encoder → multi-hop → GNN → DeepSeek synthesis |
+| **Agentic (IRCoT)** | **3.4s** | 10 | Fires on ~10% of hard multi-hop queries; Groq 8B routing + DeepSeek synthesis |
 | **Combined** | **2.7s** | 104 | Blended across all query types |
 
 ## 🕸️ Knowledge Graph — Real Corpus

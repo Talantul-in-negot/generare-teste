@@ -83,6 +83,7 @@ retrieval:
   bm25_enabled: true       # BM25 fulltext + RRF fusion with vector results
   reranker_enabled: true   # cross-encoder rerank after RRF (ms-marco-MiniLM-L-6-v2)
   query_rewrite_enabled: true  # Stage-1: strip retrieval-diluting boilerplate + expand/normalize query before first-pass retrieval; search-only, never touches answer/eval. Fails open. A/B measured 2026-07-24 on aerospace golden set (34 Q): rewrite ON and OFF both scored 29/34 (85%) — zero accuracy delta. A later re-run of the OFF arm scored 13/34 with a timeout-dominated failure signature, but that was NOT rewrite-related — root cause was an unrelated DeepSeek model-id deprecation bug (fixed separately, commit 6fe2cc7) coincidentally active during that run. Keep enabled: no accuracy cost, and it reduces load on the agentic fallback path. See tasks/lessons.md A138.
+  query_planner_enabled: true
   # ── Session context ──────────────────────────────────────────────────────────
   session_context_enabled: true     # enrich ambiguous follow-up queries with session entities
   session_max_turns: 10             # sliding window size per session
@@ -119,6 +120,8 @@ retrieval:
                                       # open, unresolved Conflict node (see
                                       # ContradictionDetector) instead of letting it
                                       # silently state a disputed fact as settled
+  feedback_ranking_enabled: true     # blend tenant-scoped citation feedback into final ranking
+  feedback_ranking_weight: 0.10      # conservative signal; retrieval evidence remains dominant
   # ─────────────────────────────────────────────────────────────────────────
   agentic_fallback: true   # trigger iterative agent when hybrid answer is weak
   agentic_max_steps: 4     # max sub-searches before forced synthesis
@@ -145,6 +148,12 @@ evaluation:
     # - context_recall
   eval_sample_rate: 0.2
   min_ground_truth_queries: 50
+
+context_graph:
+  proactive:
+    policy_expiry_days: 30
+    critical_expiry_days: 7
+    minimum_policy_uses: 1
 
 ontology:
   enforce_domain_range: true        # reject relations that violate domain/range rules

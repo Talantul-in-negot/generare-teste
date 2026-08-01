@@ -28,6 +28,22 @@ class TimescaleKPIStore:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             await conn.execute(text(
+                """
+                DO $$
+                BEGIN
+                  IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'kpi_events' AND column_name = 'recorded_at'
+                      AND data_type = 'timestamp without time zone'
+                  ) THEN
+                    ALTER TABLE kpi_events
+                      ALTER COLUMN recorded_at TYPE TIMESTAMPTZ
+                      USING recorded_at AT TIME ZONE 'UTC';
+                  END IF;
+                END $$;
+                """
+            ))
+            await conn.execute(text(
                 "SELECT create_hypertable('kpi_events', 'recorded_at', if_not_exists => TRUE)"
             ))
             await conn.execute(text(

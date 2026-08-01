@@ -22,7 +22,8 @@ for step in range(max_steps):
 final_answer = await llm(FINAL_PROMPT.format(context=context, question=question))
 ```
 
-Initially, every LLM call in this loop used the same model: `llama-3.3-70b-versatile`. This is correct for the final synthesis step but wasteful for the intermediate reasoning steps.
+Initially, every LLM call in this loop used the same large model. This is useful
+for final synthesis but wasteful for the intermediate reasoning steps.
 
 The intermediate step asks the model to emit one of two structured tokens:
 - `SEARCH: <sub-query>` (~15 output tokens)
@@ -39,7 +40,7 @@ Split the agentic loop into two model tiers:
 | Step | Model | Rationale |
 |---|---|---|
 | Reasoning steps (SEARCH/ANSWER routing) | `llama-3.1-8b-instant` | Trivial structured output; speed dominates |
-| Final synthesis | `llama-3.3-70b-versatile` | User-facing answer; quality dominates |
+| Final synthesis | DeepSeek `deepseek-v4-pro` via `get_llm()` | User-facing answer; quality dominates; Groq is fallback/override |
 
 Implementation in `graphrag/retrieval/agentic_retriever.py`:
 
@@ -53,8 +54,9 @@ async def _synthesize(self, prompt: str) -> str:
     return await get_llm().generate(prompt)
 ```
 
-`get_fast_llm()` points at `llama-3.1-8b-instant` (config: `groq_fast_model`).  
-`get_llm()` points at `llama-3.3-70b-versatile` (config: `groq_model`).
+`get_fast_llm()` points at Groq `llama-3.1-8b-instant` (config:
+`groq_fast_model`) with DeepSeek fallback. `get_llm()` defaults to DeepSeek
+`deepseek-v4-pro`; Groq `groq_model` is the fallback and optional override.
 
 `max_steps` reduced from 4 to 2. Empirically, most hard queries resolve within 2 iterations; steps 3–4 rarely surface chunks not already in context.
 
@@ -102,11 +104,11 @@ Combined p95 across hybrid and agentic: **5.9s → 2.7s** (under the 3s SLO).
 
 **Positive:**
 - Agentic p95 within SLO for the first time
-- Cost reduction: 8B inference on Groq is free-tier; two 8B calls per query instead of two 70B calls
+- Cost and latency reduction: the short routing calls use Groq's fast 8B tier instead of the large synthesis model
 - Configurable: `groq_fast_model` in `settings.yml` allows swapping the routing model without changing code
 
 **Negative / watch:**
-- Model provenance: only the synthesis model (`groq_model`) is surfaced in `QueryResult.model_version`. The routing model is invisible in the audit trail. If debugging is needed, check `agentic_retriever.reason` logs at DEBUG level.
+- Model provenance: the routing model is not currently surfaced separately in the audit trail; `QueryResult.model_version` should be read as the synthesis-tier model.
 - If the 8B model is replaced with one that produces different structured output format (`SEARCH:` / `ANSWER:`), the parser in `agentic_retriever.py` must be updated in parallel.
 
 **Extension points:**

@@ -465,7 +465,7 @@ This script focuses on IATF automotive compliance, but the platform is **domain-
 4. Show the same contradiction detection, multi-hop graph traversal, and agentic fallback — the mechanisms are domain-independent
 
 **For IBM specifically:**
-- Emphasize the agentic IRCoT fallback (8B routing + 70B synthesis)
+- Emphasize the agentic IRCoT fallback (Groq 8B routing + DeepSeek synthesis)
 - Highlight the "tool invocation" capability (not in this automotive script, but wired in the codebase)
 - Frame as: "Production-grade agentic chatbot platform, domain-independent, deployed across aerospace and automotive regulatory docs as proof"
 

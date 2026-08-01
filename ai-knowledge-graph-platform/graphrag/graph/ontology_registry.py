@@ -349,6 +349,18 @@ class OntologyRegistry:
             results[old_rel] = count
         return results
 
+    async def apply_ontology_migration(self, current: dict, target: dict) -> dict:
+        """Validate a versioned ontology diff, then apply its relation map."""
+        from graphrag.graph.ontology_migration import plan_migration
+        report = plan_migration(current, target)
+        if not report.compatible:
+            raise ValueError("ontology migration has unmapped removals")
+        self._migration_map.update({str(k).upper(): str(v).upper()
+                                    for k, v in (target.get("migration_map") or {}).items()})
+        changes = await self.apply_graph_migrations()
+        return {"compatible": True, "added": report.added, "removed": report.removed,
+                "renamed": report.renamed, "changes": changes}
+
     async def record_schema_event(
         self,
         event_type: str,        # "new_type" | "new_relation" | "type_correction"

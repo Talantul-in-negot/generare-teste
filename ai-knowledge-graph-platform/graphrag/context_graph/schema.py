@@ -20,4 +20,7 @@ CONTEXT_GRAPH_SCHEMA = (
     "CREATE CONSTRAINT cg_outcome_id IF NOT EXISTS FOR (n:CGOutcome) REQUIRE (n.tenant, n.id) IS UNIQUE",
     "CREATE CONSTRAINT cg_feedback_id IF NOT EXISTS FOR (n:CGFeedback) REQUIRE (n.tenant, n.id) IS UNIQUE",
     "CREATE CONSTRAINT cg_redaction_id IF NOT EXISTS FOR (n:CGRedaction) REQUIRE (n.tenant, n.id) IS UNIQUE",
+    "CREATE INDEX cg_approval_expiry IF NOT EXISTS FOR (n:CGApproval) ON (n.tenant, n.expires_at)",
+    "CREATE INDEX cg_exception_expiry IF NOT EXISTS FOR (n:CGExceptionGrant) ON (n.tenant, n.expires_at)",
+    "CREATE INDEX cg_decision_created IF NOT EXISTS FOR (n:CGDecision) ON (n.tenant, n.created_at)",
 )

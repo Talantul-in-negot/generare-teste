@@ -11,7 +11,7 @@
 | **Neo4j + Cypher in production** | 38 KG modules, 572-line `neo4j_client.py`; vector ANN, BM25 fulltext, `UNWIND`×22, `EXISTS {}`×12, APOC-with-fallback, bitemporal `as_of` queries | ✅ Strong |
 | **Ontology / taxonomy modeling** | Versioned `OntologyRegistry` w/ domain/range rules + migration map; `type_taxonomy.py` (`SUBCLASS_OF`, LCA for merges); config-driven domain overlays (aerospace YAML) | ✅ Strong |
 | **Python engineering** | 26,600 LOC, async throughout, 364 passing tests, CI, Docker multi-stage, `make smoke-test`, retry/backoff, structured logging | ✅ Strong |
-| **KG × LLM / RAG / vector** | 6-stage pipeline: vector→BM25+RRF→cross-encoder→multi-hop→GAT GNN→LLM; agentic IRCoT fallback (8B routing + 70B synthesis) | ✅ Exceptional |
+| **KG × LLM / RAG / vector** | 6-stage pipeline: vector→BM25+RRF→cross-encoder→multi-hop→GAT GNN→LLM; agentic IRCoT fallback (Groq 8B routing + DeepSeek synthesis) | ✅ Exceptional |
 | **Formal semantics ↔ pragmatic** | OWL-RL reasoner (`owlrl`), SPARQL bridge, RDF/Turtle export — *plus* 6 ADRs documenting every major architectural decision | ✅ Strong |
 | **Lead technically while hands-on** | 6 ADRs, 90 documented lessons, phased `todo.md`, `CONTRIBUTING.md`, `runbook.md`, `roadmap.md` | ✅ Good |
 | **RDF/OWL** (bonus) | `owl_reasoner.py`, `sparql_bridge.py`, rdflib | ✅ |
@@ -90,7 +90,7 @@ Be ready to narrate:
 - Why Bayesian confidence accumulation over last-write-wins (ADR-0003)
 - Why DeepSeek primary for generation (Groq available as fast-routing model and opt-in dev override), OpenAI `text-embedding-3-large` for embeddings (ADR-0004)
 - Why Redis as cross-process result store (ADR-0005)
-- Why 8B routing + 70B synthesis in the agentic path (ADR-0006)
+- Why Groq 8B routing + DeepSeek synthesis in the agentic path (ADR-0006)
 - What broke first when you ran it against real Neo4j, and how you fixed it
 
 That separates "I built this" from "I generated this."

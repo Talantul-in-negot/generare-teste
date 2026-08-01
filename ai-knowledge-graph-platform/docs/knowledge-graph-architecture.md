@@ -284,7 +284,7 @@ interface used across all pipeline stages.
 - `graphrag/retrieval/global_search.py` — map-reduce community summarisation (DeepSeek default)
 - `graphrag/retrieval/agentic_retriever.py` — IRCoT routing (Groq 8B, genuinely primary here) and final synthesis (DeepSeek default via `get_llm()`)
 - `graphrag/graph/community_summarizer.py` — LLM community summaries (DeepSeek default)
-- `graphrag/evaluation/ragas_evaluator.py` — RAGAS judge LLM (Groq-first; DeepSeek fallback — this ordering is specific to the judge and independent of the generation-primary choice above)
+- `graphrag/evaluation/ragas_evaluator.py` — RAGAS judge LLM (DeepSeek first, Groq fallback, Gemini last resort — independent of the generation and fast-routing tiers)
 
 ### What uses OpenAI (embeddings only)
 

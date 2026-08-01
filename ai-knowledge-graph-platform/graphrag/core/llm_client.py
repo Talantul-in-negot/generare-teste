@@ -1,4 +1,4 @@
-"""Central LLM client — routes text generation to Groq with DeepSeek fallback;
+"""Central LLM client — routes large generation to DeepSeek with Groq fallback;
 embeddings use OpenAI text-embedding-3-large (3072d).
 
 Usage:
@@ -550,7 +550,7 @@ def get_fast_llm() -> FallbackLLM:
 
     Used by the agentic retriever for intermediate SEARCH/ANSWER decisions.
     At ~800 tok/s on Groq vs ~150 tok/s for 70B, each reasoning step costs
-    ~0.2s instead of ~1.5s. The final synthesis always uses the 70B model.
+    ~0.2s instead of ~1.5s. Final synthesis uses the configured large model.
     """
     global _fast_llm
     if _fast_llm is None:

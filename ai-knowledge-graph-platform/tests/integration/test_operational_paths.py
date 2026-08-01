@@ -22,7 +22,6 @@ All tests use AsyncMock to avoid a live Neo4j instance or Redis server.
 from __future__ import annotations
 
 import sys
-from collections import deque
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -116,7 +115,8 @@ class TestSessionStorePersistence:
         # Patch the module-level logger
         with patch.object(ss_module.log, "error",  side_effect=lambda *a, **kw: err_calls.append(kw)):
             with patch.object(ss_module.log, "warning", side_effect=lambda *a, **kw: warn_calls.append(kw)):
-                store_strict._log_op_failure("save", ValueError("boom"))
+                with pytest.raises(ValueError, match="boom"):
+                    store_strict._log_op_failure("save", ValueError("boom"))
                 store_warn._log_op_failure("save", ValueError("boom"))
 
         assert len(err_calls)  == 1, "strict mode should call log.error once"

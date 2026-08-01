@@ -59,7 +59,7 @@ CREATE TABLE kpi_events (
 ### Sampling strategy
 
 - **Latency**: 100% — every query is timed
-- **RAGAS scores**: ~20% sample — evaluating every query is expensive; running Groq judge on a random sample keeps costs down while maintaining statistical validity
+- **RAGAS scores**: ~20% sample — evaluating every query is expensive; the current judge order is DeepSeek first, Groq fallback, Gemini last resort
 
 ### Access patterns
 
@@ -317,7 +317,7 @@ is non-deterministic at temperature=0; every fresh `--wipe --commit` of the same
 on three different runs, two of them on the *same day*, 2026-06-07 — see
 `tasks/lessons.md` A96/A98). Use this block to learn **how to read** a graph-health
 report — contradiction rate, orphan rate, inferred-edge breakdown — then re-run
-the live queries in `docs/hiring-and-presentation-strategy.md` Part 6 for
+the live queries in `docs/archive/job-search/hiring-and-presentation-strategy.md` Part 6 for
 whatever the actual current numbers are before presenting.
 
 The contradiction rate (48.26 /1k, *as measured on 2026-06-04 — will differ today*)
@@ -453,7 +453,7 @@ Performance of each stage in the 6-stage retrieval pipeline.
 - Stage 1+2 (retrieval): < 100ms = fast
 - Stage 3 (reranking): 100–300ms = normal (cold start slower)
 - Stage 5 (GNN): > 200ms = large graph, consider caching
-- Stage 6 (LLM): > 1000ms = Groq rate limit or complex synthesis
+- Stage 6 (LLM): > 1000ms = provider latency/rate limiting or complex synthesis
 
 **Score blend α/β:**
 - `α=0.6, β=0.4` (default): Trust textual relevance over graph structure

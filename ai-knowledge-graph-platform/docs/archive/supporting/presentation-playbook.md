@@ -18,7 +18,7 @@ and with fallbacks for when something doesn't cooperate.
 | **Live regulatory demo** | `scripts/demo_regulatory.py` (`--live` for real Neo4j) | Proof moment #1 |
 | **Admin dashboard** | `http://localhost:8001/admin/` (demo mode) | Proof moment #2 |
 | **Business KPI dashboard** | `http://localhost:8050/dashboard/` | Proof moment #2 (metrics) |
-| **Defensibility drill** | `docs/defensibility-drill.md` | Q&A defense (15 CTO questions) |
+| **Defensibility drill** | `docs/archive/supporting/defensibility-drill.md` | Q&A defense (15 CTO questions) |
 | **Terminology reference** | `docs/graphrag-terminology.md` | Q&A vocabulary backup |
 | **Metrics inventory** | `docs/performance-metrics-inventory.md` | Q&A metrics backup |
 
@@ -112,7 +112,7 @@ cd "C:\Users\Sergiu\Desktop\Projects\Generative-AI\ai-knowledge-graph-platform"
 - [ ] Deck open in PowerPoint, presenter view, slide 1
 - [ ] Terminal 4 cd'd into the project, font size bumped (Ctrl+Scroll) so the room can read it
 - [ ] `http://localhost:8001/admin/` loads with gauges visible
-- [ ] `docs/defensibility-drill.md` open in a side window (your Q&A safety net)
+- [ ] `docs/archive/supporting/defensibility-drill.md` open in a side window (your Q&A safety net)
 - [ ] Phone/laptop on Do-Not-Disturb; notifications off; screen-share confirmed
 
 ---
@@ -213,7 +213,7 @@ Tie it to their world: regulatory intelligence, audit KB, compliance monitoring.
 
 ## 5. Q&A playbook — map questions to your prepared answers
 
-Keep `docs/defensibility-drill.md` open. The 15 questions there are pre-answered.
+Keep `docs/archive/supporting/defensibility-drill.md` open. The 15 questions there are pre-answered.
 Fast lookup:
 
 | If they ask about… | Go to drill question |
@@ -292,9 +292,9 @@ point at the green gauges. 4. "It's all in the repo — grep it, run it." Done.
 **IBM CIC Timișoara** (agentic AI / Graph RAG engineer role):
 - **Hiring contact:** George Silviu Cațer (Application Architect | First Line Manager)
 - **How to find:** LinkedIn → search `IBM People` + filter keywords `engineer manager timisoara` → click George's profile → send DM
-- **Pitch angle:** Lead with agentic IRCoT fallback (8B routing + 70B synthesis), tool invocation capability, multi-hop graph traversal
+- **Pitch angle:** Lead with agentic IRCoT fallback (Groq 8B routing + DeepSeek synthesis), tool invocation capability, multi-hop graph traversal
 - **Demo focus:** Show the graph-based reasoning (Step 3) + contradiction detection (Step 4) + Neo4j Browser queries — same flow, same impact
 - **Opening:** "Hi George — I noticed IBM Timișoara is hiring for an agentic chatbot + Graph RAG role. I built exactly that stack…"
-- See `docs/hiring-and-presentation-strategy.md` Part 2 for full message template
+- See `docs/archive/job-search/hiring-and-presentation-strategy.md` Part 2 for full message template
 
 Both PwC and IBM need the same core story: **production-grade, observable, domain-agnostic GraphRAG platform**. The domain swap (aerospace → automotive → banking) proves agnosticism. The agentic fallback + contradiction detection + citation audit trail all apply to both consulting and internal IBM product roles.

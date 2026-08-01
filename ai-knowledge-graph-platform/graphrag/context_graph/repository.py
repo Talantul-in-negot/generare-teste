@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 from graphrag.context_graph.models import (
@@ -15,7 +16,14 @@ from graphrag.context_graph.validation import ContextGraphValidationError, valid
 
 
 def _props(model: Any) -> dict[str, Any]:
-    return model.model_dump(mode="json")
+    props = model.model_dump(mode="json")
+    # Neo4j node properties cannot contain nested maps. Preserve structured
+    # values deterministically as JSON at the graph boundary.
+    return {
+        key: json.dumps(value, sort_keys=True, separators=(",", ":"))
+        if isinstance(value, dict) else value
+        for key, value in props.items()
+    }
 
 
 def _trace_hash(trace: DecisionTrace) -> str:
@@ -190,6 +198,7 @@ class ContextGraphRepository:
     async def record_trace(self, trace: DecisionTrace) -> str:
         """Validate everything, then persist through one atomic Cypher write."""
         validate_trace(trace)
+        trace_hash = _trace_hash(trace)
         kg_refs = {
             "statement_ids": trace.manifest.statement_ids,
             "chunk_ids": trace.manifest.chunk_ids,
@@ -201,23 +210,30 @@ class ContextGraphRepository:
               WITH $tenant AS tenant, $statement_ids AS ids
               UNWIND CASE WHEN size(ids) = 0 THEN [null] ELSE ids END AS id
               OPTIONAL MATCH (n:Statement {tenant: tenant, id: id})
-              RETURN count(id) AS requested, count(n) AS found
+              RETURN tenant, count(id) AS requested, count(n) AS found
             }
             WITH tenant, requested, found WHERE requested = found
             CALL {
-              WITH tenant, $chunk_ids AS ids
-              UNWIND CASE WHEN size(ids) = 0 THEN [null] ELSE ids END AS id
+              WITH tenant
+              UNWIND CASE WHEN size($chunk_ids) = 0 THEN [null] ELSE $chunk_ids END AS id
               OPTIONAL MATCH (n:Chunk {tenant: tenant, id: id})
-              RETURN count(id) AS requested, count(n) AS found
+              RETURN count(id) AS chunk_requested, count(n) AS chunk_found
             }
-            WITH tenant, requested, found WHERE requested = found
+            WITH tenant, requested, found, chunk_requested, chunk_found
+            WHERE chunk_requested = chunk_found
             CALL {
-              WITH tenant, $document_ids AS ids
-              UNWIND CASE WHEN size(ids) = 0 THEN [null] ELSE ids END AS id
+              WITH tenant
+              UNWIND CASE WHEN size($document_ids) = 0 THEN [null] ELSE $document_ids END AS id
               OPTIONAL MATCH (n:Document {tenant: tenant, id: id})
-              RETURN count(id) AS requested, count(n) AS found
+              RETURN count(id) AS document_requested, count(n) AS document_found
             }
-            WITH tenant, requested, found WHERE requested = found
+            WITH tenant, requested, found, chunk_requested, chunk_found,
+                 document_requested, document_found
+            WHERE document_requested = document_found
+            MERGE (d:CGDecision {tenant: tenant, id: $decision.id})
+            ON CREATE SET d += $decision
+            WITH tenant, d
+            WHERE d.trace_hash = $trace_hash
             MERGE (c:CGCase {tenant: tenant, id: $case.id}) ON CREATE SET c += $case
             MERGE (r:CGAgentRun {tenant: tenant, id: $run.id}) ON CREATE SET r += $run
             MERGE (r)-[:ADDRESSES]->(c)
@@ -225,43 +241,42 @@ class ContextGraphRepository:
               MERGE (p:CGPolicyVersion {tenant: tenant, id: item.id}) ON CREATE SET p += item)
             MERGE (m:CGContextManifest {tenant: tenant, id: $manifest.id}) ON CREATE SET m += $manifest
             MERGE (r)-[:USED_CONTEXT]->(m)
-            WITH c, r, m
+            WITH c, r, m, d, tenant
             CALL {
-              WITH m, tenant, $statement_ids AS ids
-              UNWIND CASE WHEN size(ids) = 0 THEN [null] ELSE ids END AS id
+              WITH m, tenant
+              UNWIND CASE WHEN size($statement_ids) = 0 THEN [null] ELSE $statement_ids END AS id
               OPTIONAL MATCH (s:Statement {tenant: tenant, id: id})
               FOREACH (x IN CASE WHEN s IS NULL THEN [] ELSE [s] END |
                 MERGE (m)-[:INCLUDED_STATEMENT]->(x))
               RETURN count(*) AS linked_statements
             }
-            WITH c, r, m
+            WITH c, r, m, d, tenant
             CALL {
-              WITH m, tenant, $chunk_ids AS ids
-              UNWIND CASE WHEN size(ids) = 0 THEN [null] ELSE ids END AS id
+              WITH m, tenant
+              UNWIND CASE WHEN size($chunk_ids) = 0 THEN [null] ELSE $chunk_ids END AS id
               OPTIONAL MATCH (x:Chunk {tenant: tenant, id: id})
               FOREACH (item IN CASE WHEN x IS NULL THEN [] ELSE [x] END |
                 MERGE (m)-[:INCLUDED_CHUNK]->(item))
               RETURN count(*) AS linked_chunks
             }
-            WITH c, r, m
+            WITH c, r, m, d, tenant
             CALL {
-              WITH m, tenant, $document_ids AS ids
-              UNWIND CASE WHEN size(ids) = 0 THEN [null] ELSE ids END AS id
+              WITH m, tenant
+              UNWIND CASE WHEN size($document_ids) = 0 THEN [null] ELSE $document_ids END AS id
               OPTIONAL MATCH (x:Document {tenant: tenant, id: id})
               FOREACH (item IN CASE WHEN x IS NULL THEN [] ELSE [x] END |
                 MERGE (m)-[:INCLUDED_DOCUMENT]->(item))
               RETURN count(*) AS linked_documents
             }
-            WITH c, r, m
+            WITH c, r, m, d, tenant
             FOREACH (item IN $policies |
               MERGE (p:CGPolicyVersion {tenant: tenant, id: item.id})
               MERGE (m)-[:INCLUDED_POLICY]->(p))
-            MERGE (d:CGDecision {tenant: tenant, id: $decision.id}) ON CREATE SET d += $decision
             MERGE (r)-[:PRODUCED_DECISION]->(d)
-            WITH c, r, m, d
+            WITH c, r, m, d, tenant
             CALL {
-              WITH d, tenant, $statement_ids AS ids
-              UNWIND CASE WHEN size(ids) = 0 THEN [null] ELSE ids END AS id
+              WITH d, tenant
+              UNWIND CASE WHEN size($statement_ids) = 0 THEN [null] ELSE $statement_ids END AS id
               OPTIONAL MATCH (s:Statement {tenant: tenant, id: id})
               FOREACH (x IN CASE WHEN s IS NULL THEN [] ELSE [s] END |
                 MERGE (d)-[:SUPPORTED_BY]->(x))
@@ -289,7 +304,8 @@ class ContextGraphRepository:
             RETURN d.id AS decision_id, d.trace_hash AS existing_hash
             """,
             tenant=trace.case.tenant, case=_props(trace.case), run=_props(trace.run),
-            manifest=_props(trace.manifest), decision={**_props(trace.decision), "trace_hash": _trace_hash(trace)},
+            manifest=_props(trace.manifest), decision={**_props(trace.decision), "trace_hash": trace_hash},
+            trace_hash=trace_hash,
             policies=[_props(p) for p in trace.policy_versions],
             tool_calls=[_props(t) for t in trace.tool_calls],
             observations=[_props(o) for o in trace.observations],
@@ -298,9 +314,17 @@ class ContextGraphRepository:
             **kg_refs,
         )
         if not rows:
+            existing = await self._neo4j.run(
+                "MATCH (d:CGDecision {tenant: $tenant, id: $decision_id}) "
+                "RETURN d.trace_hash AS trace_hash",
+                tenant=trace.case.tenant,
+                decision_id=trace.decision.id,
+            )
+            if existing and existing[0].get("trace_hash") != trace_hash:
+                raise ContextGraphValidationError("completed Context Graph decision is immutable")
             raise ContextGraphValidationError("one or more Knowledge Graph references are missing or cross-tenant")
         existing_hash = rows[0].get("existing_hash")
-        if existing_hash and existing_hash != _trace_hash(trace):
+        if existing_hash and existing_hash != trace_hash:
             raise ContextGraphValidationError("completed Context Graph decision is immutable")
         return trace.decision.id
 
@@ -352,6 +376,9 @@ class ContextGraphRepository:
             query = f"""
                 MATCH (old:CGDecision {{tenant: $tenant, id: $target_id}}),
                       (new:CGDecision {{tenant: $tenant, id: $replacement_id}})
+                OPTIONAL MATCH cycle=(new)-[:SUPERSEDED_BY*1..]->(old)
+                WITH old, new, cycle
+                WHERE cycle IS NULL
                 MERGE (e:{label} {{tenant: $tenant, id: $id}})
                 ON CREATE SET e += $props
                 MERGE (old)-[:SUPERSEDED_BY]->(new)
@@ -364,8 +391,26 @@ class ContextGraphRepository:
             id=event.id, props=props,
         )
         if not rows:
-            raise ContextGraphValidationError("governance event references a missing or cross-tenant decision")
+            raise ContextGraphValidationError(
+                "governance event references a missing or cross-tenant decision, or creates a cycle"
+            )
         return event.id
+
+    async def supersession_chain(self, decision_id: str, tenant: str) -> list[dict]:
+        """Load the complete append-only replacement chain from a decision."""
+        rows = await self._neo4j.run(
+            """
+            MATCH path=(start:CGDecision {tenant: $tenant, id: $decision_id})
+                       -[:SUPERSEDED_BY*0..]->(current:CGDecision {tenant: $tenant})
+            WHERE NOT (current)-[:SUPERSEDED_BY]->(:CGDecision {tenant: $tenant})
+            RETURN [node IN nodes(path) | node {.*}] AS decisions
+            ORDER BY length(path) DESC
+            LIMIT 1
+            """,
+            tenant=tenant,
+            decision_id=decision_id,
+        )
+        return list(rows[0]["decisions"]) if rows else []
 
     async def record_action(self, action: CGAction) -> str:
         rows = await self._neo4j.run(
@@ -413,9 +458,9 @@ class ContextGraphRepository:
         rows = await self._neo4j.run(
             """
             MATCH (d:CGDecision {tenant: $tenant, id: $decision_id})
-            WHERE d.transaction_from <= datetime($as_of)
-              AND (d.transaction_to IS NULL OR d.transaction_to >= datetime($as_of))
-            OPTIONAL MATCH (d)-[:PRODUCED_DECISION|PRODUCED_BY*0..1]-(r:CGAgentRun {tenant: $tenant})
+            WHERE datetime(d.transaction_from) <= datetime($as_of)
+              AND (d.transaction_to IS NULL OR datetime(d.transaction_to) >= datetime($as_of))
+            OPTIONAL MATCH (r:CGAgentRun {tenant: $tenant})-[:PRODUCED_DECISION]->(d)
             RETURN d {.*} AS decision, collect(DISTINCT r {.*}) AS runs
             """, tenant=tenant, decision_id=decision_id, as_of=as_of,
         )
@@ -424,14 +469,21 @@ class ContextGraphRepository:
     async def find_precedents(self, tenant: str, policy_version_id: str, limit: int = 10) -> list[dict]:
         rows = await self._neo4j.run(
             """
+            MATCH (current:CGPolicyVersion {tenant: $tenant, id: $policy_version_id})
             MATCH (d:CGDecision {tenant: $tenant})-[:APPLIED_POLICY]->
-                  (p:CGPolicyVersion {tenant: $tenant, id: $policy_version_id})
+                  (p:CGPolicyVersion {tenant: $tenant})
             WHERE d.status = 'final'
             OPTIONAL MATCH (d)-[:RESULTED_IN]->(a:CGAction {tenant: $tenant})
             OPTIONAL MATCH (a)-[:PRODUCED]->(o:CGOutcome {tenant: $tenant})
-            RETURN d {.*} AS decision, p {.*} AS policy,
-                   count(o) > 0 AS has_outcome
-            ORDER BY has_outcome DESC, d.created_at DESC
+            OPTIONAL MATCH (f:CGFeedback {tenant: $tenant})-[:EVALUATES]->(d)
+            WITH d, p, current, count(DISTINCT o) AS outcomes,
+                 coalesce(avg(f.score), 0.5) AS feedback_score
+            WITH d, p,
+                 (0.65 * CASE WHEN p.policy_id = current.policy_id THEN 1.0 ELSE 0.0 END
+                  + 0.20 * CASE WHEN outcomes > 0 THEN 1.0 ELSE 0.0 END
+                  + 0.15 * feedback_score) AS score
+            RETURN d {.*} AS decision, p {.*} AS policy, score
+            ORDER BY score DESC, d.created_at DESC
             LIMIT $limit
             """, tenant=tenant, policy_version_id=policy_version_id, limit=limit,
         )
@@ -453,3 +505,82 @@ class ContextGraphRepository:
         if not rows:
             raise ContextGraphValidationError("cannot redact a missing or cross-tenant trace")
         return rows[0]["id"]
+
+    async def effective_governance(
+        self, decision_id: str, tenant: str, as_of: datetime | None = None,
+    ) -> dict:
+        """Return approval and exception state effective at a point in time."""
+        effective_at = (as_of or datetime.now(timezone.utc)).isoformat()
+        rows = await self._neo4j.run(
+            """
+            MATCH (d:CGDecision {tenant: $tenant, id: $decision_id})
+            OPTIONAL MATCH (d)-[:GOVERNED_BY]->(a:CGApproval {tenant: $tenant})
+            WHERE datetime(a.created_at) <= datetime($as_of)
+            WITH d, a ORDER BY a.created_at DESC
+            WITH d, head(collect(a)) AS approval
+            OPTIONAL MATCH (d)-[:USED_EXCEPTION]->(e:CGExceptionGrant {tenant: $tenant})
+            WHERE datetime(e.created_at) <= datetime($as_of)
+            WITH approval, e ORDER BY e.created_at DESC
+            WITH approval, collect(e) AS exceptions
+            RETURN approval {.*} AS approval,
+                   CASE WHEN approval.status = 'approved'
+                          AND (approval.expires_at IS NULL OR datetime(approval.expires_at) > datetime($as_of))
+                        THEN true ELSE false END AS approval_effective,
+                   [e IN exceptions WHERE e.status = 'granted'
+                     AND (e.expires_at IS NULL OR datetime(e.expires_at) > datetime($as_of)) | e {.*}]
+                     AS active_exceptions
+            """,
+            tenant=tenant,
+            decision_id=decision_id,
+            as_of=effective_at,
+        )
+        if not rows:
+            raise ContextGraphValidationError("governance references a missing or cross-tenant decision")
+        return dict(rows[0])
+
+    async def apply_retention_policy(
+        self,
+        tenant: str,
+        before: datetime,
+        actor_id: str,
+        *,
+        reason_code: str = "retention_expired",
+        dry_run: bool = True,
+    ) -> dict:
+        """Find or append redaction markers for traces beyond retention."""
+        if before.tzinfo is None:
+            raise ValueError("retention boundary must be timezone-aware")
+        if dry_run:
+            rows = await self._neo4j.run(
+                """
+                MATCH (d:CGDecision {tenant: $tenant})
+                WHERE datetime(d.created_at) < datetime($before)
+                  AND NOT (d)-[:REDACTED_BY]->(:CGRedaction {tenant: $tenant})
+                RETURN d.id AS decision_id
+                ORDER BY d.created_at
+                """,
+                tenant=tenant,
+                before=before.isoformat(),
+            )
+            return {"tenant": tenant, "dry_run": True, "matched": len(rows),
+                    "decision_ids": [row["decision_id"] for row in rows]}
+        rows = await self._neo4j.run(
+            """
+            MATCH (d:CGDecision {tenant: $tenant})
+            WHERE datetime(d.created_at) < datetime($before)
+              AND NOT (d)-[:REDACTED_BY]->(:CGRedaction {tenant: $tenant})
+            WITH collect(d) AS decisions
+            FOREACH (d IN decisions |
+              MERGE (r:CGRedaction {tenant: $tenant, id: 'retention-' + d.id})
+              ON CREATE SET r.reason_code = $reason_code, r.actor_id = $actor_id,
+                            r.created_at = datetime(), r.schema_version = 'context-graph/v1'
+              MERGE (d)-[:REDACTED_BY]->(r))
+            RETURN size(decisions) AS marked
+            """,
+            tenant=tenant,
+            before=before.isoformat(),
+            actor_id=actor_id,
+            reason_code=reason_code,
+        )
+        return {"tenant": tenant, "dry_run": False,
+                "marked": int(rows[0]["marked"]) if rows else 0}

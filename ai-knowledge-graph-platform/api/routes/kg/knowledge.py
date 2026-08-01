@@ -663,6 +663,34 @@ class EntityTypeRenameRequest(BaseModel):
     dry_run: bool = False
 
 
+class OntologyMigrationRequest(BaseModel):
+    current: dict
+    target: dict
+    tenant: str = "default"
+    apply: bool = False
+
+
+@router.post(
+    "/ontology/migration",
+    dependencies=[Depends(require_scope("write"))],
+    summary="Plan or apply a versioned ontology migration",
+)
+async def ontology_migration(request: OntologyMigrationRequest):
+    from graphrag.graph.ontology_migration import plan_migration
+    from graphrag.graph.ontology_registry import get_ontology_registry
+    report = plan_migration(request.current, request.target)
+    result = {"compatible": report.compatible, "added": report.added,
+              "removed": report.removed, "renamed": report.renamed,
+              "warnings": report.warnings, "applied": False}
+    if request.apply:
+        if not report.compatible:
+            raise HTTPException(status_code=409, detail="ontology migration has unmapped removals")
+        registry = get_ontology_registry(neo4j_client=get_neo4j(), tenant=request.tenant)
+        result.update(await registry.apply_ontology_migration(request.current, request.target))
+        result["applied"] = True
+    return result
+
+
 @router.post(
     "/ontology/rename-entity-type",
     dependencies=[Depends(require_scope("write"))],

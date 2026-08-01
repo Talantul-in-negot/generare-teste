@@ -176,6 +176,10 @@ class Settings(BaseSettings):
     def business_matrix(self) -> dict:
         return self._yaml.get("business_matrix", {})
 
+    @property
+    def context_graph(self) -> dict:
+        return self._yaml.get("context_graph", {})
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

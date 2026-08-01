@@ -1,4 +1,5 @@
-"""Generate and embed community summaries via Groq (LLM) + Gemini (embeddings)."""
+"""Generate community summaries via the large-model router and embed them with
+the configured embedding provider."""
 
 from __future__ import annotations
 

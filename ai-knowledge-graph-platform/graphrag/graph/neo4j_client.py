@@ -825,7 +825,8 @@ class Neo4jClient:
             """
             UNWIND $chunk_ids AS cid
             MATCH (c:Chunk {id: cid})-[:MENTIONS]->(e:Entity)
-            WHERE e.embedding IS NOT NULL AND size(e.embedding) > 0
+            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+              AND e.embedding IS NOT NULL AND size(e.embedding) > 0
               AND coalesce(e.quarantined, false) = false
             RETURN cid          AS chunk_id,
                    e.name       AS entity_name,

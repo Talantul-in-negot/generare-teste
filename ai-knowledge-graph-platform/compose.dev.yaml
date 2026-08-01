@@ -18,13 +18,13 @@
 # Health checks on all infrastructure services ensure workers and API only
 # start once their dependencies are genuinely accepting connections.
 
-version: "3.9"
-
 x-worker-env: &worker-env      # shared env for all Python services
   NEO4J_URI:                bolt://neo4j:7687
   RABBITMQ_URL:             amqp://graphrag:graphrag_dev@rabbitmq:5672/
   REDIS_URL:                redis://redis:6379/0
   KPI_DB_PATH:              /data/kpis.db
+  KPI_BACKEND:              timescale
+  TIMESCALE_DB_URL:         postgresql+asyncpg://graphrag:graphrag_dev@timescaledb:5432/graphrag
   QUERY_RESULT_TTL_SECONDS: "3600"   # override at deploy time; no redeploy needed
 
 x-worker-depends: &worker-depends
@@ -33,6 +33,8 @@ x-worker-depends: &worker-depends
   rabbitmq:
     condition: service_healthy
   redis:
+    condition: service_healthy
+  timescaledb:
     condition: service_healthy
 
 # ── Infrastructure ─────────────────────────────────────────────────────────────
@@ -56,6 +58,23 @@ services:
       test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "graphrag_dev", "RETURN 1"]
       interval: 10s
       timeout: 8s
+      retries: 10
+
+  timescaledb:
+    image: timescale/timescaledb:2.15.3-pg16
+    container_name: dev_timescaledb
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: graphrag
+      POSTGRES_PASSWORD: graphrag_dev
+      POSTGRES_DB: graphrag
+    volumes:
+      - dev_timescale_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U graphrag -d graphrag"]
+      interval: 10s
+      timeout: 5s
       retries: 10
 
   rabbitmq:
@@ -209,3 +228,4 @@ volumes:
   dev_neo4j_logs:
   dev_rabbitmq_data:
   dev_kpi_data:
+  dev_timescale_data:

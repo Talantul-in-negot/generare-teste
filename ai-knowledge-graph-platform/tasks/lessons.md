@@ -5517,3 +5517,19 @@ Tests: `test_no_tenant_scope_passes_all_tenants` renamed to
 success); added `test_tenant_scoped_caller_still_allowed_for_own_tenant`
 as an explicit regression guard that the unchanged mismatch path still
 works. Full suite: 645 passed, 0 failed.
+
+## A150 — An immutability check after a transaction is too late
+
+`ContextGraphRepository.record_trace` originally compared an existing
+decision's `trace_hash` only after the atomic Cypher returned. A conflicting
+stable ID could therefore merge new case/run/manifest/option nodes before the
+Python layer raised "immutable." The decision itself stayed unchanged, but the
+failed retry could still leave unrelated trace state behind.
+
+The hash equality guard now runs in Cypher immediately after matching or
+creating the decision and before any auxiliary Context Graph node is merged.
+A mismatch removes the row from the write pipeline, so no partial trace is
+created. The Python diagnostic query only distinguishes an immutable-ID
+conflict from missing/cross-tenant KG evidence after the transaction has made
+no changes. General rule: invariants that protect atomicity must gate writes
+inside the transaction, not validate the result afterward.

@@ -484,7 +484,7 @@ A technique for grounding LLM answers in external knowledge. Instead of relying 
 ### RAGAS
 A framework for evaluating RAG pipelines on four metrics: faithfulness, answer relevancy, context precision, context recall. Uses an LLM as the judge.
 
-**In this project:** `graphrag/evaluation/ragas_evaluator.py`. Samples 20% of queries automatically. Judge LLM: Groq (DeepSeek-V3 fallback).
+**In this project:** `graphrag/evaluation/ragas_evaluator.py`. Samples 20% of queries automatically. Judge LLM: DeepSeek first, Groq fallback, Gemini last resort.
 
 ---
 

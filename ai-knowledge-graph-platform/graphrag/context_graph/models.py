@@ -121,6 +121,7 @@ class CGApproval(CGBase):
     status: ApprovalStatus = ApprovalStatus.REQUESTED
     reason_code: str = Field(min_length=1)
     rationale: str = ""
+    expires_at: datetime | None = None
 
 
 class CGExceptionGrant(CGBase):
@@ -140,6 +141,12 @@ class CGCorrection(CGBase):
     correction_type: CorrectionType
     reason_code: str = Field(min_length=1)
     rationale: str = ""
+
+    @model_validator(mode="after")
+    def replacement_must_differ(self) -> "CGCorrection":
+        if self.decision_id == self.replacement_decision_id:
+            raise ValueError("a correction cannot replace a decision with itself")
+        return self
 
 
 class CGAction(CGBase):

@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -42,6 +43,33 @@ async def test_correction_requires_both_tenant_scoped_decisions():
         await ContextGraphRepository(neo4j).append_governance_event(correction)
 
 
+def test_correction_cannot_replace_decision_with_itself():
+    with pytest.raises(ValueError, match="cannot replace"):
+        CGCorrection(
+            id="correction-1", tenant="marketing", decision_id="same",
+            replacement_decision_id="same", actor_id="reviewer-1",
+            correction_type=CorrectionType.AMENDMENT, reason_code="invalid",
+        )
+
+
+async def test_supersession_chain_is_tenant_scoped_and_cycle_guarded():
+    neo4j = MagicMock()
+    neo4j.run = AsyncMock(return_value=[{
+        "decisions": [{"id": "d1"}, {"id": "d2"}, {"id": "d3"}],
+    }])
+    repo = ContextGraphRepository(neo4j)
+    chain = await repo.supersession_chain("d1", "marketing")
+    assert [item["id"] for item in chain] == ["d1", "d2", "d3"]
+    assert neo4j.run.await_args.kwargs["tenant"] == "marketing"
+    correction = CGCorrection(
+        id="correction-2", tenant="marketing", decision_id="d1",
+        replacement_decision_id="d2", actor_id="reviewer-1",
+        correction_type=CorrectionType.AMENDMENT, reason_code="new_evidence",
+    )
+    await repo.append_governance_event(correction)
+    assert "OPTIONAL MATCH cycle=" in neo4j.run.await_args.args[0]
+
+
 async def test_outcome_and_feedback_link_to_existing_graph_objects():
     neo4j = MagicMock()
     neo4j.run = AsyncMock(return_value=[{"id": "x"}])
@@ -61,3 +89,59 @@ async def test_expiring_policy_recommendation_is_tenant_scoped():
     result = await ProactiveContextService(neo4j).expiring_policies("marketing", within_days=30)
     assert result[0].reference_id == "policy-1"
     assert neo4j.run.await_args.kwargs["tenant"] == "marketing"
+
+
+async def test_precedent_query_returns_relevance_score_and_sorts_by_it():
+    neo4j = MagicMock()
+    neo4j.run = AsyncMock(return_value=[
+        {"decision": {"id": "d-1"}, "policy": {"id": "p-1"}, "score": 0.92},
+        {"decision": {"id": "d-2"}, "policy": {"id": "p-2"}, "score": 0.60},
+    ])
+    results = await ContextGraphRepository(neo4j).find_precedents("marketing", "p-current")
+    assert results[0]["score"] > results[1]["score"]
+    query = neo4j.run.await_args.args[0]
+    assert "ORDER BY score DESC" in query
+    assert "feedback_score" in query and "policy_id" in query
+
+
+async def test_effective_governance_enforces_approval_and_exception_expiry():
+    neo4j = MagicMock()
+    neo4j.run = AsyncMock(return_value=[{
+        "approval": {"id": "approval-1", "status": "approved"},
+        "approval_effective": False,
+        "active_exceptions": [],
+    }])
+    as_of = datetime.now(timezone.utc)
+    result = await ContextGraphRepository(neo4j).effective_governance(
+        "decision-1", "marketing", as_of
+    )
+    assert result["approval_effective"] is False
+    query = neo4j.run.await_args.args[0]
+    assert "approval.expires_at" in query and "e.expires_at" in query
+    assert neo4j.run.await_args.kwargs["tenant"] == "marketing"
+
+
+async def test_retention_is_dry_run_by_default_and_appends_redaction_markers():
+    neo4j = MagicMock()
+    neo4j.run = AsyncMock(side_effect=[
+        [{"decision_id": "old-decision"}],
+        [{"marked": 1}],
+    ])
+    repo = ContextGraphRepository(neo4j)
+    boundary = datetime.now(timezone.utc) - timedelta(days=90)
+    preview = await repo.apply_retention_policy("marketing", boundary, "ops")
+    applied = await repo.apply_retention_policy(
+        "marketing", boundary, "ops", dry_run=False
+    )
+    assert preview["decision_ids"] == ["old-decision"]
+    assert applied["marked"] == 1
+    write_query = neo4j.run.await_args.args[0]
+    assert "CGRedaction" in write_query and "DETACH DELETE" not in write_query
+    assert neo4j.run.await_args.kwargs["tenant"] == "marketing"
+
+
+async def test_retention_rejects_naive_time_boundary():
+    with pytest.raises(ValueError, match="timezone-aware"):
+        await ContextGraphRepository(MagicMock()).apply_retention_policy(
+            "marketing", datetime.now(), "ops"
+        )

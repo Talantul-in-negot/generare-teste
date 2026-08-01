@@ -105,6 +105,9 @@ async def test_missing_or_cross_tenant_kg_reference_aborts_without_partial_succe
     neo4j.run = AsyncMock(return_value=[])
     with pytest.raises(ContextGraphValidationError, match="Knowledge Graph references"):
         await ContextGraphRepository(neo4j).record_trace(_trace())
+    write_query = neo4j.run.await_args_list[0].args[0]
+    assert "WHERE d.trace_hash = $trace_hash" in write_query
+    assert write_query.index("WHERE d.trace_hash = $trace_hash") < write_query.index("MERGE (c:CGCase")
 
 
 async def test_existing_completed_trace_cannot_be_replaced():

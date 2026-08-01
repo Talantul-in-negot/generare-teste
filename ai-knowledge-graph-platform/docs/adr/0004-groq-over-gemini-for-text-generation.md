@@ -1,6 +1,6 @@
-# ADR-0004 — Groq for text generation, OpenAI for embeddings
+# ADR-0004 — LLM provider routing and OpenAI embeddings
 
-**Status:** Amended (embeddings provider updated 2026-06-03)  
+**Status:** Accepted and amended (current routing updated 2026-07-24)
 **Date:** 2026-05-30  
 **Author:** Sergiu Nicoara
 
@@ -21,26 +21,31 @@ Initially both were served by Google Gemini (`gemini-2.0-flash` for generation, 
 
 ## Decision
 
-Split the providers:
+The current provider split is:
 
-- **Embeddings:** Keep `gemini-embedding-001` (3072d, stable API, high quality on technical text)
-- **Text generation:** Switch to `groq/llama-3.3-70b-versatile` for synthesis and `groq/llama-3.1-8b-instant` for routing decisions
+- **Embeddings:** OpenAI `text-embedding-3-large` (3072d).
+- **Large text generation:** DeepSeek `deepseek-v4-pro` primary through
+  `get_llm()`, with Groq fallback.
+- **Fast routing:** Groq `llama-3.1-8b-instant` primary through
+  `get_fast_llm()`, with DeepSeek fallback.
+- **Optional override:** `LLM_INGEST_PROVIDER=groq` makes Groq primary for
+  low-volume development runs, with DeepSeek fallback.
 
 Rationale for each choice:
 
-### Why keep Gemini for embeddings
+### Why OpenAI for embeddings
 
 - The Neo4j vector index is created at 3072 dimensions. Changing embedding providers requires re-embedding every chunk and rebuilding the index — an expensive, risky migration.
 - `gemini-embedding-001` produces high-quality embeddings for domain-specific technical text (aerospace regulatory, financial, medical).
 - Embedding calls are low-frequency compared to generation calls (one per chunk at ingestion time, not per query).
 - The embedding API has separate quota from the generation API, so they don't compete.
 
-### Why Groq for text generation
+### Why Groq remains in the stack
 
-- **Quota:** Groq free tier offers 1,500 RPD / 6,000 RPM on llama-3.3-70b — sufficient for development and light production use without depleting budget.
-- **Speed:** Groq runs on custom LPU hardware. llama-3.3-70b at ~150 tok/s vs Gemini Flash at ~60 tok/s; llama-3.1-8b-instant at ~800 tok/s.
-- **Two-model design:** Groq's fast inference makes the 8B routing + 70B synthesis split economically viable. Each 8B reasoning step costs ~0.2s; the same step on a 70B model costs ~1.5s. This is the primary driver of the agentic path p95 dropping from 6.8s to 3.4s.
-- **Decoupled quota:** Swapping generation providers does not affect the embedding index. Rolling back generation to Gemini is a single function change in `llm_client.py`.
+- **Speed:** Groq's fast inference makes the 8B routing tier inexpensive and low-latency; each routing step is about 0.2s in the measured setup.
+- **Fallback:** Groq provides an independent generation fallback when DeepSeek is unavailable or rate-limited.
+- **Development override:** Groq-primary mode remains useful for quick, low-volume development runs.
+- **Decoupled providers:** Generation and embeddings can change independently without touching retrieval or graph logic.
 
 ### Why not a single provider for both
 
@@ -51,12 +56,12 @@ Rationale for each choice:
 
 ## Two-model design (extension of this ADR)
 
-Within Groq, the agentic IRCoT path uses two models:
+The agentic IRCoT path uses two provider tiers:
 
 | Call site | Model | Rationale |
 |---|---|---|
 | Routing steps (SEARCH/ANSWER) | `llama-3.1-8b-instant` | ~15 output tokens; speed matters, quality doesn't |
-| Final synthesis | `llama-3.3-70b-versatile` | Quality matters; this is the user-facing answer |
+| Final synthesis | `deepseek-v4-pro` via `get_llm()` | Quality matters; Groq is the fallback and optional override |
 
 Configured via `groq_model` and `groq_fast_model` in `settings.yml`.
 
@@ -70,8 +75,8 @@ Configured via `groq_model` and `groq_fast_model` in `settings.yml`.
 - Provider swap is a single-function change
 
 **Negative / watch:**
-- The RAGAS evaluation judge (`ragas_evaluator.py`) uses Groq with DeepSeek-V3 as fallback — if Groq quota is exhausted, RAGAS samples fail silently (logged as WARNING)
-- Model attribution in result provenance reflects the synthesis model (`groq_model`); routing model is not surfaced in citations
+- The RAGAS judge currently tries DeepSeek first, then Groq, then Gemini if the earlier clients are unavailable.
+- The fast routing model is separate from the user-facing synthesis model and should be recorded separately in future provenance improvements.
 
 **Migration path for client deployments:**
 Change `get_llm()`, `get_fast_llm()`, and `get_embedder()` in `graphrag/core/llm_client.py`. Nothing else requires modification.

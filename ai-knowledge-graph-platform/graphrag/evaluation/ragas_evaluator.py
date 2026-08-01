@@ -35,11 +35,8 @@ class RagasEvaluator:
     def _build_llm(self):
         """Build the LLM judge for RAGAS.
 
-        Priority: Groq → DeepSeek → Gemini.
-
-        Groq is the primary judge because its 100k TPD resets daily at midnight UTC
-        and the faithfulness eval (~35k tokens) fits well within that budget.
-        DeepSeek is the fallback when Groq is rate-limited; Gemini is the last resort.
+        Priority: DeepSeek → Groq → Gemini.  This ordering is specific to the
+        evaluation judge and is independent of the fast Groq routing tier.
         """
         cfg = get_settings()
 

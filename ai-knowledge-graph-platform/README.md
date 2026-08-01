@@ -38,16 +38,15 @@ The graph is not a RAG index. It is a formally modeled knowledge base:
 - [`docs/runbook.md`](docs/runbook.md) — operations: startup order, common failures, backup/restore, schema migration
 - [`docs/graphrag-terminology.md`](docs/graphrag-terminology.md) — every GraphRAG term defined, with examples and file references
 - [`docs/performance-metrics-inventory.md`](docs/performance-metrics-inventory.md) — all 16 metrics (KPI events, graph health, calibration, retrieval stages); storage, access, interpretation, pitch guidance
-- [`docs/defensibility-drill.md`](docs/defensibility-drill.md) — 15 hard CTO questions with model answers; preparation checklist
-- [`docs/presentation-playbook.md`](docs/presentation-playbook.md) — full run-of-show: setup commands, slide-by-slide script, live-demo + dashboard choreography, Q&A map, timing variants, failure fallbacks
+- Supporting interview and presentation material is archived under [`docs/archive/supporting/`](docs/archive/supporting/).
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — ADR process, PR checklist, coding standards, how to add features
 - [`docs/adr/0001-property-graph-over-triple-store.md`](docs/adr/0001-property-graph-over-triple-store.md) — Why Neo4j over RDF triple stores
 - [`docs/adr/0002-forward-chaining-over-backward-chaining.md`](docs/adr/0002-forward-chaining-over-backward-chaining.md) — Why materialised inference over query-time reasoning
 - [`docs/adr/0003-bayesian-confidence-accumulation.md`](docs/adr/0003-bayesian-confidence-accumulation.md) — Why `1−(1−c₁)(1−c₂)` over last-write-wins
 - [`docs/adr/0004-groq-over-gemini-for-text-generation.md`](docs/adr/0004-groq-over-gemini-for-text-generation.md) — LLM provider selection; two-model design rationale; OpenAI for embeddings
 - [`docs/adr/0005-redis-as-cross-process-result-store.md`](docs/adr/0005-redis-as-cross-process-result-store.md) — Why Redis over PostgreSQL and RabbitMQ reply-to for result persistence
-- [`docs/adr/0006-dual-llm-architecture.md`](docs/adr/0006-dual-llm-architecture.md) — Why 8B routing + 70B synthesis cuts agentic p95 from 6.8 s to 3.4 s
-- [`docs/pwc-jd-mapping.md`](docs/pwc-jd-mapping.md) — Every JD requirement mapped to file + endpoint + demo step + honest gap
+- [`docs/adr/0006-dual-llm-architecture.md`](docs/adr/0006-dual-llm-architecture.md) — Why Groq 8B routing + DeepSeek synthesis cuts agentic p95 from 6.8 s to 3.4 s
+- Interview and role-specific material is archived under [`docs/archive/job-search/`](docs/archive/job-search/).
 - [`evals/golden_set.json`](evals/golden_set.json) — 40-question golden eval set; run with `scripts/run_golden_eval.py`
 
 **Live demo (no services required):**
@@ -143,7 +142,7 @@ live Neo4j and corpus validation remain the release gate.
 | **BM25 + Vector hybrid search** | Vector ANN and BM25 fulltext results fused via Reciprocal Rank Fusion (RRF, k=60) |
 | **Cross-encoder reranking** | `ms-marco-MiniLM-L-6-v2` deep pairwise query-chunk scoring before graph expansion |
 | **Multi-hop graph traversal** | `Chunk → Entity → RELATES_TO* → Entity → Chunk` up to depth 2 |
-| **Agentic fallback (IRCoT)** | Low-confidence answers trigger iterative re-search (max 2 steps); two-model design — llama-3.1-8b-instant for routing (~0.2s/step), llama-3.3-70b for final synthesis; agentic p95 **3.4s** |
+| **Agentic fallback (IRCoT)** | Low-confidence answers trigger iterative re-search; Groq `llama-3.1-8b-instant` handles routing (~0.2s/step), while DeepSeek handles final synthesis; agentic p95 **3.4s** |
 | **Session context** | Redis-backed conversation history (24h TTL); enriches follow-up queries with prior turn entities |
 | **Alias resolution** | Name-based + embedding-based deduplication before every entity MERGE; per-tenant registry pool |
 | **Document authority hierarchy** | 4-level authority system (Regulatory → Manufacturer → Internal → Informal); superseded docs penalised |
@@ -227,7 +226,7 @@ The cross-encoder scores text similarity. It doesn't know that *Falcon 9* and *S
 | Reranker | `cross-encoder/ms-marco-MiniLM-L-6-v2` (sentence-transformers) |
 | GNN | PyTorch — GAT / GCN (configurable) |
 | Community detection | graspologic (Leiden algorithm) |
-| Agent Framework | Custom dual-LLM IRCoT (8B routing + 70B synthesis) |
+| Agent Framework | Custom dual-LLM IRCoT (Groq 8B routing + DeepSeek large-model synthesis) |
 | Evaluation | RAGAS |
 | API | FastAPI + Uvicorn |
 | Dashboard | Plotly Dash |
@@ -301,7 +300,7 @@ ai-knowledge-graph-platform/
 │       ├── local_search.py          # 6-stage pipeline: vector + BM25 + rerank + multihop + GNN + context
 │       ├── global_search.py         # Community embedding search + map-reduce synthesis
 │       ├── hybrid_retriever.py      # Combines local + global; agentic fallback; session turn recording
-│       ├── agentic_retriever.py     # Iterative IRCoT re-search (dual-LLM: 8B routing + 70B synthesis)
+│       ├── agentic_retriever.py     # Iterative IRCoT re-search (Groq 8B routing + DeepSeek synthesis)
 │       ├── bm25_search.py           # HybridBM25Search with RRF (k=60)
 │       ├── reranker.py              # CrossEncoderReranker (ms-marco-MiniLM-L-6-v2)
 │       ├── session_context.py       # Async session context: query enrichment from prior turns
@@ -387,7 +386,7 @@ python -m pip install -r requirements.txt
 OPENAI_API_KEY=sk-...
 
 # Groq — fast routing model for agentic retrieval (get_fast_llm()); also usable
-# as an opt-in text-generation override via LLM_INGEST_PROVIDER=groq (100k TPD free tier)
+# as an opt-in text-generation override via LLM_INGEST_PROVIDER=groq
 # Get key at: https://console.groq.com/keys
 GROQ_API_KEY=gsk_...
 GROQ_MODEL=llama-3.3-70b-versatile
@@ -693,7 +692,7 @@ This question spans 3 separate documents with no direct text overlap.
    Citations found + specific answer → skip agentic fallback ✅
    (else: IRCoT loop, max 4 SEARCH steps, then "insufficient context")
 
-8. GROQ/LLAMA GENERATES ANSWER
+8. DEEPSEEK GENERATES ANSWER
    Context: local chunks (60%) + community summaries (40%)
    "SpaceX, founded by Elon Musk, launched:
     • Falcon 9 — first booster landing 2015, 200+ missions [Chunk 8910]
@@ -739,7 +738,7 @@ Every ingestion batch runs the following checks automatically:
 
 ## Measured Performance (live, aerospace regulatory corpus)
 
-### Answer Quality — RAGAS (llama-3.3-70b synthesis, DeepSeek RAGAS judge)
+### Answer Quality — RAGAS (DeepSeek synthesis, DeepSeek judge with Groq fallback)
 
 | Metric | Measured | Target |
 |--------|----------|--------|

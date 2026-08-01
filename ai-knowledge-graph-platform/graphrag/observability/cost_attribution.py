@@ -4,6 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+try:
+    from prometheus_client import Counter, Histogram
+except ImportError:  # pragma: no cover - optional local dependency
+    Counter = Histogram = None
+
+
+_cost_counter = Counter(
+    "graphrag_stage_cost_usd_total", "Attributed stage cost", ["tenant", "stage", "provider", "model"]
+) if Counter else None
+_latency_histogram = Histogram(
+    "graphrag_stage_latency_ms", "Stage latency", ["tenant", "stage", "provider", "model"]
+) if Histogram else None
+
 
 @dataclass(frozen=True)
 class CostEvent:
@@ -13,6 +26,15 @@ class CostEvent:
     model: str
     cost_usd: float
     latency_ms: float = 0.0
+
+
+def record_cost_event(event: CostEvent) -> None:
+    """Publish a cost/latency event to Prometheus when available."""
+    labels = (event.tenant, event.stage, event.provider, event.model)
+    if _cost_counter:
+        _cost_counter.labels(*labels).inc(event.cost_usd)
+    if _latency_histogram:
+        _latency_histogram.labels(*labels).observe(event.latency_ms)
 
 
 def aggregate_costs(events: list[CostEvent]) -> list[dict]:

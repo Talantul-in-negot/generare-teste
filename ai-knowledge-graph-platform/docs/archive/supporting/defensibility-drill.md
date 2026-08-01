@@ -124,14 +124,14 @@ The flow in `agentic_retriever.py`:
 2. Ask a **fast 8B model** (llama-3.1-8b-instant): "Can you answer? If not, what do you need?"
 3. If it says `ANSWER:`, return it (still fast — sub-second reasoning step)
 4. If it says `SEARCH: <sub-query>`, retrieve on that sub-query, add new chunks to context
-5. Repeat up to 2 steps, then synthesize with the **full 70B model** for quality
+5. Repeat up to 2 steps, then synthesize with the **DeepSeek large model** for quality
 
 The trigger in `hybrid_retriever.py`: fires when the initial answer contains hedge language
 **and** has zero citations. Both signals must be present — hedge-only or zero-citations-only
 are not sufficient (on sparse corpora many confident answers have no citation IDs yet).
 
 Measured trigger rate: ~9% of queries. Agentic p95: **3.4s**. The two-model design
-(8B for routing, 70B for synthesis) keeps this well below the previous 6.8s.
+(Groq 8B for routing, DeepSeek for synthesis) keeps this well below the previous 6.8s.
 Hybrid p95 is unchanged at **2.2s**. Combined p95: **2.7s**.
 
 The key follow-up defence: "We don't alert on agentic latency — we alert on agentic
@@ -398,8 +398,8 @@ Before any meeting, verify you can do all of these **cold, without notes:**
 - [ ] State the real RAGAS numbers cold: faithfulness 0.937 (answerable) / 0.842 overall, precision 0.907, recall 0.867
 - [ ] State the real latency numbers: hybrid p95 2.2s, agentic p95 3.4s, combined 2.7s
 - [ ] Explain why p95 must be reported per mode, not combined
-- [ ] Explain the two-model design: 8B for routing (~0.2s/step), 70B for synthesis (~1.5s)
+- [ ] Explain the two-model design: Groq 8B for routing (~0.2s/step), DeepSeek for synthesis
 - [ ] Answer Q15 (agent control) from memory: allowlist, risk levels, scopes, cross-tenant, dry-run, timeout, audit
 - [ ] Know the test count cold: 380 passing (49 are tool safety guardrail tests)
-- [ ] Open `docs/jd-mapping.md` — know the Gap column entries honestly
+- [ ] Review `docs/archive/job-search/jd-mapping.md` — know the Gap column entries honestly
 - [ ] Answer Q16 conversationally, honestly, without sounding defensive

@@ -1,4 +1,5 @@
-"""Entity + relation extraction from text chunks using Groq (llama-3.3-70b) with JSON output.
+"""Entity + relation extraction using the configured large-model router
+(DeepSeek by default, Groq fallback or development override) with JSON output.
 
 Text generation is routed through ``graphrag.core.llm_client.get_llm`` (Groq);
 embeddings use OpenAI text-embedding-3-large (3072d).  The LLM is asked for strict JSON (``json_mode=True``)

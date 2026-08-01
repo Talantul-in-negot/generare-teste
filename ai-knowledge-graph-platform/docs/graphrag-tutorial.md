@@ -8,7 +8,7 @@ integration, ETL pipelines, cloud).
 Cross-references: [graphrag-terminology.md](graphrag-terminology.md) (A–Z
 glossary), [cypher-patterns.md](cypher-patterns.md) (query cookbook),
 [knowledge-graph-architecture.md](knowledge-graph-architecture.md) (data
-model), [jd-mapping.md](jd-mapping.md) (requirement-by-requirement evidence).
+model). Role-specific interview material is archived under [archive/job-search](archive/job-search).
 
 ---
 

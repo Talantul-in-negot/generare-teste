@@ -25,6 +25,10 @@ from graphrag.retrieval.context_builder import ContextBuilder
 from graphrag.retrieval.agentic_retriever import AgenticRetriever, _is_low_confidence
 from graphrag.retrieval.claim_verifier import ClaimVerifier
 from graphrag.retrieval.query_rewriter import QueryRewriter
+from graphrag.retrieval.feedback import RetrievalFeedbackService, apply_feedback_scores
+from graphrag.retrieval.query_planner import retrieval_plan
+from graphrag.observability.budgets import check_budget
+from graphrag.observability.cost_attribution import CostEvent, record_cost_event
 from graphrag.retrieval.session_context import get_session_context
 
 log = structlog.get_logger(__name__)
@@ -89,6 +93,28 @@ class HybridRetriever:
         self._use_session_ctx = self._cfg.get("session_context_enabled", True)
         self._session_ctx = get_session_context() if self._use_session_ctx else None
         self._context_graph = ContextGraphRepository(get_neo4j())
+        self._feedback = RetrievalFeedbackService(get_neo4j())
+
+    async def _apply_retrieval_feedback(
+        self, local_results: dict, tenant: str, cfg: dict,
+    ) -> None:
+        if not local_results or not cfg.get("feedback_ranking_enabled", True):
+            return
+        citation_ids: list[str] = []
+        for chunk in local_results.get("chunks", []):
+            citation_ids.append(str(chunk.get("chunk_id", "")))
+            if chunk.get("_doc_name"):
+                citation_ids.append(str(chunk["_doc_name"]))
+            source = str(chunk.get("source", ""))
+            if source:
+                citation_ids.append(source.rsplit(".", 1)[0])
+        try:
+            scores = await self._feedback.scores(citation_ids, tenant)
+            apply_feedback_scores(
+                local_results, scores, float(cfg.get("feedback_ranking_weight", 0.10))
+            )
+        except Exception as exc:
+            log.warning("hybrid_retriever.feedback_ranking_failed", error=str(exc)[:200])
 
     async def _record_context_trace(
         self, *, question: str, answer: str, tenant: str, query_id: str,
@@ -176,6 +202,12 @@ class HybridRetriever:
         # weights, the context top_k that decides how many chunks reach the LLM,
         # claim verification, agentic fallback. Empty tenant_overrides ⇒ global.
         cfg = resolve_tenant_config(self._cfg, tenant)
+        plan = retrieval_plan(question)
+        if mode == "hybrid" and cfg.get("query_planner_enabled", False):
+            mode = plan["mode"]
+            cfg = {**cfg, "local_top_k": plan["top_k"]}
+            log.info("hybrid_retriever.query_plan", query_class=plan["query_class"], mode=mode,
+                     top_k=plan["top_k"], fallback=plan["fallback"])
 
         from graphrag.retrieval.result_store import get_result_store
         _store = get_result_store() if query_id else None
@@ -243,6 +275,8 @@ class HybridRetriever:
             await _step("🕸️ Graph expansion (Leiden communities)...")
             global_results = await self._global.search(search_query, tenant=tenant)
 
+        await self._apply_retrieval_feedback(local_results, tenant, cfg)
+
         # Warn the LLM about entities in this result set that are the subject
         # of an open, unresolved contradiction — otherwise a disputed fact can
         # be retrieved and stated as settled with no signal it's contested.
@@ -281,6 +315,13 @@ class HybridRetriever:
                 log.info("hybrid_retriever.claims_stripped", n_removed=n_removed)
 
         latency_ms = (time.monotonic() - t0) * 1000
+        budget = check_budget("synthesis", latency_ms, 0.0)
+        record_cost_event(CostEvent(
+            tenant=tenant, stage="synthesis", provider="configured",
+            model=self._model_version, cost_usd=0.0, latency_ms=latency_ms,
+        ))
+        if not budget["within_budget"]:
+            log.warning("hybrid_retriever.budget_exceeded", **budget)
 
         # ── Record session turn with the real answer ───────────────────────────
         # Done here (not in local_search) so the stored turn always reflects the

@@ -257,7 +257,7 @@ Say:
 > "That's the platform. It's live, it's on your domain, and I can walk through
 > any part of the architecture or the Cypher queries underneath."
 
-Then ask one of the questions from `docs/wpp-jd-mapping.md`.
+Then ask one of the questions from `docs/archive/job-search/wpp-jd-mapping.md`.
 
 ---
 

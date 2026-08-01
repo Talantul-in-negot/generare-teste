@@ -473,3 +473,22 @@ VERDICT: keep w=0.5. Results: `evals/hop_ranking_eval_results.json`.
 
 **Verified:** 362/362 unit tests pass; dry-run ingest OK; eval ran against
 live Neo4j (aerospace tenant, 368 entities / 422 edges).
+
+---
+
+## Roadmap completion pass (2026-08-01)
+
+- [x] Consume tenant-scoped retrieval feedback in `HybridRetriever` ranking
+- [x] Enforce approval/exception expiry and append-only retention markers
+- [x] Add supersession cycle prevention and chain reconstruction
+- [x] Add deterministic Context Graph consistency, change, precedent, and proactive metrics
+- [x] Make proactive thresholds configurable and manifest compaction reversible
+- [x] Add executable load, security, recovery, and cost exercises
+- [x] Publish Prometheus stage-budget breach counters
+- [x] Fix the strict session-store test contract
+- [x] Reconcile stale roadmap claims and conditional scale work
+- [x] Complete final full-suite, live Neo4j, Compose, and lint verification
+
+**Verified:** 739 passed, 6 skipped, 0 failed; live Neo4j Context Graph
+trace/replay/approval-expiry/retention passed; both Compose configurations are
+valid; targeted Ruff checks passed.

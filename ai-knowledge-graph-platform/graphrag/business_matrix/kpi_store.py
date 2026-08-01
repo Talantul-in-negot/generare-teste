@@ -17,9 +17,12 @@ class Base(DeclarativeBase):
 class KPIEventRow(Base):
     __tablename__ = "kpi_events"
 
+    # Timescale hypertables require every unique constraint to include the
+    # partitioning column. Event IDs remain unique per recorded event while
+    # allowing the same schema to serve SQLite and TimescaleDB.
     event_id = Column(String, primary_key=True)
     query_id = Column(String, nullable=False, index=True)
-    recorded_at = Column(DateTime, nullable=False, index=True)   # index for window queries
+    recorded_at = Column(DateTime(timezone=True), nullable=False, primary_key=True, index=True)
     latency_ms = Column(Float, nullable=False)
     faithfulness = Column(Float, default=0.0)
     answer_relevancy = Column(Float, default=0.0)

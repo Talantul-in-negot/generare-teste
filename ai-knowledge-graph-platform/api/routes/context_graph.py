@@ -1,4 +1,6 @@
-"""Context Graph P0 endpoints: validation, persistence, and WPP trace slice."""
+"""Context Graph trace, governance, outcome, and proactive endpoints."""
+
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -8,13 +10,23 @@ from graphrag.context_graph.models import (
     CGAction, CGApproval, CGCorrection, CGExceptionGrant, CGFeedback, CGOutcome,
     DecisionTrace,
 )
-from graphrag.context_graph.proactive import ProactiveContextService
+from graphrag.context_graph.proactive import ProactiveContextService, ProactiveThresholds
 from graphrag.context_graph.repository import ContextGraphRepository
 from graphrag.context_graph.trace_service import ContextGraphTraceService
 from graphrag.context_graph.validation import validate_trace
 from graphrag.graph.neo4j_client import get_neo4j
+from graphrag.core.config import get_settings
 
 router = APIRouter(prefix="/context-graph", tags=["Context Graph P0"])
+
+
+def _proactive_service() -> ProactiveContextService:
+    cfg = get_settings().context_graph.get("proactive", {})
+    return ProactiveContextService(get_neo4j(), ProactiveThresholds(
+        policy_expiry_days=int(cfg.get("policy_expiry_days", 30)),
+        critical_expiry_days=int(cfg.get("critical_expiry_days", 7)),
+        minimum_policy_uses=int(cfg.get("minimum_policy_uses", 1)),
+    ))
 
 
 class TraceRequest(BaseModel):
@@ -89,11 +101,41 @@ async def replay_context_trace(decision_id: str, as_of: str, tenant: str = "defa
     return await ContextGraphRepository(get_neo4j()).replay_trace(decision_id, tenant, as_of)
 
 
+@router.get("/traces/{decision_id}/governance", dependencies=[Depends(require_scope("read"))])
+async def effective_context_governance(
+    decision_id: str, tenant: str = "default", as_of: datetime | None = None,
+):
+    return await ContextGraphRepository(get_neo4j()).effective_governance(
+        decision_id, tenant, as_of
+    )
+
+
+@router.get("/traces/{decision_id}/supersession", dependencies=[Depends(require_scope("read"))])
+async def context_supersession_chain(decision_id: str, tenant: str = "default"):
+    return await ContextGraphRepository(get_neo4j()).supersession_chain(decision_id, tenant)
+
+
+class RetentionRequest(BaseModel):
+    tenant: str = Field(min_length=1)
+    before: datetime
+    actor_id: str = Field(min_length=1)
+    reason_code: str = "retention_expired"
+    dry_run: bool = True
+
+
+@router.post("/retention/apply", dependencies=[Depends(require_scope("write"))])
+async def apply_context_retention(request: RetentionRequest):
+    return await ContextGraphRepository(get_neo4j()).apply_retention_policy(
+        request.tenant, request.before, request.actor_id,
+        reason_code=request.reason_code, dry_run=request.dry_run,
+    )
+
+
 @router.get("/precedents", dependencies=[Depends(require_scope("read"))])
 async def find_context_precedents(policy_version_id: str, tenant: str = "default", limit: int = 10):
     return await ContextGraphRepository(get_neo4j()).find_precedents(tenant, policy_version_id, limit)
 
 
 @router.get("/proactive/expiring-policies", dependencies=[Depends(require_scope("read"))])
-async def expiring_context_policies(tenant: str = "default", within_days: int = 30):
-    return [item.model_dump(mode="json") for item in await ProactiveContextService(get_neo4j()).expiring_policies(tenant, within_days)]
+async def expiring_context_policies(tenant: str = "default", within_days: int | None = None):
+    return [item.model_dump(mode="json") for item in await _proactive_service().expiring_policies(tenant, within_days)]
