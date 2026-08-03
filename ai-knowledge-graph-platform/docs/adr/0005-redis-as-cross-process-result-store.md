@@ -11,7 +11,7 @@
 The platform runs three process types:
 
 1. **API process** (`uvicorn api.main:app`) — accepts `POST /query`, returns a `query_id`, and later serves `GET /query/{id}` with the result
-2. **Query worker** (`graphrag/workers/query_worker.py`) — consumes from RabbitMQ, runs the 6-stage retrieval pipeline, produces a `QueryResult`
+2. **Query worker** — consumes from RabbitMQ, runs the five-stage retrieval pipeline followed by LLM synthesis, and produces a `QueryResult`. Difficult or weakly grounded answers can additionally enter the iterative IRCoT fallback.
 3. **Dashboard** (`:8050`) — reads KPI summaries and latency metrics
 
 In a single-process development setup, the API and query worker run in the same process and can share an in-memory dict. In any container deployment (Fly.io, Kubernetes, Docker Compose), they run in separate containers with no shared memory.

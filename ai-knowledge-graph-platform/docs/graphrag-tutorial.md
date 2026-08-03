@@ -467,8 +467,7 @@ distinction is why the retired `multi_source` strategy was wrong (A135).
   poll for result), `/graph/entities/{id}/provenance`, `/kg/conflicts`,
   `/kg/health/snapshot`, `/kpis/*`, `/demo` (interactive UI with
   chain-of-thought trace steps).
-- **Workers** (`workers/query_worker.py`): consume queue, run the 6-stage
-  pipeline, write results to Redis.
+- **Workers**: consume the queue, run the five-stage retrieval pipeline, perform the separate LLM synthesis step, and write results to Redis.
 - Clean separation: API never touches Neo4j for queries — everything goes
   through the worker, so retrieval load can scale independently.
 
@@ -482,8 +481,7 @@ both sides can see.
 1. API receives `POST /query` → publishes to RabbitMQ → immediately writes
    `{"status": "processing", "query_id": ...}` to Redis and returns
    `query_id` to the client.
-2. Worker picks up the message, runs the 6-stage retrieval pipeline. After
-   each stage it calls `push_progress(query_id, step)` — this does a
+2. Worker picks up the message, runs the five retrieval stages and then performs LLM synthesis. If the result is weakly grounded, the IRCoT fallback can issue bounded retrieve→reason→retrieve passes. During processing, each stage calls `push_progress(query_id, step)` — this does a
    Redis `GET` (read current entry), appends the step name to a `steps`
    list, `SET`s it back. This is what feeds the chain-of-thought trace in
    the `/demo` UI.

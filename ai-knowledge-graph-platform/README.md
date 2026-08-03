@@ -166,7 +166,7 @@ local live Neo4j; production traffic and production-scale tuning remain open.
 | Feature | Details |
 |---------|---------|
 | **Batched ingestion writes** | Entity embeddings (A131) + chunk/entity/relation writes (A129 + A132) batched via UNWIND to minimize Neo4j round-trips — 30-doc corpus ingests in ~48 min wall-clock (90+ min → 48 min after A129-A132 optimization) |
-| **6-stage retrieval pipeline** | Vector ANN → BM25+RRF → Cross-encoder → Multi-hop → GAT GNN → LLM |
+| **Five-stage retrieval pipeline + synthesis** | Vector ANN → BM25+RRF → Cross-encoder → Multi-hop → GAT/GCN GNN → LLM synthesis; IRCoT is an iterative fallback |
 | **Graph Attention Network (GAT)** | GCN/GAT re-scores chunks using entity embedding propagation; attention weights by cosine similarity between neighbours |
 | **Query-adaptive GNN weights** | Relational queries (e.g. "how did X cause Y") auto-shift to 50/50 text/GNN; factoid queries use default α/β |
 | **BM25 + Vector hybrid search** | Vector ANN and BM25 fulltext results fused via Reciprocal Rank Fusion (RRF, k=60) |
@@ -331,7 +331,7 @@ ai-knowledge-graph-platform/
 │   │   ├── publishers.py            # publish_document(), publish_query(), publish_eval_job()
 │   │   └── consumers.py             # Message handler wiring per queue
 │   └── retrieval/
-│       ├── local_search.py          # 6-stage pipeline: vector + BM25 + rerank + multihop + GNN + context
+│       ├── local_search.py          # Five retrieval stages: vector + BM25 + rerank + multihop + GNN; synthesis follows
 │       ├── global_search.py         # Community embedding search + direct-context synthesis
 │       ├── hybrid_retriever.py      # Combines local + global; agentic fallback; session turn recording
 │       ├── agentic_retriever.py     # Iterative IRCoT re-search (Groq 8B routing + DeepSeek synthesis)
@@ -806,7 +806,7 @@ Every ingestion batch runs the following checks automatically:
 
 | Mode | Avg | p95 | Notes |
 |------|-----|-----|-------|
-| Hybrid (6-stage) | 1,734 ms | **2,162 ms ✓** | 91% of queries |
+| Hybrid retrieval + synthesis | 1,734 ms | **2,162 ms ✓** | 91% of queries |
 | Agentic (IRCoT) | 2,842 ms | **3,442 ms** | 9% of queries — by design |
 | Combined | 1,842 ms | 2,719 ms | Inflated by mode mix |
 

@@ -467,7 +467,7 @@ not just this platform's own FastAPI/RabbitMQ stack:
 
 | Tool | Wraps | Returns |
 |---|---|---|
-| `query_knowledge_graph_tool` | `HybridRetriever.retrieve_and_answer()` — the same 6-stage pipeline the API uses | `QueryResult.model_dump()`: answer, citations, contexts, latency, mode |
+| `query_knowledge_graph_tool` | `HybridRetriever.retrieve_and_answer()` — the same five-stage retrieval pipeline plus LLM synthesis used by the API | `QueryResult.model_dump()`: answer, citations, contexts, latency, mode |
 | `lookup_entity_tool` | `AliasRegistry.resolve()` + `Neo4jClient.get_relations_for_entity()` + `get_pagerank_by_entity_names()` | resolved canonical name/type, relations, PageRank importance (nullable — never coerced to 0) |
 
 **Transport is stdio** (the standard local/dev MCP transport) — this is a

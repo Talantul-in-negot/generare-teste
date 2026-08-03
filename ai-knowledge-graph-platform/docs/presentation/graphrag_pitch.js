@@ -113,7 +113,7 @@ slideTitle(s3, "Three Layers. One Coherent System.");
 
 const layers = [
   { title: "Knowledge Graph", sub: "Neo4j 5.x", bullets: ["Entity resolution (4-stage)", "Ontology enforcement", "Forward-chaining inference", "Contradiction detection", "Bitemporal modeling"], bg: NAV },
-  { title: "Retrieval Pipeline", sub: "6-stage hybrid", bullets: ["Vector ANN (3072d OpenAI)", "BM25 + RRF fusion", "Cross-encoder reranking", "Multi-hop graph traversal", "GAT/GCN GNN scoring"], bg: "065A82" },
+  { title: "Retrieval Pipeline", sub: "Five-stage hybrid + synthesis", bullets: ["Vector ANN (3072d OpenAI)", "BM25 + RRF fusion", "Cross-encoder reranking", "Multi-hop graph traversal", "GAT/GCN GNN scoring", "LLM synthesis; IRCoT fallback"], bg: "065A82" },
   { title: "Agent Layer", sub: "Groq + DeepSeek fallback", bullets: ["Two-model IRCoT (8B + 70B)", "AND-logic agentic trigger", "Session context (Redis)", "RAGAS evaluation", "JWT-secured REST API"], bg: "164E63" },
 ];
 
@@ -156,7 +156,7 @@ s4.addText("What's Built & Where", { x: 4.25, y: hdrY + 0.05, w: 5.1, h: 0.28, f
 
 const rows = [
   ["Neo4j + graph-based data modeling", "39 KG modules · 572-line neo4j_client.py · production Cypher (UNWIND, COUNT{}, vector ANN, BM25)"],
-  ["Graph RAG patterns", "6-stage pipeline: vector → BM25+RRF → reranker → multi-hop traversal → GNN → LLM synthesis"],
+  ["Graph RAG patterns", "Five retrieval stages: vector → BM25+RRF → reranker → multi-hop traversal → GNN; then LLM synthesis with IRCoT fallback"],
   ["LLM integration + tool invocation", "Groq llama-3.3-70b (synthesis) · llama-3.1-8b (routing) · DeepSeek-V3 fallback · agentic IRCoT"],
   ["Design + validate MVP solutions", "364 passing tests · CI/CD (GitHub Actions) · Docker multi-stage · runbook · regulatory demo"],
   ["Agentic chatbot, autonomous tools", "QueryAgent + IngestionAgent + EvaluationAgent · session context · Redis result store"],

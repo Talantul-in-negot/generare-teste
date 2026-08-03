@@ -300,7 +300,7 @@ Retrieval-Augmented Generation enhanced with a knowledge graph. Instead of (or i
 
 **GraphRAG:** Query → vector search + graph traversal + inference + community summaries → structured context → LLM generates cited, reasoned answer
 
-**In this project:** The entire platform is a GraphRAG implementation. The 6-stage retrieval pipeline is the GraphRAG pipeline.
+**In this project:** The entire platform is a GraphRAG implementation. The retrieval path has five retrieval stages; final LLM synthesis is a separate sixth step. IRCoT is an iterative fallback layered over this path, not a fixed retrieval stage.
 
 ---
 

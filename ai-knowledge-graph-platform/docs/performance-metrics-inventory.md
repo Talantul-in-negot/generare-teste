@@ -404,7 +404,7 @@ brier = svc.get_brier_score("llama-3.3-70b")
 ## Retrieval Pipeline Metrics
 
 ### What they measure
-Performance of each stage in the 6-stage retrieval pipeline.
+Performance of each retrieval stage in the five-stage retrieval pipeline; LLM synthesis is measured separately.
 
 ### Metrics returned in `/search` response
 
