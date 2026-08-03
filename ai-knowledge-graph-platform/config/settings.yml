@@ -71,6 +71,8 @@ retrieval:
   multihop_top_k: 50       # max hop chunks fed to GNN — prevents full-corpus scoring on dense graphs (bug fix: 21min→30s)
   multihop_semantic_weight: 0.5  # blend hop ranking: (1-w)·path_score + w·cos(chunk,query), cosine computed in Neo4j. 0 = pure path score (pre-2026-06 behavior). Gated on retrieval eval — see scripts/eval_hop_ranking.py. Phase 5 Fix B tried 0.8 (no effect on CON-04/AUTH-01, reverted — see tasks/lessons.md A105)
   global_top_communities: 5
+  global_search_strategy: direct_context  # direct summaries -> final synthesis; map_reduce remains available for ablations
+  global_direct_context_max_chars: 6000   # bounded high-level context sent to the final answer call
   global_reduce_max_tokens: 300  # ceiling on the reduce step's output. Measured: unbounded
                                   # generation produced 494-2090 chars (6.5-15.7s) for identical
                                   # prompts. Output is machine-consumed context, not user-facing,
@@ -82,6 +84,8 @@ retrieval:
   hybrid_weight_global: 0.4
   bm25_enabled: true       # BM25 fulltext + RRF fusion with vector results
   reranker_enabled: true   # cross-encoder rerank after RRF (ms-marco-MiniLM-L-6-v2)
+  entity_context_enabled: true  # append entity descriptions/neighbors to the final prompt
+  named_document_boost_enabled: true  # reserve a seed for explicitly named documents
   query_rewrite_enabled: true  # Stage-1: strip retrieval-diluting boilerplate + expand/normalize query before first-pass retrieval; search-only, never touches answer/eval. Fails open. A/B measured 2026-07-24 on aerospace golden set (34 Q): rewrite ON and OFF both scored 29/34 (85%) — zero accuracy delta. A later re-run of the OFF arm scored 13/34 with a timeout-dominated failure signature, but that was NOT rewrite-related — root cause was an unrelated DeepSeek model-id deprecation bug (fixed separately, commit 6fe2cc7) coincidentally active during that run. Keep enabled: no accuracy cost, and it reduces load on the agentic fallback path. See tasks/lessons.md A138.
   query_planner_enabled: true
   # ── Session context ──────────────────────────────────────────────────────────
@@ -92,6 +96,8 @@ retrieval:
   session_ttl_seconds: 86400        # Redis key TTL for session turns (24h)
   session_store_strict: false       # true = fail startup if Redis unreachable; false = silent in-memory fallback
   query_result_ttl_seconds: 3600   # how long to keep query results in Redis (1 hour)
+  semantic_answer_cache_enabled: true  # governed exact-input cache for completed API/worker queries
+  semantic_answer_cache_ttl_seconds: 3600  # corpus revision is the hard staleness guard; TTL bounds storage
   # ── GNN scoring (after multi-hop traversal) ───────────────────────────────
   gnn_enabled: true        # GCN/GAT graph-propagated re-scoring
   gnn_type: gat            # "gcn" (Kipf & Welling 2017) | "gat" (Veličković 2018)

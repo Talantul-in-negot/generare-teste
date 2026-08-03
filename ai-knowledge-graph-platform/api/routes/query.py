@@ -23,6 +23,8 @@ class QueryRequest(BaseModel):
     ground_truth: str = ""
     tenant: str = "default"
     session_id: str = ""
+    valid_at: str | None = None
+    transaction_at: str | None = None
 
 
 class QueryResponse(BaseModel):
@@ -50,6 +52,8 @@ async def submit_query(request: Request, body: QueryRequest):
             ground_truth=body.ground_truth,
             tenant=body.tenant,
             session_id=body.session_id,
+            valid_at=body.valid_at,
+            transaction_at=body.transaction_at,
             query_id=query_id,
         )
     except Exception as exc:

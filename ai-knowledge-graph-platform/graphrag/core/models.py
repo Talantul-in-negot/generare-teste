@@ -231,6 +231,12 @@ class QueryResult(BaseModel):
     latency_ms: float = 0.0
     retrieval_mode: str = "hybrid"
     model_version: str = ""
+    cache_hit: bool = False
+    cache_key: str = ""
+    source_query_id: str = ""
+    source_trace_id: str = ""
+    valid_at: str | None = None
+    transaction_at: str | None = None
 
 
 class SessionTurn(BaseModel):
@@ -293,3 +299,5 @@ class QueryMessage(BaseModel):
     ground_truth: str = ""
     tenant: str = "default"
     session_id: str = ""   # for multi-turn conversational context
+    valid_at: str | None = None
+    transaction_at: str | None = None

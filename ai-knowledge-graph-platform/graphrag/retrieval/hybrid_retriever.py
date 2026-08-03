@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import structlog
 
 from graphrag.core.config import get_settings, resolve_tenant_config
-from graphrag.core.llm_client import get_llm
+from graphrag.core.llm_client import get_generation_route, get_llm
 from graphrag.core.models import QueryResult
 from graphrag.context_graph.models import (
     AgentRun, Case, ContextManifest, Decision, DecisionOption, DecisionTrace,
@@ -30,8 +30,71 @@ from graphrag.retrieval.query_planner import retrieval_plan
 from graphrag.observability.budgets import check_budget
 from graphrag.observability.cost_attribution import CostEvent, record_cost_event
 from graphrag.retrieval.session_context import get_session_context
+from graphrag.retrieval.query_cache import (
+    QueryCacheContext,
+    build_cache_key,
+    get_query_cache,
+)
 
 log = structlog.get_logger(__name__)
+
+_PROMPT_VERSION = "hybrid-answer-v1"
+_ONTOLOGY_VERSION = "platform/v1"
+_NON_SEMANTIC_RETRIEVAL_KEYS = {
+    "redis_url",
+    "query_result_ttl_seconds",
+    "semantic_answer_cache_enabled",
+    "semantic_answer_cache_ttl_seconds",
+    "session_store",
+    "session_store_strict",
+    "session_ttl_seconds",
+}
+
+_RETRIEVAL_PROFILE_OVERRIDES: dict[str, dict] = {
+    "full": {},
+    "vector_only": {
+        "bm25_enabled": False,
+        "reranker_enabled": False,
+        "multihop_depth": 0,
+        "gnn_enabled": False,
+        "pagerank_tiebreak_enabled": False,
+        "authority_weighting_enabled": False,
+        "feedback_ranking_enabled": False,
+        "query_rewrite_enabled": False,
+        "entity_context_enabled": False,
+        "named_document_boost_enabled": False,
+    },
+    "text_hybrid": {
+        "multihop_depth": 0,
+        "gnn_enabled": False,
+        "pagerank_tiebreak_enabled": False,
+        "authority_weighting_enabled": False,
+        "feedback_ranking_enabled": False,
+        "entity_context_enabled": False,
+        "named_document_boost_enabled": False,
+    },
+    "global_map_reduce": {"global_search_strategy": "map_reduce"},
+    "dual_level_direct": {"global_search_strategy": "direct_context"},
+}
+
+
+def retrieval_profile_overrides(profile: str) -> dict:
+    """Return a named, reproducible retrieval profile for evaluation."""
+    try:
+        return dict(_RETRIEVAL_PROFILE_OVERRIDES[profile])
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown retrieval profile {profile!r}; expected one of "
+            f"{', '.join(sorted(_RETRIEVAL_PROFILE_OVERRIDES))}"
+        ) from exc
+
+
+def _cache_retrieval_config(cfg: dict) -> dict:
+    """Keep output-affecting retrieval knobs in the content-addressed key."""
+    return {
+        key: value for key, value in cfg.items()
+        if key not in _NON_SEMANTIC_RETRIEVAL_KEYS
+    }
 
 _ANSWER_PROMPT = """\
 You are a regulatory knowledge assistant. Answer using ONLY the information in the context below.
@@ -119,7 +182,10 @@ class HybridRetriever:
     async def _record_context_trace(
         self, *, question: str, answer: str, tenant: str, query_id: str,
         mode: str, model_version: str, local_results: dict,
-    ) -> None:
+        cache_context: QueryCacheContext | None = None,
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
+    ) -> str | None:
         """Persist the evidence-backed query decision for API/worker queries.
 
         Query IDs are stable across retries in the worker path, making the trace
@@ -128,7 +194,18 @@ class HybridRetriever:
         """
         chunk_ids = list(dict.fromkeys(local_results.get("referenced_chunks", [])))
         if not query_id or not chunk_ids:
-            return
+            return None
+        # Preserve the document lineage of retrieved chunks in the manifest so
+        # a replay can show the same evidence at both KG levels.
+        document_rows = await get_neo4j().run(
+            "MATCH (c:Chunk {tenant: $tenant}) "
+            "WHERE c.id IN $chunk_ids "
+            "RETURN DISTINCT c.document_id AS document_id "
+            "ORDER BY document_id",
+            tenant=tenant,
+            chunk_ids=chunk_ids,
+        )
+        document_ids = [str(row["document_id"]) for row in document_rows if row.get("document_id")]
         now = datetime.now(timezone.utc)
         later = now + timedelta(days=1)
         digest = hashlib.sha256(f"{tenant}:{query_id}".encode()).hexdigest()[:20]
@@ -140,7 +217,7 @@ class HybridRetriever:
         run = AgentRun(
             id=f"run-query-{digest}", tenant=tenant, case_id=case.id,
             actor_id="graphrag-retriever", model_provider="configured",
-            model_version=model_version, prompt_version="hybrid-answer-v1",
+            model_version=model_version, prompt_version=_PROMPT_VERSION,
             valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
         )
         policy = PolicyVersion(
@@ -148,13 +225,30 @@ class HybridRetriever:
             policy_id="retrieval-evidence", version="v1", title="Evidence-grounded retrieval",
             valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
         )
+        retrieval_config: dict = {
+            "query_id": query_id,
+            "temporal_query": {
+                "valid_at": valid_at,
+                "transaction_at": transaction_at,
+            },
+        }
+        if cache_context is not None:
+            retrieval_config.update({
+                "answer_cache_key": build_cache_key(question, tenant, cache_context),
+                "cache_schema_version": cache_context.cache_schema_version,
+                "corpus_revision": cache_context.corpus_revision,
+                "requested_mode": cache_context.requested_mode,
+                "model_route": cache_context.model_route,
+                "effective_retrieval_config": cache_context.retrieval_config,
+            })
         manifest = ContextManifest(
             id=f"manifest-query-{digest}", tenant=tenant, case_id=case.id, run_id=run.id,
             chunk_ids=chunk_ids, chunk_versions=["current"] * len(chunk_ids),
+            document_ids=document_ids, document_versions=["current"] * len(document_ids),
             policy_version_ids=[policy.id], model_provider="configured",
-            model_version=model_version, prompt_version="hybrid-answer-v1",
-            retrieval_mode=mode, retrieval_config={"query_id": query_id}, task_input=question,
-            ontology_version="platform/v1", valid_from=now, valid_to=later,
+            model_version=model_version, prompt_version=_PROMPT_VERSION,
+            retrieval_mode=mode, retrieval_config=retrieval_config, task_input=question,
+            ontology_version=_ONTOLOGY_VERSION, valid_from=now, valid_to=later,
             transaction_from=now, transaction_to=later,
         ).with_integrity_hash()
         decision = Decision(
@@ -177,13 +271,14 @@ class HybridRetriever:
             valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
         )
         try:
-            await self._context_graph.record_trace(DecisionTrace(
+            return await self._context_graph.record_trace(DecisionTrace(
                 case=case, run=run, manifest=manifest, policy_versions=[policy],
                 policy_evaluations=[evaluation], options=[option], decision=decision,
             ))
         except Exception as exc:
             # Retrieval availability must not depend on Context Graph maintenance.
             log.warning("context_graph.trace_persist_failed", query_id=query_id, error=str(exc)[:200])
+            return None
 
 
     async def retrieve_and_answer(
@@ -193,15 +288,28 @@ class HybridRetriever:
         tenant: str = "default",
         session_id: str = "",
         query_id: str = "",
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
+        retrieval_profile: str = "full",
     ) -> QueryResult:
         t0 = time.monotonic()
+        requested_mode = mode
 
         # Per-tenant config: merge this tenant's overrides over the global
         # retrieval defaults (mirrors LocalSearch.search — resolved from
         # self._cfg). Governs the knobs read below: query-rewrite gate, hybrid
         # weights, the context top_k that decides how many chunks reach the LLM,
         # claim verification, agentic fallback. Empty tenant_overrides ⇒ global.
-        cfg = resolve_tenant_config(self._cfg, tenant)
+        profile_overrides = retrieval_profile_overrides(retrieval_profile)
+        cfg = {**resolve_tenant_config(self._cfg, tenant), **profile_overrides}
+        if retrieval_profile == "vector_only":
+            mode = "local"
+        if (valid_at or transaction_at) and mode in {"hybrid", "global"}:
+            # Community summaries have no versioned evidence lineage, so they
+            # cannot safely answer a point-in-time question. Use the temporal
+            # chunk/edge path until community snapshots are versioned.
+            mode = "local"
+            log.info("hybrid_retriever.global_skipped", reason="temporal_query")
         plan = retrieval_plan(question)
         if mode == "hybrid" and cfg.get("query_planner_enabled", False):
             mode = plan["mode"]
@@ -215,6 +323,66 @@ class HybridRetriever:
         async def _step(msg: str):
             if _store and query_id:
                 await _store.push_progress(query_id, msg)
+
+        answer_cache = None
+        cache_context = None
+        if (
+            query_id
+            and not session_id
+            and cfg.get("semantic_answer_cache_enabled", False)
+        ):
+            try:
+                corpus_state = await get_neo4j().get_corpus_state(tenant)
+                if not corpus_state.get("updating", False):
+                    cache_context = QueryCacheContext(
+                        corpus_revision=int(corpus_state.get("revision", 0)),
+                        requested_mode=requested_mode,
+                        effective_mode=mode,
+                        model_route=get_generation_route(),
+                        prompt_version=_PROMPT_VERSION,
+                        retrieval_config=_cache_retrieval_config(cfg),
+                        ontology_version=_ONTOLOGY_VERSION,
+                        valid_at=valid_at,
+                        transaction_at=transaction_at,
+                    )
+                    answer_cache = await get_query_cache()
+                    cached = await answer_cache.get(question, tenant, cache_context)
+                    if cached:
+                        result = QueryResult.model_validate(cached["result"])
+                        result.query_id = query_id
+                        result.question = question
+                        result.cache_hit = True
+                        result.cache_key = cached["cache_key"]
+                        result.source_query_id = cached["source_query_id"]
+                        result.source_trace_id = cached["source_trace_id"]
+                        result.latency_ms = (time.monotonic() - t0) * 1000
+                        await _step("Answer cache hit; original governed trace reused")
+                        record_cost_event(CostEvent(
+                            tenant=tenant, stage="answer_cache", provider="redis",
+                            model=result.model_version, cost_usd=0.0,
+                            latency_ms=result.latency_ms,
+                        ))
+                        return result
+                else:
+                    log.info("query_cache.bypassed_corpus_updating", tenant=tenant)
+            except Exception as exc:
+                log.warning("query_cache.lookup_failed", tenant=tenant, error=str(exc)[:200])
+
+        async def _store_governed_result(result: QueryResult, trace_id: str | None) -> None:
+            if not answer_cache or not cache_context or not trace_id or not result.citations:
+                return
+            key = await answer_cache.set(
+                question,
+                tenant,
+                cache_context,
+                result.model_dump(mode="json"),
+                source_query_id=query_id,
+                source_trace_id=trace_id,
+                entities_used=list(result.citations),
+            )
+            result.cache_key = key
+            result.source_query_id = query_id
+            result.source_trace_id = trace_id
 
         local_results = {}
         global_results = {}
@@ -241,10 +409,23 @@ class HybridRetriever:
             try:
                 async with asyncio.TaskGroup() as tg:
                     local_task = tg.create_task(
-                        self._local.search(search_query, session_id=session_id, tenant=tenant)
+                        self._local.search(
+                            search_query,
+                            session_id=session_id,
+                            tenant=tenant,
+                            valid_at=valid_at,
+                            transaction_at=transaction_at,
+                            config_overrides=profile_overrides,
+                        )
                     )
                     global_task = tg.create_task(
-                        self._global.search(search_query, tenant=tenant)
+                        self._global.search(
+                            search_query,
+                            tenant=tenant,
+                            valid_at=valid_at,
+                            transaction_at=transaction_at,
+                            config_overrides=profile_overrides,
+                        )
                     )
             except ExceptionGroup as eg:
                 # TaskGroup always wraps failures in an ExceptionGroup, even a
@@ -268,12 +449,21 @@ class HybridRetriever:
                 search_query,
                 session_id=session_id,
                 tenant=tenant,
+                valid_at=valid_at,
+                transaction_at=transaction_at,
+                config_overrides=profile_overrides,
             )
             n_reranked = cfg.get("rerank_top_k", 5)
             await _step(f"📊 Cross-encoder reranking → top {n_reranked} chunks")
         elif mode == "global":
             await _step("🕸️ Graph expansion (Leiden communities)...")
-            global_results = await self._global.search(search_query, tenant=tenant)
+            global_results = await self._global.search(
+                search_query,
+                tenant=tenant,
+                valid_at=valid_at,
+                transaction_at=transaction_at,
+                config_overrides=profile_overrides,
+            )
 
         await self._apply_retrieval_feedback(local_results, tenant, cfg)
 
@@ -339,7 +529,9 @@ class HybridRetriever:
         # If the hybrid answer is low-confidence, hand off to the iterative
         # agent which re-searches sub-questions until it accumulates enough
         # context to answer confidently (solves multi-document reasoning).
-        agentic_enabled = cfg.get("agentic_fallback", True)
+        agentic_enabled = cfg.get("agentic_fallback", True) and not (valid_at or transaction_at)
+        if cfg.get("agentic_fallback", True) and (valid_at or transaction_at):
+            log.info("hybrid_retriever.agentic_skipped", reason="temporal_query")
         # Per-tenant: when true, a hedging answer triggers the agent even if it
         # carried citations (see _is_low_confidence). Off by default.
         hedge_only = cfg.get("agentic_hedge_only_fallback", False)
@@ -360,11 +552,18 @@ class HybridRetriever:
             )
             result.latency_ms += latency_ms
             result.query_id = query_id or result.query_id
-            await self._record_context_trace(
+            result.valid_at = valid_at
+            result.transaction_at = transaction_at
+            trace_id = await self._record_context_trace(
                 question=question, answer=result.answer, tenant=tenant, query_id=query_id,
                 mode=result.retrieval_mode, model_version=result.model_version,
-                local_results=local_results,
+                local_results=local_results, cache_context=cache_context,
+                valid_at=valid_at, transaction_at=transaction_at,
             )
+            # The agentic retriever can add evidence not represented in
+            # local_results yet. Do not cache it until that complete evidence
+            # set is available to the governed trace.
+            result.source_trace_id = trace_id or ""
             return result
 
         log.info("hybrid_retriever.done", mode=mode, latency_ms=round(latency_ms, 1))
@@ -381,11 +580,16 @@ class HybridRetriever:
             latency_ms=latency_ms,
             retrieval_mode=mode,
             model_version=self._model_version,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
         )
         if query_id:
             result.query_id = query_id
-        await self._record_context_trace(
+        trace_id = await self._record_context_trace(
             question=question, answer=answer, tenant=tenant, query_id=query_id,
             mode=mode, model_version=self._model_version, local_results=local_results,
+            cache_context=cache_context,
+            valid_at=valid_at, transaction_at=transaction_at,
         )
+        await _store_governed_result(result, trace_id)
         return result

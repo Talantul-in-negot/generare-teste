@@ -100,6 +100,38 @@ def _chunk(cid: str) -> dict:
 
 
 class TestLocalSearchPipelineFlags:
+    async def test_temporal_bounds_reach_vector_bm25_and_graph_stages(self):
+        ls = _make_local_search({"gnn_enabled": False})
+        ls._embedder.embed_text = AsyncMock(return_value=[0.1] * 768)
+        ls._neo4j.vector_search_chunks = AsyncMock(return_value=[_chunk("c1")])
+        ls._bm25.search = AsyncMock(return_value=[_chunk("c1")])
+        ls._reranker.rerank = AsyncMock(return_value=[_chunk("c1")])
+        ls._neo4j.get_multihop_chunks = AsyncMock(return_value=[])
+        ls._neo4j.get_entity_neighbors = AsyncMock(return_value=[])
+
+        await ls.search(
+            "What applied then?",
+            valid_at="2025-01-01T00:00:00+00:00",
+            transaction_at="2025-02-01T00:00:00+00:00",
+        )
+
+        assert ls._neo4j.vector_search_chunks.await_args.kwargs["valid_at"] == "2025-01-01T00:00:00+00:00"
+        assert ls._bm25.search.await_args.kwargs["transaction_at"] == "2025-02-01T00:00:00+00:00"
+        assert ls._neo4j.get_multihop_chunks.await_args.kwargs["as_of"] == "2025-01-01T00:00:00+00:00"
+        assert ls._neo4j.get_entity_neighbors.await_args.kwargs["transaction_at"] == "2025-02-01T00:00:00+00:00"
+
+    async def test_zero_hops_skips_graph_traversal(self):
+        ls = _make_local_search({"gnn_enabled": False, "multihop_depth": 0})
+        ls._embedder.embed_text = AsyncMock(return_value=[0.1] * 768)
+        ls._neo4j.vector_search_chunks = AsyncMock(return_value=[_chunk("c1")])
+        ls._bm25.search = AsyncMock(return_value=[_chunk("c1")])
+        ls._reranker.rerank = AsyncMock(return_value=[_chunk("c1")])
+        ls._neo4j.get_entity_neighbors = AsyncMock(return_value=[])
+
+        await ls.search("vector baseline")
+
+        ls._neo4j.get_multihop_chunks.assert_not_called()
+
     async def test_returns_required_keys(self):
         ls = _make_local_search()
         ls._embedder.embed_text = AsyncMock(return_value=[0.1] * 768)

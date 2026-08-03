@@ -5,9 +5,7 @@ reduce LLM call (see tasks/lessons.md A144).
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, patch
 
 from graphrag.retrieval.global_search import GlobalSearch
 
@@ -19,6 +17,7 @@ def _make_global_search(cfg_overrides: dict | None = None) -> GlobalSearch:
         "vector_search_enabled": True,
         "global_top_communities": 5,
         "global_reduce_max_tokens": 300,
+        "global_search_strategy": "map_reduce",
     }
     if cfg_overrides:
         base_cfg.update(cfg_overrides)
@@ -148,3 +147,36 @@ class TestNoCommunities:
 
         assert result == {"communities": [], "synthesized_answer": ""}
         mock_llm.generate.assert_not_called()
+
+
+class TestDirectContext:
+    async def test_direct_context_uses_no_map_or_reduce_llm_calls(self) -> None:
+        gs = _make_global_search({
+            "global_search_strategy": "direct_context",
+            "global_direct_context_max_chars": 200,
+        })
+        gs._neo4j.vector_search_communities = AsyncMock(return_value=[{
+            "community_id": "community-1",
+            "level": 2,
+            "summary": "Campaign privacy controls apply to placement targeting.",
+            "score": 0.91,
+        }])
+        mock_llm = AsyncMock()
+
+        with patch("graphrag.retrieval.global_search.get_llm", return_value=mock_llm):
+            result = await gs.search("Which privacy controls apply?", tenant="marketing")
+
+        mock_llm.generate.assert_not_called()
+        assert "Campaign privacy controls" in result["synthesized_answer"]
+        assert "Community community-1" in result["synthesized_answer"]
+
+    async def test_direct_context_is_bounded_deterministically(self) -> None:
+        gs = _make_global_search({
+            "global_search_strategy": "direct_context",
+            "global_direct_context_max_chars": 80,
+        })
+        gs._neo4j.vector_search_communities = AsyncMock(return_value=_communities(2))
+
+        result = await gs.search("question", tenant="aerospace")
+
+        assert len(result["synthesized_answer"]) <= 80

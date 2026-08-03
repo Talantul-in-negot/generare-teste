@@ -69,6 +69,8 @@ class HybridBM25Search:
         vector_chunks: list[dict],
         top_k: int = 10,
         tenant: str = "default",
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
     ) -> list[dict]:
         """
         Args:
@@ -84,6 +86,8 @@ class HybridBM25Search:
             query,
             top_k=top_k,
             tenant=tenant,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
         )
 
         # BM25 on entity names/descriptions → back to chunks
@@ -91,6 +95,8 @@ class HybridBM25Search:
             query,
             top_k=top_k,
             tenant=tenant,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
         )
 
         # Merge entity BM25 into chunk BM25 (same RRF pass)

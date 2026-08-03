@@ -56,6 +56,68 @@ class Neo4jClient:
             await self.run(statement)
         log.info("neo4j.schema_initialized")
 
+    async def get_corpus_state(self, tenant: str = "default") -> dict:
+        """Return the tenant's durable retrieval revision and update status."""
+        rows = await self.run(
+            "OPTIONAL MATCH (s:KGCorpusState {tenant: $tenant}) "
+            "RETURN coalesce(s.revision, 0) AS revision, "
+            "coalesce(s.updating, false) AS updating, "
+            "coalesce(s.active_updates, 0) AS active_updates",
+            tenant=tenant,
+        )
+        return rows[0] if rows else {"revision": 0, "updating": False, "active_updates": 0}
+
+    async def begin_corpus_update(self, tenant: str = "default", *, reason: str = "ingestion") -> None:
+        """Disable answer-cache reads while an ingestion mutates this tenant."""
+        await self.run(
+            "MERGE (s:KGCorpusState {tenant: $tenant}) "
+            "ON CREATE SET s.revision = 0, s.active_updates = 0 "
+            "SET s.active_updates = coalesce(s.active_updates, 0) + 1, "
+            "s.updating = true, s.update_started_at = datetime(), "
+            "s.last_reason = $reason",
+            tenant=tenant,
+            reason=reason,
+        )
+
+    async def complete_corpus_update(
+        self,
+        tenant: str = "default",
+        *,
+        reason: str = "ingestion",
+        outcome: str = "completed",
+    ) -> int:
+        """Atomically publish a new corpus revision after successful ingestion."""
+        rows = await self.run(
+            "MERGE (s:KGCorpusState {tenant: $tenant}) "
+            "ON CREATE SET s.revision = 0, s.active_updates = 0 "
+            "WITH s, CASE WHEN coalesce(s.active_updates, 0) > 0 "
+            "THEN s.active_updates - 1 ELSE 0 END AS remaining "
+            "SET s.revision = coalesce(s.revision, 0) + 1, "
+            "s.active_updates = remaining, s.updating = remaining > 0, "
+            "s.updated_at = datetime(), s.last_reason = $reason, "
+            "s.last_outcome = $outcome "
+            "RETURN s.revision AS revision",
+            tenant=tenant,
+            reason=reason,
+            outcome=outcome,
+        )
+        return int(rows[0]["revision"]) if rows else 0
+
+    async def advance_corpus_revision(self, tenant: str = "default", *, reason: str) -> int:
+        """Publish a completed single-step retrieval-state mutation."""
+        rows = await self.run(
+            "MERGE (s:KGCorpusState {tenant: $tenant}) "
+            "ON CREATE SET s.revision = 0, s.active_updates = 0 "
+            "SET s.revision = coalesce(s.revision, 0) + 1, "
+            "s.updating = coalesce(s.active_updates, 0) > 0, "
+            "s.updated_at = datetime(), s.last_reason = $reason, "
+            "s.last_outcome = 'completed' "
+            "RETURN s.revision AS revision",
+            tenant=tenant,
+            reason=reason,
+        )
+        return int(rows[0]["revision"]) if rows else 0
+
     # ── Ingestion helpers ────────────────────────────────────────────────────────
 
     async def entity_exists(self, name: str, entity_type: str, tenant: str = "default") -> bool:
@@ -92,7 +154,7 @@ class Neo4jClient:
         rows = await self.run(
             """
             MERGE (d:Document {tenant: $tenant, filename: $filename})
-            ON CREATE SET d.id = $id, d.created_at = datetime()
+            ON CREATE SET d.id = $id, d.created_at = datetime(), d.recorded_at = datetime()
             SET d.ingested_at     = $ingested_at,
                 d.status          = 'done',
                 d.authority_level = $authority_level,
@@ -491,11 +553,16 @@ class Neo4jClient:
     # ── Retrieval helpers ────────────────────────────────────────────────────────
 
     async def vector_search_chunks(
-        self, embedding: list[float], top_k: int = 10, tenant: str = "default"
+        self,
+        embedding: list[float],
+        top_k: int = 10,
+        tenant: str = "default",
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
     ) -> list[dict]:
         """ANN search over Chunk.embedding using Neo4j vector index.
-        Filters by tenant and excludes chunks whose mentioned entities are
-        quarantined.
+        Filters by tenant, source-document temporal boundaries, and excludes
+        chunks whose mentioned entities are quarantined.
 
         Over-fetches before tenant-filtering — same tenant-starvation risk
         as vector_search_communities, see that method's docstring and
@@ -506,7 +573,18 @@ class Neo4jClient:
             """
             CALL db.index.vector.queryNodes('chunk_embeddings', $fetch_k, $embedding)
             YIELD node AS c, score
+            OPTIONAL MATCH (c)-[:PART_OF]->(d:Document)
             WHERE ($tenant = 'default' OR c.tenant = $tenant)
+              AND ($valid_at IS NULL OR (
+                  d IS NOT NULL
+                  AND (d.valid_from IS NULL OR d.valid_from <= datetime($valid_at))
+                  AND (d.valid_to IS NULL OR d.valid_to > datetime($valid_at))
+              ))
+              AND ($transaction_at IS NULL OR (
+                  d IS NOT NULL
+                  AND (coalesce(d.recorded_at, d.created_at) IS NULL
+                       OR coalesce(d.recorded_at, d.created_at) <= datetime($transaction_at))
+              ))
               AND NOT EXISTS {
                   MATCH (c)-[:MENTIONS]->(e:Entity)
                   WHERE e.quarantined = true
@@ -519,6 +597,8 @@ class Neo4jClient:
             embedding=embedding,
             tenant=tenant,
             top_k=top_k,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
         )
 
     async def get_document_filenames(self, tenant: str = "default") -> list[str]:
@@ -556,7 +636,12 @@ class Neo4jClient:
         return {r["chunk_id"]: r["filename"] for r in rows if r.get("filename")}
 
     async def get_best_chunk_for_document(
-        self, filename: str, embedding: list[float], tenant: str = "default"
+        self,
+        filename: str,
+        embedding: list[float],
+        tenant: str = "default",
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
     ) -> dict | None:
         """Best chunk (by cosine similarity to `embedding`) belonging to the
         document with this exact filename. Used by the named-document boost:
@@ -568,6 +653,14 @@ class Neo4jClient:
             MATCH (c:Chunk)-[:PART_OF]->(d:Document {filename: $filename})
             WHERE ($tenant = 'default' OR c.tenant = $tenant)
               AND c.embedding IS NOT NULL
+              AND ($valid_at IS NULL OR (
+                  (d.valid_from IS NULL OR d.valid_from <= datetime($valid_at))
+                  AND (d.valid_to IS NULL OR d.valid_to > datetime($valid_at))
+              ))
+              AND ($transaction_at IS NULL OR (
+                  coalesce(d.recorded_at, d.created_at) IS NULL
+                  OR coalesce(d.recorded_at, d.created_at) <= datetime($transaction_at)
+              ))
             RETURN c.id AS chunk_id, c.text AS text,
                    vector.similarity.cosine(c.embedding, $embedding) AS score
             ORDER BY score DESC
@@ -576,6 +669,8 @@ class Neo4jClient:
             filename=filename,
             embedding=embedding,
             tenant=tenant,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
         )
         return rows[0] if rows else None
 
@@ -584,6 +679,8 @@ class Neo4jClient:
         embedding: list[float],
         top_k: int = 5,
         tenant: str = "default",
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
     ) -> list[dict]:
         """ANN search over Community.embedding for global search.
 
@@ -601,6 +698,15 @@ class Neo4jClient:
             CALL db.index.vector.queryNodes('community_embeddings', $fetch_k, $embedding)
             YIELD node AS c, score
             WHERE ($tenant = 'default' OR c.tenant = $tenant)
+              AND ($valid_at IS NULL OR (
+                  c.valid_from IS NULL OR c.valid_from <= datetime($valid_at)
+              ))
+              AND ($valid_at IS NULL OR (
+                  c.valid_to IS NULL OR c.valid_to > datetime($valid_at)
+              ))
+              AND ($transaction_at IS NULL OR (
+                  c.recorded_at IS NULL OR c.recorded_at <= datetime($transaction_at)
+              ))
             RETURN c.id AS community_id, c.summary AS summary, c.level AS level, score
             ORDER BY score DESC
             LIMIT $top_k
@@ -609,6 +715,8 @@ class Neo4jClient:
             embedding=embedding,
             tenant=tenant,
             top_k=top_k,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
         )
 
     async def get_entity_neighbors(
@@ -616,6 +724,7 @@ class Neo4jClient:
         chunk_ids: list[str],
         as_of: str | None = None,
         tenant: str = "default",
+        transaction_at: str | None = None,
     ) -> list[dict]:
         """Expand retrieved chunks to their entity neighbors (1-hop).
         Excludes quarantined entities. Optionally filters edges by valid_to.
@@ -625,6 +734,10 @@ class Neo4jClient:
             "AND (r.valid_to IS NULL OR r.valid_to > $as_of)"
             if as_of else ""
         )
+        transaction_filter = (
+            "AND (r.recorded_at IS NULL OR r.recorded_at <= datetime($transaction_at))"
+            if transaction_at else ""
+        )
         return await self.run(
             f"""
             UNWIND $chunk_ids AS cid
@@ -632,7 +745,7 @@ class Neo4jClient:
             WHERE coalesce(e.quarantined, false) = false
             OPTIONAL MATCH (e)-[r:RELATES_TO]-(neighbor:Entity)
             OPTIONAL MATCH (src_doc:Document {{id: r.source_doc_id}})
-            WHERE coalesce(neighbor.quarantined, false) = false {temporal_filter}
+            WHERE coalesce(neighbor.quarantined, false) = false {temporal_filter} {transaction_filter}
               AND ($tenant = 'default' OR r.source_doc_id IS NULL OR src_doc.tenant = $tenant)
             RETURN e.name AS entity, e.type AS type, e.description AS description,
                    collect(DISTINCT neighbor.name) AS neighbors
@@ -640,6 +753,7 @@ class Neo4jClient:
             chunk_ids=chunk_ids,
             tenant=tenant,
             **({"as_of": as_of} if as_of else {}),
+            **({"transaction_at": transaction_at} if transaction_at else {}),
         )
 
     async def get_multihop_chunks(
@@ -648,6 +762,7 @@ class Neo4jClient:
         hops: int = 2,
         as_of: str | None = None,
         tenant: str = "default",
+        transaction_at: str | None = None,
         query_embedding: list[float] | None = None,
         semantic_weight: float = 0.0,
     ) -> list[dict]:
@@ -678,6 +793,11 @@ class Neo4jClient:
             "AND (r.valid_to IS NULL OR r.valid_to > $as_of))"
             if as_of else ""
         )
+        transaction_filter = (
+            "AND ALL(r IN relationships(path) WHERE "
+            "r.recorded_at IS NULL OR r.recorded_at <= datetime($transaction_at))"
+            if transaction_at else ""
+        )
         tenant_filter = (
             "AND ALL(r IN relationships(path) WHERE "
             "r.source_doc_id IS NULL OR EXISTS { "
@@ -705,7 +825,7 @@ class Neo4jClient:
                 MATCH (c:Chunk {{id: cid}})-[:MENTIONS]->(e:Entity)
                 WHERE coalesce(e.quarantined, false) = false
                 MATCH path = (e)-[:RELATES_TO*1..{hops}]-(neighbor:Entity)
-                WHERE coalesce(neighbor.quarantined, false) = false {temporal_filter} {tenant_filter}
+                WHERE coalesce(neighbor.quarantined, false) = false {temporal_filter} {transaction_filter} {tenant_filter}
                   AND ALL(n IN nodes(path) WHERE coalesce(n.quarantined, false) = false)
                 MATCH (neighbor_chunk:Chunk)-[:MENTIONS]->(neighbor)
                 WHERE NOT neighbor_chunk.id IN $chunk_ids
@@ -735,6 +855,7 @@ class Neo4jClient:
             per_seed_cap=200,
             total_cap=500,
             **({"as_of": as_of} if as_of else {}),
+            **({"transaction_at": transaction_at} if transaction_at else {}),
             **({"query_emb": query_embedding, "sem_w": float(semantic_weight)}
                if use_semantic else {}),
         )
@@ -744,7 +865,12 @@ class Neo4jClient:
         return results
 
     async def bm25_search_chunks(
-        self, query: str, top_k: int = 10, tenant: str = "default"
+        self,
+        query: str,
+        top_k: int = 10,
+        tenant: str = "default",
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
     ) -> list[dict]:
         """BM25 fulltext search over Chunk.text using Neo4j fulltext index.
         Filters by tenant and excludes quarantined entity chunks.
@@ -753,7 +879,18 @@ class Neo4jClient:
             """
             CALL db.index.fulltext.queryNodes('chunk_fulltext', $query)
             YIELD node AS c, score
+            OPTIONAL MATCH (c)-[:PART_OF]->(d:Document)
             WHERE ($tenant = 'default' OR c.tenant = $tenant)
+              AND ($valid_at IS NULL OR (
+                  d IS NOT NULL
+                  AND (d.valid_from IS NULL OR d.valid_from <= datetime($valid_at))
+                  AND (d.valid_to IS NULL OR d.valid_to > datetime($valid_at))
+              ))
+              AND ($transaction_at IS NULL OR (
+                  d IS NOT NULL
+                  AND (coalesce(d.recorded_at, d.created_at) IS NULL
+                       OR coalesce(d.recorded_at, d.created_at) <= datetime($transaction_at))
+              ))
               AND NOT EXISTS {
                   MATCH (c)-[:MENTIONS]->(e:Entity)
                   WHERE e.quarantined = true
@@ -765,6 +902,8 @@ class Neo4jClient:
             query=query,
             k=top_k,
             tenant=tenant,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
         )
 
     async def bm25_search_entities(
@@ -772,6 +911,8 @@ class Neo4jClient:
         query: str,
         top_k: int = 10,
         tenant: str = "default",
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
     ) -> list[dict]:
         """BM25 fulltext search over Entity name + description.
         Excludes quarantined entities.
@@ -782,7 +923,18 @@ class Neo4jClient:
             YIELD node AS e, score
             WHERE coalesce(e.quarantined, false) = false
             OPTIONAL MATCH (c:Chunk)-[:MENTIONS]->(e)
+            OPTIONAL MATCH (c)-[:PART_OF]->(d:Document)
             WHERE ($tenant = 'default' OR c.tenant = $tenant)
+              AND ($valid_at IS NULL OR (
+                  d IS NOT NULL
+                  AND (d.valid_from IS NULL OR d.valid_from <= datetime($valid_at))
+                  AND (d.valid_to IS NULL OR d.valid_to > datetime($valid_at))
+              ))
+              AND ($transaction_at IS NULL OR (
+                  d IS NOT NULL
+                  AND (coalesce(d.recorded_at, d.created_at) IS NULL
+                       OR coalesce(d.recorded_at, d.created_at) <= datetime($transaction_at))
+              ))
             RETURN DISTINCT c.id AS chunk_id, c.text AS text, score
             ORDER BY score DESC
             LIMIT $k
@@ -790,6 +942,8 @@ class Neo4jClient:
             query=query,
             k=top_k,
             tenant=tenant,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
         )
 
     async def get_chunk_entity_embeddings(
@@ -834,6 +988,7 @@ class Neo4jClient:
                    COUNT { (e)-[:RELATES_TO]-() } AS degree
             """,
             chunk_ids=chunk_ids,
+            tenant=tenant,
         )
         if not rows:
             return []
@@ -884,6 +1039,7 @@ class Neo4jClient:
         entities: list[dict],
         as_of: str | None = None,
         tenant: str = "default",
+        transaction_at: str | None = None,
     ) -> list[dict]:
         """Return RELATES_TO edges between a set of entities.
 
@@ -903,6 +1059,10 @@ class Neo4jClient:
             "AND (r.valid_to IS NULL OR r.valid_to > $as_of)"
             if as_of else ""
         )
+        transaction_filter = (
+            "AND (r.recorded_at IS NULL OR r.recorded_at <= datetime($transaction_at))"
+            if transaction_at else ""
+        )
         # Build a set-membership key of the form "name:type" for the target
         # side filter so both dimensions are checked without a subquery.
         return await self.run(
@@ -911,7 +1071,7 @@ class Neo4jClient:
             MATCH (s:Entity {{name: pair.name, type: pair.type, tenant: $tenant}})
                   -[r:RELATES_TO]->
                   (t:Entity {{tenant: $tenant}})
-            WHERE (t.name + ':' + t.type) IN $entity_keys {temporal_filter}
+            WHERE (t.name + ':' + t.type) IN $entity_keys {temporal_filter} {transaction_filter}
               AND coalesce(s.quarantined, false) = false
               AND coalesce(t.quarantined, false) = false
             RETURN s.name                             AS src,
@@ -927,6 +1087,7 @@ class Neo4jClient:
             entity_keys=[f"{e['name']}:{e['type']}" for e in entities],
             tenant=tenant,
             **({"as_of": as_of} if as_of else {}),
+            **({"transaction_at": transaction_at} if transaction_at else {}),
         )
 
     async def get_relations_for_entity(

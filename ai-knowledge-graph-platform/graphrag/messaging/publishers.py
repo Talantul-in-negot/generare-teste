@@ -29,6 +29,8 @@ async def publish_query(
     ground_truth: str = "",
     tenant: str = "default",
     session_id: str = "",
+    valid_at: str | None = None,
+    transaction_at: str | None = None,
     query_id: str = "",
 ) -> str:
     mq = await get_rabbitmq()
@@ -38,6 +40,8 @@ async def publish_query(
         ground_truth=ground_truth,
         tenant=tenant,
         session_id=session_id,
+        valid_at=valid_at,
+        transaction_at=transaction_at,
         **({"query_id": query_id} if query_id else {}),
     )
     await mq.publish(

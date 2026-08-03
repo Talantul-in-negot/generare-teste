@@ -201,3 +201,22 @@ class TestVectorSearchOverFetch:
         assert "quarantined" in query
         assert "NOT EXISTS" in query
         client.run.assert_called_once()  # phase 2 never issued for an empty phase 1
+
+    async def test_chunk_ann_filters_by_document_valid_and_transaction_time(self) -> None:
+        client = _make_client()
+        client.run = AsyncMock(return_value=[])
+
+        await client.vector_search_chunks(
+            [0.1, 0.2],
+            tenant="automotive",
+            valid_at="2025-01-01T00:00:00+00:00",
+            transaction_at="2025-02-01T00:00:00+00:00",
+        )
+
+        query = client.run.call_args.args[0]
+        kwargs = client.run.call_args.kwargs
+        assert "PART_OF" in query
+        assert "d.valid_from" in query and "d.valid_to" in query
+        assert "d.recorded_at" in query
+        assert kwargs["valid_at"] == "2025-01-01T00:00:00+00:00"
+        assert kwargs["transaction_at"] == "2025-02-01T00:00:00+00:00"

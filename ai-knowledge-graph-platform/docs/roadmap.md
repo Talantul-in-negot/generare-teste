@@ -27,7 +27,7 @@ deployed workload and monitoring data behind the claim.
 |---|---|
 | Graph ingestion (document → chunk → entity → relation) | DeepSeek extraction by default (`get_llm()`); Groq opt-in via `LLM_INGEST_PROVIDER=groq`; OpenAI `text-embedding-3-large`, 3072 dimensions |
 | LLM provider circuit breaker | Fail-fast after 3 consecutive failures or an 80% error rate over the last 20 calls; `FallbackLLM` uses DeepSeek primary and Groq fallback; surfaced on `/health/ready` |
-| Six-stage hybrid retrieval | Vector + BM25 + reranker + GNN + multi-hop + LLM synthesis; local_search and global_search run concurrently via `asyncio.TaskGroup` (see Recent Hardening below) |
+| Six-stage hybrid retrieval | Vector + BM25 + reranker + GNN + multi-hop + LLM synthesis; high-level community summaries are retrieved directly into final synthesis (legacy map-reduce remains an ablation fallback) |
 | Agentic IRCoT fallback | Two-step maximum; Groq 8B routing + DeepSeek large-model synthesis |
 | Forward-chaining inference | Transitivity, symmetry, inverse, and composition to fixpoint after ingestion |
 | OWL-RL reasoning | `owlrl` + `rdflib` over RDF export |
@@ -36,7 +36,7 @@ deployed workload and monitoring data behind the claim.
 | Four-stage entity resolution | Exact, fuzzy, embedding, and human review; cosine threshold 0.92; ambiguous matches are queued through `/kg/review-queue`; embedding-search ANN pool is tenant-starvation-safe |
 | Contradiction detection | `directional_reversal`, `exclusive_state`, `functional_violation`, and `positive_negative_pair`; retrieval-side conflict warnings |
 | Authority and supersession | Document authority hierarchy and `SUPERSEDES` chains |
-| Temporal and provenance model | Valid time, transaction time, snapshots, extraction model, prompt version, spans, and source type |
+| Temporal and provenance model | Valid time, transaction time, snapshots, extraction model, prompt version, spans, and source type; API retrieval can constrain chunk and graph traversal by valid and transaction time |
 | Multi-tenant isolation | `(name, type, tenant)` identity key; agent-tool layer (`ToolPolicy`) enforces tenant scoping on both read and write/restricted tools (see Recent Hardening) |
 | Community detection | Multi-resolution Leiden via `graspologic` |
 | Evaluation | RAGAS with 20% sampling; DeepSeek judge with Groq fallback and Gemini last resort |
@@ -66,11 +66,11 @@ Neo4j + LLM, no shortcuts):
 - p95: **26.4 seconds**
 - mean: **15.2 seconds**
 
-The remaining cost is distributed across multiple model and retrieval round
-trips (query rewrite, embed, map, occasionally reduce, final synthesis) rather
-than one dominant stage.
+The remaining cost is distributed across model and retrieval round trips
+(query rewrite, embedding, local retrieval, and final synthesis). The former
+per-community map/reduce path is retained only for measured fallback/ablation.
 
-### Recent hardening (2026-07-29 – 2026-07-30, A143–A149)
+### Recent hardening (2026-07-29 – 2026-07-30, A143–A153)
 
 A live latency and security investigation, fully documented in
 `tasks/lessons.md`:
@@ -108,6 +108,32 @@ A live latency and security investigation, fully documented in
   deliberately tested "unrestricted caller" design, closed because it's
   unsafe the moment those scopes are ever handed to an LLM agent rather than
   a human/ops process.
+- **A150** — Replaced the query/session-only answer key with a governed,
+  canonical SHA-256 key over tenant, normalized question, durable corpus
+  revision, effective retrieval configuration, model route, prompt, and
+  ontology version. Cache lookup now lives in `HybridRetriever` and hits keep
+  a fresh `query_id` while exposing the original trace.
+- **A151** — Cache entries are written only after Context Graph trace
+  persistence and require a trace ID plus citations; a cache hit exposes the
+  original `source_query_id` and `source_trace_id`.
+- **A152** — Cache identity is the full inference context, not question text:
+  tenant, normalized question, corpus revision, retrieval modes, model route,
+  prompt, retrieval configuration, and ontology version.
+- **A153** — Retrieval-visible mutations bracket writes with
+  `KGCorpusState.active_updates`; cache reads fail closed until the final
+  concurrent mutation publishes an atomic new revision.
+- **A154** - Global retrieval now uses direct, token-bounded community
+  summaries in the final synthesis context, eliminating per-community map LLM
+  calls. The old `map_reduce` strategy remains configuration-gated for A/B.
+- **A155** - `valid_at` and `transaction_at` are carried from `POST /query`
+  through the worker, ANN/BM25 candidates, multi-hop traversal, cache identity,
+  and Context Graph trace configuration. Temporal requests deliberately skip
+  unversioned community summaries rather than leaking current coarse context.
+- **A156** - Reproducible local benchmark runners now exist for retrieval
+  ablation (`scripts/benchmark_retrieval_ablation.py`) and per-document
+  incremental-ingestion/maintenance cost
+  (`scripts/benchmark_incremental_ingestion.py`). No performance delta is
+  claimed until a named live run produces its report.
 - Alert threshold `latency_p95_ms` raised from 3000 to 30000 to match
   measured reality with headroom, rather than firing continuously.
 

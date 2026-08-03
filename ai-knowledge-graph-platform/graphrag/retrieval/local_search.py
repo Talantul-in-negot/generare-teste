@@ -116,6 +116,9 @@ class LocalSearch:
         question: str,
         session_id: str = "",
         tenant: str = "default",
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
+        config_overrides: dict | None = None,
     ) -> dict:
         """Run the 6-step retrieval pipeline.
 
@@ -139,12 +142,18 @@ class LocalSearch:
         # tenant_overrides is a no-op). Construction-time defaults (self._cfg in
         # __init__) remain the global fallback for objects bound at build time
         # (reranker/GNN singletons).
-        cfg = resolve_tenant_config(self._cfg, tenant)
+        cfg = {**resolve_tenant_config(self._cfg, tenant), **(config_overrides or {})}
         top_k      = cfg.get("local_top_k", 10)
         hops       = cfg.get("multihop_depth", 2)
         use_bm25   = cfg.get("bm25_enabled", True)
         use_rerank = cfg.get("reranker_enabled", True)
         use_gnn    = cfg.get("gnn_enabled", True)
+        use_entity_context = cfg.get("entity_context_enabled", True)
+        use_named_document_boost = cfg.get("named_document_boost_enabled", True)
+        temporal_kwargs = {
+            **({"valid_at": valid_at} if valid_at else {}),
+            **({"transaction_at": transaction_at} if transaction_at else {}),
+        }
 
         # ── Session context: resolve ambiguous follow-up queries ──────────────
         # Only runs when session_context_enabled=true in config AND a session_id
@@ -165,6 +174,7 @@ class LocalSearch:
                 embedding,
                 top_k=top_k,
                 tenant=tenant,
+                **temporal_kwargs,
             )
         else:
             log.info("local_search.vector_skipped", reason="vector_search_enabled=false")
@@ -177,6 +187,7 @@ class LocalSearch:
                 vector_chunks=vector_chunks,
                 top_k=top_k,
                 tenant=tenant,
+                **temporal_kwargs,
             )
         else:
             fused_chunks = vector_chunks
@@ -272,7 +283,7 @@ class LocalSearch:
         # but lexically-dissimilar chunk as irrelevant even when the question
         # names its source document directly — trust the explicit reference
         # over the reranker in that case.
-        if embedding is not None and seed_chunks:
+        if use_named_document_boost and embedding is not None and seed_chunks:
             doc_codes = _DOC_CODE_RE.findall(enriched_question)
             if doc_codes:
                 seed_id_set = {c["chunk_id"] for c in seed_chunks}
@@ -306,7 +317,7 @@ class LocalSearch:
                     if best is None:
                         for filename in matched_filenames:
                             best = await self._neo4j.get_best_chunk_for_document(
-                                filename, embedding, tenant=tenant
+                                filename, embedding, tenant=tenant, **temporal_kwargs,
                             )
                             if best:
                                 break
@@ -330,19 +341,24 @@ class LocalSearch:
         # no embeddings cross the wire. Requires the query embedding, so it
         # degrades to pure path-score ranking when vector search is disabled.
         sem_weight = cfg.get("multihop_semantic_weight", 0.0)
-        _t0 = time.monotonic()
-        hop_chunks = await self._neo4j.get_multihop_chunks(
-            seed_ids,
-            hops=hops,
-            tenant=tenant,
-            query_embedding=embedding if sem_weight > 0 else None,
-            semantic_weight=sem_weight,
-        )
-        log.info(
-            "local_search.multihop.done",
-            elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
-            hop_chunks=len(hop_chunks),
-        )
+        if hops > 0 and seed_ids:
+            _t0 = time.monotonic()
+            hop_chunks = await self._neo4j.get_multihop_chunks(
+                seed_ids,
+                hops=hops,
+                tenant=tenant,
+                as_of=valid_at,
+                transaction_at=transaction_at,
+                query_embedding=embedding if sem_weight > 0 else None,
+                semantic_weight=sem_weight,
+            )
+            log.info(
+                "local_search.multihop.done",
+                elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
+                hop_chunks=len(hop_chunks),
+            )
+        else:
+            hop_chunks = []
 
         # De-dupe by chunk_id as we go (not just against seed_ids) — multiple
         # entities/paths in the same hop-traversal frequently converge on the
@@ -382,7 +398,9 @@ class LocalSearch:
             # tasks/lessons.md.
             _t0 = time.monotonic()
             chunk_entities = await self._neo4j.get_chunk_entity_embeddings(all_ids, tenant=tenant)
-            entity_edges = await _fetch_subgraph_edges(self._neo4j, chunk_entities, tenant)
+            entity_edges = await _fetch_subgraph_edges(
+                self._neo4j, chunk_entities, tenant, valid_at, transaction_at,
+            )
             log.info(
                 "local_search.chunk_entities_edges.done",
                 elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
@@ -488,7 +506,12 @@ class LocalSearch:
                     chunk["source"] = filename
 
         # Step 6 — entity context
-        entities = await self._neo4j.get_entity_neighbors(all_ids, tenant=tenant)
+        entities = await self._neo4j.get_entity_neighbors(
+            all_ids,
+            tenant=tenant,
+            as_of=valid_at,
+            transaction_at=transaction_at,
+        ) if use_entity_context else []
 
         # Collect the entity/chunk references so the caller can record the
         # session turn once the real LLM answer is available.
@@ -508,6 +531,8 @@ class LocalSearch:
             bm25=use_bm25,
             reranker=use_rerank,
             gnn=use_gnn,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
             session_ctx=self._use_session_ctx,
             session_id=session_id or "none",
         )
@@ -526,6 +551,8 @@ async def _fetch_subgraph_edges(
     neo4j,
     chunk_entities: list[dict],
     tenant: str = "default",
+    valid_at: str | None = None,
+    transaction_at: str | None = None,
 ) -> list[dict]:
     """Helper: derive entity (name, type) pairs from already-fetched
     chunk-entity rows, then fetch RELATES_TO edges between them.
@@ -549,4 +576,9 @@ async def _fetch_subgraph_edges(
             entities.append({"name": r["entity_name"], "type": r["entity_type"]})
     if not entities:
         return []
-    return await neo4j.get_entity_relations_subgraph(entities, tenant=tenant)
+    return await neo4j.get_entity_relations_subgraph(
+        entities,
+        tenant=tenant,
+        as_of=valid_at,
+        transaction_at=transaction_at,
+    )

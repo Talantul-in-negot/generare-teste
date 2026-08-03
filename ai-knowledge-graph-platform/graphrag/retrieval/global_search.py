@@ -1,4 +1,11 @@
-"""Global search: community summary map-reduce for broad questions."""
+"""Global search over hierarchical community summaries.
+
+The default path is deliberately retrieval-only: it sends the most relevant
+community summaries directly to the final answer synthesis rather than making
+one LLM map call per community and a second reduce call.  The legacy
+``map_reduce`` path remains available behind configuration for controlled
+ablations and rollback.
+"""
 
 from __future__ import annotations
 
@@ -36,6 +43,28 @@ Partial answers:
 Merged facts:"""
 
 
+def _direct_context(communities: list[dict], max_chars: int) -> str:
+    """Return a deterministic, bounded high-level retrieval context."""
+    parts: list[str] = []
+    remaining = max(max_chars, 0)
+    for community in communities:
+        summary = str(community.get("summary") or "").strip()
+        if not summary or remaining <= 0:
+            continue
+        header = (
+            f"[Community {community.get('community_id', 'unknown')} | "
+            f"Level {community.get('level', 'unknown')} | "
+            f"Similarity {float(community.get('score') or 0.0):.3f}]\n"
+        )
+        available = max(remaining - len(header), 0)
+        if available <= 0:
+            break
+        text = summary[:available]
+        parts.append(header + text)
+        remaining -= len(header) + len(text)
+    return "\n\n".join(parts)
+
+
 class GlobalSearch:
     def __init__(self):
         cfg = get_settings()
@@ -43,11 +72,18 @@ class GlobalSearch:
         self._neo4j = get_neo4j()
         self._embedder = Embedder()
 
-    async def search(self, question: str, tenant: str = "default") -> dict:
+    async def search(
+        self,
+        question: str,
+        tenant: str = "default",
+        valid_at: str | None = None,
+        transaction_at: str | None = None,
+        config_overrides: dict | None = None,
+    ) -> dict:
         # Per-tenant config: merge this tenant's overrides over the global
         # retrieval defaults (mirrors LocalSearch.search — resolved from
         # self._cfg). Empty tenant_overrides ⇒ global dict unchanged.
-        cfg = resolve_tenant_config(self._cfg, tenant)
+        cfg = {**resolve_tenant_config(self._cfg, tenant), **(config_overrides or {})}
 
         # Skip global search when vector_search_enabled=false (e.g. OpenAI quota exhausted)
         if not cfg.get("vector_search_enabled", True):
@@ -67,6 +103,8 @@ class GlobalSearch:
             embedding,
             top_k=top_k,
             tenant=tenant,
+            valid_at=valid_at,
+            transaction_at=transaction_at,
         )
         log.info(
             "global_search.community_vector_search.done",
@@ -100,7 +138,25 @@ class GlobalSearch:
                 impact="answers based on connected-components, not Leiden hierarchy",
             )
 
-        # Map: extract relevant info from each community summary
+        strategy = cfg.get("global_search_strategy", "direct_context")
+        if strategy == "direct_context":
+            synthesized = _direct_context(
+                communities,
+                int(cfg.get("global_direct_context_max_chars", 6000)),
+            )
+            log.info(
+                "global_search.done",
+                communities=len(communities),
+                strategy=strategy,
+                llm_calls=0,
+                context_chars=len(synthesized),
+            )
+            return {"communities": communities, "synthesized_answer": synthesized}
+
+        if strategy != "map_reduce":
+            raise ValueError(f"Unsupported global_search_strategy: {strategy}")
+
+        # Legacy map-reduce: retained solely for comparison and rollback.
         llm = get_llm()
         _t0 = time.monotonic()
         map_tasks = [
@@ -164,6 +220,7 @@ class GlobalSearch:
             "global_search.done",
             communities=len(communities),
             partial_answers=len(partial_answers),
+            strategy=strategy,
         )
         return {
             "communities": communities,
