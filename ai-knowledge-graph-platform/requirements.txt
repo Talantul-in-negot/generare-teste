@@ -46,6 +46,11 @@ sentence-transformers>=3.0.0
 
 # ── Observability ──────────────────────────────────────────────────────────────
 structlog>=24.2.0
+opentelemetry-api>=1.27.0
+opentelemetry-sdk>=1.27.0
+opentelemetry-exporter-otlp-proto-http>=1.27.0
+prometheus-client>=0.20.0
+prometheus-fastapi-instrumentator>=7.0.0
 
 # ── Resilience ─────────────────────────────────────────────────────────────────
 tenacity>=8.3.0
@@ -63,3 +68,6 @@ pyshacl>=0.29.0
 
 # ── MCP server (exposes hybrid retrieval + entity lookup to MCP clients) ───────
 mcp>=1.2.0
+
+# ── Live E2E tests (Docker-backed Neo4j and Redis) ────────────────────────────
+testcontainers>=4.15.0

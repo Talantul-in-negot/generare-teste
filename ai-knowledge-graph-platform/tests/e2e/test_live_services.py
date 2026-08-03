@@ -33,7 +33,6 @@ interfere with each other even when run in the same container instance.
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 
 import pytest
@@ -70,7 +69,7 @@ class TestNeo4jClientE2E:
 
     @pytest.fixture(scope="class")
     def neo4j_container(self):
-        from testcontainers.neo4j import Neo4jContainer
+        from testcontainers.community.neo4j import Neo4jContainer
         with Neo4jContainer("neo4j:5") as c:
             yield c
 
@@ -115,7 +114,7 @@ class TestSessionStoreE2E:
 
     @pytest.fixture(scope="class")
     def redis_container(self):
-        from testcontainers.redis import RedisContainer
+        from testcontainers.community.redis import RedisContainer
         with RedisContainer("redis:7-alpine") as c:
             yield c
 
