@@ -27,7 +27,7 @@ Use Redis as the shared result store between the API process and query workers.
 Implementation: `graphrag/retrieval/result_store.py` — a thin wrapper around `redis.asyncio` with:
 - `set(query_id, result_dict, ttl=3600)` — worker writes completed result
 - `get(query_id)` — API reads result
-- In-memory dict fallback when Redis is unreachable (transparent; warning logged)
+- explicit error logging when Redis is unreachable; no silent in-memory fallback in the shared result path
 
 The `get_result_store()` singleton is initialised at worker startup and at API startup independently. Both processes point at the same Redis instance via `REDIS_URL` env var.
 
@@ -61,7 +61,7 @@ The `get_result_store()` singleton is initialised at worker startup and at API s
 
 **Positive:**
 - API and worker processes are fully decoupled — can scale independently
-- In-memory fallback means development works without Docker
+- Redis remains the authoritative cross-process store; local demos can use the configured development fallback paths explicitly
 - Query cache (`query_cache.py`) reuses the same Redis connection pool for cache pre-checks, so the Redis connection is amortised across two features
 
 **Negative / watch:**

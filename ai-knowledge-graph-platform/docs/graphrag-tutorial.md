@@ -299,8 +299,8 @@ Six stages, each addressing a failure mode of the previous:
 | 6. LLM synthesis | DeepSeek by default (Groq fallback), cited chunks + graph facts + open-conflict warnings | grounded, auditable answer |
 
 Fallbacks: **agentic retrieval** (IRCoT — retrieve→reason→retrieve, max 4
-steps) when confidence is low; **global search** (map-reduce over community
-summaries) for corpus-wide thematic questions; **session context** (Redis)
+steps) when confidence is low; **global search** (direct retrieval of bounded
+community summaries) for corpus-wide thematic questions; **session context** (Redis)
 for multi-turn follow-ups.
 
 ### 6.1 Query rewriting (Stage 0, disabled by default)

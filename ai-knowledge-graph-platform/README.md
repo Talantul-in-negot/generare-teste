@@ -45,7 +45,10 @@ The graph is not a RAG index. It is a formally modeled knowledge base:
 - [`docs/adr/0003-bayesian-confidence-accumulation.md`](docs/adr/0003-bayesian-confidence-accumulation.md) — Why `1−(1−c₁)(1−c₂)` over last-write-wins
 - [`docs/adr/0004-groq-over-gemini-for-text-generation.md`](docs/adr/0004-groq-over-gemini-for-text-generation.md) — LLM provider selection; two-model design rationale; OpenAI for embeddings
 - [`docs/adr/0005-redis-as-cross-process-result-store.md`](docs/adr/0005-redis-as-cross-process-result-store.md) — Why Redis over PostgreSQL and RabbitMQ reply-to for result persistence
-- [`docs/adr/0006-dual-llm-architecture.md`](docs/adr/0006-dual-llm-architecture.md) — Why Groq 8B routing + DeepSeek synthesis cuts agentic p95 from 6.8 s to 3.4 s
+- [`docs/adr/0006-dual-llm-architecture.md`](docs/adr/0006-dual-llm-architecture.md) — Why Groq 8B routing + DeepSeek synthesis; historical latency benchmark is clearly labeled
+- [`docs/adr/0007-capability-gated-neo4j-vector-search.md`](docs/adr/0007-capability-gated-neo4j-vector-search.md) — Neo4j 2026 `SEARCH` with a 5.20 compatibility fallback
+- [`docs/adr/0008-adaptive-retrieval-routing.md`](docs/adr/0008-adaptive-retrieval-routing.md) — Measured tenant-scoped retrieval route selection
+- [`docs/adr/ADR-Context-Graph-Decision-Trace.md`](docs/adr/ADR-Context-Graph-Decision-Trace.md) — Bounded Context Graph ownership, trace integrity, and privacy rules
 - Interview and role-specific material is archived under [`docs/archive/job-search/`](docs/archive/job-search/).
 - [`evals/golden_set.json`](evals/golden_set.json) — 40-question golden eval set; run with `scripts/run_golden_eval.py`
 
@@ -60,6 +63,20 @@ Runs a 6-step aerospace regulatory workflow end-to-end — ontology loading, dom
 python scripts/demo_regulatory.py --live
 ```
 Ingests two genuinely conflicting documents, runs the real inference engine, and lets the contradiction detector find the IS_AIRWORTHY / IS_UNAIRWORTHY conflict. Data persists in Neo4j — query it in the browser at `http://localhost:7474`.
+
+**Live service tests:**
+
+The E2E suite uses `testcontainers-python` to start isolated Neo4j and Redis
+containers. Docker Desktop must be running:
+
+```bash
+python -m pytest -q tests/e2e/test_live_services.py
+```
+
+This runs five real persistence and connectivity tests and removes the
+temporary containers when the test classes finish. Use `python -m pytest`
+rather than the Windows `pytest` executable so the repository root is on the
+import path.
 
 ---
 
@@ -155,7 +172,7 @@ local live Neo4j; production traffic and production-scale tuning remain open.
 | **BM25 + Vector hybrid search** | Vector ANN and BM25 fulltext results fused via Reciprocal Rank Fusion (RRF, k=60) |
 | **Cross-encoder reranking** | `ms-marco-MiniLM-L-6-v2` deep pairwise query-chunk scoring before graph expansion |
 | **Multi-hop graph traversal** | `Chunk → Entity → RELATES_TO* → Entity → Chunk` up to depth 2 |
-| **Agentic fallback (IRCoT)** | Low-confidence answers trigger iterative re-search; Groq `llama-3.1-8b-instant` handles routing (~0.2s/step), while DeepSeek handles final synthesis; agentic p95 **3.4s** |
+| **Agentic fallback (IRCoT)** | Low-confidence answers trigger bounded iterative re-search; Groq `llama-3.1-8b-instant` handles routing, while DeepSeek handles final synthesis. The historical agentic p95 benchmark was **3.4s**; current end-to-end latency is tracked in the roadmap. |
 | **Session context** | Redis-backed conversation history (24h TTL); enriches follow-up queries with prior turn entities |
 | **Adaptive retrieval routing** | Per-tenant/query-class EWMA quality and latency statistics choose local, hybrid, or global retrieval after a guarded cold-start; deterministic exploration prevents route starvation |
 | **Alias resolution** | Name-based + embedding-based deduplication before every entity MERGE; per-tenant registry pool |
@@ -315,7 +332,7 @@ ai-knowledge-graph-platform/
 │   │   └── consumers.py             # Message handler wiring per queue
 │   └── retrieval/
 │       ├── local_search.py          # 6-stage pipeline: vector + BM25 + rerank + multihop + GNN + context
-│       ├── global_search.py         # Community embedding search + map-reduce synthesis
+│       ├── global_search.py         # Community embedding search + direct-context synthesis
 │       ├── hybrid_retriever.py      # Combines local + global; agentic fallback; session turn recording
 │       ├── agentic_retriever.py     # Iterative IRCoT re-search (Groq 8B routing + DeepSeek synthesis)
 │       ├── bm25_search.py           # HybridBM25Search with RRF (k=60)
@@ -771,7 +788,7 @@ Every ingestion batch runs the following checks automatically:
 
 ## Measured Performance (live, aerospace regulatory corpus)
 
-### Answer Quality — RAGAS (DeepSeek synthesis, DeepSeek judge with Groq fallback)
+### Answer Quality — RAGAS (DeepSeek synthesis; DeepSeek → Groq → Gemini compatibility judge fallback)
 
 | Metric | Measured | Target |
 |--------|----------|--------|

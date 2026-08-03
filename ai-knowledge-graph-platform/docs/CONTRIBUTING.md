@@ -64,6 +64,7 @@ Before marking a PR ready for review:
 
 - [ ] Tests added or updated for every changed behaviour
 - [ ] `python -m pytest tests/unit tests/integration -q` — 0 failures
+- [ ] `python -m pytest tests/e2e/test_live_services.py -q` — 5 live tests pass when Docker is available
 - [ ] `python scripts/demo_regulatory.py` runs clean (no live services needed)
 - [ ] If config keys added: wired to a property in `graphrag/core/config.py`, not via `getattr(settings, "key", {})`
 - [ ] If Cypher changed: tested against Neo4j 5.x (not just Neo4j 4.x syntax)
@@ -169,11 +170,14 @@ vectors: list[list[float]] = await get_embedder().embed(texts)
 ## Testing
 
 ```bash
-# Full unit suite (~100 tests, no live services)
+# Unit suite (no live services)
 python -m pytest tests/unit -q
 
 # Integration tests (require Neo4j + RabbitMQ + Redis via docker-compose)
 python -m pytest tests/integration -q
+
+# Docker-backed E2E tests (testcontainers-python; isolated Neo4j and Redis)
+python -m pytest tests/e2e/test_live_services.py -q
 
 # Load tests
 python -m pytest tests/load -q
@@ -182,7 +186,11 @@ python -m pytest tests/load -q
 python scripts/demo_regulatory.py
 ```
 
-Integration tests auto-skip if Docker is unavailable.
+The live-service E2E tests require Docker Desktop and the `testcontainers`
+dependency from `requirements.txt`. They auto-skip when Docker or
+`testcontainers-python` is unavailable. On Windows, invoke pytest as
+`python -m pytest` so local packages and the `scripts` namespace resolve from
+the repository root.
 
 ---
 

@@ -113,6 +113,23 @@ Permanent: these are now in `requirements.txt`; use `pip install -r requirements
 Fix A (dev): Set `session_store_strict: false` — API falls back to in-memory sessions.
 Fix B (prod): Restore Redis connectivity; sessions and query results will be lost until Redis is back.
 
+### Live E2E tests are skipped
+
+The five Docker-backed service tests in `tests/e2e/test_live_services.py`
+require Docker Desktop and `testcontainers-python`. Install project
+dependencies and verify Docker before running them:
+
+```bash
+python -m pip install -r requirements.txt
+docker version
+python -m pytest -q tests/e2e/test_live_services.py
+```
+
+The tests start isolated Neo4j and Redis containers and clean them up after the
+test classes finish. On Windows, use `python -m pytest`; the standalone
+`pytest` executable may not put the repository root on `sys.path`, which can
+break imports from `mcp_server` and `scripts`.
+
 ---
 
 ### `UnicodeEncodeError` running scripts on Windows

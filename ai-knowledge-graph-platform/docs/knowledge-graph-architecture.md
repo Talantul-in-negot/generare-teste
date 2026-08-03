@@ -281,10 +281,10 @@ interface used across all pipeline stages.
 
 - `graphrag/ingestion/extractor.py` — entity + relation extraction from chunks (DeepSeek default)
 - `graphrag/retrieval/local_search.py` — answer synthesis from retrieved context (DeepSeek default)
-- `graphrag/retrieval/global_search.py` — map-reduce community summarisation (DeepSeek default)
+- `graphrag/retrieval/global_search.py` — direct community-summary retrieval and bounded synthesis context; legacy map-reduce is configuration-gated
 - `graphrag/retrieval/agentic_retriever.py` — IRCoT routing (Groq 8B, genuinely primary here) and final synthesis (DeepSeek default via `get_llm()`)
 - `graphrag/graph/community_summarizer.py` — LLM community summaries (DeepSeek default)
-- `graphrag/evaluation/ragas_evaluator.py` — RAGAS judge LLM (DeepSeek first, Groq fallback, Gemini last resort — independent of the generation and fast-routing tiers)
+- `graphrag/evaluation/ragas_evaluator.py` — RAGAS judge LLM (DeepSeek first, Groq fallback, Gemini only as a final compatibility fallback — independent of the generation and fast-routing tiers)
 
 ### What uses OpenAI (embeddings only)
 
@@ -293,7 +293,7 @@ interface used across all pipeline stages.
 - `graphrag/agents/ingestion_agent.py` — entity name+description embedding
 
 > **RAGAS evaluator note:** The judge LLM for RAGAS metrics is resolved in priority
-> order: Groq (`langchain-groq`) → DeepSeek → None. This ordering is specific to
+> order: DeepSeek → Groq (`langchain-groq`) → Gemini compatibility fallback → None. This ordering is specific to
 > the evaluation judge and is separate from `get_llm()`'s generation-primary
 > choice (DeepSeek by default).
 > Install with `pip install langchain-groq`.

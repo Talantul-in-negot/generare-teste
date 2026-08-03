@@ -194,8 +194,10 @@ ORDER BY score DESC
 
 The Leiden algorithm produces hierarchical communities at configurable resolution.
 Level 0 = fine-grained clusters; higher levels = broader thematic groupings.
-The global search map-reduce pattern runs LLM extraction on each top-k community
-summary, then synthesises partial answers into a final response.
+The default global search path retrieves top-k community summaries and places a
+bounded context directly into final synthesis. The legacy map-reduce pattern,
+which runs one LLM call per community, remains available only for controlled
+ablation.
 
 ---
 

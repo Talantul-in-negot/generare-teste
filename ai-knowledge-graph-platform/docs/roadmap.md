@@ -39,7 +39,7 @@ deployed workload and monitoring data behind the claim.
 | Temporal and provenance model | Valid time, transaction time, snapshots, extraction model, prompt version, spans, and source type; API retrieval can constrain chunk and graph traversal by valid and transaction time |
 | Multi-tenant isolation | `(name, type, tenant)` identity key; agent-tool layer (`ToolPolicy`) enforces tenant scoping on both read and write/restricted tools (see Recent Hardening) |
 | Community detection | Multi-resolution Leiden via `graspologic` |
-| Evaluation | RAGAS with 20% sampling; DeepSeek judge with Groq fallback and Gemini last resort |
+| Evaluation | RAGAS with 20% sampling; DeepSeek judge, Groq fallback, then Gemini compatibility fallback |
 | Authentication and privacy | OAuth 2.0, M2M JWT, GDPR erasure, cascade handling, and audit log |
 | Domain ontologies | YAML-configurable; aerospace regulatory, automotive IATF 16949 (30-doc corpus, 5-question golden set), and marketing/adtech domains |
 | CI | GitHub Actions, pytest matrix, and Ruff linting |
@@ -160,6 +160,11 @@ A live latency and security investigation, fully documented in
   through RabbitMQ to query workers, results, structured cost logs, and
   `CGAgentRun`. Prometheus dependencies are explicit and OTLP export activates
   when `OTEL_EXPORTER_OTLP_ENDPOINT` is configured.
+- **A163** - Docker-backed service E2E coverage is executable through
+  `testcontainers-python`: five tests now exercise real Neo4j and Redis
+  persistence/connectivity with isolated containers. The tests are opt-in when
+  Docker is unavailable and use the current `testcontainers.community`
+  namespaces without deprecation warnings.
 - Alert threshold `latency_p95_ms` raised from 3000 to 30000 to match
   measured reality with headroom, rather than firing continuously.
 
@@ -431,7 +436,7 @@ production traffic remains operational validation, not missing code.
 ## Context Graph evaluation suite
 
 Evaluation must go beyond answer relevance. Corrected against actual test
-coverage (2026-07-30) — a checkmark here means a real test asserts the
+coverage (2026-08-03) — a checkmark here means a real test asserts the
 behavior, not that the capability is production-validated:
 
 - [x] Trace completeness
@@ -502,6 +507,8 @@ customer-scale validation without deployment evidence.
 | Knowledge-state lifecycle and retraction semantics | Implemented (`confidence_lifecycle.py`, wired) |
 | Temporal snapshot and integrity model | Implemented (`bitemporal.py`, wired) |
 | Tenant-scoping enforcement on the agent-tool surface | Implemented and live-verified — `tasks/lessons.md` A147/A149 |
+| Capability-gated Neo4j 2026 vector search | `docs/adr/0007-capability-gated-neo4j-vector-search.md`; implemented and live-validated on a separate modern volume |
+| Measured adaptive retrieval routing | `docs/adr/0008-adaptive-retrieval-routing.md`; implemented and unit-tested, with production gains still unclaimed |
 
 ## Context Graph ADRs
 

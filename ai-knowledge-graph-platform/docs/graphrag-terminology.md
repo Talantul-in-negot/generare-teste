@@ -93,7 +93,7 @@ A dense cluster of entities in the graph — nodes that are more connected to ea
 
 **Example:** In a regulatory corpus, one community might contain all entities related to "Boeing 737 MAX airworthiness" — the relevant ADs, the aircraft types, the responsible regulators, and the maintenance procedures.
 
-**In this project:** `graphrag/graph/community_builder.py` — runs multi-resolution Leiden via `graspologic`. Communities are used by `graphrag/retrieval/global_search.py` for map-reduce summarisation across the full corpus.
+**In this project:** `graphrag/graph/community_builder.py` — runs multi-resolution Leiden via `graspologic`. Communities are used by `graphrag/retrieval/global_search.py` for direct high-level context retrieval; the legacy map-reduce path remains configuration-gated for comparison only.
 
 ---
 
@@ -267,7 +267,7 @@ A type of graph neural network that aggregates information from all neighbors wi
 ---
 
 ### Global search
-A retrieval mode that answers broad, thematic questions by summarising across all communities in the graph, rather than retrieving specific chunks. Uses map-reduce: summarise each community, then synthesise.
+A retrieval mode that answers broad, thematic questions by retrieving relevant community summaries, rather than retrieving only specific chunks. The default path places bounded high-level summaries directly into the final synthesis context; a legacy map-reduce implementation remains available only as a configuration-gated ablation.
 
 **Example:** "What are the main airworthiness concerns for Boeing 737 aircraft?" — this requires synthesizing across many documents. Local search (specific chunk retrieval) would return fragments. Global search summarises the entire relevant sub-graph.
 
@@ -484,7 +484,7 @@ A technique for grounding LLM answers in external knowledge. Instead of relying 
 ### RAGAS
 A framework for evaluating RAG pipelines on four metrics: faithfulness, answer relevancy, context precision, context recall. Uses an LLM as the judge.
 
-**In this project:** `graphrag/evaluation/ragas_evaluator.py`. Samples 20% of queries automatically. Judge LLM: DeepSeek first, Groq fallback, Gemini last resort.
+**In this project:** `graphrag/evaluation/ragas_evaluator.py`. Samples 20% of queries automatically. Judge order is DeepSeek first, Groq fallback, then Gemini only if the earlier clients cannot be initialized.
 
 ---
 

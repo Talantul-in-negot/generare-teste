@@ -54,12 +54,12 @@ CREATE TABLE kpi_events (
 | `context_recall` | Float | 0.0–1.0 | RAGAS: did we retrieve all relevant context? Higher = better | 0.0 |
 | `cost_usd` | Float | 0.0–∞ | Total cost of the query (LLM + embedding API calls) | 0.0 |
 | `retrieval_mode` | Text | "hybrid", "local", "global", "agentic" | Which retrieval path was taken | "hybrid" |
-| `model_version` | Text | e.g., "gemini-2.5-flash" | Which LLM generated the answer | "" |
+| `model_version` | Text | e.g., "deepseek-v4-pro" | Which synthesis-tier LLM generated the answer | "" |
 
 ### Sampling strategy
 
 - **Latency**: 100% — every query is timed
-- **RAGAS scores**: ~20% sample — evaluating every query is expensive; the current judge order is DeepSeek first, Groq fallback, Gemini last resort
+- **RAGAS scores**: ~20% sample — evaluating every query is expensive; the current judge order is DeepSeek, Groq fallback, then Gemini compatibility fallback
 
 ### Access patterns
 

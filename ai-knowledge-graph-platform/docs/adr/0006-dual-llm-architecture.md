@@ -76,7 +76,9 @@ For a typical 2-step agentic query:
 | **Total** | **~5.5s** | **~2.9s** |
 
 Measured p95 improvement: **6.8s → 3.4s** (−50%).  
-Combined p95 across hybrid and agentic: **5.9s → 2.7s** (under the 3s SLO).
+The historical combined p95 measurement was **5.9s → 2.7s**. It is retained as
+the original benchmark, not as the current platform baseline; the current
+roadmap records later live measurements separately.
 
 ---
 

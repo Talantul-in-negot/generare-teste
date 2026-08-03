@@ -36,7 +36,7 @@ Rationale for each choice:
 ### Why OpenAI for embeddings
 
 - The Neo4j vector index is created at 3072 dimensions. Changing embedding providers requires re-embedding every chunk and rebuilding the index — an expensive, risky migration.
-- `gemini-embedding-001` produces high-quality embeddings for domain-specific technical text (aerospace regulatory, financial, medical).
+- The original `gemini-embedding-001` evaluation established that a 3072d embedding contract was suitable for domain-specific technical text; production embeddings are now OpenAI `text-embedding-3-large`.
 - Embedding calls are low-frequency compared to generation calls (one per chunk at ingestion time, not per query).
 - The embedding API has separate quota from the generation API, so they don't compete.
 
@@ -109,7 +109,7 @@ After ADR-0004 was accepted, the Google Gemini API key was revoked, removing acc
 
 ### Impact
 
-No behavioral change to the retrieval pipeline. Vector dimensions unchanged. All 367 entities and 380 edges re-embedded and re-indexed without schema changes.
+No behavioral change to the retrieval pipeline. Vector dimensions unchanged. The migration was a historical corpus re-embedding and re-indexing exercise; its entity and edge counts are not a current corpus claim.
 
 ---
 
