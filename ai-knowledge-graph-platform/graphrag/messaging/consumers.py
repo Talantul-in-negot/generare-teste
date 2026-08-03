@@ -8,6 +8,7 @@ import structlog
 
 from graphrag.core.models import EvalJob, IngestMessage, QueryMessage
 from graphrag.core.config import get_settings
+from graphrag.core.retry import with_retry
 from graphrag.messaging.exchanges import (
     EVAL_EXCHANGE, EVAL_QUEUE, EVAL_ROUTING_KEY,
     INGEST_EXCHANGE, INGEST_QUEUE, INGEST_ROUTING_KEY,
@@ -15,8 +16,24 @@ from graphrag.messaging.exchanges import (
 )
 from graphrag.messaging.rabbitmq_client import get_rabbitmq
 from graphrag.messaging.publishers import publish_eval_job
+from graphrag.retrieval.result_store import ResultStoreUnavailable
 
 log = structlog.get_logger(__name__)
+
+
+@with_retry(exceptions=(ResultStoreUnavailable,), max_attempts=3, base_delay_s=0.5)
+async def _persist_final_result(store, query_id: str, payload: dict) -> None:
+    """Write the completed query result, retrying transient Redis failures.
+
+    A completed retrieval already paid its real LLM/Neo4j cost — losing the
+    result to a single blip is worse than 2-3 short retries. If Redis is
+    still down after that, this re-raises ResultStoreUnavailable: the caller
+    (the RabbitMQ consume loop) treats an unhandled handler exception as a
+    failed delivery and nacks/dead-letters the message rather than acking a
+    result that was never actually persisted.
+    """
+    prior = await store.get(query_id) or {}
+    await store.set(query_id, {**payload, "steps": prior.get("steps", [])})
 
 
 class IngestionConsumer:
@@ -63,10 +80,12 @@ class QueryConsumer:
             # Persist result via Redis-backed ResultStore so the API process
             # (a separate container) can read it. Preserve any progress steps
             # that were pushed during retrieval so the UI can render them.
+            # Retries transient failures (_persist_final_result); if Redis is
+            # still down after that, this raises and the message is nacked
+            # rather than acked as if the result had been delivered.
             from graphrag.retrieval.result_store import get_result_store
             _store = get_result_store()
-            _prior = await _store.get(msg.query_id) or {}
-            await _store.set(msg.query_id, {
+            await _persist_final_result(_store, msg.query_id, {
                 "status":     "completed",
                 "query_id":   msg.query_id,
                 "answer":     result.answer,
@@ -83,7 +102,6 @@ class QueryConsumer:
                 "routing_reason": result.routing_reason,
                 "policy_result": result.policy_result,
                 "policy_reason_code": result.policy_reason_code,
-                "steps":      _prior.get("steps", []),
             })
 
             # Async RAGAS evaluation on sampled queries

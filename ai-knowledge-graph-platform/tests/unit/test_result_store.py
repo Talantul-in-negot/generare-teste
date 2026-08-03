@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from graphrag.retrieval.result_store import ResultStore
+from graphrag.retrieval.result_store import ResultStore, ResultStoreUnavailable
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -86,29 +86,34 @@ class TestRedisStore:
         mock_redis.get = AsyncMock(return_value=None)
         assert await store.get("missing") is None
 
-    async def test_redis_write_failure_does_not_fall_back_to_memory(self, redis_store):
-        """When Redis write fails, the result must NOT be silently written to
-        memory. In a multi-process deployment (API + worker containers), a
-        memory fallback here is a split-brain: the writer's process has the
-        value, the reader's process never will. Losing the write loudly (via
-        the ERROR log) is safer than pretending it succeeded."""
+    async def test_redis_write_failure_raises_and_does_not_fall_back_to_memory(self, redis_store):
+        """When Redis write fails, this must raise ResultStoreUnavailable — not
+        silently write to memory, and not silently swallow the error either.
+        In a multi-process deployment (API + worker containers), a memory
+        fallback here is a split-brain: the writer's process has the value,
+        the reader's process never will. The caller (API route, worker retry
+        loop) decides how to respond; the store itself must not pretend the
+        write succeeded."""
         store, mock_redis = redis_store
         mock_redis.setex = AsyncMock(side_effect=ConnectionError("Redis down"))
-        await store.set("q_fallback", {"status": "completed", "answer": "ok"})
+        with pytest.raises(ResultStoreUnavailable):
+            await store.set("q_fallback", {"status": "completed", "answer": "ok"})
         assert store._memory.get("q_fallback") is None
 
-    async def test_redis_read_failure_returns_none(self, redis_store):
-        """When Redis read fails, return None rather than falling back to this
-        process's memory dict — that memory was never populated by whatever
-        process actually wrote the result, so a "hit" there would be either
-        stale or belong to an unrelated query_id collision, not the real
-        cross-process result."""
+    async def test_redis_read_failure_raises_not_returns_none(self, redis_store):
+        """When Redis read fails, this must raise ResultStoreUnavailable rather
+        than returning None — a bare None is indistinguishable from a genuine
+        "query not found," which would make GET /query/{id} lie with a 404
+        when the real problem is that storage couldn't be checked at all. Must
+        also not fall back to this process's memory dict — that memory was
+        never populated by whatever process actually wrote the result, so a
+        "hit" there would be stale or an unrelated query_id collision."""
         store, mock_redis = redis_store
         # Simulate stale/unrelated local memory state that must NOT be served.
         store._memory["q_mem"] = {"status": "queued", "query_id": "q_mem"}
         mock_redis.get = AsyncMock(side_effect=ConnectionError("Redis down"))
-        result = await store.get("q_mem")
-        assert result is None
+        with pytest.raises(ResultStoreUnavailable):
+            await store.get("q_mem")
 
     async def test_delete_calls_redis_delete(self, redis_store):
         store, mock_redis = redis_store
@@ -119,6 +124,19 @@ class TestRedisStore:
     def test_is_redis_backed_true(self, redis_store):
         store, _ = redis_store
         assert store.is_redis_backed() is True
+
+
+# ── push_progress: deliberately non-fatal ───────────────────────────────────────
+
+class TestPushProgressNonFatal:
+    async def test_push_progress_swallows_unavailable_does_not_raise(self, redis_store):
+        """push_progress is a best-effort UI nicety during an in-flight query
+        that's already paying real LLM cost — unlike the final result write
+        (which the worker retries and ultimately propagates), a transient
+        Redis blip here must not abort the retrieval."""
+        store, mock_redis = redis_store
+        mock_redis.get = AsyncMock(side_effect=ConnectionError("Redis down"))
+        await store.push_progress("q_prog", "step one")  # must not raise
 
 
 # ── Key format ─────────────────────────────────────────────────────────────────

@@ -15,10 +15,13 @@ Architecture
   Works across any number of API + worker containers sharing the same Redis.
 
 - Fallback: in-memory dict.
-  Used automatically when Redis is unavailable. This regresses to the old
-  single-process behaviour, which works fine for development but will
-  fail in multi-worker production — the fallback logs a WARNING to make
-  this visible.
+  Only used when Redis was never configured at all (no redis_url) — fine
+  for single-process development. If Redis *is* configured but a read/write
+  fails, `set`/`get` raise `ResultStoreUnavailable` instead of silently
+  falling back to memory: in a multi-process deployment a memory fallback
+  here is a split-brain (the writer's process has the value, the reader's
+  process never will), so callers must decide how to respond (503, retry)
+  rather than have this pretend the operation succeeded.
 
 Usage::
 
@@ -43,6 +46,17 @@ from functools import lru_cache
 import structlog
 
 log = structlog.get_logger(__name__)
+
+
+class ResultStoreUnavailable(Exception):
+    """Raised when a configured Redis backend fails to serve a read/write.
+
+    Only raised when Redis was actually configured and the operation itself
+    failed — never for the deliberate in-memory-only mode (no redis_url),
+    and never for a genuine cache miss (key not found). Callers that need
+    to distinguish "storage is down" from "no data" (e.g. GET /query/{id}
+    returning 503 vs 404) rely on this distinction.
+    """
 
 # TTL is configurable at deploy time without redeploy.
 # Precedence: QUERY_RESULT_TTL_SECONDS → GRAPHRAG_RESULT_TTL → YAML retrieval.query_result_ttl_seconds → 3600
@@ -95,24 +109,34 @@ class ResultStore:
     # ── Public API ─────────────────────────────────────────────────────────────
 
     async def set(self, query_id: str, result: dict) -> None:
-        """Persist a query result. Called from the worker after completion."""
+        """Persist a query result. Called from the worker after completion.
+
+        Raises ResultStoreUnavailable if Redis is configured but the write
+        fails — the caller must decide how to respond (503, retry, etc.)
+        rather than this silently pretending the result was saved.
+        """
         payload = json.dumps(result)
         if self._redis is not None:
             try:
                 await self._redis.setex(self._key(query_id), self._ttl, payload)
             except Exception as exc:  # broad: redis.RedisError hierarchy
-                # ERROR not WARNING: in a multi-process deployment the result
-                # lives only in this process's memory and the API will never see
-                # it — the client hangs until timeout. Don't fall back to memory.
+                # In a multi-process deployment the result would otherwise live
+                # only in this process's memory and the API would never see it
+                # — don't fall back to memory, raise so the caller knows.
                 log.error("result_store.redis_write_failed",
                           query_id=query_id, error=str(exc),
-                          note="result lost — client will see timeout")
+                          note="result not persisted")
+                raise ResultStoreUnavailable(str(exc)) from exc
             return  # regardless of success/fail, don't touch memory
         # In-memory fallback — only active when Redis was never configured
         self._memory[query_id] = result
 
     async def get(self, query_id: str) -> dict | None:
-        """Return the stored result dict, or None if not found / expired."""
+        """Return the stored result dict, or None if genuinely not found / expired.
+
+        Raises ResultStoreUnavailable if Redis is configured but the read
+        fails — distinct from a real cache miss, which returns None.
+        """
         if self._redis is not None:
             try:
                 raw = await self._redis.get(self._key(query_id))
@@ -122,7 +146,10 @@ class ResultStore:
             except Exception as exc:  # broad: redis.RedisError hierarchy
                 log.error("result_store.redis_read_failed",
                           query_id=query_id, error=str(exc))
-                return None  # don't fall back to memory — wrong process's dict
+                # Don't fall back to memory — wrong process's dict — and don't
+                # return None either, since that would look like "not found"
+                # when it's really "couldn't check."
+                raise ResultStoreUnavailable(str(exc)) from exc
         return self._memory.get(query_id)
 
     async def set_status(self, query_id: str, status: str) -> None:
@@ -130,12 +157,22 @@ class ResultStore:
         await self.set(query_id, {"status": status, "query_id": query_id})
 
     async def push_progress(self, query_id: str, step: str) -> None:
-        """Append a progress step to an in-flight result (visible to polling clients)."""
-        current = await self.get(query_id) or {"status": "processing", "query_id": query_id}
-        steps = current.setdefault("steps", [])
-        if step not in steps:  # deduplicate — agentic fallback may re-run the retriever
-            steps.append(step)
-        await self.set(query_id, current)
+        """Append a progress step to an in-flight result (visible to polling clients).
+
+        Deliberately swallows ResultStoreUnavailable: this is a best-effort UI
+        nicety mid-retrieval, not the final result. A transient Redis blip here
+        must not abort an in-flight query that's already paying real LLM cost —
+        unlike the final result write, which the worker does retry (see
+        graphrag/messaging/consumers.py).
+        """
+        try:
+            current = await self.get(query_id) or {"status": "processing", "query_id": query_id}
+            steps = current.setdefault("steps", [])
+            if step not in steps:  # deduplicate — agentic fallback may re-run the retriever
+                steps.append(step)
+            await self.set(query_id, current)
+        except ResultStoreUnavailable as exc:
+            log.warning("result_store.push_progress_failed", query_id=query_id, error=str(exc))
 
     async def delete(self, query_id: str) -> None:
         """Remove a result entry (optional cleanup)."""

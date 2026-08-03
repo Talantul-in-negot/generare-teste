@@ -5612,3 +5612,76 @@ Rule: when code or tests change, update both the roadmap status and the lesson
 that explains the decision. Keep deferred scale work, production-specific
 operations, and missing deployment evidence visible instead of silently
 converting them into completed features.
+
+## A155 -- A silently-lost async result is worse than an explicit 503
+
+Investigated (not assumed) how the platform behaves if Redis goes down,
+across all 11 modules that touch it. Nine already degrade gracefully — cache
+miss, in-memory fallback, or a skipped optimization, never an unhandled
+exception. Two did not: `ResultStore` and `SessionStore` in strict mode.
+
+`ResultStore.set()`/`get()` caught every Redis failure, logged it, and
+returned as if nothing had happened — `set()` silently dropped the write
+("result lost — client will see timeout"), `get()` returned `None`
+indistinguishable from a genuine cache miss. The actual failure mode this
+produced: `POST /query` would enqueue a real ~13-26s LLM/Neo4j retrieval,
+the worker would pay that full cost, then the completed result had nowhere
+durable to land — the client polling `GET /query/{id}` got a `404 Query not
+found`, a direct lie, since the query very much existed and had an answer;
+storage just couldn't be checked. A 503 would have told the truth. A silent
+`None` did not.
+
+Fixed by making the failure loud instead of swallowed: added
+`ResultStoreUnavailable`, raised from `set()`/`get()` only when Redis is
+*configured but failing* (never for the deliberate in-memory-only dev mode,
+never for a real "key not found"). Three call sites now handle it
+differently, on purpose:
+
+- `POST /query` — persists `status=queued` *before* publishing to RabbitMQ;
+  if that write fails, returns 503 immediately and never publishes. Without
+  this, the worker still does the expensive retrieval for a result that was
+  already guaranteed to be unrecoverable.
+- `GET /query/{id}` — 503 when the store raises, 404 only when it responds
+  and the key genuinely isn't there. The one-line distinction this whole
+  fix exists to draw.
+- The worker's final-result write — wrapped in a small retry helper
+  (`_persist_final_result`, reusing the existing `graphrag/core/retry.py`
+  decorator rather than writing new retry logic) that retries transient
+  failures 2-3 times, then re-raises. An unhandled exception from a RabbitMQ
+  consumer handler is already treated as a failed delivery by the existing
+  `x-retry-count`/dead-letter mechanism in `rabbitmq_client.py` — the fix
+  needed to *let* that happen, not build a second failure-handling path
+  next to one that already existed.
+
+**Two things deliberately not done, on request, and why they'd have been
+over-engineering here:** no in-memory fallback on failure (in a
+multi-process deployment the API can't see the worker's process memory —
+this was the original bug's exact shape, re-adding it anywhere would
+reintroduce it) and no Redis-specific circuit breaker (unlike the LLM
+providers, which got one — `provider_health.py` — after a real 40-minute
+incident, there's no evidence Redis fails *intermittently under load* here;
+building a breaker on a hypothesis rather than a measured pattern is the
+same mistake A142/A146 already cost this session once).
+
+**One deliberate asymmetry inside `ResultStore` itself**: `push_progress`
+(the mid-retrieval UI step narration) catches `ResultStoreUnavailable`
+internally and only logs — it does not propagate. A transient Redis blip
+mid-query must not abort a retrieval that's already paying real LLM cost
+just to update a progress bar; that's a different risk profile from the
+final result write, which the worker retries and does propagate. Same
+exception type, two different call sites, two different correct behaviors.
+
+Tests: 26 new/changed across three files. `test_result_store.py` — two
+existing tests renamed and flipped from "swallow and return None/log" to
+"raise `ResultStoreUnavailable`" (a real behavior change, not just added
+coverage), plus a new test proving `push_progress` does NOT raise. New
+`test_query_routes.py` (no prior test file for this route existed) — a
+minimal `FastAPI()` app with just this router mounted, `get_current_user`
+overridden, and a stand-in correlation-ID middleware (the real one lives in
+`api/main.py` and isn't part of the router under test) — asserts 503 vs 200
+on `POST /query` and 503 vs 404 vs 200 on `GET /query/{id}`. New
+`test_consumers_result_persist.py` tests `_persist_final_result` directly:
+succeeds first try, retries then succeeds, exhausts retries and raises, and
+confirms a failure on the *read* half of the function (prior-steps lookup)
+triggers a retry of the whole unit, not just the write half. Full suite:
+752 passed, 0 failed.
