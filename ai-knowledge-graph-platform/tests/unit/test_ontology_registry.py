@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from graphrag.graph.ontology_registry import OntologyRegistry, _RELATION_RULES
+from graphrag.graph.ontology_registry import (
+    OntologyRegistry,
+    _RELATION_RULES,
+    _registries,
+    get_ontology_registry,
+)
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -42,6 +47,33 @@ def _relation(src, tgt, rel: str):
     r.target_entity_id = tgt.id
     r.relation = rel
     return r
+
+
+def test_get_ontology_registry_is_isolated_by_tenant():
+    _registries.clear()
+    neo4j = AsyncMock()
+
+    marketing = get_ontology_registry(neo4j, tenant="marketing")
+    automotive = get_ontology_registry(neo4j, tenant="automotive")
+
+    assert marketing is not automotive
+    assert marketing._tenant == "marketing"
+    assert automotive._tenant == "automotive"
+
+
+async def test_graph_migration_counts_and_updates_only_the_registry_tenant():
+    neo4j = AsyncMock()
+    neo4j.run = AsyncMock(return_value=[{"total": 2}])
+    registry = OntologyRegistry(neo4j, tenant="marketing")
+    registry._migration_map = {"OLD_RULE": "NEW_RULE"}
+
+    result = await registry.apply_graph_migrations()
+
+    assert result == {"OLD_RULE": 2}
+    count_call, update_call, _ = neo4j.run.await_args_list
+    assert "tenant: $tenant" in count_call.args[0]
+    assert count_call.kwargs["tenant"] == "marketing"
+    assert update_call.kwargs["tenant"] == "marketing"
 
 
 # ── validate_extraction ────────────────────────────────────────────────────────

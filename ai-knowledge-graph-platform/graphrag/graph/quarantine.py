@@ -54,12 +54,13 @@ class QuarantineService:
         entity_type: str,
         reason: str,
         flagged_by: str = "system",
+        tenant: str = "default",
     ) -> None:
         """Flag a single entity as quarantined — excluded from retrieval."""
         log_id = str(uuid4())
         await self._neo4j.run(
             """
-            MATCH (e:Entity {name: $name, type: $type})
+            MATCH (e:Entity {name: $name, type: $type, tenant: $tenant})
             SET e.quarantined         = true,
                 e.quarantine_reason   = $reason,
                 e.quarantined_at      = datetime(),
@@ -71,6 +72,7 @@ class QuarantineService:
                 reason:      $reason,
                 flagged_by:  $flagged_by,
                 action:      'quarantine',
+                tenant:      $tenant,
                 logged_at:   datetime()
             })
             """,
@@ -79,6 +81,7 @@ class QuarantineService:
             reason=reason,
             flagged_by=flagged_by,
             log_id=log_id,
+            tenant=tenant,
         )
         log.warning(
             "quarantine.entity_flagged",
@@ -94,6 +97,7 @@ class QuarantineService:
         reason: str,
         flagged_by: str = "system",
         depth: int = 2,
+        tenant: str = "default",
     ) -> int:
         """
         Quarantine the seed entity and all entities reachable from it
@@ -103,19 +107,21 @@ class QuarantineService:
         depth = min(depth, MAX_QUARANTINE_DEPTH)
 
         # First quarantine the seed itself
-        await self.quarantine_entity(seed_entity_name, seed_entity_type, reason, flagged_by)
+        await self.quarantine_entity(
+            seed_entity_name, seed_entity_type, reason, flagged_by, tenant
+        )
 
         # Find reachable entities that are ONLY reachable from this seed
         rows = await self._neo4j.run(
             f"""
-            MATCH (seed:Entity {{name: $seed_name}})
-            MATCH (seed)-[:RELATES_TO*1..{depth}]->(neighbor:Entity)
+            MATCH (seed:Entity {{name: $seed_name, tenant: $tenant}})
+            MATCH (seed)-[:RELATES_TO*1..{depth}]->(neighbor:Entity {{tenant: $tenant}})
             WHERE NOT neighbor.quarantined = true
             // Only quarantine if neighbor has no path from non-quarantined nodes
             //  other than through the seed
             WITH neighbor
             WHERE NOT EXISTS {{
-                MATCH (other:Entity)-[:RELATES_TO*1..{depth}]->(neighbor)
+                MATCH (other:Entity {{tenant: $tenant}})-[:RELATES_TO*1..{depth}]->(neighbor)
                 WHERE NOT other.quarantined = true
                   AND other.name <> $seed_name
             }}
@@ -128,6 +134,7 @@ class QuarantineService:
             seed_name=seed_entity_name,
             reason=f"subgraph_from:{seed_entity_name}",
             flagged_by=flagged_by,
+            tenant=tenant,
         )
         count = (rows[0]["quarantined"] if rows else 0) + 1   # +1 for seed
         log.warning(
@@ -146,6 +153,7 @@ class QuarantineService:
         entity_type: str,
         released_by: str,
         note: str = "",
+        tenant: str = "default",
     ) -> None:
         """
         Release a quarantined entity back into the active graph.
@@ -154,7 +162,7 @@ class QuarantineService:
         log_id = str(uuid4())
         await self._neo4j.run(
             """
-            MATCH (e:Entity {name: $name, type: $type})
+            MATCH (e:Entity {name: $name, type: $type, tenant: $tenant})
             REMOVE e.quarantined
             SET e.quarantine_released_at = datetime(),
                 e.quarantine_released_by = $released_by
@@ -165,6 +173,7 @@ class QuarantineService:
                 reason:      $note,
                 flagged_by:  $released_by,
                 action:      'release',
+                tenant:      $tenant,
                 logged_at:   datetime()
             })
             """,
@@ -173,6 +182,7 @@ class QuarantineService:
             released_by=released_by,
             note=note,
             log_id=log_id,
+            tenant=tenant,
         )
         log.info(
             "quarantine.entity_released",
@@ -182,11 +192,11 @@ class QuarantineService:
 
     # ── Listing ────────────────────────────────────────────────────────────────
 
-    async def list_quarantined(self, limit: int = 100) -> list[dict]:
+    async def list_quarantined(self, limit: int = 100, tenant: str = "default") -> list[dict]:
         """Return all currently quarantined entities."""
         return await self._neo4j.run(
             """
-            MATCH (e:Entity)
+            MATCH (e:Entity {tenant: $tenant})
             WHERE e.quarantined = true
             RETURN e.name            AS entity_name,
                    e.type            AS entity_type,
@@ -197,10 +207,11 @@ class QuarantineService:
             LIMIT $limit
             """,
             limit=limit,
+            tenant=tenant,
         )
 
     async def auto_quarantine_anomalies(
-        self, doc_id: str, validation_report: dict
+        self, doc_id: str, validation_report: dict, tenant: str = "default"
     ) -> int:
         """
         Called automatically by GraphWriter after ingestion validation.
@@ -217,6 +228,7 @@ class QuarantineService:
                         entity_type="UNKNOWN",
                         reason=f"degree_anomaly:degree={issue.get('degree')}",
                         flagged_by="ingestion_validator",
+                        tenant=tenant,
                     )
                     count += 1
         if count:

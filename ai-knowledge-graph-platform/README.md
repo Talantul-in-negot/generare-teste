@@ -66,7 +66,7 @@ Ingests two genuinely conflicting documents, runs the real inference engine, and
 ## Context Graph Layer
 
 The platform now includes the P0 foundation for a tenant-scoped Context Graph.
-It persists `CGCase`, `CGAgentRun`, `CGToolCall`, `CGObservation`,
+It persists `CGCase`, `CGAgentRun`, `CGToolCall`, `CGObservation`, `CGEpisode`,
 `CGContextManifest`, `CGDecision`, `CGOption`, `CGPolicyVersion`, and
 `CGPolicyEvaluation` in Neo4j.
 
@@ -74,12 +74,25 @@ Available under `/context-graph`:
 
 - trace creation and validation;
 - immutable manifest persistence with deterministic SHA-256 integrity hashing;
+- deterministic policy-rule evaluation with structured reason codes;
+- durable, tenant-scoped session episodes linked to the run and manifest;
+- live retrieval traces linked to a separate content-addressed answer cache;
 - the WPP marketing campaign-placement governed decision flow.
+
+The two hashes have different contracts. A manifest hash protects one
+historical trace, including its timestamps. The answer-cache hash identifies
+reusable inference inputs: tenant, normalized question, durable corpus
+revision, requested/effective retrieval mode and configuration, model route,
+prompt version, and ontology version. Every request still receives a new
+`query_id`; a cache hit returns `source_query_id` and `source_trace_id` for the
+original governed decision. Session queries bypass this cache because their
+mutable conversation history is not yet part of the key.
 
 The Context Graph stores structured evidence and rationale only; hidden
 chain-of-thought is not persisted. P1 replay/governance, P2
-outcomes/precedents, and P3 proactive intelligence contracts are implemented;
-live Neo4j and corpus validation remain the release gate.
+outcomes/precedents, and P3 proactive intelligence contracts are implemented.
+The trace, replay, retention, policy, and episode paths have been validated on
+local live Neo4j; production traffic and production-scale tuning remain open.
 
 ---
 
@@ -144,17 +157,19 @@ live Neo4j and corpus validation remain the release gate.
 | **Multi-hop graph traversal** | `Chunk → Entity → RELATES_TO* → Entity → Chunk` up to depth 2 |
 | **Agentic fallback (IRCoT)** | Low-confidence answers trigger iterative re-search; Groq `llama-3.1-8b-instant` handles routing (~0.2s/step), while DeepSeek handles final synthesis; agentic p95 **3.4s** |
 | **Session context** | Redis-backed conversation history (24h TTL); enriches follow-up queries with prior turn entities |
+| **Adaptive retrieval routing** | Per-tenant/query-class EWMA quality and latency statistics choose local, hybrid, or global retrieval after a guarded cold-start; deterministic exploration prevents route starvation |
 | **Alias resolution** | Name-based + embedding-based deduplication before every entity MERGE; per-tenant registry pool |
 | **Document authority hierarchy** | 4-level authority system (Regulatory → Manufacturer → Internal → Informal); superseded docs penalised |
 | **Contradiction detection** | Multi-source, directional-reversal, exclusive-state, and functional-violation conflict types; scoped per tenant |
 | **Community detection** | Leiden algorithm (graspologic) builds hierarchical graph summaries for global search; staleness-gated auto-rebuild |
+| **Temporal community summaries** | Immutable `CommunitySummarySnapshot` versions carry valid/transaction time, integrity hashes, chunk/document versions, and evidence links for point-in-time global retrieval |
 | **Graph health metrics** | 6 semantic metrics (alias coverage, relation precision, contradiction rate, orphan growth, merge/split proxy, community coherence) with per-tenant trend snapshots |
 | **Ontology enforcement** | Domain/range validation on every relation write; deprecated relation names auto-migrated on ingestion |
 | **Tenant isolation** | All entities, edges, conflicts, communities, and health snapshots are scoped by `(name, type, tenant)` |
 | **Graph integrity guards** | Self-loop removal, cycle detection, quarantine, ingestion validation, dirty-flag propagation after every write |
 | **Manual correction API** | `/corrections` endpoints: entity split, quarantine/release, edge reject/override, conflict resolution |
 | **Agent tool safety** | `ToolPolicy` gate: allowlist, per-tool risk levels (low/medium/high/restricted), scope enforcement, arg validation, cross-tenant guard, dry-run mode, timeout, structured audit log; 49 guardrail tests |
-| **Query result cache** | Redis-backed, provenance-aware cache in `QueryConsumer`; cache hit skips all 6 retrieval stages; invalidates only queries that cited affected entities; TTL configurable via `QUERY_RESULT_TTL_SECONDS` |
+| **Governed answer cache** | Redis-backed SHA-256 cache inside `HybridRetriever`; keys include tenant, normalized question, corpus revision, retrieval configuration, model route, prompt, and ontology versions. A hit skips retrieval/LLM work and points to the original Context Graph trace. Every retrieval-visible mutation, including ingestion, corrections, ontology migrations, graph re-ranking, communities, and GNN calibration, uses `KGCorpusState.active_updates` and publishes a new revision on completion. |
 | **Redis alias registry** | `AliasRegistry.load()` pushes alias table to Redis hash (`graphrag:aliases:{tenant}`, 24h TTL); parallel workers warm from Redis without full Neo4j scan; `load_alias_registry()` is Redis-first |
 | **Wikidata entity linking** | Optional post-ingestion step (`WIKIDATA_LINKING=1`); grounds high-confidence entities to canonical QIDs; rate-limited to 20 entities/document |
 | **RAGAS evaluation** | Faithfulness, answer relevancy, context precision, context recall — auto-sampled at 20% |
@@ -164,6 +179,8 @@ live Neo4j and corpus validation remain the release gate.
 | **Structured DLQ** | Failed messages carry `exception_type`, `error`, `retry_count`, `queue`, `message_id`, `payload_summary` — full JSON envelope for automated triage |
 | **Async pipeline** | RabbitMQ decouples ingestion, query, and evaluation workers with structured DLQ; `compose.dev.yaml` starts the full stack in one command |
 | **Context Graph P0** | Tenant-scoped cases, agent runs, tool observations, manifests, policy evaluations, options, and decisions under `/context-graph` |
+| **Source catalog** | `/kg/sources` manages tenant-scoped source systems and versioned, secret-free mapping contracts; documents can link through `INGESTED_FROM` |
+| **End-to-end observability** | `X-Correlation-ID` flows HTTP -> RabbitMQ -> worker -> result -> `CGAgentRun`; Prometheus metrics and optional OTLP traces share the same request context |
 | **Multimodal provenance** | Media attachments plus OCR, transcript, caption, and visual-embedding transformation links; media bytes remain in object storage |
 
 ---
@@ -217,7 +234,7 @@ The cross-encoder scores text similarity. It doesn't know that *Falcon 9* and *S
 
 | Component | Technology |
 |-----------|-----------|
-| Graph DB | Neo4j 5.20 |
+| Graph DB | Neo4j 5.20 compatibility baseline; validated Neo4j 2026.06 path with tenant-filtered vector `SEARCH` via `compose.neo4j-modern.yaml` |
 | Session Store | Redis 7 |
 | Message Queue | RabbitMQ 3.13 |
 | KPI Store | SQLite by default; optional TimescaleDB via `KPI_BACKEND=timescale` |
@@ -426,6 +443,19 @@ ENV=development
 ```bash
 docker compose -f compose.dev.yaml up   # full stack: Neo4j + RabbitMQ + Redis + API + workers + dashboards
 ```
+
+For a fresh Neo4j 2026.06 deployment with in-index tenant filtering, use the
+separate-volume override. It does not mount the existing 5.20 data volume:
+
+```bash
+docker compose -f docker-compose.yml -f compose.neo4j-modern.yaml up -d neo4j
+python scripts/init_neo4j.py
+python scripts/migrate_neo4j_vector_indexes.py  # dry-run on an upgraded existing database
+python scripts/migrate_neo4j_vector_indexes.py --apply
+```
+
+The migration command rebuilds indexes only. Back up an existing database
+before a server upgrade; do not attach a 5.20 volume directly to 2026.06.
 
 ### 5. Initialize Neo4j schema
 
@@ -661,6 +691,9 @@ This question spans 3 separate documents with no direct text overlap.
 
 3. QUERY WORKER
    →  QueryAgent.run(query_id, question, session_id)
+   →  This example has session context, so the governed answer cache is bypassed.
+      A stateless cache hit keeps the new query_id and returns source_query_id
+      plus source_trace_id without rerunning retrieval or the LLM.
 
 4. SESSION CONTEXT ENRICHMENT
    Prior turn: "Who owns SpaceX?" → answer mentioned "Elon Musk", "SpaceX"

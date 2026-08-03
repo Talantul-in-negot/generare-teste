@@ -196,6 +196,7 @@ class ReificationService:
         stmt_id: str,
         key: str,
         value: str,
+        tenant: str = "default",
     ) -> None:
         """
         Attach a key/value annotation to a Statement node.
@@ -207,12 +208,13 @@ class ReificationService:
         """
         await self._neo4j.run(
             """
-            MATCH (stmt:Statement {id: $stmt_id})
+            MATCH (stmt:Statement {id: $stmt_id, tenant: $tenant})
             SET stmt[$key] = $value
             """,
             stmt_id=stmt_id,
             key=key,
             value=value,
+            tenant=tenant,
         )
 
     async def endorse(
@@ -222,6 +224,7 @@ class ReificationService:
         endorser_type: str = "Document",
         confidence: float = 1.0,
         note: str = "",
+        tenant: str = "default",
     ) -> None:
         """
         Add an ENDORSED_BY link from a Statement to an endorsing entity/document.
@@ -231,8 +234,9 @@ class ReificationService:
         """
         await self._neo4j.run(
             """
-            MATCH (stmt:Statement {id: $stmt_id})
-            MERGE (endorser {id: $endorser_id})
+            MATCH (stmt:Statement {id: $stmt_id, tenant: $tenant})
+            MATCH (endorser {id: $endorser_id, tenant: $tenant})
+            WHERE $endorser_type IN labels(endorser)
             MERGE (stmt)-[e:ENDORSED_BY]->(endorser)
             ON CREATE SET e.confidence = $confidence,
                           e.note       = $note,
@@ -240,8 +244,10 @@ class ReificationService:
             """,
             stmt_id=stmt_id,
             endorser_id=endorser_id,
+            endorser_type=endorser_type,
             confidence=confidence,
             note=note,
+            tenant=tenant,
         )
 
     async def contradict(
@@ -249,6 +255,7 @@ class ReificationService:
         stmt_a_id: str,
         stmt_b_id: str,
         reason: str = "",
+        tenant: str = "default",
     ) -> None:
         """
         Assert that Statement A contradicts Statement B.
@@ -260,8 +267,8 @@ class ReificationService:
         """
         await self._neo4j.run(
             """
-            MATCH (a:Statement {id: $a_id})
-            MATCH (b:Statement {id: $b_id})
+            MATCH (a:Statement {id: $a_id, tenant: $tenant})
+            MATCH (b:Statement {id: $b_id, tenant: $tenant})
             MERGE (a)-[c:CONTRADICTS]->(b)
             ON CREATE SET c.reason = $reason,
                           c.asserted_at = datetime()
@@ -269,6 +276,7 @@ class ReificationService:
             a_id=stmt_a_id,
             b_id=stmt_b_id,
             reason=reason,
+            tenant=tenant,
         )
         log.info(
             "reification.contradiction_asserted",

@@ -52,6 +52,13 @@ async def load_context_trace(decision_id: str, tenant: str = "default"):
     return await ContextGraphRepository(get_neo4j()).load_trace(decision_id, tenant)
 
 
+@router.get("/sessions/{session_id}/episodes", dependencies=[Depends(require_scope("read"))])
+async def load_session_episodes(session_id: str, tenant: str = "default", limit: int = 10):
+    return await ContextGraphRepository(get_neo4j()).load_session_episodes(
+        session_id, tenant, limit,
+    )
+
+
 class WPPTraceRequest(BaseModel):
     placement_id: str = Field(min_length=1)
     question: str = Field(min_length=1)

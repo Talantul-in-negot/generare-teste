@@ -52,6 +52,31 @@ class ToolCallStatus(StrEnum):
     FAILED = "failed"
 
 
+class EpisodeRole(StrEnum):
+    USER = "user"
+    AGENT = "agent"
+    TOOL = "tool"
+    EXTERNAL = "external"
+
+
+class ConditionOperator(StrEnum):
+    EQ = "eq"
+    NE = "ne"
+    GT = "gt"
+    GTE = "gte"
+    LT = "lt"
+    LTE = "lte"
+    IN = "in"
+    CONTAINS = "contains"
+    IS_EMPTY = "is_empty"
+    NOT_EMPTY = "not_empty"
+
+
+class RuleMatch(StrEnum):
+    ALL = "all"
+    ANY = "any"
+
+
 class ApprovalStatus(StrEnum):
     REQUESTED = "requested"
     APPROVED = "approved"
@@ -207,6 +232,21 @@ class Observation(CGBase):
     structured_value: dict[str, Any] = Field(default_factory=dict)
 
 
+class CGEpisode(CGBase):
+    """Auditable session event; never stores hidden model reasoning."""
+
+    run_id: str
+    session_id: str
+    sequence: int = Field(ge=0)
+    role: EpisodeRole
+    episode_type: str = Field(min_length=1)
+    content: str = ""
+    content_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_system: str = ""
+    payload_ref: str = ""
+    correlation_id: str = ""
+
+
 class ContextManifest(CGBase):
     case_id: str
     run_id: str
@@ -219,6 +259,7 @@ class ContextManifest(CGBase):
     policy_version_ids: list[str] = Field(default_factory=list)
     tool_call_ids: list[str] = Field(default_factory=list)
     observation_ids: list[str] = Field(default_factory=list)
+    episode_ids: list[str] = Field(default_factory=list)
     model_provider: str
     model_version: str
     prompt_version: str
@@ -251,11 +292,30 @@ class DecisionOption(CGBase):
 Option = DecisionOption
 
 
+class PolicyCondition(BaseModel):
+    field: str = Field(min_length=1)
+    operator: ConditionOperator = ConditionOperator.EQ
+    value: Any = None
+
+
+class PolicyRule(BaseModel):
+    id: str = Field(min_length=1)
+    priority: int = 100
+    conditions: list[PolicyCondition] = Field(default_factory=list)
+    match: RuleMatch = RuleMatch.ALL
+    result: PolicyResult
+    reason_code: str = Field(min_length=1)
+    rationale: str = ""
+
+
 class PolicyVersion(CGBase):
     policy_id: str
     version: str
     status: PolicyStatus = PolicyStatus.ACTIVE
     title: str = ""
+    rules: list[PolicyRule] = Field(default_factory=list)
+    default_result: PolicyResult = PolicyResult.ESCALATE
+    enforcement_mode: str = "advisory"
 
 
 class PolicyEvaluation(CGBase):
@@ -285,6 +345,7 @@ class DecisionTrace(BaseModel):
     run: AgentRun
     tool_calls: list[ToolCall] = Field(default_factory=list)
     observations: list[Observation] = Field(default_factory=list)
+    episodes: list[CGEpisode] = Field(default_factory=list)
     manifest: ContextManifest
     policy_versions: list[PolicyVersion] = Field(min_length=1)
     policy_evaluations: list[PolicyEvaluation] = Field(min_length=1)
@@ -294,7 +355,7 @@ class DecisionTrace(BaseModel):
     @model_validator(mode="after")
     def validate_links(self) -> "DecisionTrace":
         objects = [self.case, self.run, self.manifest, self.decision,
-                   *self.tool_calls, *self.observations, *self.policy_versions,
+                   *self.tool_calls, *self.observations, *self.episodes, *self.policy_versions,
                    *self.policy_evaluations, *self.options]
         tenants = {obj.tenant for obj in objects}
         if len(tenants) != 1:
@@ -326,6 +387,10 @@ class DecisionTrace(BaseModel):
             raise ValueError("tool calls must reference the run")
         if any(obs.tool_call_id not in {call.id for call in self.tool_calls} for obs in self.observations):
             raise ValueError("observations must reference a tool call")
+        if any(episode.run_id != self.run.id for episode in self.episodes):
+            raise ValueError("episodes must reference the run")
+        if set(self.manifest.episode_ids) != {episode.id for episode in self.episodes}:
+            raise ValueError("manifest episode references must match supplied episodes")
         selected = [opt for opt in self.options if opt.disposition == OptionDisposition.SELECTED]
         if len(selected) != 1 or self.decision.selected_option_id != selected[0].id:
             raise ValueError("exactly one selected option must match the decision")

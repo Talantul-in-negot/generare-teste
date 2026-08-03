@@ -10,6 +10,11 @@ CREATE CONSTRAINT community_id IF NOT EXISTS FOR (c:Community) REQUIRE c.id IS U
 CREATE CONSTRAINT alias_id IF NOT EXISTS FOR (a:Alias) REQUIRE a.id IS UNIQUE;
 CREATE CONSTRAINT changelog_id IF NOT EXISTS FOR (c:ChangeLog) REQUIRE c.id IS UNIQUE;
 CREATE CONSTRAINT canonical_part_id IF NOT EXISTS FOR (p:CanonicalPart) REQUIRE p.part_number IS UNIQUE;
+CREATE CONSTRAINT kg_corpus_state_tenant IF NOT EXISTS FOR (s:KGCorpusState) REQUIRE s.tenant IS UNIQUE;
+CREATE CONSTRAINT kg_source_id IF NOT EXISTS FOR (s:KGSource) REQUIRE (s.tenant, s.id) IS UNIQUE;
+CREATE CONSTRAINT kg_source_mapping_id IF NOT EXISTS FOR (m:KGSourceMapping) REQUIRE (m.tenant, m.id) IS UNIQUE;
+CREATE CONSTRAINT kg_source_mapping_version_unique IF NOT EXISTS FOR (m:KGSourceMapping) REQUIRE (m.tenant, m.source_id, m.version) IS UNIQUE;
+CREATE CONSTRAINT kg_route_stat_id IF NOT EXISTS FOR (s:KGRetrievalRouteStat) REQUIRE (s.tenant, s.query_class, s.mode) IS UNIQUE;
 
 -- ── Vector indexes ─────────────────────────────────────────────────────────────
 CREATE VECTOR INDEX chunk_embeddings IF NOT EXISTS
@@ -20,6 +25,9 @@ CREATE VECTOR INDEX community_embeddings IF NOT EXISTS
   OPTIONS {indexConfig: {`vector.dimensions`: 3072, `vector.similarity_function`: 'cosine'}};
 CREATE VECTOR INDEX entity_embeddings IF NOT EXISTS
   FOR (e:Entity) ON (e.embedding)
+  OPTIONS {indexConfig: {`vector.dimensions`: 3072, `vector.similarity_function`: 'cosine'}};
+CREATE VECTOR INDEX community_summary_snapshot_embeddings IF NOT EXISTS
+  FOR (s:CommunitySummarySnapshot) ON (s.embedding)
   OPTIONS {indexConfig: {`vector.dimensions`: 3072, `vector.similarity_function`: 'cosine'}};
 
 -- ── Property indexes ──────────────────────────────────────────────────────────
@@ -40,6 +48,7 @@ CREATE CONSTRAINT conflict_id IF NOT EXISTS FOR (c:Conflict) REQUIRE c.id IS UNI
 CREATE CONSTRAINT ontology_version_id IF NOT EXISTS FOR (o:OntologyVersion) REQUIRE o.id IS UNIQUE;
 CREATE CONSTRAINT ontology_migration_id IF NOT EXISTS FOR (m:OntologyMigration) REQUIRE m.id IS UNIQUE;
 CREATE CONSTRAINT community_snapshot_id IF NOT EXISTS FOR (s:CommunitySnapshot) REQUIRE s.id IS UNIQUE;
+CREATE CONSTRAINT community_summary_snapshot_id IF NOT EXISTS FOR (s:CommunitySummarySnapshot) REQUIRE (s.tenant, s.id) IS UNIQUE;
 CREATE CONSTRAINT quarantine_log_id IF NOT EXISTS FOR (q:QuarantineLog) REQUIRE q.id IS UNIQUE;
 CREATE CONSTRAINT graph_health_snapshot_id IF NOT EXISTS FOR (h:GraphHealthSnapshot) REQUIRE h.id IS UNIQUE;
 CREATE CONSTRAINT pagerank_snapshot_id IF NOT EXISTS FOR (s:PageRankSnapshot) REQUIRE s.id IS UNIQUE;
@@ -47,6 +56,9 @@ CREATE CONSTRAINT pagerank_snapshot_id IF NOT EXISTS FOR (s:PageRankSnapshot) RE
 -- ── Tenant + quarantine indexes ───────────────────────────────────────────────
 CREATE INDEX chunk_tenant IF NOT EXISTS FOR (c:Chunk) ON (c.tenant);
 CREATE INDEX doc_tenant IF NOT EXISTS FOR (d:Document) ON (d.tenant);
+CREATE INDEX community_summary_snapshot_time IF NOT EXISTS FOR (s:CommunitySummarySnapshot) ON (s.tenant, s.valid_from, s.transaction_from);
+CREATE INDEX kg_source_status IF NOT EXISTS FOR (s:KGSource) ON (s.tenant, s.status);
+CREATE INDEX kg_source_mapping_version IF NOT EXISTS FOR (m:KGSourceMapping) ON (m.tenant, m.source_id, m.version);
 CREATE INDEX entity_quarantined IF NOT EXISTS FOR (e:Entity) ON (e.quarantined);
 CREATE INDEX entity_source_doc IF NOT EXISTS FOR (e:Entity) ON (e.source_doc_id);
 CREATE INDEX relation_valid_to IF NOT EXISTS FOR ()-[r:RELATES_TO]-() ON (r.valid_to);

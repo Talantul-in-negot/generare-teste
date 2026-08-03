@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+from graphrag.graph.corpus_revision import CorpusMutation
+
 
 class GNNCalibrationScheduler:
     def __init__(self, neo4j_client, threshold: int = 100, runner=None):
@@ -74,7 +76,8 @@ class GNNCalibrationScheduler:
                 result = {"model_version": "gnn-calibrated", "score": 0.0,
                           "data_version": eval_path, "output": stdout.decode(errors="replace")[-1000:]}
             await self.record_completion(
-                job_id, alpha=float(result.get("alpha", 0.0)), beta=float(result.get("beta", 0.0)),
+                job_id, tenant=tenant,
+                alpha=float(result.get("alpha", 0.0)), beta=float(result.get("beta", 0.0)),
                 score=float(result.get("score", 0.0)), model_version=result.get("model_version", "gnn-calibrated"),
                 data_version=result.get("data_version", "calibration"),
             )
@@ -86,16 +89,17 @@ class GNNCalibrationScheduler:
             )
 
     async def record_completion(
-        self, job_id: str, *, alpha: float, beta: float, score: float,
+        self, job_id: str, *, tenant: str, alpha: float, beta: float, score: float,
         model_version: str, data_version: str,
     ) -> None:
-        await self._neo4j.run(
-            """
-            MATCH (r:GNNCalibrationRun {id: $job_id})
-            SET r.status = 'completed', r.alpha = $alpha, r.beta = $beta,
-                r.score = $score, r.model_version = $model_version,
-                r.data_version = $data_version, r.completed_at = datetime()
-            """,
-            job_id=job_id, alpha=alpha, beta=beta, score=score,
-            model_version=model_version, data_version=data_version,
-        )
+        async with CorpusMutation(self._neo4j, tenant, "gnn_calibration"):
+            await self._neo4j.run(
+                """
+                MATCH (r:GNNCalibrationRun {id: $job_id, tenant: $tenant})
+                SET r.status = 'completed', r.alpha = $alpha, r.beta = $beta,
+                    r.score = $score, r.model_version = $model_version,
+                    r.data_version = $data_version, r.completed_at = datetime()
+                """,
+                job_id=job_id, tenant=tenant, alpha=alpha, beta=beta, score=score,
+                model_version=model_version, data_version=data_version,
+            )

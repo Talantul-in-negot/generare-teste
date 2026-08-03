@@ -323,6 +323,67 @@ returns `{"status": "queued"}` visibly rather than masking a cross-process
 split-brain. Set `REDIS_URL` in `.env` and ensure Redis is running before
 starting workers.
 
+### Governed answer cache
+
+`ResultStore` is transport state keyed by the new `query_id`; it is not an
+answer cache. Stateless worker-path queries also pass through
+`graphrag/retrieval/query_cache.py` inside `HybridRetriever`. Its canonical
+SHA-256 key covers the tenant, normalized question, requested and effective
+retrieval modes, output-affecting retrieval configuration, the full
+primary/fallback model route, prompt version, ontology version, and the
+tenant's durable `KGCorpusState.revision`.
+
+Every retrieval-visible graph mutation marks `KGCorpusState.updating=true`
+before its graph writes. Cache reads are disabled while the tenant has active
+updates, and the final concurrent completion atomically increments the
+revision and clears the flag. Old Redis entries may
+remain until TTL expiry, but cannot match the new key. A cache entry is written
+only after the corresponding Context Graph decision trace persists. Hits keep
+the new request's `query_id` and expose `source_query_id`, `source_trace_id`,
+and `cache_key`, so the saved time does not erase provenance. Queries with a
+`session_id` deliberately bypass this cache until conversation state can be
+included in the canonical key.
+
+### Adaptive retrieval routing
+
+`query_planner.py` remains the deterministic cold-start policy, while
+`adaptive_router.py` persists tenant- and query-class-scoped route statistics
+in `KGRetrievalRouteStat`. Once at least two modes have enough samples, the
+router chooses local, hybrid, or global retrieval using an EWMA quality signal
+minus a bounded, log-scaled latency penalty. Deterministic 5% exploration keeps
+untried routes measurable. Explicit non-hybrid modes and vector-only ablations
+remain authoritative, and any router storage failure falls back to the planner.
+
+### Versioned community summaries
+
+Leiden community IDs are deterministic over tenant, level, algorithm, and
+member IDs. Every non-empty generated summary appends a
+`CommunitySummarySnapshot` with valid-time and transaction-time boundaries,
+the summary embedding, a canonical content hash, exact chunk/document IDs and
+versions, and `SUPPORTED_BY`/`DERIVED_FROM` evidence links. Temporal global
+retrieval searches these snapshots instead of the mutable current `Community`
+projection. Neo4j 2026 performs the tenant predicate inside the vector index;
+Neo4j 5.20 uses the bounded over-fetch fallback.
+
+### Source catalog and connector boundary
+
+`KGSource` owns source identity, type, owner, classification, refresh SLA, and
+status. Immutable `KGSourceMapping` versions store canonical mapping JSON and
+its SHA-256 digest, but reject credential-shaped fields. Connectors implement
+the provider-neutral `SourceConnector.records()` protocol and emit
+`SourceEnvelope` records; credentials remain in deployment secret stores.
+Cataloged documents link to their source through `INGESTED_FROM`.
+
+### Correlation and telemetry
+
+FastAPI accepts or creates `X-Correlation-ID`, returns it to the caller, and
+propagates it in the RabbitMQ payload, AMQP properties, worker result, cost
+events, and `CGAgentRun`. RabbitMQ also injects/extracts W3C trace context so
+optional OTLP spans remain one distributed trace across API and worker
+processes. Correlation IDs are deliberately excluded from Prometheus labels to
+avoid unbounded metric cardinality. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to enable
+export; Prometheus remains available at `/metrics` independently.
+
 ---
 
 ## 10. Scalability Considerations
@@ -330,7 +391,7 @@ starting workers.
 | Concern | Current design | Scale path |
 |---|---|---|
 | Write throughput | Sequential per-document; RabbitMQ decouples producers | Parallel workers per tenant |
-| Read latency | Vector ANN + BM25 in Neo4j; Redis result cache | Read replicas; query result TTL tuning |
+| Read latency | Vector ANN + BM25 in Neo4j; governed Redis answer cache; Redis result transport | Read replicas; cache TTL and corpus-revision monitoring |
 | Community rebuild | Leiden on full entity graph per tenant | Incremental rebuild (changed entities only) via `IncrementalCommunityDetector` |
 | Alias resolution | In-memory dict per process | Redis-backed for multi-replica deployments |
 | Inference | Post-ingestion forward-chaining; bounded by MAX_RETRIES | Scoped to affected document's entity subgraph via `run_for_document()` |

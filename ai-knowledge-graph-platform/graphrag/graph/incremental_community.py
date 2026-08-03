@@ -31,11 +31,12 @@ IncrementalCommunityDetector:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime
 from uuid import uuid4
 
 import structlog
+
+from graphrag.graph.corpus_revision import CorpusMutation
 
 log = structlog.get_logger(__name__)
 
@@ -203,6 +204,18 @@ class IncrementalCommunityDetector:
         self,
         tenant: str = "default",
         dry_run: bool = False,
+        publish_revision: bool = True,
+    ) -> dict:
+        """Rebuild affected communities under a cache-safe publication guard."""
+        if dry_run or not publish_revision:
+            return await self._rebuild_affected_communities(tenant, dry_run)
+        async with CorpusMutation(self._neo4j, tenant, "incremental_community_rebuild"):
+            return await self._rebuild_affected_communities(tenant, dry_run=False)
+
+    async def _rebuild_affected_communities(
+        self,
+        tenant: str,
+        dry_run: bool,
     ) -> dict:
         """
         Rebuild only communities that contain at least one recently changed entity.

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from graphrag.context_graph.models import (
-    AgentRun, Case, ContextManifest, Decision, DecisionOption,
+    AgentRun, Case, CGEpisode, ContextManifest, Decision, DecisionOption,
     DecisionTrace, Observation, PolicyEvaluation, PolicyVersion, ToolCall,
     CGAction, CGApproval, CGCorrection, CGExceptionGrant, CGFeedback, CGOutcome,
 )
@@ -21,7 +21,9 @@ def _props(model: Any) -> dict[str, Any]:
     # values deterministically as JSON at the graph boundary.
     return {
         key: json.dumps(value, sort_keys=True, separators=(",", ":"))
-        if isinstance(value, dict) else value
+        if isinstance(value, dict) or (
+            isinstance(value, list) and any(isinstance(item, dict) for item in value)
+        ) else value
         for key, value in props.items()
     }
 
@@ -86,6 +88,24 @@ class ContextGraphRepository:
             id=observation.id, props=_props(observation),
         )
         return observation.id
+
+    async def record_episode(self, episode: CGEpisode) -> str:
+        rows = await self._neo4j.run(
+            """
+            MATCH (r:CGAgentRun {tenant: $tenant, id: $run_id})
+            MERGE (e:CGEpisode {tenant: $tenant, id: $id})
+            ON CREATE SET e += $props
+            MERGE (r)-[:RECORDED_EPISODE]->(e)
+            RETURN e.id AS id
+            """,
+            tenant=episode.tenant,
+            run_id=episode.run_id,
+            id=episode.id,
+            props=_props(episode),
+        )
+        if not rows:
+            raise ContextGraphValidationError("episode references a missing or cross-tenant run")
+        return episode.id
 
     async def _assert_kg_references(self, tenant: str, manifest: ContextManifest) -> None:
         for label, ids in (
@@ -289,6 +309,10 @@ class ContextGraphRepository:
               MERGE (o:CGObservation {tenant: tenant, id: item.id}) ON CREATE SET o += item
               MERGE (t:CGToolCall {tenant: tenant, id: item.tool_call_id})
               MERGE (t)-[:PRODUCED]->(o))
+            FOREACH (item IN $episodes |
+              MERGE (ep:CGEpisode {tenant: tenant, id: item.id}) ON CREATE SET ep += item
+              MERGE (r)-[:RECORDED_EPISODE]->(ep)
+              MERGE (m)-[:INCLUDED_EPISODE]->(ep))
             FOREACH (item IN $options |
               MERGE (o:CGOption {tenant: tenant, id: item.id}) ON CREATE SET o += item
               MERGE (d)-[:CONSIDERED]->(o)
@@ -309,6 +333,7 @@ class ContextGraphRepository:
             policies=[_props(p) for p in trace.policy_versions],
             tool_calls=[_props(t) for t in trace.tool_calls],
             observations=[_props(o) for o in trace.observations],
+            episodes=[_props(e) for e in trace.episodes],
             options=[_props(o) for o in trace.options],
             evaluations=[_props(e) for e in trace.policy_evaluations],
             **kg_refs,
@@ -337,6 +362,7 @@ class ContextGraphRepository:
             OPTIONAL MATCH (r)-[:USED_CONTEXT]->(m:CGContextManifest)
             OPTIONAL MATCH (r)-[:MADE_TOOL_CALL]->(t:CGToolCall)
             OPTIONAL MATCH (t)-[:PRODUCED]->(o:CGObservation {tenant: $tenant})
+            OPTIONAL MATCH (r)-[:RECORDED_EPISODE]->(ep:CGEpisode {tenant: $tenant})
             OPTIONAL MATCH (d)-[:CONSIDERED]->(op:CGOption {tenant: $tenant})
             OPTIONAL MATCH (d)-[:HAS_POLICY_EVALUATION]->(e:CGPolicyEvaluation {tenant: $tenant})
             OPTIONAL MATCH (d)-[:APPLIED_POLICY]->(p:CGPolicyVersion {tenant: $tenant})
@@ -346,6 +372,7 @@ class ContextGraphRepository:
             RETURN c {.*} AS case, r {.*} AS run, m {.*} AS manifest,
               d {.*} AS decision, collect(DISTINCT t {.*}) AS tool_calls,
               collect(DISTINCT o {.*}) AS observations,
+              collect(DISTINCT ep {.*}) AS episodes,
               collect(DISTINCT op {.*}) AS options,
               collect(DISTINCT e {.*}) AS policy_evaluations,
               collect(DISTINCT p {.*}) AS policy_versions,
@@ -356,6 +383,23 @@ class ContextGraphRepository:
             tenant=tenant, decision_id=decision_id,
         )
         return dict(rows[0]) if rows else {}
+
+    async def load_session_episodes(
+        self, session_id: str, tenant: str, limit: int = 10,
+    ) -> list[dict]:
+        """Load durable agent/session memory in chronological order."""
+        rows = await self._neo4j.run(
+            """
+            MATCH (e:CGEpisode {tenant: $tenant, session_id: $session_id})
+            RETURN e {.*} AS episode
+            ORDER BY e.created_at DESC, e.sequence DESC
+            LIMIT $limit
+            """,
+            tenant=tenant,
+            session_id=session_id,
+            limit=max(1, min(limit, 100)),
+        )
+        return [dict(row["episode"]) for row in reversed(rows) if row.get("episode")]
 
     async def append_governance_event(self, event: CGApproval | CGExceptionGrant | CGCorrection) -> str:
         labels = {

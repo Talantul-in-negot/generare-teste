@@ -16,7 +16,7 @@ Services have hard dependencies. Start in this order:
 2. Schema initialisation (requires Neo4j)
    python scripts/init_neo4j.py
    → Wait for: "schema_ready" in output
-   → Verify: SHOW INDEXES YIELD name, state — all 6 should be ONLINE
+   → Verify: `SHOW INDEXES YIELD name, state` returns every index as ONLINE
 
 3. API (requires RabbitMQ + Redis)
    uvicorn api.main:app --host 0.0.0.0 --port 8000
@@ -63,7 +63,7 @@ Neo4j write contention and entity-resolution latency before increasing further.
 | API live | `curl http://localhost:8000/health` | `{"status":"ok"}` |
 | API ready | `curl http://localhost:8000/health/ready` | `{"neo4j":"ok","redis":"ok"}` (returns HTTP 503 if either is down) |
 | Neo4j | Neo4j Browser → `:server status` | Connected |
-| Schema indexes | `SHOW INDEXES YIELD name, state` | 6 indexes ONLINE |
+| Schema indexes | `SHOW INDEXES YIELD name, state` | Every listed index is ONLINE |
 | RabbitMQ | `curl -u graphrag:graphrag_dev http://localhost:15672/api/overview` | `{"object_totals":{...}}` |
 | Redis | `redis-cli ping` | `PONG` |
 | Queue depth | RabbitMQ UI → Queues tab | Near-zero for healthy throughput |
@@ -162,7 +162,12 @@ Alert thresholds in `config/settings.yml` → `business_matrix.alert_thresholds`
 GET http://localhost:8000/metrics
 ```
 
-Instrumented via `prometheus-fastapi-instrumentator`. Covers HTTP request counts, latency histograms, and error rates per endpoint.
+Instrumented via `prometheus-fastapi-instrumentator`. Covers HTTP request
+counts, latency histograms, and error rates per endpoint. Stage cost/latency
+metrics are emitted by `cost_attribution.py`. Set
+`OTEL_EXPORTER_OTLP_ENDPOINT` to export API and worker spans; preserve
+`X-Correlation-ID` when opening an incident so HTTP, RabbitMQ, result-store,
+and Context Graph records can be joined without using it as a metric label.
 
 ### Dashboards
 
@@ -290,6 +295,31 @@ The schema is idempotent. Re-run `scripts/init_neo4j.py` to recreate indexes and
 1. Add the Cypher statement to `graphrag/graph/schema.cypher`
 2. Run `python scripts/init_neo4j.py` — all statements are idempotent (`IF NOT EXISTS`)
 3. For vector indexes: specify correct dimensions (3072 for OpenAI `text-embedding-3-large`)
+
+### Neo4j 2026 vector-index upgrade
+
+The compatibility stack remains usable on Neo4j 5.20. To validate or deploy
+Neo4j 2026.06 without attaching the old store, start the separate-volume
+override:
+
+```bash
+docker compose -f docker-compose.yml -f compose.neo4j-modern.yaml up -d neo4j
+python scripts/init_neo4j.py
+```
+
+On a fresh 2026 database, schema initialization creates filterable indexes
+directly. For a separately backed-up and deliberately upgraded existing
+database, inspect and then rebuild only the vector indexes:
+
+```bash
+python scripts/migrate_neo4j_vector_indexes.py
+python scripts/migrate_neo4j_vector_indexes.py --apply
+```
+
+Verify `SHOW VECTOR INDEXES YIELD name, state, properties, indexProvider`.
+`chunk_embeddings` and `community_embeddings` must be `ONLINE`, use a
+`vector-2026.*` provider, and include `tenant` in `properties`. The application
+detects this at startup; otherwise it keeps the 5.20 over-fetch fallback.
 
 ### Renaming an entity type across the graph
 

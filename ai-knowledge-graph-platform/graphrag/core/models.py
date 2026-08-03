@@ -51,6 +51,7 @@ class Document(BaseModel):
     valid_from: datetime | None = None
     valid_to: datetime | None = None
     tenant: str = "default"
+    source_id: str | None = None   # optional KGSource catalog reference
 
 
 class Chunk(BaseModel):
@@ -237,6 +238,10 @@ class QueryResult(BaseModel):
     source_trace_id: str = ""
     valid_at: str | None = None
     transaction_at: str | None = None
+    correlation_id: str = ""
+    routing_reason: str = ""
+    policy_result: str = ""
+    policy_reason_code: str = ""
 
 
 class SessionTurn(BaseModel):
@@ -301,3 +306,4 @@ class QueryMessage(BaseModel):
     session_id: str = ""   # for multi-turn conversational context
     valid_at: str | None = None
     transaction_at: str | None = None
+    correlation_id: str = ""

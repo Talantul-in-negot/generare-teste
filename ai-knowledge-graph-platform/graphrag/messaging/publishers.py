@@ -32,6 +32,7 @@ async def publish_query(
     valid_at: str | None = None,
     transaction_at: str | None = None,
     query_id: str = "",
+    correlation_id: str = "",
 ) -> str:
     mq = await get_rabbitmq()
     msg = QueryMessage(
@@ -42,6 +43,7 @@ async def publish_query(
         session_id=session_id,
         valid_at=valid_at,
         transaction_at=transaction_at,
+        correlation_id=correlation_id,
         **({"query_id": query_id} if query_id else {}),
     )
     await mq.publish(

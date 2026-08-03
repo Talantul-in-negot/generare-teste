@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Callable, Awaitable
+from typing import Callable, Awaitable
 
 import aio_pika
 import structlog
@@ -13,6 +13,7 @@ from aio_pika.pool import Pool
 
 from graphrag.core.config import get_settings
 from graphrag.core.exceptions import MessagingError
+from graphrag.observability.correlation import current_correlation_id
 
 log = structlog.get_logger(__name__)
 
@@ -70,10 +71,19 @@ class RabbitMQClient:
                 durable=True,
             )
             body = json.dumps(payload).encode()
+            correlation_id = str(payload.get("correlation_id") or current_correlation_id() or "")
+            headers = {"x-correlation-id": correlation_id} if correlation_id else {}
+            try:
+                from opentelemetry.propagate import inject
+                inject(headers)
+            except ImportError:
+                pass
             message = Message(
                 body,
                 delivery_mode=DeliveryMode.PERSISTENT,
                 priority=priority,
+                correlation_id=correlation_id or None,
+                headers=headers or None,
             )
             await exchange.publish(message, routing_key=routing_key)
             log.info(
@@ -102,7 +112,7 @@ class RabbitMQClient:
             )
             # Dead-letter queue
             dlq_name = f"{queue_name}.dlq"
-            dlq = await channel.declare_queue(dlq_name, durable=True)
+            await channel.declare_queue(dlq_name, durable=True)
 
             queue = await channel.declare_queue(
                 queue_name,
@@ -129,7 +139,20 @@ class RabbitMQClient:
                     )
                     try:
                         payload = json.loads(message.body)
-                        await handler(payload)
+                        if message.correlation_id and not payload.get("correlation_id"):
+                            payload["correlation_id"] = message.correlation_id
+                        otel_token = None
+                        try:
+                            from opentelemetry import context as otel_context
+                            from opentelemetry.propagate import extract
+                            otel_token = otel_context.attach(extract(dict(message.headers or {})))
+                        except ImportError:
+                            pass
+                        try:
+                            await handler(payload)
+                        finally:
+                            if otel_token is not None:
+                                otel_context.detach(otel_token)
                         await message.ack()
                     except Exception as exc:  # broad: handler may raise anything; must not kill consumer loop
                         exc_type  = type(exc).__name__
@@ -172,6 +195,7 @@ class RabbitMQClient:
                                 delivery_mode=message.delivery_mode,
                                 priority=message.priority or 0,
                                 headers=new_headers,
+                                correlation_id=message.correlation_id,
                             )
                             await channel.default_exchange.publish(
                                 retry_msg, routing_key=queue_name
@@ -198,6 +222,7 @@ class RabbitMQClient:
                                     "x-exception-type":  exc_type,
                                     "x-retry-count":     retries,
                                 },
+                                correlation_id=message.correlation_id,
                             )
                             await channel.default_exchange.publish(dlq_msg, routing_key=dlq_name)
                             await message.ack()  # ack original so it leaves the main queue

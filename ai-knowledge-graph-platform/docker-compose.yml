@@ -44,6 +44,20 @@ services:
       timeout: 10s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: graphrag_redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   timescaledb:
     image: timescale/timescaledb:2.15.3-pg16
     container_name: graphrag_timescaledb
@@ -73,6 +87,7 @@ services:
     environment:
       NEO4J_URI: bolt://neo4j:7687
       RABBITMQ_URL: amqp://graphrag:graphrag_dev@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379/0
       KPI_DB_PATH: /data/kpis.db
       KPI_BACKEND: timescale
       TIMESCALE_DB_URL: postgresql+asyncpg://graphrag:graphrag_dev@timescaledb:5432/graphrag
@@ -80,6 +95,8 @@ services:
       neo4j:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       timescaledb:
         condition: service_healthy
@@ -96,10 +113,13 @@ services:
     environment:
       NEO4J_URI: bolt://neo4j:7687
       RABBITMQ_URL: amqp://graphrag:graphrag_dev@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       neo4j:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - .:/app
@@ -114,6 +134,7 @@ services:
     environment:
       NEO4J_URI: bolt://neo4j:7687
       RABBITMQ_URL: amqp://graphrag:graphrag_dev@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379/0
       KPI_DB_PATH: /data/kpis.db
       KPI_BACKEND: timescale
       TIMESCALE_DB_URL: postgresql+asyncpg://graphrag:graphrag_dev@timescaledb:5432/graphrag
@@ -121,6 +142,8 @@ services:
       neo4j:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       timescaledb:
         condition: service_healthy
@@ -172,3 +195,4 @@ volumes:
   rabbitmq_data:
   kpi_data:
   timescale_data:
+  redis_data:

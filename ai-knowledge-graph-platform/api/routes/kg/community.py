@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from api.auth.dependencies import require_scope
 from graphrag.graph.neo4j_client import get_neo4j
+from graphrag.graph.corpus_revision import CorpusMutation
 
 router = APIRouter()
 
@@ -36,11 +37,18 @@ async def incremental_community_summary(tenant: str = "default"):
 )
 async def incremental_rebuild_affected(request: IncrementalRebuildRequest):
     from graphrag.graph.incremental_community import IncrementalCommunityDetector
-    detector = IncrementalCommunityDetector(get_neo4j())
-    return await detector.rebuild_affected_communities(
-        tenant=request.tenant,
-        dry_run=request.dry_run,
-    )
+    neo4j = get_neo4j()
+    detector = IncrementalCommunityDetector(neo4j)
+    if request.dry_run:
+        return await detector.rebuild_affected_communities(
+            tenant=request.tenant, dry_run=True,
+        )
+    async with CorpusMutation(neo4j, request.tenant, "incremental_community_rebuild") as mutation:
+        result = await detector.rebuild_affected_communities(
+            tenant=request.tenant, dry_run=False, publish_revision=False,
+        )
+    result["corpus_revision"] = mutation.revision
+    return result
 
 
 @router.post(
@@ -135,5 +143,9 @@ async def community_history(tenant: str = "default", limit: int = 20):
 )
 async def build_semantic_communities(tenant: str = "default"):
     from graphrag.graph.community_builder import CommunityBuilder
+    neo4j = get_neo4j()
     builder = CommunityBuilder(tenant=tenant)
-    return await builder.build_semantic_communities()
+    async with CorpusMutation(neo4j, tenant, "semantic_community_rebuild") as mutation:
+        result = await builder.build_semantic_communities(publish_revision=False)
+    result["corpus_revision"] = mutation.revision
+    return result

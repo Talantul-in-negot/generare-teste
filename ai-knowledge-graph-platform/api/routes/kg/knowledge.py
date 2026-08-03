@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth.dependencies import require_scope
+from graphrag.graph.corpus_revision import CorpusMutation
 from graphrag.graph.neo4j_client import get_neo4j
 
 router = APIRouter()
@@ -47,20 +48,22 @@ async def assert_negative(request: NegativeAssertRequest):
     Triggers a warning if a positive RELATES_TO edge also exists (conflict).
     """
     from graphrag.graph.negative_knowledge import NegativeKnowledgeService
-    svc = NegativeKnowledgeService(get_neo4j())
-    neg_id = await svc.assert_negative(
-        src_name=request.src_name,
-        src_type=request.src_type,
-        relation=request.relation,
-        tgt_name=request.tgt_name,
-        tgt_type=request.tgt_type,
-        tenant=request.tenant,
-        doc_id=request.doc_id,
-        confidence=request.confidence,
-        valid_from=request.valid_from,
-        valid_to=request.valid_to,
-    )
-    return {"status": "asserted", "neg_id": neg_id}
+    neo4j = get_neo4j()
+    svc = NegativeKnowledgeService(neo4j)
+    async with CorpusMutation(neo4j, request.tenant, "negative_assertion") as mutation:
+        neg_id = await svc.assert_negative(
+            src_name=request.src_name,
+            src_type=request.src_type,
+            relation=request.relation,
+            tgt_name=request.tgt_name,
+            tgt_type=request.tgt_type,
+            tenant=request.tenant,
+            doc_id=request.doc_id,
+            confidence=request.confidence,
+            valid_from=request.valid_from,
+            valid_to=request.valid_to,
+        )
+    return {"status": "asserted", "neg_id": neg_id, "corpus_revision": mutation.revision}
 
 
 @router.post(
@@ -70,18 +73,20 @@ async def assert_negative(request: NegativeAssertRequest):
 )
 async def retract_negative(request: NegativeRetractRequest):
     from graphrag.graph.negative_knowledge import NegativeKnowledgeService
-    svc = NegativeKnowledgeService(get_neo4j())
-    deleted = await svc.retract_negative(
-        src_name=request.src_name,
-        src_type=request.src_type,
-        relation=request.relation,
-        tgt_name=request.tgt_name,
-        tgt_type=request.tgt_type,
-        tenant=request.tenant,
-    )
+    neo4j = get_neo4j()
+    svc = NegativeKnowledgeService(neo4j)
+    async with CorpusMutation(neo4j, request.tenant, "negative_retraction") as mutation:
+        deleted = await svc.retract_negative(
+            src_name=request.src_name,
+            src_type=request.src_type,
+            relation=request.relation,
+            tgt_name=request.tgt_name,
+            tgt_type=request.tgt_type,
+            tenant=request.tenant,
+        )
     if not deleted:
         raise HTTPException(status_code=404, detail="Negative assertion not found")
-    return {"status": "retracted"}
+    return {"status": "retracted", "corpus_revision": mutation.revision}
 
 
 @router.get(
@@ -247,6 +252,7 @@ class StatementMetaRequest(BaseModel):
     stmt_id: str
     key: str
     value: str
+    tenant: str = "default"
 
 
 class StatementEndorseRequest(BaseModel):
@@ -255,12 +261,14 @@ class StatementEndorseRequest(BaseModel):
     endorser_type: str = "Document"
     confidence: float = 1.0
     note: str = ""
+    tenant: str = "default"
 
 
 class StatementContradictRequest(BaseModel):
     stmt_a_id: str
     stmt_b_id: str
     reason: str = ""
+    tenant: str = "default"
 
 
 @router.post(
@@ -270,16 +278,18 @@ class StatementContradictRequest(BaseModel):
 )
 async def reify_relation(request: ReifyRequest):
     from graphrag.graph.reification import ReificationService
-    svc = ReificationService(get_neo4j())
-    stmt_id = await svc.reify_relation(
-        src_name=request.src_name,
-        src_type=request.src_type,
-        relation=request.relation,
-        tgt_name=request.tgt_name,
-        tgt_type=request.tgt_type,
-        tenant=request.tenant,
-    )
-    return {"stmt_id": stmt_id}
+    neo4j = get_neo4j()
+    svc = ReificationService(neo4j)
+    async with CorpusMutation(neo4j, request.tenant, "statement_reification") as mutation:
+        stmt_id = await svc.reify_relation(
+            src_name=request.src_name,
+            src_type=request.src_type,
+            relation=request.relation,
+            tgt_name=request.tgt_name,
+            tgt_type=request.tgt_type,
+            tenant=request.tenant,
+        )
+    return {"stmt_id": stmt_id, "corpus_revision": mutation.revision}
 
 
 @router.post(
@@ -289,9 +299,14 @@ async def reify_relation(request: ReifyRequest):
 )
 async def add_statement_meta(request: StatementMetaRequest):
     from graphrag.graph.reification import ReificationService
-    svc = ReificationService(get_neo4j())
-    await svc.add_meta(stmt_id=request.stmt_id, key=request.key, value=request.value)
-    return {"status": "ok"}
+    neo4j = get_neo4j()
+    svc = ReificationService(neo4j)
+    async with CorpusMutation(neo4j, request.tenant, "statement_metadata") as mutation:
+        await svc.add_meta(
+            stmt_id=request.stmt_id, key=request.key, value=request.value,
+            tenant=request.tenant,
+        )
+    return {"status": "ok", "corpus_revision": mutation.revision}
 
 
 @router.post(
@@ -301,15 +316,18 @@ async def add_statement_meta(request: StatementMetaRequest):
 )
 async def endorse_statement(request: StatementEndorseRequest):
     from graphrag.graph.reification import ReificationService
-    svc = ReificationService(get_neo4j())
-    await svc.endorse(
-        stmt_id=request.stmt_id,
-        endorser_id=request.endorser_id,
-        endorser_type=request.endorser_type,
-        confidence=request.confidence,
-        note=request.note,
-    )
-    return {"status": "endorsed"}
+    neo4j = get_neo4j()
+    svc = ReificationService(neo4j)
+    async with CorpusMutation(neo4j, request.tenant, "statement_endorsement") as mutation:
+        await svc.endorse(
+            stmt_id=request.stmt_id,
+            endorser_id=request.endorser_id,
+            endorser_type=request.endorser_type,
+            confidence=request.confidence,
+            note=request.note,
+            tenant=request.tenant,
+        )
+    return {"status": "endorsed", "corpus_revision": mutation.revision}
 
 
 @router.post(
@@ -319,13 +337,16 @@ async def endorse_statement(request: StatementEndorseRequest):
 )
 async def contradict_statements(request: StatementContradictRequest):
     from graphrag.graph.reification import ReificationService
-    svc = ReificationService(get_neo4j())
-    await svc.contradict(
-        stmt_a_id=request.stmt_a_id,
-        stmt_b_id=request.stmt_b_id,
-        reason=request.reason,
-    )
-    return {"status": "contradiction_asserted"}
+    neo4j = get_neo4j()
+    svc = ReificationService(neo4j)
+    async with CorpusMutation(neo4j, request.tenant, "statement_contradiction") as mutation:
+        await svc.contradict(
+            stmt_a_id=request.stmt_a_id,
+            stmt_b_id=request.stmt_b_id,
+            reason=request.reason,
+            tenant=request.tenant,
+        )
+    return {"status": "contradiction_asserted", "corpus_revision": mutation.revision}
 
 
 @router.get(
@@ -678,6 +699,7 @@ class OntologyMigrationRequest(BaseModel):
 async def ontology_migration(request: OntologyMigrationRequest):
     from graphrag.graph.ontology_migration import plan_migration
     from graphrag.graph.ontology_registry import get_ontology_registry
+    from graphrag.graph.corpus_revision import CorpusMutation
     report = plan_migration(request.current, request.target)
     result = {"compatible": report.compatible, "added": report.added,
               "removed": report.removed, "renamed": report.renamed,
@@ -685,8 +707,11 @@ async def ontology_migration(request: OntologyMigrationRequest):
     if request.apply:
         if not report.compatible:
             raise HTTPException(status_code=409, detail="ontology migration has unmapped removals")
-        registry = get_ontology_registry(neo4j_client=get_neo4j(), tenant=request.tenant)
-        result.update(await registry.apply_ontology_migration(request.current, request.target))
+        neo4j = get_neo4j()
+        registry = get_ontology_registry(neo4j_client=neo4j, tenant=request.tenant)
+        async with CorpusMutation(neo4j, request.tenant, "ontology_relation_migration") as mutation:
+            result.update(await registry.apply_ontology_migration(request.current, request.target))
+        result["corpus_revision"] = mutation.revision
         result["applied"] = True
     return result
 
@@ -698,10 +723,18 @@ async def ontology_migration(request: OntologyMigrationRequest):
 )
 async def rename_entity_type(request: EntityTypeRenameRequest):
     from graphrag.graph.ontology_registry import get_ontology_registry
-    registry = get_ontology_registry(neo4j_client=get_neo4j())
-    return await registry.rename_entity_type(
-        old_type=request.old_type,
-        new_type=request.new_type,
-        tenant=request.tenant,
-        dry_run=request.dry_run,
-    )
+    from graphrag.graph.corpus_revision import CorpusMutation
+    neo4j = get_neo4j()
+    registry = get_ontology_registry(neo4j_client=neo4j, tenant=request.tenant)
+    if request.dry_run:
+        return await registry.rename_entity_type(
+            old_type=request.old_type, new_type=request.new_type,
+            tenant=request.tenant, dry_run=True,
+        )
+    async with CorpusMutation(neo4j, request.tenant, "ontology_entity_type_rename") as mutation:
+        result = await registry.rename_entity_type(
+            old_type=request.old_type, new_type=request.new_type,
+            tenant=request.tenant, dry_run=False,
+        )
+    result["corpus_revision"] = mutation.revision
+    return result

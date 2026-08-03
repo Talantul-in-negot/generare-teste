@@ -55,6 +55,7 @@ async def submit_query(request: Request, body: QueryRequest):
             valid_at=body.valid_at,
             transaction_at=body.transaction_at,
             query_id=query_id,
+            correlation_id=request.state.correlation_id,
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Queue unavailable: {exc}")

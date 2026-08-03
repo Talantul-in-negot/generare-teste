@@ -5533,3 +5533,82 @@ created. The Python diagnostic query only distinguishes an immutable-ID
 conflict from missing/cross-tenant KG evidence after the transaction has made
 no changes. General rule: invariants that protect atomicity must gate writes
 inside the transaction, not validate the result afterward.
+
+## A151 -- A fast answer is not safe to cache until its governed trace exists
+
+The live retrieval path can produce an answer before the Context Graph has
+persisted the evidence and decision trace that make the answer auditable. An
+early answer-cache write would make that answer reusable even if trace
+persistence then failed. The second caller would receive a fast response with
+no durable record of its source evidence, model configuration, or rationale.
+
+The retrieval flow now records the Context Graph trace first and only writes a
+cache entry when it has a trace ID and citations. A cache hit keeps its new
+request/query ID, but exposes the original `source_query_id` and
+`source_trace_id`. This preserves request-level observability without creating
+a duplicate governed decision for the same cached result.
+
+Rule: an answer cache in a governed AI system is a pointer to an already
+durable decision, never a substitute for one. Test the negative path too: when
+trace persistence returns no ID, the cache must not be written
+(`test_hybrid_retriever_does_not_store_without_trace`).
+
+## A152 -- Cache identity is inference identity, not just question text
+
+Using only tenant plus normalized question for an answer-cache key reuses an
+answer after a material change to the corpus, model route, prompt, retrieval
+mode, ranking settings, or ontology. The response can look plausible while
+being grounded in a different inference context -- precisely the stale-answer
+failure a Context Graph is meant to make visible.
+
+`QueryCacheContext` therefore makes the deterministic key depend on tenant,
+normalized question, corpus revision, requested and effective retrieval mode,
+model route, prompt version, retrieval configuration, and ontology version.
+Canonical serialization makes dictionary ordering irrelevant while material
+input changes produce a different key. The trace manifest records the same
+context alongside its integrity hash.
+
+Rule: cache-key design is a correctness contract. Add a test for every new
+material input, and do not treat a hash as safe merely because it is stable
+(`test_cache_key_ignores_dictionary_order` and
+`test_material_inputs_change_cache_key`).
+
+## A153 -- Cache reads must fail closed while a corpus update is in progress
+
+Ingestion and graph maintenance are multi-step operations with independent
+Neo4j writes. Advancing a revision only at the end is not enough: a query that
+arrives during the operation could read a cache entry from the old corpus while
+some new graph state is already visible.
+
+`CorpusMutation` brackets retrieval-visible mutations. It marks the tenant as
+`updating` before work starts, advances its durable revision on both success
+and operation-error paths, and leaves the tenant fail-closed if publication
+cannot complete. `HybridRetriever` bypasses answer-cache reads while that flag
+is set; after a completed update, the changed revision selects a new cache key.
+
+Rule: use a publication boundary for any multi-write change that affects
+retrieval. Cache invalidation is not a cleanup step after ingestion; it is part
+of making the new corpus visible (`test_hybrid_retriever_bypasses_cache_during_ingestion`
+and `test_corpus_mutation_finalizes_after_an_operation_error`).
+
+## A154 -- The roadmap is an evidence ledger, not a completion claim
+
+The roadmap was updated as the implementation moved from Knowledge Graph
+hardening into Context Graph work. The distinction between these stages must
+remain visible: Part I covers the existing KG, ingestion, retrieval, graph
+reasoning, security, observability, and operational maturity; Part II adds
+decision context, governed traces, approvals, outcomes, and organizational
+memory.
+
+For each roadmap item, the status must match the strongest evidence available:
+implemented and unit-tested, implemented and wired, or live-validated. A
+passing mock test does not prove a live Neo4j or production deployment path,
+and a working prototype does not justify a customer-scale readiness claim.
+The recent roadmap alignment records A143-A153 explicitly, including the
+pre-Context-Graph latency and tenant-isolation hardening and the later
+governed-cache changes.
+
+Rule: when code or tests change, update both the roadmap status and the lesson
+that explains the decision. Keep deferred scale work, production-specific
+operations, and missing deployment evidence visible instead of silently
+converting them into completed features.

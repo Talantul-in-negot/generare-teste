@@ -13,9 +13,11 @@ from graphrag.core.config import get_settings, resolve_tenant_config
 from graphrag.core.llm_client import get_generation_route, get_llm
 from graphrag.core.models import QueryResult
 from graphrag.context_graph.models import (
-    AgentRun, Case, ContextManifest, Decision, DecisionOption, DecisionTrace,
-    OptionDisposition, PolicyEvaluation, PolicyResult, PolicyVersion,
+    AgentRun, Case, CGEpisode, ConditionOperator, ContextManifest, Decision,
+    DecisionOption, DecisionTrace, EpisodeRole, OptionDisposition,
+    PolicyCondition, PolicyResult, PolicyRule, PolicyVersion, RunStatus,
 )
+from graphrag.context_graph.policy_engine import evaluate_policy
 from graphrag.context_graph.repository import ContextGraphRepository
 from graphrag.graph.contradiction_detector import ContradictionDetector
 from graphrag.graph.neo4j_client import get_neo4j
@@ -27,6 +29,7 @@ from graphrag.retrieval.claim_verifier import ClaimVerifier
 from graphrag.retrieval.query_rewriter import QueryRewriter
 from graphrag.retrieval.feedback import RetrievalFeedbackService, apply_feedback_scores
 from graphrag.retrieval.query_planner import retrieval_plan
+from graphrag.retrieval.adaptive_router import AdaptiveRetrievalRouter
 from graphrag.observability.budgets import check_budget
 from graphrag.observability.cost_attribution import CostEvent, record_cost_event
 from graphrag.retrieval.session_context import get_session_context
@@ -157,6 +160,12 @@ class HybridRetriever:
         self._session_ctx = get_session_context() if self._use_session_ctx else None
         self._context_graph = ContextGraphRepository(get_neo4j())
         self._feedback = RetrievalFeedbackService(get_neo4j())
+        self._adaptive_router = AdaptiveRetrievalRouter(
+            get_neo4j(),
+            minimum_samples=int(self._cfg.get("adaptive_router_minimum_samples", 5)),
+            exploration_rate=float(self._cfg.get("adaptive_router_exploration_rate", 0.05)),
+            latency_weight=float(self._cfg.get("adaptive_router_latency_weight", 0.12)),
+        )
 
     async def _apply_retrieval_feedback(
         self, local_results: dict, tenant: str, cfg: dict,
@@ -185,6 +194,9 @@ class HybridRetriever:
         cache_context: QueryCacheContext | None = None,
         valid_at: str | None = None,
         transaction_at: str | None = None,
+        session_id: str = "",
+        correlation_id: str = "",
+        conflict_count: int = 0,
     ) -> str | None:
         """Persist the evidence-backed query decision for API/worker queries.
 
@@ -195,20 +207,34 @@ class HybridRetriever:
         chunk_ids = list(dict.fromkeys(local_results.get("referenced_chunks", [])))
         if not query_id or not chunk_ids:
             return None
+        digest = hashlib.sha256(f"{tenant}:{query_id}".encode()).hexdigest()[:20]
+        decision_id = f"decision-query-{digest}"
+        existing = await self._context_graph.load_trace(decision_id, tenant)
+        if existing:
+            return decision_id
         # Preserve the document lineage of retrieved chunks in the manifest so
         # a replay can show the same evidence at both KG levels.
         document_rows = await get_neo4j().run(
-            "MATCH (c:Chunk {tenant: $tenant}) "
-            "WHERE c.id IN $chunk_ids "
-            "RETURN DISTINCT c.document_id AS document_id "
-            "ORDER BY document_id",
+            "MATCH (c:Chunk {tenant: $tenant}) WHERE c.id IN $chunk_ids "
+            "OPTIONAL MATCH (c)-[:PART_OF]->(d:Document {tenant: $tenant}) "
+            "RETURN c.id AS chunk_id, "
+            "coalesce(toString(c.updated_at), toString(c.created_at), 'v1') AS chunk_version, "
+            "d.id AS document_id, "
+            "coalesce(toString(d.updated_at), toString(d.ingested_at), 'v1') AS document_version",
             tenant=tenant,
             chunk_ids=chunk_ids,
         )
-        document_ids = [str(row["document_id"]) for row in document_rows if row.get("document_id")]
+        chunk_version_by_id = {
+            str(row["chunk_id"]): str(row.get("chunk_version") or "v1")
+            for row in document_rows if row.get("chunk_id")
+        }
+        document_version_by_id = {
+            str(row["document_id"]): str(row.get("document_version") or "v1")
+            for row in document_rows if row.get("document_id")
+        }
+        document_ids = sorted(document_version_by_id)
         now = datetime.now(timezone.utc)
         later = now + timedelta(days=1)
-        digest = hashlib.sha256(f"{tenant}:{query_id}".encode()).hexdigest()[:20]
         case = Case(
             id=f"case-query-{digest}", tenant=tenant, case_type="retrieval_query",
             title="Governed GraphRAG query", description=question,
@@ -216,15 +242,66 @@ class HybridRetriever:
         )
         run = AgentRun(
             id=f"run-query-{digest}", tenant=tenant, case_id=case.id,
+            status=RunStatus.COMPLETED,
             actor_id="graphrag-retriever", model_provider="configured",
             model_version=model_version, prompt_version=_PROMPT_VERSION,
+            correlation_id=correlation_id or query_id,
             valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
         )
         policy = PolicyVersion(
-            id="policy-retrieval-evidence-v1", tenant=tenant,
-            policy_id="retrieval-evidence", version="v1", title="Evidence-grounded retrieval",
+            id="policy-retrieval-evidence-v2", tenant=tenant,
+            policy_id="retrieval-evidence", version="v2", title="Evidence-grounded retrieval",
+            rules=[
+                PolicyRule(
+                    id="escalate-no-evidence", priority=10,
+                    conditions=[PolicyCondition(
+                        field="evidence_count", operator=ConditionOperator.LTE, value=0,
+                    )],
+                    result=PolicyResult.ESCALATE, reason_code="missing_evidence",
+                    rationale="No governed evidence was retrieved.",
+                ),
+                PolicyRule(
+                    id="escalate-unresolved-conflict", priority=20,
+                    conditions=[PolicyCondition(
+                        field="conflict_count", operator=ConditionOperator.GT, value=0,
+                    )],
+                    result=PolicyResult.ESCALATE, reason_code="unresolved_conflict",
+                    rationale="Retrieved evidence contains an unresolved conflict.",
+                ),
+                PolicyRule(
+                    id="allow-grounded-answer", priority=30,
+                    conditions=[PolicyCondition(
+                        field="evidence_count", operator=ConditionOperator.GT, value=0,
+                    )],
+                    result=PolicyResult.ALLOW, reason_code="evidence_captured",
+                    rationale="The answer is backed by captured, tenant-scoped evidence.",
+                ),
+            ],
+            default_result=PolicyResult.ESCALATE,
+            enforcement_mode="advisory",
             valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
         )
+        effective_session_id = session_id or f"query-{query_id}"
+        episodes = [
+            CGEpisode(
+                id=f"episode-query-{digest}-user", tenant=tenant, run_id=run.id,
+                session_id=effective_session_id, sequence=0, role=EpisodeRole.USER,
+                episode_type="query", content=question,
+                content_digest=hashlib.sha256(question.encode()).hexdigest(),
+                source_system="api", correlation_id=run.correlation_id,
+                valid_from=now, valid_to=later,
+                transaction_from=now, transaction_to=later,
+            ),
+            CGEpisode(
+                id=f"episode-query-{digest}-agent", tenant=tenant, run_id=run.id,
+                session_id=effective_session_id, sequence=1, role=EpisodeRole.AGENT,
+                episode_type="answer", content=answer,
+                content_digest=hashlib.sha256(answer.encode()).hexdigest(),
+                source_system="graphrag-retriever", correlation_id=run.correlation_id,
+                valid_from=now, valid_to=later,
+                transaction_from=now, transaction_to=later,
+            ),
+        ]
         retrieval_config: dict = {
             "query_id": query_id,
             "temporal_query": {
@@ -243,37 +320,56 @@ class HybridRetriever:
             })
         manifest = ContextManifest(
             id=f"manifest-query-{digest}", tenant=tenant, case_id=case.id, run_id=run.id,
-            chunk_ids=chunk_ids, chunk_versions=["current"] * len(chunk_ids),
-            document_ids=document_ids, document_versions=["current"] * len(document_ids),
-            policy_version_ids=[policy.id], model_provider="configured",
+            chunk_ids=chunk_ids,
+            chunk_versions=[chunk_version_by_id.get(chunk_id, "v1") for chunk_id in chunk_ids],
+            document_ids=document_ids,
+            document_versions=[document_version_by_id[doc_id] for doc_id in document_ids],
+            policy_version_ids=[policy.id], episode_ids=[episode.id for episode in episodes],
+            model_provider="configured",
             model_version=model_version, prompt_version=_PROMPT_VERSION,
             retrieval_mode=mode, retrieval_config=retrieval_config, task_input=question,
             ontology_version=_ONTOLOGY_VERSION, valid_from=now, valid_to=later,
             transaction_from=now, transaction_to=later,
         ).with_integrity_hash()
+        evaluation = evaluate_policy(
+            policy,
+            {"evidence_count": len(chunk_ids), "conflict_count": conflict_count},
+            decision_id=decision_id,
+            evaluation_id=f"policy-evaluation-query-{digest}",
+        )
+        selected_label = {
+            PolicyResult.ALLOW: "answer",
+            PolicyResult.DENY: "deny",
+            PolicyResult.ESCALATE: "human_review",
+        }[evaluation.result]
+        selected_option_id = f"option-query-{digest}-{selected_label}"
         decision = Decision(
-            id=f"decision-query-{digest}", tenant=tenant, case_id=case.id, run_id=run.id,
-            manifest_id=manifest.id, title="GraphRAG answer", selected_option_id=f"option-query-{digest}",
-            reason_code="retrieved_evidence", rationale="Answer synthesized from the captured retrieval context.",
+            id=decision_id, tenant=tenant, case_id=case.id, run_id=run.id,
+            manifest_id=manifest.id, title="GraphRAG governed response",
+            selected_option_id=selected_option_id,
+            reason_code=evaluation.reason_code, rationale=evaluation.rationale,
             valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
         )
-        option = DecisionOption(
-            id=f"option-query-{digest}", tenant=tenant, decision_id=decision.id,
-            label="answer", disposition=OptionDisposition.SELECTED,
-            reason_code="retrieved_evidence", rationale=answer[:500],
-            valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
-        )
-        evaluation = PolicyEvaluation(
-            id=f"policy-evaluation-query-{digest}", tenant=tenant, decision_id=decision.id,
-            policy_version_id=policy.id, result=PolicyResult.ALLOW,
-            matched_rule="evidence captured", reason_code="evidence_captured",
-            rationale="The retrieval pipeline captured the evidence used for synthesis.",
-            valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
-        )
+        options = [
+            DecisionOption(
+                id=f"option-query-{digest}-{label}", tenant=tenant, decision_id=decision.id,
+                label=label,
+                disposition=(OptionDisposition.SELECTED if label == selected_label
+                             else OptionDisposition.REJECTED),
+                reason_code=(evaluation.reason_code if label == selected_label
+                             else "policy_alternative_rejected"),
+                rationale=(answer[:500] if label == "answer"
+                           else f"Disposition determined by policy result: {evaluation.result.value}."),
+                valid_from=now, valid_to=later,
+                transaction_from=now, transaction_to=later,
+            )
+            for label in ("answer", "deny", "human_review")
+        ]
         try:
             return await self._context_graph.record_trace(DecisionTrace(
-                case=case, run=run, manifest=manifest, policy_versions=[policy],
-                policy_evaluations=[evaluation], options=[option], decision=decision,
+                case=case, run=run, manifest=manifest, episodes=episodes,
+                policy_versions=[policy], policy_evaluations=[evaluation],
+                options=options, decision=decision,
             ))
         except Exception as exc:
             # Retrieval availability must not depend on Context Graph maintenance.
@@ -291,9 +387,11 @@ class HybridRetriever:
         valid_at: str | None = None,
         transaction_at: str | None = None,
         retrieval_profile: str = "full",
+        correlation_id: str = "",
     ) -> QueryResult:
         t0 = time.monotonic()
         requested_mode = mode
+        routing_reason = "explicit_mode"
 
         # Per-tenant config: merge this tenant's overrides over the global
         # retrieval defaults (mirrors LocalSearch.search — resolved from
@@ -304,18 +402,27 @@ class HybridRetriever:
         cfg = {**resolve_tenant_config(self._cfg, tenant), **profile_overrides}
         if retrieval_profile == "vector_only":
             mode = "local"
-        if (valid_at or transaction_at) and mode in {"hybrid", "global"}:
-            # Community summaries have no versioned evidence lineage, so they
-            # cannot safely answer a point-in-time question. Use the temporal
-            # chunk/edge path until community snapshots are versioned.
-            mode = "local"
-            log.info("hybrid_retriever.global_skipped", reason="temporal_query")
+            routing_reason = "retrieval_profile"
         plan = retrieval_plan(question)
         if mode == "hybrid" and cfg.get("query_planner_enabled", False):
-            mode = plan["mode"]
-            cfg = {**cfg, "local_top_k": plan["top_k"]}
+            if cfg.get("adaptive_router_enabled", True):
+                try:
+                    route = await self._adaptive_router.choose(question, tenant)
+                    mode = route.mode
+                    routing_reason = route.reason
+                    cfg = {**cfg, "local_top_k": route.top_k}
+                except Exception as exc:
+                    mode = plan["mode"]
+                    routing_reason = "planner_fail_open"
+                    cfg = {**cfg, "local_top_k": plan["top_k"]}
+                    log.warning("hybrid_retriever.adaptive_router_failed", error=str(exc)[:200])
+            else:
+                mode = plan["mode"]
+                routing_reason = "keyword_planner"
+                cfg = {**cfg, "local_top_k": plan["top_k"]}
             log.info("hybrid_retriever.query_plan", query_class=plan["query_class"], mode=mode,
-                     top_k=plan["top_k"], fallback=plan["fallback"])
+                     top_k=cfg["local_top_k"], fallback=plan["fallback"],
+                     routing_reason=routing_reason)
 
         from graphrag.retrieval.result_store import get_result_store
         _store = get_result_store() if query_id else None
@@ -356,6 +463,8 @@ class HybridRetriever:
                         result.source_query_id = cached["source_query_id"]
                         result.source_trace_id = cached["source_trace_id"]
                         result.latency_ms = (time.monotonic() - t0) * 1000
+                        result.correlation_id = correlation_id
+                        result.routing_reason = routing_reason
                         await _step("Answer cache hit; original governed trace reused")
                         record_cost_event(CostEvent(
                             tenant=tenant, stage="answer_cache", provider="redis",
@@ -483,6 +592,14 @@ class HybridRetriever:
                     await _step(f"⚠️ {len(conflicts)} unresolved conflict(s) flagged")
 
         await _step("✍️ Synthesising answer with LLM...")
+        evidence_count = len(local_results.get("referenced_chunks", []))
+        if evidence_count <= 0 or conflicts:
+            policy_result = PolicyResult.ESCALATE
+            policy_reason_code = "missing_evidence" if evidence_count <= 0 else "unresolved_conflict"
+        else:
+            policy_result = PolicyResult.ALLOW
+            policy_reason_code = "evidence_captured"
+
         context, citations = self._context_builder.build(
             local_results=local_results,
             global_results=global_results,
@@ -554,16 +671,32 @@ class HybridRetriever:
             result.query_id = query_id or result.query_id
             result.valid_at = valid_at
             result.transaction_at = transaction_at
+            result.correlation_id = correlation_id
+            result.routing_reason = routing_reason
+            result.policy_result = policy_result.value
+            result.policy_reason_code = policy_reason_code
             trace_id = await self._record_context_trace(
                 question=question, answer=result.answer, tenant=tenant, query_id=query_id,
                 mode=result.retrieval_mode, model_version=result.model_version,
                 local_results=local_results, cache_context=cache_context,
                 valid_at=valid_at, transaction_at=transaction_at,
+                session_id=session_id, correlation_id=correlation_id,
+                conflict_count=len(conflicts),
             )
             # The agentic retriever can add evidence not represented in
             # local_results yet. Do not cache it until that complete evidence
             # set is available to the governed trace.
             result.source_trace_id = trace_id or ""
+            try:
+                await self._adaptive_router.observe(
+                    tenant=tenant, question=question, mode=mode,
+                    latency_ms=result.latency_ms,
+                    quality=1.0 if result.citations and not _is_low_confidence(
+                        result.answer, result.citations, require_no_citations=False,
+                    ) else 0.25,
+                )
+            except Exception as exc:
+                log.warning("hybrid_retriever.route_observation_failed", error=str(exc)[:200])
             return result
 
         log.info("hybrid_retriever.done", mode=mode, latency_ms=round(latency_ms, 1))
@@ -582,6 +715,10 @@ class HybridRetriever:
             model_version=self._model_version,
             valid_at=valid_at,
             transaction_at=transaction_at,
+            correlation_id=correlation_id,
+            routing_reason=routing_reason,
+            policy_result=policy_result.value,
+            policy_reason_code=policy_reason_code,
         )
         if query_id:
             result.query_id = query_id
@@ -590,6 +727,18 @@ class HybridRetriever:
             mode=mode, model_version=self._model_version, local_results=local_results,
             cache_context=cache_context,
             valid_at=valid_at, transaction_at=transaction_at,
+            session_id=session_id, correlation_id=correlation_id,
+            conflict_count=len(conflicts),
         )
         await _store_governed_result(result, trace_id)
+        try:
+            await self._adaptive_router.observe(
+                tenant=tenant, question=question, mode=mode,
+                latency_ms=latency_ms,
+                quality=1.0 if citations and not _is_low_confidence(
+                    answer, citations, require_no_citations=False,
+                ) else (0.5 if citations else 0.0),
+            )
+        except Exception as exc:
+            log.warning("hybrid_retriever.route_observation_failed", error=str(exc)[:200])
         return result

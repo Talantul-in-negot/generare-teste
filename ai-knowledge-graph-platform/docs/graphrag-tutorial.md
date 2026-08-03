@@ -521,18 +521,16 @@ Redis failure. Concrete examples:
 | Consumer | Before | Redis op | After |
 |---|---|---|---|
 | **Session store** (`session_store.py`) | new message arrives in an existing conversation | `RPUSH graphrag:session:<id> turn_json` | next message in the session does `LRANGE` to rebuild history for the LLM prompt |
-| **Query cache** (`query_cache.py`) | new question comes in, cache key computed from `(query, tenant, session_id)` | `GET key` → hit: skip LLM entirely; miss: run retrieval, then `SETEX key ttl answer_json` | same question asked again → served from cache; if a cited document changes, its provenance set is invalidated so the cached entry is dropped |
+| **Governed answer cache** (`query_cache.py`) | a stateless query enters `HybridRetriever`; Neo4j supplies the tenant corpus revision | SHA-256 over canonical tenant/query/corpus/model/prompt/ontology/retrieval inputs, then `GET`; on a governed miss, `SETEX` stores the answer and source trace | unchanged inputs return immediately with a new `query_id` linked to the original `source_trace_id`; any retrieval-visible mutation changes the corpus revision, making every old key unreachable |
 | **Alias registry** (`alias_registry.py`) | an ingestion batch finishes, new aliases exist (e.g. "Boeing" → "The Boeing Company") | `HSET graphrag:aliases:<tenant> alias "name\|type"`, `EXPIRE 86400` | a different worker sees "Boeing" in a query → resolves via Redis `HGET` instead of a Neo4j round-trip |
 | **Alerts** (`alerts.py`) | a monitoring check fires (e.g. LLM provider unhealthy) | `LPUSH graphrag:alerts:recent alert_json`, `LTRIM 0 ALERT_HISTORY-1` | dashboard reads the list to show recent alerts, capped history |
 | **Rate limiter** (`api/limiter.py`) | `POST /query` request arrives from a client | `slowapi` checks/increments the per-IP counter against `60/minute` | over limit → `429` immediately, no Neo4j/LLM touched; under limit → request proceeds |
 
-Failure behavior confirmed by reading each module's except-path: all five
-catch the Redis exception, log a warning, and continue on
-`self._memory`/local `deque` — the request still completes, just without
-cross-worker sharing or persistence. This is the audited pattern from the
-Redis-failure-mode pass earlier in the project (health-check gating +
-split-brain elimination) — `ResultStore` (§8.1) is the deliberate
-exception, not an oversight.
+The support caches degrade differently. Session and alias data can use local
+fallbacks. The governed answer cache uses memory only when Redis was
+unavailable at initialization; a runtime Redis error is a cache miss, so the
+request executes live rather than trusting process-local stale data.
+`ResultStore` (§8.1) remains the strict cross-process transport exception.
 
 **RabbitMQ's failure mode is not the same shape.** It isn't a cache with a
 memory substitute — it *is* the cross-process transport, so there's
@@ -551,7 +549,7 @@ original message is `ack()`'d either way so it doesn't block the queue.
 | Flow | Before | RabbitMQ op | After |
 |---|---|---|---|
 | **Ingest** (`IngestionConsumer`) | document uploaded via API | publish `IngestMessage` to `INGEST_EXCHANGE`/`INGEST_QUEUE` | worker's `handle()` picks it up, runs `IngestionAgent.run(msg)` — this is the entry point into the whole ingestion pipeline (Part 5) |
-| **Query** (`QueryConsumer`) | `POST /query` from client | publish `QueryMessage`; API writes `{"status": "processing"}` to Redis and returns `query_id` | worker checks `QueryCache` first (cache hit → skip all 6 retrieval stages, write cached answer straight to `ResultStore`); miss → runs `QueryAgent.run(msg)`, caches the result, writes final answer to `ResultStore` |
+| **Query** (`QueryConsumer`) | `POST /query` from client | publish `QueryMessage`; API writes queued state to Redis and returns a fresh `query_id` | `QueryAgent` enters `HybridRetriever`, which checks the versioned answer cache; a hit returns the prior answer plus source trace metadata, while a miss runs retrieval and caches only after trace persistence; the consumer writes either result to `ResultStore` |
 | **Eval sampling** (`EvaluationConsumer`) | a query result just completed | `QueryConsumer` publishes an `EvalJob` for ~20% of queries (`eval_sample_rate`) — async, doesn't block the client's answer | `EvaluationConsumer` picks it up, runs RAGAS scoring (faithfulness, relevancy, etc.) against the sampled query |
 | **Handler failure, any consumer** | e.g. `IngestionAgent.run()` raises (Neo4j timeout, malformed LLM output) | message headers get `x-retry-count` incremented, republished after backoff (1s → 2s → 4s, cap 30s) | after 3 failed retries, message → `<queue>.dlq` with a structured envelope (`exception_type`, `error`, `payload_summary`) for manual triage; original message acked either way so the queue isn't blocked |
 | **Connection drop** (any consumer) | RabbitMQ container restarts or network blip | `aio_pika.connect_robust` detects the drop | connection and channels are re-established automatically in the background — consumers resume without code intervention, no manual reconnect logic needed |

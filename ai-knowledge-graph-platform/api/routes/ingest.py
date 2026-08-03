@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from api.auth.dependencies import get_current_user, require_scope
+from api.auth.dependencies import require_scope
 from api.limiter import INGEST_LIMIT, limiter
 from graphrag.core.models import Document
 from graphrag.messaging.publishers import publish_document
@@ -17,6 +17,7 @@ class IngestRequest(BaseModel):
     priority: str = "normal"
     metadata: dict = {}
     tenant: str = "default"
+    source_id: str | None = None
 
 
 class IngestResponse(BaseModel):
@@ -39,6 +40,7 @@ async def ingest_document(request: Request, body: IngestRequest):
         raw_text=body.text,
         metadata=body.metadata,
         tenant=body.tenant,
+        source_id=body.source_id,
     )
     try:
         job_id = await publish_document(doc, priority=body.priority)

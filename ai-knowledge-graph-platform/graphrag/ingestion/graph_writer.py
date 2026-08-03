@@ -56,6 +56,12 @@ class GraphWriter:
         self._ontology_loaded        = False
         self._cfg                    = get_settings()
 
+    async def begin_corpus_update(self, tenant: str) -> None:
+        await self._neo4j.begin_corpus_update(tenant, reason="ingestion")
+
+    async def complete_corpus_update(self, tenant: str) -> int:
+        return await self._neo4j.complete_corpus_update(tenant, reason="ingestion")
+
     async def _enqueue_safe(
         self,
         entity: "Entity",
@@ -120,6 +126,7 @@ class GraphWriter:
             valid_from=doc.valid_from.isoformat() if doc.valid_from else None,
             valid_to=doc.valid_to.isoformat() if doc.valid_to else None,
             tenant=doc.tenant,
+            source_id=doc.source_id,
         )
         doc.id = canonical_id
 
@@ -485,6 +492,7 @@ class GraphWriter:
         quarantined = await self._quarantine.auto_quarantine_anomalies(
             doc_id=doc_id,
             validation_report=validation_report,
+            tenant=tenant,
         )
 
         # Detect and persist new contradictions introduced by this document.
@@ -531,7 +539,7 @@ class GraphWriter:
             return report
 
         builder = CommunityBuilder(tenant=tenant)
-        communities = await builder.build()
+        communities = await builder.build(publish_revision=False)
         if communities:
             summarizer = CommunitySummarizer()
             communities = await summarizer.summarize_all(communities)
@@ -558,7 +566,7 @@ class GraphWriter:
         if not stale.get("should_recompute"):
             return report
 
-        result = await computer.compute_and_persist()
+        result = await computer.compute_and_persist(publish_revision=False)
         report["recomputed"] = True
         report["entities_scored"] = result.get("entities_scored", 0)
         return report

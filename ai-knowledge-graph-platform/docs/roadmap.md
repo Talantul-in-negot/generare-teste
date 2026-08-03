@@ -55,7 +55,7 @@ deployed workload and monitoring data behind the claim.
 | Community rebuild | Full graph per tenant | Slow beyond approximately 100,000 entities; incremental builder exists |
 | Result-store TTL | One hour | Appropriate for interactive queries; insufficient for some batch pipelines |
 | Groq free tier | 1,500 RPD / 6,000 RPM | Gates fast routing and the optional Groq ingestion path, not default DeepSeek synthesis |
-| Vector index | Neo4j native cosine index, 3072 dimensions | Approximately 10 million chunks on adequately sized Neo4j infrastructure |
+| Vector index | 3072d cosine; Neo4j 5.20 over-fetch fallback and validated Neo4j 2026.06 in-index tenant filtering | Recall/load testing is still required before claiming a 10M-chunk operating point |
 
 ### Current performance baseline
 
@@ -70,7 +70,7 @@ The remaining cost is distributed across model and retrieval round trips
 (query rewrite, embedding, local retrieval, and final synthesis). The former
 per-community map/reduce path is retained only for measured fallback/ablation.
 
-### Recent hardening (2026-07-29 – 2026-07-30, A143–A153)
+### Recent hardening (2026-07-29 - 2026-08-03, A143-A162)
 
 A live latency and security investigation, fully documented in
 `tasks/lessons.md`:
@@ -127,13 +127,39 @@ A live latency and security investigation, fully documented in
   calls. The old `map_reduce` strategy remains configuration-gated for A/B.
 - **A155** - `valid_at` and `transaction_at` are carried from `POST /query`
   through the worker, ANN/BM25 candidates, multi-hop traversal, cache identity,
-  and Context Graph trace configuration. Temporal requests deliberately skip
-  unversioned community summaries rather than leaking current coarse context.
+  and Context Graph trace configuration. Community summaries are now append-only
+  `CommunitySummarySnapshot` versions with evidence lineage, so temporal hybrid
+  and global retrieval no longer have to fall back to local-only retrieval.
 - **A156** - Reproducible local benchmark runners now exist for retrieval
   ablation (`scripts/benchmark_retrieval_ablation.py`) and per-document
   incremental-ingestion/maintenance cost
   (`scripts/benchmark_incremental_ingestion.py`). No performance delta is
   claimed until a named live run produces its report.
+- **A157** - Neo4j 2026.06 support is capability-gated. Fresh modern deployments
+  create filterable vector indexes and use Cypher `SEARCH` with tenant filtering
+  inside the ANN index; Neo4j 5.20 keeps the tested over-fetch fallback. The
+  modern image, index provider, properties, and tenant-isolated query were
+  live-validated on a separate volume. Existing 5.20 volumes are not upgraded
+  implicitly.
+- **A158** - Community identities are deterministic and each generated summary
+  creates an immutable bitemporal snapshot carrying chunk/document IDs,
+  versions, a canonical content hash, and `SUPPORTED_BY`/`DERIVED_FROM` links.
+- **A159** - The keyword planner is now the cold-start policy for a measured
+  adaptive router. Per-tenant/query-class/mode EWMA quality and latency select
+  routes after minimum sample counts; deterministic bounded exploration avoids
+  starving untried routes. No production win is claimed until traffic supplies
+  representative observations.
+- **A160** - Retrieval policy is executable structured data, not a hard-coded
+  `ALLOW`: ordered typed conditions produce `allow`, `deny`, or `escalate` with
+  a matched rule and reason code. Governed traces also persist user/agent
+  `CGEpisode` nodes and can load durable session memory tenant-safely.
+- **A161** - A tenant-scoped source catalog and connector protocol now version
+  ingestion mappings, reject credential-shaped mapping data, and link
+  cataloged documents through `INGESTED_FROM`.
+- **A162** - `X-Correlation-ID` and W3C trace context propagate from FastAPI
+  through RabbitMQ to query workers, results, structured cost logs, and
+  `CGAgentRun`. Prometheus dependencies are explicit and OTLP export activates
+  when `OTEL_EXPORTER_OTLP_ENDPOINT` is configured.
 - Alert threshold `latency_p95_ms` raised from 3000 to 30000 to match
   measured reality with headroom, rather than firing continuously.
 
@@ -190,9 +216,10 @@ It should not yet be called a complete Context Graph for AI.
 | GNN calibration scheduler (`graphrag/graph/calibration_scheduler.py`) | **Implemented and wired** | Triggered from the RabbitMQ ingestion consumer; records scheduled/running/completed/failed states and launches `scripts/calibrate_gnn.py`. Runner injection keeps unit tests deterministic. |
 | TimescaleDB KPI store (`graphrag/business_matrix/timescale_kpi_store.py`) | **Implemented and live-validated** | Provisioned in both Compose stacks, selected through `KPI_BACKEND`/`TIMESCALE_DB_URL`, and verified with a live initialize/write/read cutover. |
 | Ontology migration diffing (`graphrag/graph/ontology_migration.py`) | **Implemented and wired** | Added/removed/renamed-class diff logic is applied through `OntologyRegistry.apply_ontology_migration` and `/kg/ontology/migration`. |
-| Query planner (`graphrag/retrieval/query_planner.py`) | **Implemented and wired** | `HybridRetriever` applies the planner when `query_planner_enabled` is set while preserving explicit retrieval modes. |
+| Adaptive query router (`query_planner.py`, `adaptive_router.py`) | **Implemented and wired** | The planner supplies cold-start routing; measured tenant/query-class/mode EWMA quality and latency take over after bounded sample gates, with deterministic exploration and fail-open fallback. |
 | Domain eval harness (`graphrag/evaluation/domain_eval.py`) | **Implemented, wired to a script only** | Used by `scripts/validate_eval_datasets.py`; not part of the running application. |
-| Observability (`graphrag/observability/`: `budgets.py`, `cost_attribution.py`) | **Implemented and wired** | Retrieval records Prometheus cost/latency metrics, stage-budget breaches have counters, and `/metrics` is exposed by the API when the instrumentation dependency is installed. |
+| Observability (`graphrag/observability/`) | **Implemented and wired** | Prometheus cost/latency and budget metrics are exposed at `/metrics`; HTTP/RabbitMQ/worker correlation is preserved, W3C trace context is propagated, and optional OTLP spans activate from environment configuration. |
+| Source catalog (`graphrag/graph/source_catalog.py`) | **Implemented and API-wired** | `/kg/sources` owns tenant-scoped sources and immutable mapping versions; connector implementations use a provider-neutral protocol and credentials are prohibited from persisted mappings. |
 | Ops exercises (`graphrag/ops/`, `scripts/run_production_exercises.py`) | **Implemented and executable** | Load, security, backup/restore digest, and cost exercises have a CLI and deterministic tests. Results still describe the environment in which the command was run; they are not evidence of customer-scale traffic. |
 
 ## Part I long-term scale path (3–12 months)
@@ -294,17 +321,17 @@ but not customer traffic or a production-sized Context Graph.
 |---|---|---|
 | Entity and relationship graph | Neo4j, ontology registry, typed domain models | Strong foundation |
 | Fact-level provenance | Documents, chunks, spans, extraction model, prompt version, source type | Strong |
-| Temporal context | Valid time, transaction time, snapshots, supersession | Strong |
+| Temporal context | Valid time, transaction time, snapshots, supersession, versioned community summaries | Strong; summary lineage is query-time usable |
 | Confidence and epistemic state | Confidence, source type, contradiction, negative knowledge, real `confidence_lifecycle.py` state machine | Strong, wired |
 | Higher-order statements | Reified relations and meta-relations | Strong foundation |
 | Authority and constraints | Authority hierarchy, constraints, `ToolPolicy` (hardened A147/A149) | Strong, security-verified |
-| Agent execution trace | `AgentRun`/`ToolCall`/`Observation` models + repository writes | **Implemented, wired, and tested** — every worker-path retrieval query records one via `HybridRetriever._record_context_trace`; trace maintenance fails open |
+| Agent execution trace | `AgentRun`/`ToolCall`/`Observation`/`CGEpisode` + repository writes | **Implemented, wired, and live-tested** — worker retrieval records correlation, durable session episodes, executable policy results, evidence, and alternatives; maintenance fails open |
 | Decision trace | Tenant-scoped `AgentRun`/`Decision` graph, real Cypher, real validation | **Implemented, wired, and live-validated** |
 | Alternatives and rejection reasons | `DecisionOption.reason_code` (required field), persisted | **Implemented and unit-tested** |
 | Exceptions and approvals | `CGApproval`/`CGExceptionGrant` models + append-only correction linkage | **Implemented and live-validated** — effective state is evaluated as-of a timestamp with approval and exception expiry enforcement |
 | Outcomes and feedback | `record_outcome`/`record_feedback` | **Implemented and unit-tested** |
 | Precedent retrieval | `find_precedents` — policy, outcome, and feedback-weighted score | **Implemented and tested**, including deterministic precision/recall/MRR metrics |
-| Context assembly governance | `ContextManifest` with SHA-256 integrity hash, `record_trace` | **Implemented and unit-tested** |
+| Context assembly governance | `ContextManifest`, SHA-256 integrity hash, typed policy rules, `record_trace` | **Implemented, unit-tested, and live-tested** |
 | Proactive context | Expiring-policy recommendations, as-of validity, reversible compaction | **Implemented and tested** with configurable usage/urgency thresholds and false-positive metrics; production threshold tuning remains environment-specific |
 
 ## Target three-layer ontology

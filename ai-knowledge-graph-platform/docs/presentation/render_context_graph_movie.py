@@ -1,7 +1,9 @@
-"""Render the complete nine-scene Context Graph presentation movie."""
+"""Render a live-retrieval Context Graph presentation movie."""
 
 from __future__ import annotations
 
+import json
+import math
 import shutil
 import subprocess
 import textwrap
@@ -11,11 +13,40 @@ from pathlib import Path
 from gtts import gTTS
 from PIL import Image, ImageDraw, ImageFont
 
+from graphrag.context_graph.models import ContextManifest
+
 
 W, H, FPS = 1280, 720, 24
 ROOT = Path(__file__).resolve().parent
 BUILD = ROOT / "context_graph_movie_build"
 OUT = ROOT / "context_graph_e2e_narrated.mp4"
+CAPTURE = json.loads((ROOT / "context_graph_movie_trace.json").read_text(encoding="utf-8"))
+TRACE = CAPTURE["trace_api_response"]
+API_RESULT = CAPTURE["query_response"]
+CACHE_RESULT = CAPTURE.get("cache_response", {})
+CACHE_DEMO = CAPTURE.get("cache_demo", {})
+API = CAPTURE["api"]
+COUNTS = CAPTURE["graph_counts"]
+CASE = TRACE["case"]
+RUN = TRACE["run"]
+MANIFEST = dict(TRACE["manifest"])
+if isinstance(MANIFEST.get("retrieval_config"), str):
+    MANIFEST["retrieval_config"] = json.loads(MANIFEST["retrieval_config"])
+RETRIEVAL_CONFIG = MANIFEST.get("retrieval_config", {})
+DECISION = TRACE["decision"]
+POLICY = TRACE["policy_versions"][0]
+EVALUATION = TRACE["policy_evaluations"][0]
+OPTIONS = TRACE["options"]
+DOCUMENTS = {item["id"]: item for item in TRACE.get("documents", []) if item}
+CHUNKS = {item["id"]: item for item in TRACE.get("chunks", []) if item}
+HASH_VALID = ContextManifest.model_validate(MANIFEST).compute_integrity_hash() == MANIFEST["integrity_hash"]
+ANSWER = API_RESULT["answer"]
+CANONICAL_MANIFEST = json.dumps(
+    ContextManifest.model_validate(MANIFEST).canonical_content(),
+    sort_keys=True,
+    separators=(",", ":"),
+)
+
 BG = (5, 12, 25)
 PANEL = (9, 25, 40)
 CYAN = (95, 221, 255)
@@ -35,82 +66,68 @@ class Scene:
 
 SCENES = [
     Scene(
-        "Ingestion Completes the Workflow",
-        25,
-        "The workflow starts before the question. Documents enter the knowledge graph "
-        "through the ingestion pipeline. The pipeline chunks source material, extracts "
-        "entities and relationships, creates embeddings, and preserves document and chunk "
-        "identity so later retrieval can verify exactly where an answer came from.",
+        "Live Retrieval Starts with Indexed Evidence", 20,
+        "The live request starts from an already indexed tenant. Marketing contains "
+        "four documents and twenty-four chunks. The query enters the same retrieval "
+        "path used by the application, with no hand-selected evidence in the movie.",
     ),
     Scene(
-        "The Question Becomes a Case",
-        25,
-        "A normal RAG answer ends when the model returns text. In a governed "
-        "environment, that is where the important part begins. We start with a case: "
-        "determine whether this action is allowed under the current policy.",
+        "The Question Enters the API", 20,
+        "The question asks whether a Nova Beverages EU Q3 placement beside sports-betting "
+        "promotional content is allowed. The application assigns a stable query identity "
+        "so the answer and its decision trace can be found again.",
     ),
     Scene(
-        "The Agent Run Is Captured",
-        25,
-        "The system opens a durable case and starts an agent run. This gives the "
-        "request an identity, a tenant boundary, and a lifecycle. The run can now be "
-        "connected to the context it used, the tools it called, and the decision it "
-        "eventually produced.",
+        "Retrieval Captures Its Evidence", 25,
+        "The live retriever returns the exact chunks behind the answer. They include the "
+        "Campaign Brief, the Statement of Work, the Data Privacy Policy, and the global "
+        "Brand Guideline. Their document lineage is captured in the Context Graph manifest.",
     ),
     Scene(
-        "Evidence Is Assembled",
-        30,
-        "Retrieval finds the evidence: the source document, the policy statement, and "
-        "the exact document and chunk versions behind them. The Context Graph records "
-        "those references explicitly. It does not merely say that the model searched; "
-        "it records what was available to the model at decision time.",
+        "The Graph Expands and Reranks Context", 25,
+        "The planner selects local retrieval for this fact question. The path then applies "
+        "vector and lexical search, two-hop graph expansion, GNN scoring, and reranking. "
+        "The manifest records the retrieval mode and configuration used for this run.",
     ),
     Scene(
-        "The Manifest Locks the Moment",
-        25,
-        "This is the key difference between context and a loose conversation log. The "
-        "manifest captures evidence, policy versions, retrieval configuration, model "
-        "and prompt versions, temporal boundaries, and tool observations. Canonical "
-        "content produces an integrity hash. Reconstruct the same context, and the hash "
-        "must match. Structured rationale is stored. Hidden chain-of-thought is not.",
+        "The API Returns a Grounded Answer", 30,
+        "The answer does not hide the conflict. The Statement of Work excludes gambling "
+        "and sports-betting placements, while the Campaign Brief lists a sports-betting "
+        "companion-app adjacency. Because the privacy provisions are not present in the "
+        "retrieved context, the system says that permissibility cannot be determined.",
     ),
     Scene(
-        "Tools Produce Auditable Observations",
-        20,
-        "When the agent uses a tool, the call and its observation become part of the "
-        "trace. We preserve the auditable result, not private internal reasoning: which "
-        "policy was evaluated, what rule controlled, and what constraint was returned.",
+        "The Manifest Locks the Inference Moment", 25,
+        "The manifest captures the question, chunks, documents, retrieval configuration, "
+        "model, prompt version, ontology, and temporal boundaries. Canonical content is "
+        "hashed with SHA-256. Reconstructing the same context produces the same hash.",
     ),
     Scene(
-        "Alternatives Make the Decision Governed",
-        30,
-        "The agent does not write an unexplained verdict. It records the alternatives it "
-        "considered. Allow is rejected because the controlling policy rule is not "
-        "satisfied. Escalation remains possible, but the evidence is sufficient for a "
-        "policy decision. Deny is selected, with a concise rationale and explicit reason "
-        "codes for the alternatives.",
+        "A Repeat Question Hits Governed Cache", 24,
+        "The second identical request does not rerun retrieval or the language model. "
+        "Redis returns the completed answer only because the tenant, normalized question, "
+        "model route, retrieval settings, ontology, prompt version, and corpus revision "
+        "match the governed cache key. The new query keeps a fresh identity and points "
+        "back to the original trace.",
     ),
     Scene(
-        "Policy Evaluation Is Linked",
-        20,
-        "The decision is linked to the exact policy version and its evaluation. When the "
-        "policy changes, a later run can use a newer version and produce a different "
-        "result without rewriting what happened here. The history remains append-only.",
+        "The Answer Becomes a Decision Trace", 25,
+        "The live retrieval path records the answer as the selected option of a governed "
+        "decision. The trace keeps the case, agent run, evidence, policy evaluation, and "
+        "structured rationale together. It stores the answer, not hidden chain-of-thought.",
     ),
     Scene(
-        "Replay the Trace",
-        25,
-        "Now we can answer the questions an enterprise actually asks: what case was "
-        "handled, which run handled it, what evidence was available, which policy applied, "
-        "which alternatives were considered, why they were rejected, which observations "
-        "contributed, and whether the reconstructed manifest still matches its hash.",
+        "Replay Through the Tenant-Scoped API", 25,
+        "A later request can load the same trace through the Context Graph API. The tenant "
+        "is explicit, the evidence references are visible, and the reconstructed manifest "
+        "still matches its integrity hash. The decision can be audited without rerunning "
+        "the model.",
     ),
     Scene(
-        "From Answer to Accountable Decision",
-        10,
-        "The Knowledge Graph helps the system find what is true. The Context Graph records "
-        "what the system knew, what it considered, and why it acted. That is the difference "
-        "between an answer and an accountable decision.",
+        "From Answer to Accountable Decision", 15,
+        "The Knowledge Graph finds the evidence. The Context Graph records what the system "
+        "retrieved, what it answered, and why it refused to overstate the result. That is "
+        "the difference between a fast answer and an accountable decision.",
     ),
 ]
 
@@ -120,230 +137,271 @@ def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(path, size)
 
 
-def text(draw: ImageDraw.ImageDraw, xy, value: str, size=20, color=WHITE, bold=False, anchor=None):
+def text(draw, xy, value: str, size=20, color=WHITE, bold=False, anchor=None):
     draw.text(xy, value, font=font(size, bold), fill=color, anchor=anchor)
 
 
-def wrapped(draw: ImageDraw.ImageDraw, xy, value: str, width=48, size=20, color=WHITE, bold=False, spacing=7):
+def wrapped(draw, xy, value: str, width=60, size=20, color=WHITE, bold=False, spacing=7):
     draw.multiline_text(xy, textwrap.fill(value, width), font=font(size, bold), fill=color, spacing=spacing)
 
 
-def panel(draw: ImageDraw.ImageDraw, box, outline=(32, 72, 94), fill=PANEL, radius=10, width=2):
+def panel(draw, box, outline=(32, 72, 94), fill=PANEL, radius=10, width=2):
     draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
 
 
-def arrow(draw: ImageDraw.ImageDraw, start, end, color=CYAN, width=3):
+def arrow(draw, start, end, color=CYAN, width=3):
     draw.line((*start, *end), fill=color, width=width)
     x2, y2 = end
     draw.polygon([(x2, y2), (x2 - 12, y2 - 6), (x2 - 12, y2 + 6)], fill=color)
 
 
-def node(draw: ImageDraw.ImageDraw, xy, label, sub="", color=CYAN, radius=50):
+def node(draw, xy, label, sub="", color=CYAN, radius=50):
     x, y = xy
-    draw.ellipse((x-radius, y-radius, x+radius, y+radius), fill=(7, 25, 42), outline=color, width=3)
-    text(draw, (x, y-8), label, 14, color, True, "mm")
+    draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(7, 25, 42), outline=color, width=3)
+    text(draw, (x, y - 8), label, 14, color, True, "mm")
     if sub:
-        text(draw, (x, y+16), sub, 11, (197, 220, 233), False, "mm")
+        text(draw, (x, y + 16), sub, 11, (197, 220, 233), False, "mm")
 
 
-def base(scene_index: int) -> tuple[Image.Image, ImageDraw.ImageDraw]:
+def short(value: str, length: int = 22) -> str:
+    return value if len(value) <= length else value[:length] + "..."
+
+
+def tail(value: str, length: int = 16) -> str:
+    return value[-length:] if value else ""
+
+
+def ms(value) -> str:
+    try:
+        numeric = float(value)
+        if numeric <= 0:
+            return "<1 ms"
+        return f"{numeric:,.0f} ms"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def speedup_text() -> str:
+    speedup = CACHE_DEMO.get("speedup")
+    if speedup:
+        return f"{speedup}x"
+    cold = CACHE_DEMO.get("cold_latency_ms", API_RESULT.get("latency_ms"))
+    warm = CACHE_DEMO.get("warm_latency_ms", CACHE_RESULT.get("latency_ms"))
+    try:
+        cold_f = float(cold)
+        warm_f = float(warm)
+    except (TypeError, ValueError):
+        return "n/a"
+    if warm_f <= 0:
+        return f">{cold_f:,.0f}x"
+    return f"{cold_f / warm_f:,.1f}x"
+
+
+def base(index: int):
     img = Image.new("RGB", (W, H), BG)
     draw = ImageDraw.Draw(img)
     for x in range(0, W, 64):
         draw.line((x, 0, x, H), fill=(10, 29, 47), width=1)
     for y in range(0, H, 48):
         draw.line((0, y, W, y), fill=(10, 29, 47), width=1)
-    text(draw, (54, 35), "CONTEXT GRAPH  /  END-TO-END DECISION TRACE", 16, CYAN, True)
-    text(draw, (54, 67), f"{scene_index:02d}", 16, GOLD, True)
-    text(draw, (86, 63), SCENES[scene_index].title, 30, WHITE, True)
-    text(draw, (1222, 43), "TENANT: MARKETING", 13, MUTED, True, "ra")
+    text(draw, (54, 35), "CONTEXT GRAPH  /  LIVE RETRIEVAL TRACE", 16, CYAN, True)
+    text(draw, (54, 67), f"{index:02d}", 16, GOLD, True)
+    text(draw, (86, 63), SCENES[index].title, 30, WHITE, True)
+    text(draw, (1222, 43), f"TENANT: {CASE['tenant'].upper()}", 13, MUTED, True, "ra")
     for i in range(len(SCENES)):
         x1 = 54 + i * 115
-        draw.line((x1, 112, x1 + 102, 112), fill=GOLD if i <= scene_index else (35, 66, 84), width=4)
+        draw.line((x1, 112, x1 + 102, 112), fill=GOLD if i <= index else (35, 66, 84), width=4)
     return img, draw
 
 
 def scene_0(draw):
     panel(draw, (70, 150, 1210, 620))
-    text(draw, (104, 184), "PRE-RECORDED TERMINAL  /  KNOWLEDGE GRAPH INGESTION", 13, GOLD, True)
-    panel(draw, (104, 225, 1176, 535), fill=(3, 10, 18), outline=(47, 103, 126))
-    text(draw, (132, 252), "PS C:\\ai-knowledge-graph-platform>", 17, MUTED)
-    text(draw, (132, 286), "python scripts/ingest_corpus.py --tenant marketing --commit", 19, CYAN, True)
-    text(draw, (132, 340), "[ingestion] reading source documents...", 16, MUTED)
-    text(draw, (132, 378), "[ingestion] chunks created: 48", 16, WHITE)
-    text(draw, (132, 416), "[ingestion] entities extracted: 51", 16, WHITE)
-    text(draw, (132, 454), "[ingestion] embeddings written: 48", 16, WHITE)
-    text(draw, (132, 492), "[ingestion] graph commit complete", 16, GREEN, True)
-    panel(draw, (835, 328, 1140, 505), outline=GOLD)
-    text(draw, (865, 358), "FINAL SUMMARY", 12, GOLD, True)
-    text(draw, (865, 401), "documents     4", 17, WHITE, True)
-    text(draw, (865, 438), "chunks       48", 17, WHITE, True)
-    text(draw, (865, 475), "status       COMPLETE", 17, GREEN, True)
+    text(draw, (104, 184), "LIVE TENANT SNAPSHOT / BEFORE THE QUESTION", 13, GOLD, True)
+    panel(draw, (105, 235, 610, 535), outline=(47, 103, 126))
+    text(draw, (137, 270), "POST /query", 22, CYAN, True)
+    text(draw, (137, 315), f'tenant: "{CASE["tenant"]}"', 17, WHITE)
+    text(draw, (137, 350), f'mode: "{API_RESULT["retrieval_mode"]}"', 17, WHITE)
+    text(draw, (137, 385), f'query_id: "{short(API_RESULT["query_id"], 27)}"', 16, MUTED)
+    text(draw, (137, 445), "retrieval path: LIVE", 18, GREEN, True)
+    panel(draw, (690, 235, 1175, 535), outline=GOLD)
+    text(draw, (725, 270), "MARKETING KG / NEO4J", 13, GOLD, True)
+    values = [
+        ("Documents", COUNTS.get("documents", 0)),
+        ("Chunks", COUNTS.get("chunks", 0)),
+        ("Entities", COUNTS.get("entities", 0)),
+        ("Edges", COUNTS.get("edges", 0)),
+        ("Open conflicts", COUNTS.get("open_conflicts", 0)),
+    ]
+    for i, (label, value) in enumerate(values):
+        y = 320 + i * 39
+        text(draw, (725, y), label, 16, MUTED)
+        text(draw, (1135, y), str(value), 18, GREEN if label == "Open conflicts" else WHITE, True, "ra")
 
 
 def scene_1(draw):
     panel(draw, (78, 150, 1202, 625))
-    text(draw, (112, 184), "GOVERNED ACTION", 14, GOLD, True)
-    text(draw, (112, 222), "Campaign placement review", 30, WHITE, True)
-    panel(draw, (112, 284, 1168, 400), fill=(12, 35, 55))
-    text(draw, (142, 310), "QUESTION", 12, CYAN, True)
-    wrapped(draw, (142, 340), "Is this campaign placement allowed under the current Data Privacy Policy?", 72, 23, WHITE, True)
-    panel(draw, (112, 438, 520, 565), outline=(48, 104, 129))
-    text(draw, (140, 460), "TENANT", 12, MUTED, True)
-    text(draw, (140, 491), "marketing", 23, WHITE, True)
-    panel(draw, (550, 438, 1168, 565), outline=(48, 104, 129))
-    text(draw, (578, 460), "CASE CREATED", 12, MUTED, True)
-    text(draw, (578, 491), "case_campaign_placement_0142", 23, CYAN, True)
-    text(draw, (578, 531), "status: open", 14, GOLD, True)
+    text(draw, (112, 184), "QUESTION / STABLE QUERY IDENTITY", 14, GOLD, True)
+    wrapped(draw, (112, 225), API_RESULT["question"], 75, 25, WHITE, True)
+    panel(draw, (112, 365, 1168, 540), outline=(48, 104, 129))
+    text(draw, (140, 395), "QUERY RESPONSE ID", 12, MUTED, True)
+    text(draw, (140, 430), API_RESULT["query_id"], 22, CYAN, True)
+    text(draw, (140, 480), "tenant", 13, MUTED)
+    text(draw, (280, 480), CASE["tenant"], 17, WHITE, True)
+    text(draw, (580, 480), "status", 13, MUTED)
+    text(draw, (700, 480), "completed", 17, GREEN, True)
 
 
 def scene_2(draw):
-    node(draw, (250, 355), "CGCase", "case_0142", GOLD, 68)
-    node(draw, (685, 355), "CGAgentRun", "run_0142", CYAN, 76)
-    arrow(draw, (605, 355), (325, 355), CYAN, 4)
-    text(draw, (465, 322), "ADDRESSES", 15, CYAN, True, "mm")
-    panel(draw, (880, 215, 1175, 500))
-    text(draw, (910, 244), "RUN LIFECYCLE", 13, MUTED, True)
-    text(draw, (910, 286), "RUNNING", 22, GOLD, True)
-    draw.line((910, 330, 1130, 330), fill=(41, 85, 106), width=3)
-    text(draw, (910, 361), "tenant", 13, MUTED)
-    text(draw, (1130, 361), "marketing", 15, WHITE, True, "ra")
-    text(draw, (910, 399), "started", 13, MUTED)
-    text(draw, (1130, 399), "10:32:14Z", 15, WHITE, True, "ra")
-    text(draw, (910, 437), "schema", 13, MUTED)
-    text(draw, (1130, 437), "cg:1.0", 15, WHITE, True, "ra")
-    text(draw, (250, 548), "The request now has identity, tenancy, and lifecycle.", 22, WHITE, True)
+    doc_items = list(DOCUMENTS.values())
+    for i, item in enumerate(doc_items[:4]):
+        y = 195 + i * 96
+        panel(draw, (75, y, 545, y + 75), outline=(49, 99, 120))
+        text(draw, (102, y + 22), "DOCUMENT", 11, MUTED, True)
+        text(draw, (102, y + 51), short(item.get("filename", item["id"]), 42), 16, WHITE, True)
+        arrow(draw, (545, y + 37), (680, 355), CYAN, 2)
+    node(draw, (770, 355), "MANIFEST", short(MANIFEST["id"]), GOLD, 78)
+    panel(draw, (920, 190, 1195, 525))
+    text(draw, (950, 220), "CAPTURED EVIDENCE", 13, GOLD, True)
+    text(draw, (950, 275), f"chunks: {len(MANIFEST['chunk_ids'])}", 17, WHITE)
+    text(draw, (950, 315), f"documents: {len(MANIFEST['document_ids'])}", 17, WHITE)
+    text(draw, (950, 355), f"citations: {len(API_RESULT['citations'])}", 17, WHITE)
+    text(draw, (950, 395), "lineage: Chunk -> Document", 16, GREEN, True)
+    text(draw, (82, 595), "Evidence is selected by the live retriever and persisted for replay.", 21, WHITE, True)
 
 
 def scene_3(draw):
-    docs = [(185, 250, "Campaign Brief", "doc:brief-v3"), (185, 440, "Privacy Policy", "doc:privacy-v4.2")]
-    for x, y, title, version in docs:
-        panel(draw, (80, y-70, 390, y+70), outline=(49, 99, 120))
-        text(draw, (108, y-42), "DOCUMENT", 11, MUTED, True)
-        text(draw, (108, y-8), title, 20, WHITE, True)
-        text(draw, (108, y+28), version, 14, CYAN)
-    node(draw, (690, 350), "MANIFEST", "ctx_0142", GOLD, 78)
-    arrow(draw, (390, 250), (605, 322))
-    arrow(draw, (390, 440), (605, 378))
-    panel(draw, (850, 175, 1190, 535))
-    text(draw, (880, 202), "EXACT INFERENCE CONTEXT", 12, GOLD, True)
-    fields = ["Statement IDs + versions", "Chunk + document refs", "Valid / transaction time", "Ontology: marketing-v7", "Retrieval: hybrid + GAT", "Model + prompt version"]
-    for i, item in enumerate(fields):
-        y = 248 + i * 44
-        draw.ellipse((882, y+4, 892, y+14), fill=GREEN)
-        text(draw, (908, y), item, 16, WHITE)
-    text(draw, (80, 590), "What was available to the model is now explicit and reconstructable.", 21, WHITE, True)
+    panel(draw, (75, 180, 510, 540), outline=CYAN)
+    text(draw, (105, 215), "RETRIEVAL PIPELINE", 13, GOLD, True)
+    steps = ["planner: local", "lexical + vector search", "2-hop graph expansion", "GNN scoring", "cross-encoder reranking"]
+    for i, item in enumerate(steps):
+        y = 270 + i * 48
+        draw.ellipse((107, y + 4, 117, y + 14), fill=GREEN)
+        text(draw, (137, y), item, 17, WHITE)
+    node(draw, (800, 355), "CONTEXT", f"{len(MANIFEST['chunk_ids'])} chunks", GOLD, 82)
+    node(draw, (1060, 275), "GNN", "2 hops", CYAN, 52)
+    node(draw, (1060, 445), "RERANK", "top context", CYAN, 52)
+    arrow(draw, (585, 355), (715, 355), CYAN, 3)
+    arrow(draw, (880, 320), (1005, 285), CYAN, 3)
+    arrow(draw, (880, 390), (1005, 435), CYAN, 3)
+    text(draw, (640, 595), f"mode: {API_RESULT['retrieval_mode']}   /   model: {API_RESULT['model_version']}", 19, WHITE, True, "mm")
 
 
 def scene_4(draw):
-    panel(draw, (62, 155, 482, 582))
-    text(draw, (92, 180), "CONTEXT MANIFEST", 13, GOLD, True)
-    rows = [("tenant", '"marketing"'), ("model", '"deepseek-v4-pro"'), ("prompt", '"decision-v3"'), ("policy", '"privacy-v4.2"'), ("valid_at", '"2026-08-01"'), ("tool_obs", '["obs_0142"]')]
-    for i, (k, v) in enumerate(rows):
-        y = 226 + i * 48
-        text(draw, (92, y), k, 15, MUTED)
-        text(draw, (228, y), v, 15, CYAN, True)
-    arrow(draw, (482, 370), (590, 370), GOLD, 4)
-    panel(draw, (590, 270, 825, 470), outline=(64, 119, 140))
-    text(draw, (708, 320), "CANONICAL JSON", 15, WHITE, True, "mm")
-    text(draw, (708, 365), "sorted keys", 14, MUTED, False, "mm")
-    text(draw, (708, 397), "stable serialization", 14, MUTED, False, "mm")
-    arrow(draw, (825, 370), (900, 370), GOLD, 4)
-    panel(draw, (900, 245, 1200, 495), outline=GOLD, width=3)
-    text(draw, (1050, 290), "SHA-256", 20, GOLD, True, "mm")
-    text(draw, (1050, 345), "9f2a7d0c...e184", 22, WHITE, True, "mm")
-    text(draw, (1050, 395), "INTEGRITY VALID", 15, GREEN, True, "mm")
-    text(draw, (1050, 445), "same context = same hash", 13, MUTED, False, "mm")
-    text(draw, (640, 610), "Structured rationale stored  •  hidden chain-of-thought excluded", 18, CYAN, True, "mm")
+    panel(draw, (65, 155, 520, 590))
+    text(draw, (95, 185), "LIVE API RESPONSE", 13, GOLD, True)
+    wrapped(draw, (95, 225), ANSWER, 48, 17, WHITE, False, spacing=6)
+    panel(draw, (635, 205, 1195, 535), outline=GREEN)
+    text(draw, (670, 240), "RESPONSE METADATA", 13, GREEN, True)
+    fields = [
+        ("retrieval_mode", API_RESULT["retrieval_mode"]),
+        ("model_version", API_RESULT["model_version"]),
+        ("latency_ms", f"{API_RESULT['latency_ms']:.0f}"),
+        ("citations", str(len(API_RESULT["citations"]))),
+        ("decision", "do not overstate"),
+    ]
+    for i, (key, value) in enumerate(fields):
+        y = 295 + i * 44
+        text(draw, (670, y), key, 14, MUTED)
+        text(draw, (1135, y), value, 16, GREEN if key == "decision" else WHITE, True, "ra")
 
 
 def scene_5(draw):
-    node(draw, (200, 355), "AGENT RUN", "run_0142", CYAN, 70)
-    panel(draw, (410, 205, 760, 505), outline=(55, 111, 135))
-    text(draw, (440, 235), "TOOL CALL", 13, GOLD, True)
-    text(draw, (440, 279), "evaluate_policy", 24, WHITE, True)
-    text(draw, (440, 326), "policy: privacy-v4.2", 15, CYAN)
-    text(draw, (440, 365), "action: campaign_placement", 15, CYAN)
-    text(draw, (440, 430), "status: completed", 14, GREEN, True)
-    panel(draw, (900, 205, 1190, 505), outline=GREEN)
-    text(draw, (930, 235), "OBSERVATION", 13, GREEN, True)
-    text(draw, (930, 278), "rule: DP-17", 18, WHITE, True)
-    text(draw, (930, 320), "result: DENY", 22, RED, True)
-    wrapped(draw, (930, 370), "Consent condition is not satisfied.", 25, 16, MUTED)
-    arrow(draw, (270, 355), (410, 355))
-    arrow(draw, (760, 355), (900, 355), GREEN)
-    text(draw, (585, 555), "MADE_TOOL_CALL", 13, CYAN, True, "mm")
-    text(draw, (1045, 555), "PRODUCED", 13, GREEN, True, "mm")
+    panel(draw, (65, 155, 475, 575))
+    text(draw, (95, 185), "CONTEXT MANIFEST", 13, GOLD, True)
+    rows = [
+        ("tenant", MANIFEST["tenant"]),
+        ("model", MANIFEST["model_version"]),
+        ("prompt", MANIFEST["prompt_version"]),
+        ("retrieval", MANIFEST["retrieval_mode"]),
+        ("ontology", MANIFEST["ontology_version"]),
+        ("corpus rev", str(RETRIEVAL_CONFIG.get("corpus_revision", "n/a"))),
+        ("cache schema", str(RETRIEVAL_CONFIG.get("cache_schema_version", "n/a"))),
+        ("evidence", f"{len(MANIFEST['chunk_ids'])} chunks / {len(MANIFEST['document_ids'])} docs"),
+    ]
+    for i, (key, value) in enumerate(rows):
+        y = 224 + i * 39
+        text(draw, (95, y), key, 14, MUTED)
+        text(draw, (245, y), str(value), 15, CYAN, True)
+    arrow(draw, (475, 365), (590, 365), GOLD, 4)
+    panel(draw, (590, 270, 825, 460), outline=(64, 119, 140))
+    text(draw, (708, 320), "CANONICAL JSON", 15, WHITE, True, "mm")
+    text(draw, (708, 360), f"{len(CANONICAL_MANIFEST):,} bytes", 14, MUTED, False, "mm")
+    text(draw, (708, 390), short(CANONICAL_MANIFEST[:46], 42), 12, MUTED, False, "mm")
+    arrow(draw, (825, 365), (900, 365), GOLD, 4)
+    panel(draw, (900, 245, 1200, 495), outline=GOLD, width=3)
+    text(draw, (1050, 290), "SHA-256", 20, GOLD, True, "mm")
+    text(draw, (1050, 345), short(MANIFEST["integrity_hash"], 20), 18, WHITE, True, "mm")
+    text(draw, (1050, 395), "INTEGRITY VALID", 15, GREEN, True, "mm")
+    text(draw, (1050, 445), "same context = same hash", 13, MUTED, False, "mm")
 
 
 def scene_6(draw):
-    text(draw, (640, 156), "THREE OPTIONS. ONE EXPLAINABLE SELECTION.", 18, MUTED, True, "mm")
-    options = [
-        (80, "ALLOW", "REJECTED", "POLICY_CONDITION_UNMET", RED),
-        (460, "DENY", "SELECTED", "CONTROLLING_RULE_DP_17", GOLD),
-        (840, "ESCALATE", "REJECTED", "EVIDENCE_SUFFICIENT", RED),
-    ]
-    for x, title, state, reason, color in options:
-        panel(draw, (x, 215, x+340, 520), outline=color, width=3)
-        text(draw, (x+28, 245), "OPTION", 12, MUTED, True)
-        text(draw, (x+170, 309), title, 32, color, True, "mm")
-        text(draw, (x+170, 365), state, 16, color, True, "mm")
-        draw.line((x+35, 404, x+305, 404), fill=(43, 78, 96), width=2)
-        text(draw, (x+28, 429), "REASON CODE", 11, MUTED, True)
-        wrapped(draw, (x+28, 460), reason, 30, 14, WHITE, True)
-    text(draw, (640, 590), "Every alternative remains visible in the durable decision trace.", 21, WHITE, True, "mm")
+    panel(draw, (65, 165, 1205, 585), outline=GOLD)
+    text(draw, (95, 200), "GOVERNED ANSWER CACHE / SECOND IDENTICAL REQUEST", 13, GOLD, True)
+    panel(draw, (100, 250, 430, 505), outline=(48, 104, 129))
+    text(draw, (130, 285), "COLD RUN", 13, CYAN, True)
+    text(draw, (130, 325), short(CACHE_DEMO.get("cold_query_id", API_RESULT["query_id"]), 31), 16, WHITE, True)
+    text(draw, (130, 375), "retrieval + LLM + trace", 15, MUTED)
+    text(draw, (130, 425), ms(CACHE_DEMO.get("cold_latency_ms", API_RESULT.get("latency_ms"))), 26, WHITE, True)
+    text(draw, (130, 470), "cache written after trace", 14, GREEN, True)
+    arrow(draw, (445, 380), (585, 380), GOLD, 4)
+    panel(draw, (585, 250, 900, 505), outline=GREEN)
+    text(draw, (615, 285), "REDIS HASH KEY", 13, GREEN, True)
+    text(draw, (615, 325), "tenant + normalized query", 15, WHITE)
+    text(draw, (615, 360), "model + prompt + retrieval config", 15, WHITE)
+    text(draw, (615, 395), f"corpus_revision = {RETRIEVAL_CONFIG.get('corpus_revision', 'n/a')}", 15, WHITE)
+    text(draw, (615, 440), f"...{tail(CACHE_DEMO.get('cache_key', API_RESULT.get('cache_key', '')), 18)}", 18, GOLD, True)
+    arrow(draw, (915, 380), (1040, 380), GOLD, 4)
+    panel(draw, (1040, 250, 1190, 505), outline=GREEN)
+    text(draw, (1115, 285), "REPEAT", 13, GREEN, True, "mm")
+    text(draw, (1115, 335), "cache_hit", 14, MUTED, False, "mm")
+    text(draw, (1115, 370), str(CACHE_DEMO.get("cache_hit", CACHE_RESULT.get("cache_hit", False))).lower(), 21, GREEN, True, "mm")
+    text(draw, (1115, 420), ms(CACHE_DEMO.get("warm_latency_ms", CACHE_RESULT.get("latency_ms"))), 18, WHITE, True, "mm")
+    text(draw, (1115, 465), speedup_text(), 18, GOLD, True, "mm")
+    text(draw, (640, 545), f"source trace: {short(CACHE_DEMO.get('source_trace_id', CACHE_RESULT.get('source_trace_id', '')), 46)}", 17, WHITE, True, "mm")
 
 
 def scene_7(draw):
-    panel(draw, (80, 205, 440, 505), outline=CYAN)
-    text(draw, (260, 248), "POLICY VERSION", 13, MUTED, True, "mm")
-    text(draw, (260, 315), "privacy-v4.2", 28, CYAN, True, "mm")
-    text(draw, (260, 367), "rule DP-17", 16, WHITE, True, "mm")
-    text(draw, (260, 412), "effective: 2026-07-01", 14, MUTED, False, "mm")
-    node(draw, (700, 355), "DECISION", "DENY", GOLD, 78)
-    arrow(draw, (440, 355), (618, 355), CYAN, 4)
-    text(draw, (528, 323), "APPLIED_POLICY", 13, CYAN, True, "mm")
-    panel(draw, (900, 205, 1200, 505), outline=(64, 102, 120))
-    text(draw, (1050, 250), "LATER VERSION", 13, MUTED, True, "mm")
-    text(draw, (1050, 315), "privacy-v4.3", 25, WHITE, True, "mm")
-    text(draw, (1050, 370), "new run", 16, GREEN, True, "mm")
-    text(draw, (1050, 415), "old trace unchanged", 14, MUTED, False, "mm")
-    text(draw, (640, 585), "APPEND-ONLY HISTORY  •  NO IN-PLACE REWRITE", 18, GOLD, True, "mm")
+    node(draw, (210, 355), "CGCase", short(CASE["id"]), GOLD, 68)
+    node(draw, (560, 355), "CGAgentRun", short(RUN["id"]), CYAN, 74)
+    node(draw, (910, 355), "CGDecision", short(DECISION["id"]), GOLD, 78)
+    arrow(draw, (280, 355), (485, 355), CYAN, 4)
+    arrow(draw, (635, 355), (830, 355), GOLD, 4)
+    text(draw, (382, 320), "ADDRESSES", 13, CYAN, True, "mm")
+    text(draw, (732, 320), "PRODUCED_DECISION", 13, GOLD, True, "mm")
+    panel(draw, (315, 500, 970, 590), outline=GREEN)
+    text(draw, (640, 545), "selected option: answer   /   reason: retrieved_evidence", 18, GREEN, True, "mm")
 
 
 def scene_8(draw):
-    panel(draw, (54, 145, 1226, 610))
-    text(draw, (84, 171), "GET /context-graph/traces/decision_0142", 15, CYAN, True)
-    draw.line((84, 207, 1194, 207), fill=(38, 79, 99), width=2)
-    path = [(145, 298, "CASE"), (330, 298, "RUN"), (515, 298, "MANIFEST"), (700, 298, "EVIDENCE"), (885, 298, "POLICY"), (1070, 298, "DECISION")]
-    for i, (x, y, label) in enumerate(path):
-        if i:
-            arrow(draw, (path[i-1][0]+45, y), (x-45, y), (52, 139, 166), 3)
-        node(draw, (x, y), label, "", GOLD if label == "DECISION" else CYAN, 43)
+    panel(draw, (65, 175, 1215, 580))
+    text(draw, (95, 210), API["method"] + " " + API["path"], 14, CYAN, True)
+    draw.line((95, 245, 1190, 245), fill=(38, 79, 99), width=2)
+    coords = {"CASE": (150, 340), "RUN": (390, 340), "MANIFEST": (650, 275), "EVIDENCE": (930, 275), "DECISION": (650, 445)}
+    for a, b in (("CASE", "RUN"), ("RUN", "MANIFEST"), ("MANIFEST", "EVIDENCE"), ("RUN", "DECISION")):
+        arrow(draw, coords[a], coords[b], GOLD if b == "DECISION" else (52, 139, 166), 3)
+    for label, xy in coords.items():
+        node(draw, xy, label, "", GOLD if label == "DECISION" else CYAN, 43)
     fields = [
-        (84, "selected_option", '"deny"', GOLD),
-        (390, "policy_version", '"privacy-v4.2"', CYAN),
-        (725, "reason_codes", '["DP_17"]', WHITE),
-        (1010, "integrity_hash_valid", "true", GREEN),
+        (95, "selected_option", '"answer"', GOLD),
+        (365, "policy_version", POLICY["version"], CYAN),
+        (630, "tenant", CASE["tenant"], WHITE),
+        (895, "integrity_hash_valid", str(HASH_VALID).lower(), GREEN),
     ]
     for x, key, value, color in fields:
-        text(draw, (x, 405), key, 12, MUTED, True)
-        text(draw, (x, 441), value, 16, color, True)
-    text(draw, (84, 525), "tenant_scope", 12, MUTED, True)
-    text(draw, (220, 525), '"marketing"', 15, WHITE, True)
-    text(draw, (390, 525), "replay_status", 12, MUTED, True)
-    text(draw, (525, 525), '"reconstructed"', 15, GREEN, True)
+        text(draw, (x, 505), key, 12, MUTED, True)
+        text(draw, (x, 540), value, 16, color, True)
 
 
 def scene_9(draw):
-    coords = {"CASE": (160, 370), "RUN": (355, 285), "MANIFEST": (585, 370), "EVIDENCE": (805, 260), "POLICY": (805, 485), "DECISION": (1080, 370)}
-    links = [("CASE", "RUN"), ("RUN", "MANIFEST"), ("MANIFEST", "EVIDENCE"), ("MANIFEST", "POLICY"), ("EVIDENCE", "DECISION"), ("POLICY", "DECISION")]
+    coords = {"CASE": (160, 350), "RUN": (370, 270), "MANIFEST": (610, 350), "EVIDENCE": (840, 270), "DECISION": (1080, 350)}
+    links = [("CASE", "RUN"), ("RUN", "MANIFEST"), ("MANIFEST", "EVIDENCE"), ("RUN", "DECISION")]
     for a, b in links:
         arrow(draw, coords[a], coords[b], (40, 115, 143), 3)
     for label, xy in coords.items():
         node(draw, xy, label, "", GOLD if label == "DECISION" else CYAN, 48)
-    text(draw, (640, 580), "KNOW WHAT HAPPENED.  RECONSTRUCT WHY.", 24, WHITE, True, "mm")
-    text(draw, (640, 628), "From an answer to an accountable decision.", 18, GOLD, True, "mm")
+    text(draw, (640, 560), "WHAT WAS RETRIEVED.  WHAT WAS ANSWERED.", 24, WHITE, True, "mm")
+    text(draw, (640, 610), "From an answer to an accountable decision.", 18, GOLD, True, "mm")
 
 
 DRAWERS = [scene_0, scene_1, scene_2, scene_3, scene_4, scene_5, scene_6, scene_7, scene_8, scene_9]
@@ -353,38 +411,50 @@ def run(command: list[str]) -> None:
     subprocess.run(command, check=True)
 
 
+def audio_duration(ffprobe: str, path: Path) -> float:
+    output = subprocess.check_output(
+        [ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+        text=True,
+    )
+    return float(output.strip())
+
+
 def main() -> None:
     ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        raise RuntimeError("ffmpeg is required")
+    ffprobe = shutil.which("ffprobe")
+    if not ffmpeg or not ffprobe:
+        raise RuntimeError("ffmpeg and ffprobe are required")
     BUILD.mkdir(exist_ok=True)
     segments: list[Path] = []
     for i, scene in enumerate(SCENES):
         image, draw = base(i)
         DRAWERS[i](draw)
-        png = BUILD / f"scene_{i+1:02d}.png"
-        mp3 = BUILD / f"scene_{i+1:02d}.mp3"
-        segment = BUILD / f"scene_{i+1:02d}.mp4"
+        png = BUILD / f"scene_{i + 1:02d}.png"
+        mp3 = BUILD / f"scene_{i + 1:02d}.mp3"
+        voice_stamp = BUILD / f"scene_{i + 1:02d}.voice.txt"
+        segment = BUILD / f"scene_{i + 1:02d}.mp4"
         image.save(png)
-        gTTS(scene.voiceover, lang="en", slow=False).save(mp3)
-        frames = scene.duration * FPS
-        vf = (
-            f"zoompan=z='min(zoom+0.00012,1.035)':x='iw/2-(iw/zoom/2)':"
-            f"y='ih/2-(ih/zoom/2)':d={frames}:s={W}x{H}:fps={FPS},"
-            "fade=t=in:st=0:d=0.6,fade=t=out:st="
-            f"{scene.duration-0.6}:d=0.6,format=yuv420p"
-        )
+        if not mp3.exists() or not voice_stamp.exists() or voice_stamp.read_text(encoding="utf-8") != scene.voiceover:
+            gTTS(scene.voiceover, lang="en", slow=False).save(mp3)
+            voice_stamp.write_text(scene.voiceover, encoding="utf-8")
+        duration = max(scene.duration, math.ceil(audio_duration(ffprobe, mp3) + 1.0))
+        vf = "format=yuv420p"
         run([
-            ffmpeg, "-y", "-loop", "1", "-i", str(png), "-i", str(mp3),
+            ffmpeg, "-y", "-loop", "1", "-framerate", str(FPS), "-i", str(png), "-i", str(mp3),
             "-filter_complex", f"[0:v]{vf}[v];[1:a]adelay=500|500,apad[a]",
-            "-map", "[v]", "-map", "[a]", "-t", str(scene.duration),
+            "-map", "[v]", "-map", "[a]", "-t", str(duration),
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
             "-c:a", "aac", "-b:a", "128k", str(segment),
         ])
         segments.append(segment)
     concat = BUILD / "segments.txt"
     concat.write_text("".join(f"file '{p.as_posix()}'\n" for p in segments), encoding="utf-8")
-    run([ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", str(OUT)])
+    run([
+        ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(concat),
+        "-fflags", "+genpts", "-avoid_negative_ts", "make_zero",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:a", "aac", "-b:a", "128k", str(OUT),
+    ])
     print(OUT)
 
 

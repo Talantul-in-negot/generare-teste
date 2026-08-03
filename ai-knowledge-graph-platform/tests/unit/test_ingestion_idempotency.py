@@ -240,6 +240,8 @@ class TestIngestionAgentReassignsChunkDocumentId:
             return "canonical-existing-id"
 
         writer.write_document = AsyncMock(side_effect=fake_write_document)
+        writer.begin_corpus_update = AsyncMock()
+        writer.complete_corpus_update = AsyncMock(return_value=2)
         writer.write_chunks = AsyncMock()
         writer.write_entities = AsyncMock(return_value=[])
         writer.write_relations = AsyncMock()
@@ -262,6 +264,8 @@ class TestIngestionAgentReassignsChunkDocumentId:
         for c in chunks:
             assert c.document_id == "canonical-existing-id"
         assert doc.id == "canonical-existing-id"
+        writer.begin_corpus_update.assert_awaited_once_with(doc.tenant)
+        writer.complete_corpus_update.assert_awaited_once_with(doc.tenant)
 
     @pytest.mark.asyncio
     async def test_chunks_unchanged_when_document_is_genuinely_new(self):
@@ -272,6 +276,8 @@ class TestIngestionAgentReassignsChunkDocumentId:
         agent = IngestionAgent.__new__(IngestionAgent)
         writer = MagicMock()
         writer.write_document = AsyncMock(return_value="same-id-new-doc")
+        writer.begin_corpus_update = AsyncMock()
+        writer.complete_corpus_update = AsyncMock(return_value=1)
         writer.write_chunks = AsyncMock()
         writer.write_entities = AsyncMock(return_value=[])
         writer.write_relations = AsyncMock()

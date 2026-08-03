@@ -161,7 +161,9 @@ class LocalSearch:
         # the caller (hybrid_retriever) once the real answer is available.
         enriched_question = question
         if self._use_session_ctx and self._session_ctx and session_id:
-            enriched_question = await self._session_ctx.enrich_query(session_id, question)
+            enriched_question = await self._session_ctx.enrich_query(
+                session_id, question, tenant=tenant,
+            )
             if enriched_question != question:
                 log.info("local_search.query_enriched", session_id=session_id)
 

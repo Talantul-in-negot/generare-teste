@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from api.auth.dependencies import require_scope
 from graphrag.graph.neo4j_client import get_neo4j
+from graphrag.graph.corpus_revision import CorpusMutation
 
 router = APIRouter()
 
@@ -22,8 +23,10 @@ class FeedbackRequest(BaseModel):
 @router.post("/feedback", dependencies=[Depends(require_scope("write"))])
 async def record_feedback(request: FeedbackRequest):
     from graphrag.retrieval.feedback import RetrievalFeedbackService
-    event_id = await RetrievalFeedbackService(get_neo4j()).record(**request.model_dump())
-    return {"event_id": event_id}
+    neo4j = get_neo4j()
+    async with CorpusMutation(neo4j, request.tenant, "retrieval_feedback") as mutation:
+        event_id = await RetrievalFeedbackService(neo4j).record(**request.model_dump())
+    return {"event_id": event_id, "corpus_revision": mutation.revision}
 
 
 @router.get("/feedback/summary", dependencies=[Depends(require_scope("read"))])

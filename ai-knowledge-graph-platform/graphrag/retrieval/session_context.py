@@ -113,7 +113,9 @@ class SessionContext:
 
     # ── Read / enrich ──────────────────────────────────────────────────────────
 
-    async def enrich_query(self, session_id: str, question: str) -> str:
+    async def enrich_query(
+        self, session_id: str, question: str, tenant: str = "default",
+    ) -> str:
         """
         If the question contains ambiguity signals, append the most
         recently referenced entities as explicit context.
@@ -124,10 +126,26 @@ class SessionContext:
             return question
 
         turns = await self._get_turns(session_id)
-        if not turns:
+        if not _AMBIGUITY_RE.search(question):
             return question
 
-        if not _AMBIGUITY_RE.search(question):
+        if not turns:
+            try:
+                from graphrag.context_graph.repository import ContextGraphRepository
+                from graphrag.graph.neo4j_client import get_neo4j
+
+                episodes = await ContextGraphRepository(get_neo4j()).load_session_episodes(
+                    session_id, tenant, limit=4,
+                )
+                prior_answers = [
+                    str(episode.get("content", ""))[:500]
+                    for episode in episodes
+                    if episode.get("role") == "agent" and episode.get("content")
+                ]
+                if prior_answers:
+                    return f"{question} (prior session answer: {prior_answers[-1]})"
+            except Exception as exc:
+                log.warning("session_context.episode_fallback_failed", error=str(exc)[:200])
             return question
 
         # Collect entities from the last 3 turns, most recent first

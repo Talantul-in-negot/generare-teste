@@ -16,6 +16,7 @@ from api.routes.kg import (
     pagerank,
     review_queue,
     feedback,
+    sources,
 )
 
 router = APIRouter()
@@ -31,3 +32,4 @@ router.include_router(knowledge.router)
 router.include_router(pagerank.router)
 router.include_router(review_queue.router)
 router.include_router(feedback.router)
+router.include_router(sources.router)

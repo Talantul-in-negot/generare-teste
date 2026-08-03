@@ -46,48 +46,19 @@ class IngestionConsumer:
 class QueryConsumer:
     async def start(self):
         from graphrag.agents.query_agent import QueryAgent
-        from graphrag.retrieval.query_cache import QueryCache
         agent = QueryAgent()
-        cache = QueryCache()
-        await cache.connect()
         mq = await get_rabbitmq()
         eval_sample_rate = get_settings().evaluation.get("eval_sample_rate", 0.2)
 
         async def handle(payload: dict):
             msg = QueryMessage(**payload)
-            tenant     = getattr(msg, "tenant",     "default")
-            session_id = getattr(msg, "session_id", "") or ""
-
-            # ── Cache pre-check (O(1) on hit; skips all 6 retrieval stages) ──
-            cached = await cache.get(msg.question, tenant=tenant, session_id=session_id)
-            if cached:
-                log.info("query_consumer.cache_hit", query_id=msg.query_id)
-                from graphrag.retrieval.result_store import get_result_store
-                await get_result_store().set(msg.query_id, {
-                    "status":     "completed",
-                    "query_id":   msg.query_id,
-                    "answer":     cached["answer"],
-                    "citations":  cached.get("citations", []),
-                    "latency_ms": 0,
-                    "cache_hit":  True,
-                    "steps":      ["⚡ Semantic cache hit (entities: " + ", ".join(cached.get("citations", [])) + ")"],
-                })
-                return
-
-            result = await agent.run(msg)
-
-            # ── Cache the result (provenance-aware: keyed by cited entity names) ──
-            await cache.set(
-                query=msg.question,
-                tenant=tenant,
-                result={
-                    "answer":    result.answer,
-                    "contexts":  result.contexts,
-                    "citations": result.citations,
-                },
-                entities_used=list(result.citations),
-                session_id=session_id,
-            )
+            from graphrag.observability.correlation import correlation_context
+            from graphrag.observability.tracing import trace_span
+            with correlation_context(msg.correlation_id), trace_span(
+                "query.consume", query_id=msg.query_id, tenant=msg.tenant,
+                correlation_id=msg.correlation_id,
+            ):
+                result = await agent.run(msg)
 
             # Persist result via Redis-backed ResultStore so the API process
             # (a separate container) can read it. Preserve any progress steps
@@ -99,8 +70,19 @@ class QueryConsumer:
                 "status":     "completed",
                 "query_id":   msg.query_id,
                 "answer":     result.answer,
+                "contexts":   result.contexts,
                 "citations":  result.citations,
                 "latency_ms": result.latency_ms,
+                "retrieval_mode": result.retrieval_mode,
+                "model_version": result.model_version,
+                "cache_hit": result.cache_hit,
+                "cache_key": result.cache_key,
+                "source_query_id": result.source_query_id,
+                "source_trace_id": result.source_trace_id,
+                "correlation_id": result.correlation_id,
+                "routing_reason": result.routing_reason,
+                "policy_result": result.policy_result,
+                "policy_reason_code": result.policy_reason_code,
                 "steps":      _prior.get("steps", []),
             })
 

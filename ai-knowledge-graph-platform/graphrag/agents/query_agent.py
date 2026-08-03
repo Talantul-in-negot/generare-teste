@@ -54,8 +54,10 @@ class QueryAgent(BaseGraphRAGAgent):
             query_id=message.query_id,
             valid_at=message.valid_at,
             transaction_at=message.transaction_at,
+            correlation_id=message.correlation_id,
         )
         result.query_id = message.query_id
+        result.correlation_id = message.correlation_id
         log.info(
             "query_agent.done",
             query_id=message.query_id,

@@ -56,6 +56,13 @@ async def test_live_wpp_trace_writes_and_reads_from_neo4j():
         loaded = await ContextGraphRepository(adapter).load_trace(decision_id, tenant)
         assert loaded["decision"]["id"] == decision_id
         assert loaded["chunks"][0]["id"] == chunk_id
+        assert [
+            episode["role"] for episode in sorted(loaded["episodes"], key=lambda item: item["sequence"])
+        ] == ["user", "agent"]
+        session_episodes = await ContextGraphRepository(adapter).load_session_episodes(
+            f"placement-live-{tenant}", tenant,
+        )
+        assert [episode["role"] for episode in session_episodes] == ["user", "agent"]
         replayed = await ContextGraphRepository(adapter).replay_trace(
             decision_id, tenant, datetime.now(timezone.utc).isoformat()
         )

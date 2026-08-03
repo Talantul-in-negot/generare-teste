@@ -513,6 +513,24 @@ _fast_llm: FallbackLLM | None = None
 _embedder: OpenAIEmbedder | None = None
 
 
+def get_generation_route() -> dict[str, str]:
+    """Describe every model route that can materially affect query output."""
+    from graphrag.core.config import get_settings
+
+    cfg = get_settings()
+    deepseek = f"deepseek:{DeepSeekLLM._DEFAULT_MODEL}"
+    groq = f"groq:{cfg.groq_model}"
+    if cfg.llm_ingest_provider == "groq":
+        primary, fallback = groq, deepseek
+    else:
+        primary, fallback = deepseek, groq
+    return {
+        "primary": primary,
+        "fallback": fallback,
+        "agentic_fast": f"groq:{cfg.groq_fast_model}",
+    }
+
+
 def get_llm() -> BaseLLM:
     """Return the primary (large) LLM — DeepSeek-V4 primary, Groq fallback.
 

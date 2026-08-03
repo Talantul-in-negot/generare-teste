@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import structlog
@@ -26,6 +29,41 @@ class Neo4jClient:
             max_connection_pool_size=50,
             notifications_min_severity="OFF",
         )
+        self._filtered_vector_search = False
+        self._filtered_vector_indexes: set[str] = set()
+
+    async def detect_capabilities(self) -> dict:
+        """Detect Neo4j 2026 tenant-filtered vector indexes explicitly."""
+        version_rows = await self.run(
+            "CALL dbms.components() YIELD versions RETURN versions[0] AS version"
+        )
+        version = str(version_rows[0].get("version", "")) if version_rows else ""
+        try:
+            modern_server = int(version.split(".", 1)[0]) >= 2026
+        except ValueError:
+            modern_server = False
+        filtered_indexes: set[str] = set()
+        if modern_server:
+            rows = await self.run(
+                "SHOW VECTOR INDEXES YIELD name, state, properties, indexProvider "
+                "RETURN name, state, properties, indexProvider"
+            )
+            for row in rows:
+                properties = set(row.get("properties") or [])
+                if (row.get("state") == "ONLINE" and "tenant" in properties
+                        and str(row.get("indexProvider", "")).startswith("vector-2026")):
+                    filtered_indexes.add(str(row.get("name")))
+        self._filtered_vector_search = {
+            "chunk_embeddings", "community_embeddings"
+        }.issubset(filtered_indexes)
+        self._filtered_vector_indexes = filtered_indexes
+        capabilities = {
+            "neo4j_version": version,
+            "filtered_vector_search": self._filtered_vector_search,
+            "filtered_vector_indexes": sorted(filtered_indexes),
+        }
+        log.info("neo4j.capabilities", **capabilities)
+        return capabilities
 
     async def close(self):
         await self._driver.close()
@@ -39,6 +77,14 @@ class Neo4jClient:
     # ── Schema initialization ────────────────────────────────────────────────────
 
     async def init_schema(self):
+        version_rows = await self.run(
+            "CALL dbms.components() YIELD versions RETURN versions[0] AS version"
+        )
+        version = str(version_rows[0].get("version", "")) if version_rows else ""
+        try:
+            modern_server = int(version.split(".", 1)[0]) >= 2026
+        except ValueError:
+            modern_server = False
         schema_cypher = Path(__file__).parent / "schema.cypher"
         raw = schema_cypher.read_text()
         for fragment in raw.split(";"):
@@ -47,13 +93,32 @@ class Neo4jClient:
             lines = [line for line in fragment.splitlines()
                      if not line.strip().startswith("--")]
             stmt = "\n".join(lines).strip()
+            if modern_server and stmt.startswith("CREATE VECTOR INDEX"):
+                continue
             if stmt:
                 result = await self.run(stmt)
                 # Consume result so DDL actually executes (A58)
                 _ = result
+        if modern_server:
+            modern_indexes = {
+                "chunk_embeddings": "FOR (n:Chunk) ON n.embedding WITH [n.tenant]",
+                "community_embeddings": "FOR (n:Community) ON n.embedding WITH [n.tenant]",
+                "entity_embeddings": "FOR (n:Entity) ON n.embedding WITH [n.tenant]",
+                "community_summary_snapshot_embeddings": (
+                    "FOR (n:CommunitySummarySnapshot) ON n.embedding "
+                    "WITH [n.tenant, n.valid_from, n.valid_to, n.transaction_from, n.transaction_to]"
+                ),
+            }
+            for name, index_schema in modern_indexes.items():
+                await self.run(
+                    f"CREATE VECTOR INDEX {name} IF NOT EXISTS {index_schema} "
+                    "OPTIONS {indexConfig: {`vector.dimensions`: 3072, "
+                    "`vector.similarity_function`: 'cosine'}}"
+                )
         from graphrag.context_graph.schema import CONTEXT_GRAPH_SCHEMA
         for statement in CONTEXT_GRAPH_SCHEMA:
             await self.run(statement)
+        await self.detect_capabilities()
         log.info("neo4j.schema_initialized")
 
     async def get_corpus_state(self, tenant: str = "default") -> dict:
@@ -139,6 +204,7 @@ class Neo4jClient:
         valid_from: str | None = None,
         valid_to: str | None = None,
         tenant: str = "default",
+        source_id: str | None = None,
     ) -> str:
         """MERGE on the document's real identity, (tenant, filename) — not on
         doc_id, which is a fresh uuid4() every ingestion run and so can never
@@ -153,13 +219,19 @@ class Neo4jClient:
         """
         rows = await self.run(
             """
+            OPTIONAL MATCH (source:KGSource {tenant: $tenant, id: $source_id})
+            WITH source
+            WHERE $source_id IS NULL OR source IS NOT NULL
             MERGE (d:Document {tenant: $tenant, filename: $filename})
             ON CREATE SET d.id = $id, d.created_at = datetime(), d.recorded_at = datetime()
             SET d.ingested_at     = $ingested_at,
                 d.status          = 'done',
                 d.authority_level = $authority_level,
                 d.valid_from      = $valid_from,
-                d.valid_to        = $valid_to
+                d.valid_to        = $valid_to,
+                d.source_id       = $source_id
+            FOREACH (_ IN CASE WHEN source IS NULL THEN [] ELSE [1] END |
+              MERGE (d)-[:INGESTED_FROM]->(source))
             RETURN d.id AS doc_id
             """,
             id=doc_id,
@@ -169,7 +241,10 @@ class Neo4jClient:
             valid_from=valid_from,
             valid_to=valid_to,
             tenant=tenant,
+            source_id=source_id,
         )
+        if source_id and not rows:
+            raise ValueError("document source is missing or belongs to another tenant")
         return rows[0]["doc_id"] if rows else doc_id
 
     async def merge_chunk(self, chunk: Chunk, tenant: str = "default"):
@@ -532,13 +607,111 @@ class Neo4jClient:
         for entity_id in community.member_entity_ids:
             await self.run(
                 """
-                MATCH (e:Entity {id: $entity_id})
-                MATCH (c:Community {id: $community_id})
+                MATCH (e:Entity {id: $entity_id, tenant: $tenant})
+                MATCH (c:Community {id: $community_id, tenant: $tenant})
                 MERGE (e)-[:MEMBER_OF]->(c)
                 """,
                 entity_id=entity_id,
                 community_id=community.id,
+                tenant=community.tenant,
             )
+        if community.summary and community.embedding:
+            await self._snapshot_community_summary(community)
+
+    async def _snapshot_community_summary(self, community: Community) -> str:
+        """Append an immutable summary version and its evidence lineage."""
+        rows = await self.run(
+            """
+            MATCH (c:Community {tenant: $tenant, id: $community_id})
+            OPTIONAL MATCH (e:Entity {tenant: $tenant})-[:MEMBER_OF]->(c)
+            OPTIONAL MATCH (ch:Chunk {tenant: $tenant})-[:MENTIONS]->(e)
+            OPTIONAL MATCH (ch)-[:PART_OF]->(d:Document {tenant: $tenant})
+            RETURN collect(DISTINCT e.id) AS entity_ids,
+                   collect(DISTINCT ch.id) AS chunk_ids,
+                   collect(DISTINCT d.id) AS document_ids,
+                   collect(DISTINCT coalesce(toString(ch.updated_at), toString(ch.created_at), 'v1')) AS chunk_versions,
+                   collect(DISTINCT coalesce(toString(d.updated_at), toString(d.ingested_at), 'v1')) AS document_versions,
+                   collect(DISTINCT toString(d.valid_from)) AS valid_froms,
+                   collect(DISTINCT toString(d.valid_to)) AS valid_tos
+            """,
+            tenant=community.tenant,
+            community_id=community.id,
+        )
+        lineage = rows[0] if rows else {}
+        canonical = {
+            "community_id": community.id,
+            "tenant": community.tenant,
+            "level": community.level,
+            "summary": community.summary,
+            "entity_ids": sorted(value for value in lineage.get("entity_ids", []) if value),
+            "chunk_ids": sorted(value for value in lineage.get("chunk_ids", []) if value),
+            "document_ids": sorted(value for value in lineage.get("document_ids", []) if value),
+            "chunk_versions": sorted(value for value in lineage.get("chunk_versions", []) if value),
+            "document_versions": sorted(value for value in lineage.get("document_versions", []) if value),
+        }
+        content_hash = hashlib.sha256(
+            json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        snapshot_id = f"{community.id}:{content_hash[:20]}"
+        valid_froms = sorted(
+            value for value in lineage.get("valid_froms", []) if value and value != "None"
+        )
+        valid_tos = sorted(
+            value for value in lineage.get("valid_tos", []) if value and value != "None"
+        )
+        now = datetime.now(timezone.utc).isoformat()
+        await self.run(
+            """
+            MATCH (c:Community {tenant: $tenant, id: $community_id})
+            OPTIONAL MATCH (c)-[:HAS_SUMMARY_VERSION]->(current:CommunitySummarySnapshot)
+            WHERE current.transaction_to IS NULL
+            WITH c, current
+            FOREACH (_ IN CASE WHEN current IS NOT NULL AND current.content_hash <> $content_hash
+                               THEN [1] ELSE [] END |
+              SET current.transaction_to = datetime($now),
+                  current.valid_to = coalesce(current.valid_to, datetime($valid_from)))
+            MERGE (s:CommunitySummarySnapshot {tenant: $tenant, id: $snapshot_id})
+            ON CREATE SET s.community_id = $community_id, s.level = $level,
+                          s.summary = $summary, s.embedding = $embedding,
+                          s.content_hash = $content_hash,
+                          s.entity_ids = $entity_ids, s.chunk_ids = $chunk_ids,
+                          s.chunk_versions = $chunk_versions,
+                          s.document_ids = $document_ids,
+                          s.document_versions = $document_versions,
+                          s.valid_from = datetime($valid_from),
+                          s.valid_to = CASE WHEN $valid_to IS NULL THEN null ELSE datetime($valid_to) END,
+                          s.transaction_from = datetime($now), s.transaction_to = null,
+                          s.recorded_at = datetime($now)
+            MERGE (c)-[:HAS_SUMMARY_VERSION]->(s)
+            WITH s
+            UNWIND CASE WHEN size($chunk_ids) = 0 THEN [null] ELSE $chunk_ids END AS chunk_id
+            OPTIONAL MATCH (ch:Chunk {tenant: $tenant, id: chunk_id})
+            FOREACH (_ IN CASE WHEN ch IS NULL THEN [] ELSE [1] END |
+              MERGE (s)-[:SUPPORTED_BY]->(ch))
+            WITH DISTINCT s
+            UNWIND CASE WHEN size($document_ids) = 0 THEN [null] ELSE $document_ids END AS document_id
+            OPTIONAL MATCH (d:Document {tenant: $tenant, id: document_id})
+            FOREACH (_ IN CASE WHEN d IS NULL THEN [] ELSE [1] END |
+              MERGE (s)-[:DERIVED_FROM]->(d))
+            RETURN s.id AS snapshot_id
+            """,
+            tenant=community.tenant,
+            community_id=community.id,
+            snapshot_id=snapshot_id,
+            level=community.level,
+            summary=community.summary,
+            embedding=community.embedding,
+            content_hash=content_hash,
+            entity_ids=canonical["entity_ids"],
+            chunk_ids=canonical["chunk_ids"],
+            chunk_versions=canonical["chunk_versions"],
+            document_ids=canonical["document_ids"],
+            document_versions=canonical["document_versions"],
+            valid_from=valid_froms[-1] if valid_froms else now,
+            valid_to=valid_tos[0] if valid_tos else None,
+            now=now,
+        )
+        return snapshot_id
 
     async def clear_communities(self, tenant: str = "default") -> None:
         await self.run(
@@ -568,6 +741,37 @@ class Neo4jClient:
         as vector_search_communities, see that method's docstring and
         tasks/lessons.md A146.
         """
+        if self.__dict__.get("_filtered_vector_search", False) and tenant != "default":
+            return await self.run(
+                """
+                MATCH (c:Chunk)
+                  SEARCH c IN (
+                    VECTOR INDEX chunk_embeddings
+                    FOR $embedding
+                    WHERE c.tenant = $tenant
+                    LIMIT $top_k
+                  ) SCORE AS score
+                OPTIONAL MATCH (c)-[:PART_OF]->(d:Document {tenant: $tenant})
+                WHERE ($valid_at IS NULL OR (
+                    d IS NOT NULL
+                    AND (d.valid_from IS NULL OR d.valid_from <= datetime($valid_at))
+                    AND (d.valid_to IS NULL OR d.valid_to > datetime($valid_at))))
+                  AND ($transaction_at IS NULL OR (
+                    d IS NOT NULL AND (coalesce(d.recorded_at, d.created_at) IS NULL
+                    OR coalesce(d.recorded_at, d.created_at) <= datetime($transaction_at))))
+                  AND NOT EXISTS {
+                    MATCH (c)-[:MENTIONS]->(e:Entity {tenant: $tenant})
+                    WHERE e.quarantined = true
+                  }
+                RETURN c.id AS chunk_id, c.text AS text, score
+                ORDER BY score DESC LIMIT $top_k
+                """,
+                embedding=embedding,
+                tenant=tenant,
+                top_k=top_k,
+                valid_at=valid_at,
+                transaction_at=transaction_at,
+            )
         fetch_k = max(top_k * 20, 100)
         return await self.run(
             """
@@ -692,6 +896,82 @@ class Neo4jClient:
         fetch_k gives the tenant filter a much larger candidate pool before
         truncating to top_k.
         """
+        if ((valid_at or transaction_at) and tenant != "default"
+                and "community_summary_snapshot_embeddings"
+                in self.__dict__.get("_filtered_vector_indexes", set())):
+            fetch_k = max(top_k * 4, 20)
+            return await self.run(
+                """
+                MATCH (c:CommunitySummarySnapshot)
+                  SEARCH c IN (
+                    VECTOR INDEX community_summary_snapshot_embeddings
+                    FOR $embedding
+                    WHERE c.tenant = $tenant
+                    LIMIT $fetch_k
+                  ) SCORE AS score
+                WHERE ($valid_at IS NULL OR c.valid_from IS NULL OR c.valid_from <= datetime($valid_at))
+                  AND ($valid_at IS NULL OR c.valid_to IS NULL OR c.valid_to > datetime($valid_at))
+                  AND ($transaction_at IS NULL OR c.transaction_from IS NULL
+                       OR c.transaction_from <= datetime($transaction_at))
+                  AND ($transaction_at IS NULL OR c.transaction_to IS NULL
+                       OR c.transaction_to > datetime($transaction_at))
+                RETURN c.community_id AS community_id, c.summary AS summary,
+                       c.level AS level, score, c.id AS summary_snapshot_id,
+                       c.content_hash AS summary_content_hash
+                ORDER BY score DESC LIMIT $top_k
+                """,
+                fetch_k=fetch_k,
+                embedding=embedding,
+                tenant=tenant,
+                top_k=top_k,
+                valid_at=valid_at,
+                transaction_at=transaction_at,
+            )
+        if valid_at or transaction_at:
+            fetch_k = max(top_k * 20, 100)
+            return await self.run(
+                """
+                CALL db.index.vector.queryNodes(
+                  'community_summary_snapshot_embeddings', $fetch_k, $embedding
+                )
+                YIELD node AS c, score
+                WHERE ($tenant = 'default' OR c.tenant = $tenant)
+                  AND ($valid_at IS NULL OR c.valid_from IS NULL OR c.valid_from <= datetime($valid_at))
+                  AND ($valid_at IS NULL OR c.valid_to IS NULL OR c.valid_to > datetime($valid_at))
+                  AND ($transaction_at IS NULL OR c.transaction_from IS NULL
+                       OR c.transaction_from <= datetime($transaction_at))
+                  AND ($transaction_at IS NULL OR c.transaction_to IS NULL
+                       OR c.transaction_to > datetime($transaction_at))
+                RETURN c.community_id AS community_id, c.summary AS summary,
+                       c.level AS level, score, c.id AS summary_snapshot_id,
+                       c.content_hash AS summary_content_hash
+                ORDER BY score DESC LIMIT $top_k
+                """,
+                fetch_k=fetch_k,
+                embedding=embedding,
+                tenant=tenant,
+                top_k=top_k,
+                valid_at=valid_at,
+                transaction_at=transaction_at,
+            )
+        if self.__dict__.get("_filtered_vector_search", False) and tenant != "default":
+            return await self.run(
+                """
+                MATCH (c:Community)
+                  SEARCH c IN (
+                    VECTOR INDEX community_embeddings
+                    FOR $embedding
+                    WHERE c.tenant = $tenant
+                    LIMIT $top_k
+                  ) SCORE AS score
+                RETURN c.id AS community_id, c.summary AS summary,
+                       c.level AS level, score
+                ORDER BY score DESC LIMIT $top_k
+                """,
+                embedding=embedding,
+                tenant=tenant,
+                top_k=top_k,
+            )
         fetch_k = max(top_k * 20, 100)
         return await self.run(
             """

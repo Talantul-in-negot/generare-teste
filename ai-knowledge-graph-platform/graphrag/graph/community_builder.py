@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
-from uuid import uuid4
+import hashlib
 
 import networkx as nx
 import structlog
 
 from graphrag.core.config import get_settings
 from graphrag.core.models import Community
+from graphrag.graph.corpus_revision import CorpusMutation
 from graphrag.graph.neo4j_client import get_neo4j
 
 log = structlog.get_logger(__name__)
@@ -26,7 +26,18 @@ class CommunityBuilder:
         self._neo4j = get_neo4j()
         self._tenant = tenant
 
-    async def build(self) -> list[Community]:
+    def _community_id(self, level: int, members: list[str], kind: str = "structural") -> str:
+        canonical = "\0".join((self._tenant, kind, str(level), *sorted(members)))
+        return f"community-{hashlib.sha256(canonical.encode()).hexdigest()[:24]}"
+
+    async def build(self, *, publish_revision: bool = True) -> list[Community]:
+        """Build structural communities and publish the resulting graph state."""
+        if not publish_revision:
+            return await self._build()
+        async with CorpusMutation(self._neo4j, self._tenant, "community_rebuild"):
+            return await self._build()
+
+    async def _build(self) -> list[Community]:
         log.info("community_builder.start", tenant=self._tenant)
 
         entities = await self._neo4j.get_all_entities(tenant=self._tenant)
@@ -142,7 +153,7 @@ class CommunityBuilder:
                 if len(members) >= min_size:
                     communities.append(
                         Community(
-                            id=str(uuid4()),
+                            id=self._community_id(level, members),
                             level=level,
                             member_entity_ids=members,
                             member_count=len(members),
@@ -196,7 +207,7 @@ class CommunityBuilder:
                 if len(members) >= min_size:
                     communities.append(
                         Community(
-                            id=str(uuid4()),
+                            id=self._community_id(level, members, "louvain"),
                             level=level,
                             member_entity_ids=members,
                             member_count=len(members),
@@ -213,7 +224,7 @@ class CommunityBuilder:
             if len(members) >= 2:
                 communities.append(
                     Community(
-                        id=str(uuid4()),
+                        id=self._community_id(0, members, "component"),
                         level=0,
                         member_entity_ids=members,
                         member_count=len(members),
@@ -223,7 +234,14 @@ class CommunityBuilder:
 
     # ── HDBSCAN semantic community detection ──────────────────────────────────
 
-    async def build_semantic_communities(self) -> dict:
+    async def build_semantic_communities(self, *, publish_revision: bool = True) -> dict:
+        """Build semantic communities and publish the resulting graph state."""
+        if not publish_revision:
+            return await self._build_semantic_communities()
+        async with CorpusMutation(self._neo4j, self._tenant, "semantic_community_rebuild"):
+            return await self._build_semantic_communities()
+
+    async def _build_semantic_communities(self) -> dict:
         """
         Build semantic communities using HDBSCAN on entity embeddings.
 
@@ -261,7 +279,6 @@ class CommunityBuilder:
             return {"error": "hdbscan_missing"}
 
         # Fetch entities with embeddings
-        rows = await self._neo4j.get_all_entities(tenant=self._tenant)
         embed_rows = await self._neo4j.run(
             """
             MATCH (e:Entity {tenant: $tenant})
@@ -302,7 +319,7 @@ class CommunityBuilder:
         semantic_comms: list[Community] = []
         for label, members in cluster_map.items():
             sem_comm = Community(
-                id=str(uuid4()),
+                id=self._community_id(0, members, "semantic"),
                 level=0,
                 member_entity_ids=members,
                 member_count=len(members),

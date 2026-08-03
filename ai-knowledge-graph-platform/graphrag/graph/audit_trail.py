@@ -16,7 +16,6 @@ only queried.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -163,11 +162,14 @@ class AuditTrail:
         new_values: dict[str, Any] | None = None,
         changed_by: str = "system",
         source_doc_id: str = "",
+        tenant: str = "default",
     ) -> None:
         try:
             await self._neo4j.run(
                 """
-                MATCH (s:Entity {name: $src})-[r:RELATES_TO {relation: $relation}]->(t:Entity {name: $tgt})
+                OPTIONAL MATCH (s:Entity {name: $src, tenant: $tenant})
+                    -[r:RELATES_TO {relation: $relation, tenant: $tenant}]->
+                    (t:Entity {name: $tgt, tenant: $tenant})
                 WITH r LIMIT 1
                 CREATE (cl:ChangeLog {
                     id:            $log_id,
@@ -178,7 +180,8 @@ class AuditTrail:
                     changed_at:    datetime(),
                     old_values:    $old_values,
                     new_values:    $new_values,
-                    source_doc_id: $source_doc_id
+                    source_doc_id: $source_doc_id,
+                    tenant:        $tenant
                 })
                 """,
                 src=src_name,
@@ -190,6 +193,7 @@ class AuditTrail:
                 old_values=str(old_values or {}),
                 new_values=str(new_values or {}),
                 source_doc_id=source_doc_id,
+                tenant=tenant,
             )
         except Exception as exc:
             log.warning("audit_trail.relation_log_failed",

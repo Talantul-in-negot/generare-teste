@@ -8,9 +8,8 @@ import structlog
 
 from graphrag.agents.base_agent import BaseGraphRAGAgent
 from graphrag.core.config import get_settings
-from graphrag.core.models import Document, IngestMessage
+from graphrag.core.models import IngestMessage
 from graphrag.ingestion.chunker import chunk_document
-from graphrag.ingestion.document_loader import load_document
 from graphrag.ingestion.embedder import Embedder
 from graphrag.ingestion.extractor import Extractor
 from graphrag.ingestion.graph_writer import GraphWriter
@@ -111,6 +110,11 @@ class IngestionAgent(BaseGraphRAGAgent):
         doc    = extracted["doc"]
         chunks = extracted["chunks"]
 
+        # Cache readers fail open to live retrieval while this tenant is being
+        # mutated. The revision is advanced only after all writes and checks
+        # below complete, so no answer can be cached against a partial ingest.
+        await self._writer.begin_corpus_update(doc.tenant)
+
         # 1. Write document node. write_document may return a DIFFERENT id than
         # doc.id came in with — merge_document keys on (tenant, filename), so a
         # re-ingested document resolves to its existing id, not the fresh
@@ -178,6 +182,8 @@ class IngestionAgent(BaseGraphRAGAgent):
             except Exception as exc:
                 log.warning("ingestion_agent.wikidata_error", error=str(exc)[:120])
 
+        corpus_revision = await self._writer.complete_corpus_update(doc.tenant)
+
         log.info(
             "ingestion_agent.done",
             job_id=job_id,
@@ -187,6 +193,7 @@ class IngestionAgent(BaseGraphRAGAgent):
             wikidata_links=wikidata_links,
             validation_issues=maintenance_report["validation"]["total_issues"],
             new_conflicts=maintenance_report["new_conflicts"],
+            corpus_revision=corpus_revision,
         )
         return {
             "job_id": job_id,
@@ -196,4 +203,5 @@ class IngestionAgent(BaseGraphRAGAgent):
             "relations": len(all_relations),
             "wikidata_links": wikidata_links,
             "maintenance": maintenance_report,
+            "corpus_revision": corpus_revision,
         }

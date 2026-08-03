@@ -34,6 +34,7 @@ from uuid import uuid4
 import structlog
 
 from graphrag.core.config import get_settings, resolve_tenant_config
+from graphrag.graph.corpus_revision import CorpusMutation
 from graphrag.graph.neo4j_client import get_neo4j
 
 log = structlog.get_logger(__name__)
@@ -51,7 +52,14 @@ class PageRankComputer:
         self._neo4j = get_neo4j()
         self._tenant = tenant
 
-    async def compute_and_persist(self) -> dict:
+    async def compute_and_persist(self, *, publish_revision: bool = True) -> dict:
+        """Compute PageRank with cache reads disabled during persisted writes."""
+        if not publish_revision:
+            return await self._compute_and_persist()
+        async with CorpusMutation(self._neo4j, self._tenant, "pagerank_recompute"):
+            return await self._compute_and_persist()
+
+    async def _compute_and_persist(self) -> dict:
         log.info("pagerank.start", tenant=self._tenant)
 
         scores = await self._neo4j.run_pagerank(
@@ -66,7 +74,6 @@ class PageRankComputer:
 
         await self._neo4j.write_pagerank_scores(self._tenant, scores)
         await self.snapshot()
-
         log.info(
             "pagerank.done",
             tenant=self._tenant,

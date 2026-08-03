@@ -64,8 +64,9 @@ class OntologyRegistry:
             log.warning("New types found", new_types=result["new_types"])
     """
 
-    def __init__(self, neo4j_client):
+    def __init__(self, neo4j_client, tenant: str = "default"):
         self._neo4j = neo4j_client
+        self._tenant = tenant
         self._allowed_types: set[str] = set()
         self._known_relations: set[str] = set()
         self._migration_map: dict[str, str] = {}   # deprecated → canonical name
@@ -323,21 +324,23 @@ class OntologyRegistry:
         for old_rel, new_rel in self._migration_map.items():
             rows = await self._neo4j.run(
                 """
-                MATCH ()-[r:RELATES_TO {relation: $old}]->()
+                MATCH ()-[r:RELATES_TO {relation: $old, tenant: $tenant}]->()
                 WITH count(r) AS total
                 RETURN total
                 """,
                 old=old_rel,
+                tenant=self._tenant,
             )
             count = int(rows[0]["total"]) if rows else 0
             if count > 0:
                 await self._neo4j.run(
                     """
-                    MATCH ()-[r:RELATES_TO {relation: $old}]->()
+                    MATCH ()-[r:RELATES_TO {relation: $old, tenant: $tenant}]->()
                     SET r.relation = $new, r.migrated_from = $old
                     """,
                     old=old_rel,
                     new=new_rel,
+                    tenant=self._tenant,
                 )
                 await self.persist_migration(old_rel, new_rel, count)
                 log.info(
@@ -558,14 +561,15 @@ class OntologyRegistry:
 
 # ── Module-level singleton ─────────────────────────────────────────────────────
 
-_registry: OntologyRegistry | None = None
+_registries: dict[tuple[int, str], OntologyRegistry] = {}
 
 
 def get_ontology_registry(neo4j_client=None, tenant: str = "default") -> OntologyRegistry:
-    global _registry
-    if _registry is None:
-        if neo4j_client is None:
-            from graphrag.graph.neo4j_client import get_neo4j
-            neo4j_client = get_neo4j()
-        _registry = OntologyRegistry(neo4j_client)
-    return _registry
+    """Return an ontology registry isolated by Neo4j client and tenant."""
+    if neo4j_client is None:
+        from graphrag.graph.neo4j_client import get_neo4j
+        neo4j_client = get_neo4j()
+    key = (id(neo4j_client), tenant)
+    if key not in _registries:
+        _registries[key] = OntologyRegistry(neo4j_client, tenant=tenant)
+    return _registries[key]

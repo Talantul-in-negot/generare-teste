@@ -137,11 +137,12 @@ class ContradictionDetector(_ConflictStrategies):
         resolution: str,    # "resolved_authority" | "resolved_manual" | "false_positive"
         winner_doc_id: str = "",
         resolved_by: str = "system",
+        tenant: str = "default",
     ) -> None:
         """Mark a Conflict as resolved with a chosen outcome."""
         await self._neo4j.run(
             """
-            MATCH (c:Conflict {id: $id})
+            MATCH (c:Conflict {id: $id, tenant: $tenant})
             SET c.status        = $resolution,
                 c.resolved_at   = datetime(),
                 c.resolved_by   = $resolved_by,
@@ -151,6 +152,7 @@ class ContradictionDetector(_ConflictStrategies):
             resolution=resolution,
             resolved_by=resolved_by,
             winner_doc_id=winner_doc_id,
+            tenant=tenant,
         )
         log.info(
             "contradiction_detector.resolved",

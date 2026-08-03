@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta, timezone
 
 from graphrag.context_graph.models import (
-    AgentRun, Case, ContextManifest, Decision, DecisionOption, DecisionTrace,
-    Observation, OptionDisposition, PolicyEvaluation, PolicyResult,
+    AgentRun, Case, CGEpisode, ContextManifest, Decision, DecisionOption,
+    DecisionTrace, EpisodeRole, Observation, OptionDisposition, PolicyEvaluation, PolicyResult,
     PolicyVersion, ToolCall, ToolCallStatus,
 )
 from graphrag.context_graph.repository import ContextGraphRepository
@@ -68,13 +69,36 @@ class ContextGraphTraceService:
             policy_id=policy_id, version=policy_version, title="Data Privacy Policy",
             valid_from=now, valid_to=later, transaction_from=now, transaction_to=later,
         )
+        episode_answer = f"Selected governed option: {selected}."
+        episodes = [
+            CGEpisode(
+                id=f"episode-{placement_id}-user", tenant=tenant, run_id=run.id,
+                session_id=f"placement-{placement_id}", sequence=0,
+                role=EpisodeRole.USER, episode_type="case_question", content=question,
+                content_digest=hashlib.sha256(question.encode()).hexdigest(),
+                source_system="context-graph-api",
+                valid_from=now, valid_to=later,
+                transaction_from=now, transaction_to=later,
+            ),
+            CGEpisode(
+                id=f"episode-{placement_id}-agent", tenant=tenant, run_id=run.id,
+                session_id=f"placement-{placement_id}", sequence=1,
+                role=EpisodeRole.AGENT, episode_type="policy_disposition",
+                content=episode_answer,
+                content_digest=hashlib.sha256(episode_answer.encode()).hexdigest(),
+                source_system="context-graph-service",
+                valid_from=now, valid_to=later,
+                transaction_from=now, transaction_to=later,
+            ),
+        ]
         manifest = ContextManifest(
             id=f"manifest-{placement_id}", tenant=tenant, case_id=case.id, run_id=run.id,
             statement_ids=statement_ids, chunk_ids=chunk_ids, document_ids=document_ids,
             statement_versions=statement_versions, chunk_versions=chunk_versions,
             document_versions=document_versions,
             policy_version_ids=[policy.id], tool_call_ids=[tool_call.id],
-            observation_ids=[observation.id], model_provider=model_provider,
+            observation_ids=[observation.id], episode_ids=[episode.id for episode in episodes],
+            model_provider=model_provider,
             model_version=model_version, prompt_version=prompt_version,
             retrieval_mode=retrieval_mode, retrieval_config=retrieval_config or {},
             task_input=question, ontology_version="marketing-adtech/v1",
@@ -106,6 +130,7 @@ class ContextGraphTraceService:
         )
         trace = DecisionTrace(
             case=case, run=run, tool_calls=[tool_call], observations=[observation],
+            episodes=episodes,
             manifest=manifest, policy_versions=[policy], policy_evaluations=[evaluation],
             options=options, decision=decision,
         )

@@ -1,6 +1,5 @@
 """FastAPI application — AI Knowledge Graph & Ontology Platform API with OAuth 2.0."""
 
-import secrets
 from contextlib import asynccontextmanager
 
 import structlog
@@ -22,6 +21,8 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Run startup checks before accepting traffic, teardown on shutdown."""
+    from graphrag.observability.tracing import configure_tracing
+    configure_tracing("graphrag-api")
     # ── Startup ───────────────────────────────────────────────────────────────
     # Verify Redis session store connectivity.
     # When session_store_strict=true this raises immediately on failure so
@@ -72,6 +73,23 @@ app = FastAPI(  # noqa: E302 — rate limiter attached below
     lifespan=lifespan,
 )
 
+
+@app.middleware("http")
+async def correlation_middleware(request, call_next):
+    from graphrag.observability.correlation import correlation_context, new_correlation_id
+    from graphrag.observability.tracing import trace_span
+
+    incoming = request.headers.get("X-Correlation-ID", "").strip()
+    correlation_id = incoming if 0 < len(incoming) <= 128 and incoming.isprintable() else new_correlation_id()
+    request.state.correlation_id = correlation_id
+    with correlation_context(correlation_id), trace_span(
+        "http.request", http_method=request.method, http_route=request.url.path,
+        correlation_id=correlation_id,
+    ):
+        response = await call_next(request)
+    response.headers["X-Correlation-ID"] = correlation_id
+    return response
+
 # ── Rate limiting ─────────────────────────────────────────────────────────────
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -105,7 +123,8 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Requested-With"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Requested-With", "X-Correlation-ID"],
+    expose_headers=["X-Correlation-ID"],
 )
 
 # ── Routes ────────────────────────────────────────────────────────────────────
