@@ -1,0 +1,9 @@
+SYNTHETIC DEMO DATA ONLY - NO REAL HCP OR PERSONAL DATA
+
+Document ID: SYNTHETIC-HCP-Cardiology-Profile-v1
+HCP profile: Fictional cardiology specialist
+Specialty: Cardiology
+Market: Germany
+
+This fictional role profile represents a commercial interaction constraint. It
+does not identify a real healthcare professional and contains no patient data.

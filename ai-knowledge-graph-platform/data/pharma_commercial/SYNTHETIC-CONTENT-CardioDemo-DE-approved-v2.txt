@@ -1,0 +1,15 @@
+SYNTHETIC DEMO DATA ONLY - APPROVED CONTROLLED CONTENT
+
+Document ID: SYNTHETIC-CONTENT-CardioDemo-DE-approved-v2
+Title: CardioDemo Germany Cardiology Detail Aid
+Version: v2
+Status: approved
+Valid from: 2026-01-01
+Product: CardioDemo
+Synthetic indication: Demo Cardiac Condition
+Market: Germany
+HCP specialty: Cardiology
+Supersedes: SYNTHETIC-CONTENT-CardioDemo-DE-expired-v1
+
+This current, fictional content version is the allowed option for the synthetic
+scenario. It contains no medical advice or real product claim.

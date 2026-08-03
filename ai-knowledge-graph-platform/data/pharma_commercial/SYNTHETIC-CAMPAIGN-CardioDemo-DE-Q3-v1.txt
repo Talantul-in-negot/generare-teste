@@ -1,0 +1,10 @@
+SYNTHETIC DEMO DATA ONLY - NOT AN ACTIVE CAMPAIGN
+
+Document ID: SYNTHETIC-CAMPAIGN-CardioDemo-DE-Q3-v1
+Campaign: CardioDemo Germany Q3
+Requested product: CardioDemo
+Requested indication: Demo Cardiac Condition
+Requested HCP specialty: Cardiology
+
+The campaign may use only current content approved for Germany, the stated
+synthetic indication, and the stated specialty.

@@ -53,7 +53,8 @@ class GraphWriter:
         self._ontology               = get_ontology_registry(self._neo4j)
         self._changed_by             = changed_by
         self._registry_loaded_tenants: set[str] = set()   # per-tenant load tracking
-        self._ontology_loaded        = False
+        self._ontology_loaded_tenants: set[str] = set()
+        self._ontology_tenant        = "default"
         self._cfg                    = get_settings()
 
     async def begin_corpus_update(self, tenant: str) -> None:
@@ -95,14 +96,17 @@ class GraphWriter:
         if tenant not in self._registry_loaded_tenants:
             await registry.load()
             self._registry_loaded_tenants.add(tenant)
-        if not self._ontology_loaded:
+        if self._ontology_tenant != tenant:
+            self._ontology = get_ontology_registry(self._neo4j, tenant=tenant)
+            self._ontology_tenant = tenant
+        if tenant not in self._ontology_loaded_tenants:
             await self._ontology.load(
                 self._cfg.ingestion.get(
                     "entity_types",
                     ["PERSON", "ORG", "PRODUCT", "CONCEPT", "LOCATION", "EVENT"],
                 )
             )
-            self._ontology_loaded = True
+            self._ontology_loaded_tenants.add(tenant)
 
     # ── Document ───────────────────────────────────────────────────────────────
 

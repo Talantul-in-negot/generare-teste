@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from graphrag.core.models import Chunk, Entity, Relation
 
 
@@ -44,6 +42,27 @@ def _build_writer():
         writer._cfg = MagicMock()
         writer._cfg.graph = {}
     return writer
+
+
+class TestOntologyTenantWiring:
+    async def test_ensure_registry_uses_tenant_scoped_ontology(self):
+        writer = _build_writer()
+        writer._ontology_loaded_tenants = set()
+        writer._ontology_tenant = "default"
+        writer._cfg.ingestion = {"entity_types": ["PERSON", "CONCEPT"]}
+        alias_registry = MagicMock()
+        alias_registry.load = AsyncMock()
+        ontology = MagicMock()
+        ontology.load = AsyncMock()
+
+        with (
+            patch("graphrag.ingestion.graph_writer.get_alias_registry", return_value=alias_registry),
+            patch("graphrag.ingestion.graph_writer.get_ontology_registry", return_value=ontology) as get_ontology,
+        ):
+            await writer._ensure_registry("pharma")
+
+        get_ontology.assert_called_once_with(writer._neo4j, tenant="pharma")
+        ontology.load.assert_awaited_once_with(["PERSON", "CONCEPT"])
 
 
 class TestWriteEntities:

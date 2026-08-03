@@ -36,7 +36,7 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="repla
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import structlog
+import structlog  # noqa: E402  # ROOT must be added to sys.path first.
 log = structlog.get_logger("ingest_corpus")
 
 # Per-tenant corpus configuration. Predecessors must sort before successors
@@ -176,6 +176,32 @@ def _telecom_corpus_config() -> dict:
     }
 
 
+def _pharma_corpus_config() -> dict:
+    """Derive the synthetic commercial-pharma corpus from its ontology."""
+    from graphrag.graph.domain_ontology import (
+        get_ontology_path_for_tenant,
+        load_domain_ontology,
+    )
+
+    ontology_path = get_ontology_path_for_tenant("pharma")
+    ontology = load_domain_ontology(ontology_path) if ontology_path else {}
+    prefixes = ontology.get("document_prefixes", {}) or {}
+    authority_map = {
+        prefix: spec["authority"]
+        for prefix, spec in sorted(prefixes.items(), key=lambda kv: -len(kv[0]))
+    }
+    supersession_map: dict[str, list[str]] = {}
+    for chain in ontology.get("supersession_chains", []) or []:
+        supersession_map.setdefault(chain["successor"], []).append(chain["predecessor"])
+
+    return {
+        "corpus_dir": ROOT / "data" / "pharma_commercial",
+        "recursive": False,
+        "authority_map": authority_map,
+        "supersession_map": supersession_map,
+    }
+
+
 def _corpus_config(tenant: str) -> dict:
     if tenant == "automotive":
         return _automotive_corpus_config()
@@ -183,6 +209,8 @@ def _corpus_config(tenant: str) -> dict:
         return _marketing_corpus_config()
     if tenant == "telecom":
         return _telecom_corpus_config()
+    if tenant == "pharma":
+        return _pharma_corpus_config()
     return _CORPUS_CONFIGS.get(tenant, _CORPUS_CONFIGS["aerospace"])
 
 
@@ -252,7 +280,7 @@ async def ingest_all(
     wipe: bool,
     tenant: str = "aerospace",
 ) -> int:
-    from graphrag.core.models import Document, IngestMessage
+    from graphrag.core.models import IngestMessage
     from graphrag.graph.neo4j_client import get_neo4j
     from graphrag.graph.inference_engine import ForwardChainingEngine
     from graphrag.graph.graph_snapshots import GraphSnapshotService
@@ -301,7 +329,7 @@ async def ingest_all(
         applied = 0
         for stmt in schema_path.read_text(encoding="utf-8").split(";"):
             stmt = "\n".join(
-                l for l in stmt.splitlines() if not l.strip().startswith("--")
+                line for line in stmt.splitlines() if not line.strip().startswith("--")
             ).strip()
             if not stmt:
                 continue
@@ -325,7 +353,7 @@ async def ingest_all(
         for p in paths:
             level = _authority_level(p.name, authority_map)
             print(f"    {p.relative_to(corpus_dir)!s:50s}  authority={level}")
-        print(f"\n  Pass --commit to write to Neo4j.\n")
+        print("\n  Pass --commit to write to Neo4j.\n")
         await neo4j.close()
         return 0
 
@@ -546,7 +574,7 @@ async def ingest_all(
         print(f"       WARNING: inference failed — {exc}")
 
     # ── Real counts from Neo4j ────────────────────────────────────────────────
-    print(f"\n[*] Querying real graph counts from Neo4j...")
+    print("\n[*] Querying real graph counts from Neo4j...")
     try:
         rows = await neo4j.run(
             """
@@ -576,7 +604,7 @@ async def ingest_all(
     )
 
     # ── Snapshot ──────────────────────────────────────────────────────────────
-    print(f"\n[*] Creating graph snapshot...")
+    print("\n[*] Creating graph snapshot...")
     try:
         snap_svc = GraphSnapshotService(neo4j)
         snap_id = await snap_svc.create_snapshot(
@@ -599,7 +627,7 @@ async def ingest_all(
     print(f"  Chunks processed    : {total_chunks}")
     print(f"  Entities (pipeline) : {total_entities}")
     print(f"  Relations (pipeline): {total_relations}")
-    print(f"  ---")
+    print("  ---")
     print(f"  Entities in Neo4j   : {neo4j_entities}  (after alias dedup)")
     print(f"  Edges in Neo4j      : {neo4j_edges}  (asserted + inferred)")
     print(f"  Open conflicts      : {neo4j_conflicts}")
@@ -636,7 +664,7 @@ def main() -> None:
     parser.add_argument("--doc",    default=None,
                         help="Filter to document filename substring(s), comma-separated")
     parser.add_argument("--tenant", default="aerospace",
-                        choices=sorted(set(_CORPUS_CONFIGS) | {"automotive", "marketing"}),
+                        choices=sorted(set(_CORPUS_CONFIGS) | {"automotive", "marketing", "pharma", "telecom"}),
                         help="Tenant corpus to ingest (default: aerospace)")
     parser.add_argument("--reconcile-supersession", action="store_true",
                         help="Patch SUPERSEDES edges on an already-ingested tenant from "

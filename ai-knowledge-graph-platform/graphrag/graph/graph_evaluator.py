@@ -286,7 +286,7 @@ class GraphEvaluator:
             WHERE ($tenant = 'default' OR c.tenant = $tenant)
             OPTIONAL MATCH (e)-[r:RELATES_TO]->(t:Entity)
             WHERE ($tenant = 'default' OR r.tenant = $tenant)
-            RETURN e.name AS source, c.id AS community_id,
+            RETURN e.name AS source, c.id AS community_id, c.level AS community_level,
                    collect(DISTINCT t.name) AS targets
             """,
             tenant=tenant,
@@ -296,9 +296,17 @@ class GraphEvaluator:
 
         import networkx as nx
 
+        # CommunityBuilder stores a hierarchy: an entity can legitimately be
+        # in one community at every Leiden level. Modularity, however, accepts
+        # one flat partition only. Use the finest base level and deterministically
+        # resolve stale duplicate memberships, then add singleton communities
+        # for graph nodes not assigned at that level.
+        base_level = min(int(row.get("community_level") or 0) for row in rows)
         graph = nx.Graph()
         communities: dict[str, set[str]] = {}
         for row in rows:
+            if int(row.get("community_level") or 0) != base_level:
+                continue
             source = row["source"]
             graph.add_node(source)
             communities.setdefault(row["community_id"], set()).add(source)
@@ -306,7 +314,15 @@ class GraphEvaluator:
                 if target:
                     graph.add_edge(source, target)
 
-        partition = [members for members in communities.values() if members]
+        owner_by_node: dict[str, str] = {}
+        partition_by_id: dict[str, set[str]] = {}
+        for community_id, members in sorted(communities.items()):
+            for member in sorted(members):
+                if member not in owner_by_node:
+                    owner_by_node[member] = community_id
+                    partition_by_id.setdefault(community_id, set()).add(member)
+        partition = [members for members in partition_by_id.values() if members]
+        partition.extend({node} for node in graph if node not in owner_by_node)
         if len(partition) < 2 or graph.number_of_edges() == 0:
             return {}
 

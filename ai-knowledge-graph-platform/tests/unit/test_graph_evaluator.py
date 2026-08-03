@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from graphrag.graph.graph_evaluator import GraphEvaluator
 
 
@@ -63,6 +61,23 @@ class TestCommunityModularity:
         evaluator = _make_evaluator(rows)
         result = await evaluator.community_modularity(tenant="acme")
         assert result == {}
+
+    async def test_hierarchical_memberships_are_reduced_to_one_partition(self) -> None:
+        """Leiden levels overlap by design; NetworkX modularity must not see them all."""
+        rows = [
+            {"source": "a1", "community_id": "level-0-a", "community_level": 0, "targets": ["a2"]},
+            {"source": "a2", "community_id": "level-0-a", "community_level": 0, "targets": ["a1"]},
+            {"source": "b1", "community_id": "level-0-b", "community_level": 0, "targets": ["b2"]},
+            {"source": "b2", "community_id": "level-0-b", "community_level": 0, "targets": ["b1"]},
+            {"source": "a1", "community_id": "level-1-all", "community_level": 1, "targets": ["a2"]},
+            {"source": "b1", "community_id": "level-1-all", "community_level": 1, "targets": ["b2"]},
+        ]
+        evaluator = _make_evaluator(rows)
+
+        result = await evaluator.community_modularity(tenant="acme")
+
+        assert result["community_count"] == 2
+        assert result["modularity"] > 0
 
     async def test_result_included_in_full_report(self) -> None:
         """full_report() must call community_modularity and thread its

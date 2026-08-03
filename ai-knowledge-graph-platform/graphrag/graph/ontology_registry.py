@@ -126,17 +126,22 @@ class OntologyRegistry:
             self._migration_map = {
                 str(k).upper(): str(v).upper() for k, v in raw_map.items()
             }
-            # Load domain ontology if path is configured
+            # A configured path overrides tenant convention. Otherwise, each
+            # tenant automatically owns config/ontologies/{tenant}_*.yml.
             domain_path = onto_cfg.get("domain_ontology_path", "") or ""
-            if domain_path:
-                from graphrag.graph.domain_ontology import (
-                    load_domain_ontology,
-                    get_relation_rules,
-                    get_type_hierarchy_pairs,
-                    assert_valid_ontology,
-                )
-                from graphrag.core.config import ROOT
-                full_path = ROOT / domain_path
+            from graphrag.graph.domain_ontology import (
+                assert_valid_ontology,
+                get_ontology_path_for_tenant,
+                get_relation_rules,
+                get_type_hierarchy_pairs,
+                load_domain_ontology,
+            )
+            from graphrag.core.config import ROOT
+
+            full_path = ROOT / domain_path if domain_path else get_ontology_path_for_tenant(
+                self._tenant, ROOT / "config" / "ontologies"
+            )
+            if full_path:
                 ontology  = load_domain_ontology(full_path)
                 if ontology:
                     assert_valid_ontology(ontology, source=str(full_path))
@@ -145,7 +150,7 @@ class OntologyRegistry:
                     for child, _ in get_type_hierarchy_pairs(ontology):
                         self._allowed_types.add(child)
                     log.info("ontology_registry.domain_ontology_loaded",
-                             path=domain_path,
+                             path=str(full_path),
                              added_types=len(get_type_hierarchy_pairs(ontology)),
                              added_relations=len(get_relation_rules(ontology)))
         except (AttributeError, KeyError, TypeError) as exc:
@@ -159,9 +164,13 @@ class OntologyRegistry:
         self._known_relations = {r["rel"] for r in rows if r.get("rel")}
 
         # Compute version hash from current allowed types
-        schema_hash = hashlib.sha256(
-            json.dumps(sorted(entity_types)).encode()
-        ).hexdigest()[:16]
+        schema_hash = hashlib.sha256(json.dumps({
+            "types": sorted(self._allowed_types),
+            "domain_rules": {
+                relation: sorted(f"{source}:{target}" for source, target in pairs)
+                for relation, pairs in sorted(self._domain_rules.items())
+            },
+        }, sort_keys=True).encode()).hexdigest()[:16]
 
         # Upsert OntologyVersion node
         result = await self._neo4j.run(

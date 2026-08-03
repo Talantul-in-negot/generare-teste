@@ -31,7 +31,7 @@ def _ontology(type_hierarchy=None, **metadata):
 def test_all_shipped_ontologies_pass_lifecycle_gate():
     for name in (
         "aerospace_regulatory.yml", "automotive_iatf.yml",
-        "marketing_adtech.yml", "synthetic_large.yml", "telecom_oss.yml",
+        "marketing_adtech.yml", "pharma_commercial.yml", "synthetic_large.yml", "telecom_oss.yml",
     ):
         report = validate_ontology_yaml(f"config/ontologies/{name}")
         assert report["valid"] is True

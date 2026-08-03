@@ -9,9 +9,7 @@ Bayesian merge formula downstream cannot be corrupted by out-of-range values.
 
 from __future__ import annotations
 
-import asyncio
 import json
-import re
 
 import structlog
 
@@ -162,7 +160,7 @@ class Extractor:
         # ── Ontology validation ───────────────────────────────────────
         try:
             from graphrag.graph.ontology_registry import get_ontology_registry
-            registry = get_ontology_registry()
+            registry = get_ontology_registry(tenant=chunk.tenant)
             if registry._loaded:
                 registry.validate_extraction(entities, relations)
         except ImportError:
