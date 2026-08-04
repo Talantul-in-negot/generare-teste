@@ -1,0 +1,557 @@
+{
+  "run_at": "2026-08-04T03:39:58.886782+00:00",
+  "tenant": "aerospace",
+  "n_questions": 33,
+  "candidate_pool_k": 50,
+  "final_top_k": 10,
+  "lambda": 0.5,
+  "current": {
+    "hit_rate": 0.9696969696969697,
+    "mean_coverage": 0.9292929292929293,
+    "mrr": 0.7808080808080806
+  },
+  "mmr": {
+    "hit_rate": 0.9696969696969697,
+    "mean_coverage": 0.8434343434343434,
+    "mrr": 0.772053872053872
+  },
+  "mrr_improved": 1,
+  "mrr_regressed": 4,
+  "mrr_tied": 28,
+  "mmr_latency_ms": {
+    "mean_ms": 11.283624239943244,
+    "p50_ms": 10.238599992590025,
+    "p95_ms": 18.49779998883605,
+    "max_ms": 21.643600019160658
+  },
+  "per_question": [
+    {
+      "id": "SH-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 5.918399983784184,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "SH-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 8.835899992845953,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "SH-03",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 10.152899980312213,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "mmr": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "SH-04",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 7.999599998584017,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "SH-05",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 15.38050000090152,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "SH-06",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 13.649400003487244,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "SH-07",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 8.721899997908622,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "SH-08",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 8.748099993681535,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "MH-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 12.787200015736744,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.5
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.5
+      }
+    },
+    {
+      "id": "MH-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 10.274100000970066,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "MH-03",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 8.014500024728477,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "MH-04",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 9.839600010309368,
+      "current": {
+        "hit": true,
+        "coverage": 0.5,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 0.5,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "MH-05",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 9.847599983913824,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 0.6666666666666666,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "MH-06",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 11.742799979401752,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "CON-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 6.816000008257106,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "CON-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 15.982400014763698,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "AUT-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 5.791000003227964,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.2
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 0.5,
+        "mrr": 0.16666666666666666
+      }
+    },
+    {
+      "id": "AUT-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 15.110699983779341,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "AUT-03",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 15.775899984873831,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.2
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.2
+      }
+    },
+    {
+      "id": "INF-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 9.215900005074218,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.5
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 0.3333333333333333,
+        "mrr": 0.3333333333333333
+      }
+    },
+    {
+      "id": "INF-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 12.783999991370365,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.5
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 0.5,
+        "mrr": 0.5
+      }
+    },
+    {
+      "id": "NEG-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 8.53990000905469,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.2
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.5
+      }
+    },
+    {
+      "id": "NEG-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 12.05279998248443,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.5
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.3333333333333333
+      }
+    },
+    {
+      "id": "TMP-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 9.740899986354634,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 0.6666666666666666,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "TMP-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 9.97719998122193,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "TMP-03",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 10.238599992590025,
+      "current": {
+        "hit": true,
+        "coverage": 0.6666666666666666,
+        "mrr": 0.3333333333333333
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 0.6666666666666666,
+        "mrr": 0.3333333333333333
+      }
+    },
+    {
+      "id": "PRE-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 7.746999996015802,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "PRE-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 11.305699998047203,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.3333333333333333
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.1111111111111111
+      }
+    },
+    {
+      "id": "CAL-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 13.134800014086068,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "AGT-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 15.376900002593175,
+      "current": {
+        "hit": true,
+        "coverage": 0.5,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 0.5,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "AGT-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 18.49779998883605,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 0.5
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 0.5,
+        "mrr": 0.5
+      }
+    },
+    {
+      "id": "CTX-01",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 10.715999989770353,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    },
+    {
+      "id": "CTX-02",
+      "candidate_pool_size": 50,
+      "chunks_with_embedding": 50,
+      "mmr_latency_ms": 21.643600019160658,
+      "current": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      },
+      "mmr": {
+        "hit": true,
+        "coverage": 1.0,
+        "mrr": 1.0
+      }
+    }
+  ]
+}

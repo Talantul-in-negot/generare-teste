@@ -572,24 +572,19 @@ automotive corpus ingested to get the other half of this decision.
 
 ## When to add MMR (Maximal Marginal Relevance) reranking
 
-Not currently planned, though the cost case is favorable. Measured via
-`scripts/benchmark_mmr_latency.py` (see `tasks/lessons.md` A158, a
-fully-synthetic micro-benchmark — no Neo4j, no corpus dependency):
-selection cost is negligible, mean 0.36–0.49ms / p95 under 1.2ms per
-top-5/top-10 selection over a 50-candidate pool — roughly 4 orders of
-magnitude cheaper than SPLADE's measured cost above. Unlike SPLADE, this
-doesn't need a new model or dependency; `vector_search_chunks`
-(`graphrag/graph/neo4j_client.py:766`) would just need to also return
-`c.embedding`, and the natural integration point is the existing
-lexical-diversity step in `local_search.py:237-264` (same position,
-embedding-similarity check instead of filename/text-ratio).
-
-The retrieval-quality gain this would need to justify remains **unmeasured**,
-for the identical reason as SPLADE — the aerospace/automotive golden
-corpora aren't ingested in the current environment. A cheap-and-unproven
-mechanism isn't a green light on its own: revisit once a corpus is ingested
-and `expected_citations`-based coverage/MRR can actually be compared
-against the existing lexical-diversity mechanism (would MMR catch
-semantically-redundant chunks worded differently across documents that the
-filename/text-ratio checks miss — that's the concrete gap to check for,
-not "is MMR generically better").
+**Not building it — measured, not just unproven.** Cost is negligible
+(`scripts/benchmark_mmr_latency.py`, `tasks/lessons.md` A158: synthetic,
+mean 0.36–0.49ms/selection; `scripts/benchmark_mmr_quality.py`, A159:
+mean 11.3ms on real embeddings, still ~4 orders of magnitude cheaper than
+SPLADE's +2072ms), but the quality delta on this pipeline's real aerospace
+corpus (33 golden questions) is **mildly negative**: coverage 0.929→0.843
+(−0.086), MRR 0.781→0.772 (−0.009), 1 question improved vs. 4 regressed
+vs. 28 tied. Most likely cause: this pipeline already has a
+document-coverage lexical-diversity step (`local_search.py:237-264`) doing
+real diversity work; MMR's embedding-similarity notion of "diversity" is
+document-agnostic and can demote a relevant same-document chunk in favor
+of a different-document chunk that looks diverse but is less relevant —
+the two mechanisms optimize different notions of "redundant" and can work
+against each other rather than stacking. Revisit only if the existing
+lexical-diversity step is removed or substantially changed — this verdict
+is about MMR *stacked on top of* that mechanism, not MMR in isolation.

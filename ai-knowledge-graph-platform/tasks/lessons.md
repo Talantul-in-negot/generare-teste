@@ -5876,3 +5876,70 @@ still needs the corpus-ingestion half to be answerable.
 
 No tests added, no production code touched — same one-off-script
 convention as A157. `evals/mmr_latency_results.json` holds the raw run.
+
+## A159 — Why A157/A158 came back empty: a Neo4j container was silently attached to an orphaned volume. And: MMR regresses quality on this pipeline, measured
+
+**Root cause of the empty-corpus problem in A157/A158, found and fixed.**
+`docker inspect graphrag_neo4j` showed the running container mounted
+`ai-knowledge-graph-platform_neo4j_modern_data`/`_modern_logs` on image
+`neo4j:2026.06-community` — neither of which `docker-compose.yml` declares
+(it pins `neo4j:5.20-community` on `neo4j_data`/`neo4j_logs`, and
+`git log -S"neo4j_modern"` found zero commits ever introducing that name).
+The container was started from an uncommitted local edit or a manual
+`docker run`, outside anything tracked in git, and silently diverged from
+the repo's declared config — the healthcheck stayed green throughout
+because the container itself was fine, just attached to the wrong data.
+The real `neo4j_data`/`neo4j_logs` volumes were never deleted — `docker
+volume ls` showed them sitting unused the whole time. Fixed with explicit
+user approval: `docker compose stop neo4j && docker compose rm -f neo4j &&
+docker compose up -d neo4j`, recreating the container from the actual
+compose file. Confirmed after: `automotive=30`, `aerospace=12`,
+`marketing=4` documents, matching the counts referenced in earlier
+entries (A136 et al.) — the data was never lost, just unreachable from
+the container that happened to be running. The `pharma` tenant (7 docs,
+A157/A158) is now itself in the same position — inaccessible from this
+container, sitting in the abandoned `_modern` volume — same failure mode,
+just inverted; easy to re-ingest via `scripts/demo_pharma_commercial.py`
+if needed again.
+
+**MMR quality re-measured on the real aerospace corpus** (`scripts/benchmark_mmr_quality.py`,
+new file — imports `_mmr_select`/`LAMBDA` from A158's
+`benchmark_mmr_latency.py` rather than reimplementing, so both scripts
+provably measure the same algorithm). Same golden set as A157 (33
+questions with `expected_citations`), same production candidate-pool
+step (`vector_search_chunks` + `HybridBM25Search.search`, `top_k=50`).
+New requirement MMR has that SPLADE didn't: real `Chunk.embedding`
+vectors, fetched via one extra read-only Cypher query
+(`_chunk_embeddings`, mirrors the existing `_chunk_doc_map` pattern — no
+production code changed). Design note worth keeping: RRF scores
+(~0.003–0.016) aren't scale-comparable to cosine similarity ([-1,1]), so
+feeding them raw into `λ*relevance - (1-λ)*similarity` would let the
+diversity term dominate regardless of relevance — min-max normalized RRF
+scores to [0,1] per query's candidate pool before running MMR so λ=0.5 is
+a meaningful balance.
+
+**Result: MMR mildly regresses this pipeline, not improves it.**
+current (BM25+vector RRF, unmodified production ranking): hit=0.970,
+coverage=0.929, mrr=0.781. MMR-reranked: hit=0.970 (unchanged), coverage=0.843
+(−0.086), mrr=0.772 (−0.009). Per-question MRR: 1 improved, 4 regressed, 28
+tied. Latency confirmed cheap on real embeddings too (mean 11.3ms, p95
+18.5ms — higher than A158's synthetic ~0.4ms due to real numpy
+allocation/normalization overhead, but still four orders of magnitude
+below SPLADE's measured +2072ms).
+
+**Why it regresses, most likely**: this pipeline already has a
+document-coverage lexical-diversity step (`local_search.py:237-264`) doing
+real diversity work before MMR would ever run. MMR's embedding-similarity
+notion of "diversity" is document-agnostic — it can demote a highly
+relevant chunk from the *same* document the lexical-diversity step
+correctly protected, in favor of a different-document chunk that looks
+diverse by embedding distance but is less relevant to the actual citation.
+The two diversity mechanisms optimize different notions of "redundant" and
+can work against each other rather than stacking.
+
+**Decision**: not building MMR. Unlike SPLADE (blocked by cost), MMR is
+blocked by measured evidence it makes this specific pipeline's retrieval
+quality slightly worse — a data-backed "no," not an absence of data.
+
+No tests added, no production code touched.
+`evals/mmr_quality_results.json` holds the raw run.
