@@ -118,6 +118,19 @@ class Opportunity(BaseModel):
     is_open: bool = True
 
 
+class OpportunityStageChange(BaseModel):
+    """Increment 10 — an append-only record of one stage transition, written by
+    CrmRepository.upsert_opportunity() whenever the incoming stage differs from
+    the previously persisted one. Without this, only the CURRENT stage was ever
+    knowable — 'did the deal advance after sharing content X' has no answer
+    without the stage value at two points in time."""
+    opportunity_id: str
+    workspace_id: str
+    from_stage: str
+    to_stage: str
+    changed_at: datetime
+
+
 class OpportunityContactRole(BaseModel):
     role_id: str
     workspace_id: str

@@ -8,7 +8,7 @@ not itself a tenant-isolation boundary.
 from __future__ import annotations
 
 from src.domain.identity import crm_entity_id
-from src.domain.knowledge import AssetView, ContentAsset
+from src.domain.knowledge import AssetView, ContentAsset, Share
 from src.ingestion.adapters.base import ParsedRecord, compute_content_hash
 
 
@@ -52,4 +52,25 @@ class ShowpadAdapter:
             content_asset_id=content_asset_id,
             viewer_contact_id=viewer_contact_id,
             viewed_at=raw["viewed_at"],
+        )
+
+    def parse_share(
+        self, workspace_id: str, content_asset_id: str, shared_with_contact_id: str, raw: dict,
+        *, shared_by_seller_id: str | None = None, opportunity_id: str | None = None,
+        triggered_by_claim_id: str | None = None,
+    ) -> Share:
+        """Same append-only-event shape as parse_asset_view — a Share is a
+        thing that happened, not a versioned CRM-style record, so no
+        reconciliation is needed here either."""
+        external_id = raw["id"]
+        share_id = crm_entity_id(workspace_id, self.source_system, "Share", external_id)
+        return Share(
+            share_id=share_id,
+            workspace_id=workspace_id,
+            content_asset_id=content_asset_id,
+            shared_with_contact_id=shared_with_contact_id,
+            shared_by_seller_id=shared_by_seller_id,
+            shared_at=raw["shared_at"],
+            opportunity_id=opportunity_id,
+            triggered_by_claim_id=triggered_by_claim_id,
         )

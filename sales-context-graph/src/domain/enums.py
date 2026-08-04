@@ -68,3 +68,29 @@ class ConflictStatus(StrEnum):
     OPEN = "open"
     RESOLVED = "resolved"
     FALSE_POSITIVE = "false_positive"
+
+
+class StakeholderRole(StrEnum):
+    """Increment 12 — MEDDIC-style buying-committee role vocabulary.
+
+    Only UNKNOWN is actually assigned by src/resolution/stakeholder_inference.py
+    today — role *classification* from call content would need either an LLM
+    or a much larger rule set than this vertical slice's honest scope covers
+    (see that module's docstring). The other values exist so the field is
+    correctly typed for when a real classification signal is added, not
+    because anything currently produces them."""
+    ECONOMIC_BUYER = "ECONOMIC_BUYER"
+    CHAMPION = "CHAMPION"
+    TECHNICAL_BUYER = "TECHNICAL_BUYER"
+    INFLUENCER = "INFLUENCER"
+    UNKNOWN = "UNKNOWN"
+
+
+class ConflictType(StrEnum):
+    """Increment 11 — what kind of contradiction a Conflict records. Only one
+    strategy is implemented (same subject+predicate, differing object) — the
+    legacy contradiction_detector.py's other strategies (directional reversal,
+    exclusive-state pairs, functional-relation violations) all require a
+    hardcoded relation-name vocabulary that has no analogue for free-text
+    Claim predicates, so they aren't ported."""
+    CONTRADICTORY_CLAIM = "CONTRADICTORY_CLAIM"

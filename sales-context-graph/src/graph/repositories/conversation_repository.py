@@ -80,13 +80,25 @@ class ConversationRepository:
         return [Conversation(**row) for row in rows]
 
     async def upsert_segment(self, segment: TranscriptSegment) -> None:
+        """MERGE key includes workspace_id (via scoped_match), not just
+        segment_id — segment_id() is deterministically derived from
+        conversation_id, which is itself workspace-salted (src/domain/
+        identity.py), so a real cross-workspace collision is astronomically
+        unlikely; still, every other MERGE in this package scopes its key by
+        workspace_id (see scoped_match's docstring), and this one previously
+        didn't — a bare {segment_id: $segment_id} MERGE key would let two
+        different workspaces' segments collide onto the same node if they
+        ever did produce the same id, silently leaking HAS_CLAIM/HAS_SEGMENT
+        edges across the tenant boundary. Found via a test reusing a fixed
+        segment_id against the persistent Neo4j volume across repeated runs.
+        """
         conv_match = scoped_match("Conversation", "c", conversation_id="conversation_id")
+        seg_match = scoped_match("TranscriptSegment", "seg", segment_id="segment_id")
         await self._executor.tenant_query(
             f"""
             MATCH {conv_match}
-            MERGE (seg:TranscriptSegment {{segment_id: $segment_id}})
-            SET seg.workspace_id = $workspace_id,
-                seg.conversation_id = $conversation_id,
+            MERGE {seg_match}
+            SET seg.conversation_id = $conversation_id,
                 seg.source_segment_index = $source_segment_index,
                 seg.speaker_label = $speaker_label,
                 seg.text = $text,
@@ -136,12 +148,12 @@ class ConversationRepository:
 
     async def upsert_participant(self, participant: Participant) -> None:
         conv_match = scoped_match("Conversation", "c", conversation_id="conversation_id")
+        p_match = scoped_match("Participant", "p", participant_id="participant_id")
         await self._executor.tenant_query(
             f"""
             MATCH {conv_match}
-            MERGE (p:Participant {{participant_id: $participant_id}})
-            SET p.workspace_id = $workspace_id,
-                p.conversation_id = $conversation_id,
+            MERGE {p_match}
+            SET p.conversation_id = $conversation_id,
                 p.speaker_label = $speaker_label,
                 p.contact_id = $contact_id,
                 p.seller_id = $seller_id,
@@ -172,12 +184,12 @@ class ConversationRepository:
 
     async def upsert_speaker_resolution(self, resolution: SpeakerResolution) -> None:
         conv_match = scoped_match("Conversation", "c", conversation_id="conversation_id")
+        r_match = scoped_match("SpeakerResolution", "r", resolution_id="resolution_id")
         await self._executor.tenant_query(
             f"""
             MATCH {conv_match}
-            MERGE (r:SpeakerResolution {{resolution_id: $resolution_id}})
-            SET r.workspace_id = $workspace_id,
-                r.conversation_id = $conversation_id,
+            MERGE {r_match}
+            SET r.conversation_id = $conversation_id,
                 r.speaker_label = $speaker_label,
                 r.resolved_contact_id = $resolved_contact_id,
                 r.resolved_seller_id = $resolved_seller_id,

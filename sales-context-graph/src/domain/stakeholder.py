@@ -12,13 +12,15 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from src.domain.enums import StakeholderRole
+
 
 class StakeholderAssignment(BaseModel):
     assignment_id: str
     workspace_id: str
     opportunity_id: str
     contact_id: str
-    role: str | None = None
+    role: StakeholderRole = StakeholderRole.UNKNOWN
     influence: str | None = None
     sentiment: str | None = None
     authority: str | None = None

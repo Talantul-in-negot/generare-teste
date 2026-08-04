@@ -156,12 +156,20 @@ have.
   truncated=True`; `predicate_diversity_cap=2` over 4 same-predicate Claims
   yields `nodes_used=2` even with `max_nodes=50` (diversity, not budget,
   binds).
-- **Conflicting relevant Claims survive selection**: not evaluated — no
-  Conflict-detection wiring exists between Claims in this vertical slice (see
-  `docs/architecture.md`'s Context Graph section); the response shape carries
-  `conflicts: list[Conflict] = []` so a future phase can populate it without
-  changing the contract, but it is honestly empty today, not silently
-  omitted from the schema.
+- **Conflicting relevant Claims survive selection and are surfaced, not
+  silently dropped**: Increment 11 wired `detect_conflicting_claims()`
+  (`src/resolution/conflict_detection.py`) into `ContextGraphBuilder.build()`
+  — same subject+predicate, differing object, both AFFIRMED, neither
+  superseded → a `Conflict` is returned in `ContextGraphResult.conflicts`
+  *and* persisted via `ConflictRepository` for later querying independent of
+  one build() call
+  (`tests/integration/test_conflict_detection_e2e.py::
+  test_context_graph_builder_populates_and_persists_conflicts`). Detection is
+  a single-strategy comparison (same-subject/predicate/differing-object) —
+  the legacy `contradiction_detector.py`'s other strategies (directional
+  reversal, exclusive-state pairs, functional-relation violations) all need a
+  hardcoded relation-name vocabulary with no analogue for free-text Claim
+  predicates, so they weren't ported.
 
 ## Known measurement gaps
 
@@ -173,3 +181,17 @@ have.
 - No load/latency testing — `max_tokens`/`max_nodes` budgets are enforced
   correctly but their wall-clock cost under realistic Claim volumes is
   unmeasured.
+- **No true point-in-time ("as of") reconstruction of what was known before a
+  given moment.** `Claim.valid_from`/`transaction_from` are populated at
+  ingest and genuinely queryable (Increment 14's `list_claims_recorded_since`
+  — "what's new since \<date\>", filtering on `transaction_from`, real and
+  tested). `valid_to`/`transaction_to` are a different story: **nothing in
+  this vertical slice ever sets them** — no Claim is ever marked as having
+  stopped being valid when it's superseded or contradicted, because no
+  supersession-closes-the-interval trigger exists (the natural trigger would
+  be Increment 11's conflict resolution or `ReviewService`'s reconciliation
+  marking a losing Claim as superseded, and that wiring wasn't built).
+  Shipping an "as of \<past date\>" query without that wiring would silently
+  return wrong answers for every Claim that predates it, since every Claim's
+  validity interval looks permanently open — worse than not having the
+  feature, so it was deliberately not built rather than shipped half-working.

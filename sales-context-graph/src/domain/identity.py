@@ -105,6 +105,24 @@ def assertion_id(
     )
 
 
+def stakeholder_assignment_id(opportunity_id: str, contact_id: str) -> str:
+    """Not in §6's explicit list — Increment 12. One assignment per
+    (opportunity, contact) pair, so re-inferring the buying committee from a
+    re-ingested/updated transcript set updates the existing assignment rather
+    than creating a duplicate."""
+    return _hash(opportunity_id, contact_id)
+
+
+def conflict_id(workspace: str, claim_id_a: str, claim_id_b: str, conflict_type: str) -> str:
+    """Not in §6's explicit list — Increment 11. The claim id pair is sorted
+    before hashing so the same two contradicting Claims always produce the
+    same conflict_id regardless of which one was iterated first during
+    detection (an unsorted (a, b) vs (b, a) hash would create two logical
+    duplicates for the same pair)."""
+    ordered_a, ordered_b = sorted((claim_id_a, claim_id_b))
+    return _hash(workspace, ordered_a, ordered_b, conflict_type)
+
+
 def extraction_run_id(
     provider: str,
     model: str,

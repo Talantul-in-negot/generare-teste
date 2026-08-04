@@ -51,6 +51,16 @@ class ContentAssetIngestionRequest(BaseModel):
     content_assets: list[dict] = []
 
 
+class EngagementIngestionRequest(BaseModel):
+    """Increment 10 — asset_views/shares raw shapes match ShowpadAdapter.
+    parse_asset_view/parse_share's `raw` argument plus the ids those methods
+    take as separate parameters (content_asset_id, viewer_contact_id /
+    shared_with_contact_id), flattened into one dict per item since this is a
+    single JSON request body, not two separate typed method calls."""
+    asset_views: list[dict] = []
+    shares: list[dict] = []
+
+
 class TranscriptIngestionRequest(BaseModel):
     calls: list[dict] = []
     opportunity_id: str | None = None
@@ -118,6 +128,39 @@ async def ingest_content_assets(
         results = await pipeline.ingest_content_assets(
             workspace_id, body.content_assets,
             division_id=body.division_id, ingestion_run_id=ingestion_id, observed_at=now,
+        )
+        job.item_results = [asdict(r) for r in results]
+        job.state = IngestionState.COMPLETED
+    except Exception as exc:
+        job.state = IngestionState.FAILED_PERMANENT
+        job.error = str(exc)
+    job.updated_at = datetime.now(timezone.utc)
+    await _store.put(job)
+
+    return {"ingestion_id": ingestion_id, "state": job.state.value}
+
+
+@router.post("/engagement", status_code=202)
+async def ingest_engagement(body: EngagementIngestionRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+    ingestion_id = str(uuid4())
+    now = datetime.now(timezone.utc)
+    job = IngestionJob(
+        ingestion_id=ingestion_id, workspace_id=workspace_id, kind="engagement",
+        state=IngestionState.ACCEPTED, created_at=now, updated_at=now,
+    )
+    await _store.put(job)
+
+    executor = GraphExecutor()
+    pipeline = ContentIngestionPipeline(ContentRepository(executor), SourceRepository(executor), ShowpadAdapter())
+
+    job.state = IngestionState.PERSISTING
+    try:
+        results = []
+        results += await pipeline.ingest_asset_views(
+            workspace_id, body.asset_views, ingestion_run_id=ingestion_id, observed_at=now
+        )
+        results += await pipeline.ingest_shares(
+            workspace_id, body.shares, ingestion_run_id=ingestion_id, observed_at=now
         )
         job.item_results = [asdict(r) for r in results]
         job.state = IngestionState.COMPLETED

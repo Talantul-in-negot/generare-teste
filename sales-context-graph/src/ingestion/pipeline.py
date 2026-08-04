@@ -164,3 +164,41 @@ class ContentIngestionPipeline:
                 await self._content_repo.upsert_content_asset(parsed.entity)
             results.append(IngestionItemResult(parsed.object_type, parsed.external_id, reconciliation.outcome))
         return results
+
+    async def ingest_asset_views(
+        self, workspace_id: str, raw_records: list[dict], *, ingestion_run_id: str, observed_at: datetime,
+    ) -> list[IngestionItemResult]:
+        """raw_records shape: [{"content_asset_id", "viewer_contact_id", "id",
+        "viewed_at"}, ...]. AssetViews are append-only engagement events (see
+        ShowpadAdapter.parse_asset_view's own docstring) — no
+        reconcile_source_record needed, this simply upserts each one. Was
+        previously unwired entirely; only hand-constructed AssetView objects
+        in tests/demo ever reached the graph before this method existed.
+        """
+        results = []
+        for raw in raw_records:
+            view = self._adapter.parse_asset_view(
+                workspace_id, raw["content_asset_id"], raw["viewer_contact_id"], raw,
+            )
+            await self._content_repo.upsert_asset_view(view)
+            results.append(IngestionItemResult("AssetView", raw["id"], ReconciliationOutcome.CREATED))
+        return results
+
+    async def ingest_shares(
+        self, workspace_id: str, raw_records: list[dict], *, ingestion_run_id: str, observed_at: datetime,
+    ) -> list[IngestionItemResult]:
+        """raw_records shape: [{"content_asset_id", "shared_with_contact_id",
+        "id", "shared_at", "shared_by_seller_id"?, "opportunity_id"?,
+        "triggered_by_claim_id"?}, ...]. Same append-only-event treatment as
+        ingest_asset_views — no reconcile_source_record needed."""
+        results = []
+        for raw in raw_records:
+            share = self._adapter.parse_share(
+                workspace_id, raw["content_asset_id"], raw["shared_with_contact_id"], raw,
+                shared_by_seller_id=raw.get("shared_by_seller_id"),
+                opportunity_id=raw.get("opportunity_id"),
+                triggered_by_claim_id=raw.get("triggered_by_claim_id"),
+            )
+            await self._content_repo.upsert_share(share)
+            results.append(IngestionItemResult("Share", raw["id"], ReconciliationOutcome.CREATED))
+        return results

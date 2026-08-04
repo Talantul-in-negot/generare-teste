@@ -11,6 +11,7 @@ from pydantic import BaseModel, model_validator
 from src.domain.enums import (
     AdjudicationStatus,
     ConflictStatus,
+    ConflictType,
     ErasureStatus,
     Polarity,
     ResolutionStatus,
@@ -141,7 +142,7 @@ class Conflict(BaseModel):
     workspace_id: str
     claim_id_a: str
     claim_id_b: str
-    conflict_type: str
+    conflict_type: ConflictType
     status: ConflictStatus = ConflictStatus.OPEN
     detected_at: datetime
     resolved_at: datetime | None = None

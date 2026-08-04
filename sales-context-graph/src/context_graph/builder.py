@@ -15,14 +15,20 @@ pipeline is genuinely implemented at this scope:
 4. scoring                          -> _score_claim
 5. greedy budget selection          -> build()'s main loop
 6. diversity caps                   -> per-predicate cap
-7. conflict preservation            -> response shape carries `conflicts`;
-                                        no Conflict-detection wiring exists yet
-                                        between Claims in this vertical slice,
-                                        so it's always empty here, not silently
-                                        dropped from the contract.
+7. conflict preservation            -> Increment 11: detect_conflicting_claims()
+                                        runs over the already-selected Claims
+                                        (no extra repository fetch — every
+                                        candidate is already in memory from
+                                        step 5), and any detected Conflicts are
+                                        both returned and persisted via
+                                        ConflictRepository for later querying
+                                        independent of a specific build() call.
 
 Every call is a single bounded repository fetch — no per-Claim follow-up query,
-so this never becomes N+1 (§12: 'Avoid N+1 repository calls').
+so this never becomes N+1 (§12: 'Avoid N+1 repository calls'). Conflict
+detection is a pure in-memory scan over Claims already fetched, so it doesn't
+add one either — only the persistence of newly-detected Conflicts is extra
+I/O, bounded by the (typically small) number of actual contradictions found.
 """
 
 from __future__ import annotations
@@ -34,6 +40,8 @@ from src.context_graph.models import ContextGraphResult, EvidenceReference, Sele
 from src.domain.assertion import Claim
 from src.domain.enums import AdjudicationStatus
 from src.graph.repositories.claim_repository import ClaimRepository
+from src.graph.repositories.conflict_repository import ConflictRepository
+from src.resolution.conflict_detection import detect_conflicting_claims
 
 DEFAULT_MAX_NODES = 50
 DEFAULT_MAX_TOKENS = 4000
@@ -80,8 +88,9 @@ def _explain(claim: Claim, score: float) -> str:
 
 
 class ContextGraphBuilder:
-    def __init__(self, claim_repo: ClaimRepository):
+    def __init__(self, claim_repo: ClaimRepository, conflict_repo: ConflictRepository | None = None):
         self._claim_repo = claim_repo
+        self._conflict_repo = conflict_repo or ConflictRepository()
 
     async def build(
         self,
@@ -137,12 +146,16 @@ class ContextGraphBuilder:
         ]
         selected_items = [SelectedItem(claim_id=c.claim_id, score=s, reason=_explain(c, s)) for c, s in selected]
 
+        conflicts = detect_conflicting_claims([c for c, _ in selected], now=now)
+        for conflict in conflicts:
+            await self._conflict_repo.create_conflict(conflict)
+
         return ContextGraphResult(
             workspace_id=scope.workspace_id,
             claims=[c for c, _ in selected],
             evidence=evidence,
             unresolved_mention_ids=[],
-            conflicts=[],
+            conflicts=conflicts,
             selected_items=selected_items,
             budget_max_nodes=max_nodes,
             budget_max_tokens=max_tokens,

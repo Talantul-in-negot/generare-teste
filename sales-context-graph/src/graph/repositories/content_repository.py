@@ -3,7 +3,7 @@ crm_repository.py."""
 
 from __future__ import annotations
 
-from src.domain.knowledge import AssetView, ContentAsset
+from src.domain.knowledge import AssetView, ContentAsset, Share
 from src.graph.execution import GraphExecutor, scoped_match
 
 _ASSET_RETURN = (
@@ -16,6 +16,13 @@ _VIEW_RETURN = (
     "v.asset_view_id AS asset_view_id, v.workspace_id AS workspace_id, "
     "v.content_asset_id AS content_asset_id, v.viewer_contact_id AS viewer_contact_id, "
     "v.viewed_at AS viewed_at"
+)
+
+_SHARE_RETURN = (
+    "s.share_id AS share_id, s.workspace_id AS workspace_id, "
+    "s.content_asset_id AS content_asset_id, s.shared_with_contact_id AS shared_with_contact_id, "
+    "s.shared_by_seller_id AS shared_by_seller_id, s.shared_at AS shared_at, "
+    "s.opportunity_id AS opportunity_id, s.triggered_by_claim_id AS triggered_by_claim_id"
 )
 
 
@@ -87,3 +94,52 @@ class ContentRepository:
             viewer_contact_id=viewer_contact_id,
         )
         return {row["content_asset_id"] for row in rows}
+
+    async def list_views_for_asset_and_contact(
+        self, workspace_id: str, content_asset_id: str, viewer_contact_id: str
+    ) -> list[AssetView]:
+        """Increment 10 — every view of one asset by one contact, oldest first.
+        Used by ContentEffectivenessUseCase to find the first view *after* a
+        given Share's shared_at (a view predating the share can't have been
+        caused by it)."""
+        match = scoped_match(
+            "AssetView", "v", content_asset_id="content_asset_id", viewer_contact_id="viewer_contact_id"
+        )
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN {_VIEW_RETURN} ORDER BY v.viewed_at",
+            workspace_id=workspace_id,
+            content_asset_id=content_asset_id,
+            viewer_contact_id=viewer_contact_id,
+        )
+        return [AssetView(**row) for row in rows]
+
+    async def upsert_share(self, share: Share) -> None:
+        match = scoped_match("Share", "s", share_id="share_id")
+        await self._executor.tenant_query(
+            f"""
+            MERGE {match}
+            SET s.content_asset_id = $content_asset_id,
+                s.shared_with_contact_id = $shared_with_contact_id,
+                s.shared_by_seller_id = $shared_by_seller_id,
+                s.shared_at = $shared_at,
+                s.opportunity_id = $opportunity_id,
+                s.triggered_by_claim_id = $triggered_by_claim_id
+            """,
+            workspace_id=share.workspace_id,
+            share_id=share.share_id,
+            content_asset_id=share.content_asset_id,
+            shared_with_contact_id=share.shared_with_contact_id,
+            shared_by_seller_id=share.shared_by_seller_id,
+            shared_at=share.shared_at.isoformat(),
+            opportunity_id=share.opportunity_id,
+            triggered_by_claim_id=share.triggered_by_claim_id,
+        )
+
+    async def list_shares_for_opportunity(self, workspace_id: str, opportunity_id: str) -> list[Share]:
+        match = scoped_match("Share", "s", opportunity_id="opportunity_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN {_SHARE_RETURN}",
+            workspace_id=workspace_id,
+            opportunity_id=opportunity_id,
+        )
+        return [Share(**row) for row in rows]

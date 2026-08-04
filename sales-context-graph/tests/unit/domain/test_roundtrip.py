@@ -42,6 +42,7 @@ from src.domain.crm import (
     Meeting,
     Opportunity,
     OpportunityContactRole,
+    OpportunityStageChange,
     Seller,
     SourceRecord,
     SourceSnapshot,
@@ -76,6 +77,7 @@ MODEL_STRATEGIES: list[tuple[type, object]] = [
     (Seller, st.builds(Seller)),
     (Opportunity, st.builds(Opportunity)),
     (OpportunityContactRole, st.builds(OpportunityContactRole)),
+    (OpportunityStageChange, st.builds(OpportunityStageChange)),
     (Meeting, st.builds(Meeting)),
     (Activity, st.builds(Activity)),
     # ── conversation.py ────────────────────────────────────────────────────

@@ -8,6 +8,8 @@ Claim is actually about) and workspace_id.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from src.domain.assertion import Claim
 from src.graph.execution import GraphExecutor, scoped_match
 
@@ -156,6 +158,32 @@ class ClaimRepository:
         )
         return [Claim(**row) for row in rows]
 
+    async def list_claims_recorded_since(
+        self, workspace_id: str, subject_id: str, since: datetime
+    ) -> list[Claim]:
+        """Increment 14 — 'what's new on this subject since <date>', filtering
+        on transaction_from (populated at ingest, real — see
+        src/ingestion/transcript_pipeline.py) rather than attempting true
+        point-in-time ('as of') reconstruction. valid_to/transaction_to are
+        never set by anything in this vertical slice (no supersession-closes-
+        the-interval wiring exists), so a genuine 'what did we believe before
+        X' query would silently return wrong answers for every Claim that
+        predates that wiring — deliberately not built; see
+        docs/evaluation.md's Known measurement gaps.
+        """
+        match = scoped_match("Claim", "cl", subject_id="subject_id")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {match}
+            WHERE cl.transaction_from >= $since
+            RETURN {_CLAIM_RETURN}
+            """,
+            workspace_id=workspace_id,
+            subject_id=subject_id,
+            since=since.isoformat(),
+        )
+        return [Claim(**row) for row in rows]
+
     async def list_claims_for_conversation(self, workspace_id: str, conversation_id: str) -> list[Claim]:
         """Routed through Conversation -[:HAS_SEGMENT]-> TranscriptSegment
         -[:HAS_CLAIM]-> Claim (§10) — never a bare property-match on
@@ -170,5 +198,75 @@ class ClaimRepository:
             """,
             workspace_id=workspace_id,
             conversation_id=conversation_id,
+        )
+        return [Claim(**row) for row in rows]
+
+    async def list_claims_by_predicate_for_seller(
+        self, workspace_id: str, seller_id: str, predicate: str
+    ) -> list[Claim]:
+        """Increment 13 — cross-Opportunity aggregation for one seller's OPEN
+        deals (e.g. 'top objections in this seller's pipeline'). Routes
+        Opportunity(seller_id) -> Conversation(opportunity_id) ->
+        TranscriptSegment -> Claim — the same routing shape
+        list_claims_by_opportunity already relies on (Conversation carries
+        opportunity_id as a direct property), just aggregated over every open
+        Opportunity one seller owns instead of one at a time. Never a direct
+        Account/Opportunity -> Claim fan-out (§10).
+        """
+        opp_match = scoped_match("Opportunity", "o", seller_id="seller_id")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {opp_match}
+            WHERE o.is_open = true
+            MATCH (c:Conversation {{workspace_id: $workspace_id, opportunity_id: o.opportunity_id}})
+            MATCH (c)-[:HAS_SEGMENT]->(:TranscriptSegment)-[:HAS_CLAIM]->(cl:Claim {{predicate: $predicate}})
+            RETURN {_CLAIM_RETURN}
+            """,
+            workspace_id=workspace_id,
+            seller_id=seller_id,
+            predicate=predicate,
+        )
+        return [Claim(**row) for row in rows]
+
+    async def list_claims_by_opportunity(self, workspace_id: str, opportunity_id: str) -> list[Claim]:
+        """Same routing as list_claims_by_opportunity_and_predicate, without
+        the predicate filter — every Claim across every Conversation
+        belonging to one Opportunity. Backs Increment 11's conflict-detection
+        route, which needs to compare Claims across all predicates, not one."""
+        conv_match = scoped_match("Conversation", "c", opportunity_id="opportunity_id")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {conv_match}
+            MATCH (c)-[:HAS_SEGMENT]->(:TranscriptSegment)-[:HAS_CLAIM]->(cl:Claim)
+            RETURN {_CLAIM_RETURN}
+            """,
+            workspace_id=workspace_id,
+            opportunity_id=opportunity_id,
+        )
+        return [Claim(**row) for row in rows]
+
+    async def list_claims_by_opportunity_and_predicate(
+        self, workspace_id: str, opportunity_id: str, predicate: str
+    ) -> list[Claim]:
+        """Every Claim with the given predicate across every Conversation
+        belonging to one Opportunity — Conversation carries opportunity_id as
+        a direct property (see conversation_repository.py's
+        list_conversations_by_opportunity), so this routes through Conversation
+        -[:HAS_SEGMENT]->TranscriptSegment-[:HAS_CLAIM]->Claim (§10) exactly
+        like list_claims_for_conversation, just scoped by opportunity_id
+        instead of conversation_id and additionally filtered by predicate.
+        Backs the Q&A layer's account_objections/open_commitments intents and
+        Increment 13's cross-deal aggregation (called once per Opportunity).
+        """
+        conv_match = scoped_match("Conversation", "c", opportunity_id="opportunity_id")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {conv_match}
+            MATCH (c)-[:HAS_SEGMENT]->(:TranscriptSegment)-[:HAS_CLAIM]->(cl:Claim {{predicate: $predicate}})
+            RETURN {_CLAIM_RETURN}
+            """,
+            workspace_id=workspace_id,
+            opportunity_id=opportunity_id,
+            predicate=predicate,
         )
         return [Claim(**row) for row in rows]

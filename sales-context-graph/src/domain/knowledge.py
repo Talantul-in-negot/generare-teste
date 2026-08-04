@@ -85,6 +85,11 @@ class Share(BaseModel):
     shared_with_contact_id: str
     shared_by_seller_id: str | None = None
     shared_at: datetime
+    # Increment 10 additions — additive, optional: link a Share back to the
+    # deal and (when known) the specific Claim that motivated it, so content
+    # effectiveness can be measured per-objection, not just per-asset.
+    opportunity_id: str | None = None
+    triggered_by_claim_id: str | None = None
 
 
 class AssetView(BaseModel):

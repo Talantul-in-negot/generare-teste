@@ -6,8 +6,15 @@ GraphExecutor.tenant_query()).
 
 from __future__ import annotations
 
-from src.domain.crm import Account, Contact, Lead, Opportunity
+from datetime import datetime, timezone
+
+from src.domain.crm import Account, Contact, Lead, Opportunity, OpportunityStageChange
 from src.graph.execution import GraphExecutor, scoped_match
+
+_STAGE_CHANGE_RETURN = (
+    "chg.opportunity_id AS opportunity_id, chg.workspace_id AS workspace_id, "
+    "chg.from_stage AS from_stage, chg.to_stage AS to_stage, chg.changed_at AS changed_at"
+)
 
 _ACCOUNT_RETURN = (
     "a.account_id AS account_id, a.workspace_id AS workspace_id, "
@@ -151,6 +158,24 @@ class CrmRepository:
         return Lead(**rows[0]) if rows else None
 
     async def upsert_opportunity(self, opportunity: Opportunity) -> None:
+        """Before overwriting `stage`, checks the previously persisted value
+        and — if it's genuinely changing — records an append-only
+        OpportunityStageChange event first (Increment 10: 'did the deal
+        advance after sharing content X' needs the stage at two points in
+        time; every prior upsert here silently discarded the old value with
+        no history at all). Safe to call unconditionally on every ingest:
+        CrmIngestionPipeline only invokes this once reconcile_source_record()
+        has already determined the incoming record is genuinely new/changed
+        (CREATED/SUPERSEDED outcome) — a retried identical re-ingest never
+        reaches this method, so it never records a spurious transition.
+        """
+        previous = await self.get_opportunity(opportunity.workspace_id, opportunity.opportunity_id)
+        if previous is not None and previous.stage != opportunity.stage:
+            await self._record_stage_change(
+                opportunity.workspace_id, opportunity.opportunity_id,
+                from_stage=previous.stage, to_stage=opportunity.stage,
+            )
+
         match = scoped_match("Opportunity", "o", opportunity_id="opportunity_id")
         await self._executor.tenant_query(
             f"""
@@ -173,6 +198,47 @@ class CrmRepository:
             stage=opportunity.stage,
             is_open=opportunity.is_open,
         )
+
+    async def _record_stage_change(
+        self, workspace_id: str, opportunity_id: str, *, from_stage: str, to_stage: str
+    ) -> None:
+        # changed_at is computed here in Python and passed as an ISO string
+        # parameter, not Cypher's server-side datetime() — every other
+        # timestamp field in this codebase's repositories follows that same
+        # pattern specifically so reads get back a plain ISO string Pydantic
+        # can parse; datetime()-computed properties come back from the driver
+        # as neo4j.time.DateTime, which OpportunityStageChange(**row) cannot
+        # coerce directly.
+        changed_at = datetime.now(timezone.utc).isoformat()
+        match = scoped_match("Opportunity", "o", opportunity_id="opportunity_id")
+        await self._executor.tenant_query(
+            f"""
+            MATCH {match}
+            CREATE (o)-[:HAS_STAGE_CHANGE]->(chg:OpportunityStageChange {{
+                workspace_id: $workspace_id, opportunity_id: $opportunity_id,
+                from_stage: $from_stage, to_stage: $to_stage, changed_at: $changed_at
+            }})
+            """,
+            workspace_id=workspace_id,
+            opportunity_id=opportunity_id,
+            from_stage=from_stage,
+            to_stage=to_stage,
+            changed_at=changed_at,
+        )
+
+    async def list_stage_changes(self, workspace_id: str, opportunity_id: str) -> list[OpportunityStageChange]:
+        match = scoped_match("Opportunity", "o", opportunity_id="opportunity_id")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {match}
+            MATCH (o)-[:HAS_STAGE_CHANGE]->(chg:OpportunityStageChange)
+            RETURN {_STAGE_CHANGE_RETURN}
+            ORDER BY chg.changed_at
+            """,
+            workspace_id=workspace_id,
+            opportunity_id=opportunity_id,
+        )
+        return [OpportunityStageChange(**row) for row in rows]
 
     async def get_opportunity(self, workspace_id: str, opportunity_id: str) -> Opportunity | None:
         match = scoped_match("Opportunity", "o", opportunity_id="opportunity_id")

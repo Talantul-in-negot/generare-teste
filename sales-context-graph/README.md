@@ -14,10 +14,29 @@ evidence-backed, query-specific context for one sales workflow:
 The full P0–P4.5 vertical slice described in [`docs/plan.md`](docs/plan.md) is
 implemented and tested, plus MVP cloud-readiness hardening (API-key auth,
 durable Redis-backed job store, Fly.io deploy artifacts — see
-[`docs/deployment.md`](docs/deployment.md)). 185 tests pass (unit, integration
-against a live Neo4j, security, and eval) — see the completion report at
-the end of this document for the phase-by-phase breakdown, real measured
-numbers, and known limitations.
+[`docs/deployment.md`](docs/deployment.md)) and a product-completeness pass:
+
+- **Q&A layer** (`api/routes/qa.py`) — 7 fixed intents (account objections,
+  call briefing, open commitments, content recommendation, open conflicts,
+  missing stakeholders, what's new since a date) instead of raw
+  id-scoped queries only.
+- **Content-effectiveness loop** — links which `ContentAsset` was shared,
+  because of which objection `Claim`, and whether the deal's stage actually
+  moved afterward (`GET /api/v1/opportunities/{id}/content-effectiveness`) —
+  the one thing conversation-only tools structurally can't answer.
+- **Conflict detection** — two contradicting, coexisting Claims are now
+  detected and surfaced (`GET /api/v1/opportunities/{id}/conflicts`), not
+  silently dropped.
+- **Buying-committee mapping** — flags single-threaded deals
+  (`GET /api/v1/opportunities/{id}/buying-committee`), honestly scoped: real
+  MEDDIC role classification isn't built (would need an LLM), only who's
+  actually on the calls.
+- **Cross-deal aggregation** — top objections across one seller's open
+  pipeline (`GET /api/v1/sellers/{id}/top-objections`).
+
+226 tests pass (unit, integration against a live Neo4j, security, and eval) —
+see the completion report at the end of this document for the phase-by-phase
+breakdown, real measured numbers, and known limitations.
 
 ## Architecture
 
@@ -255,3 +274,23 @@ breakdown per module.
   `WORKSPACE_API_KEYS` — `api/dependencies.py::verify_api_key`), not a real
   identity provider. No self-serve key rotation/revocation, no OAuth/JWT. See
   `docs/security-and-tenancy.md` for exactly what this does and doesn't cover.
+- **Conflict detection**: one strategy only (same subject+predicate, differing
+  object, both AFFIRMED, neither superseded — `src/resolution/
+  conflict_detection.py`). The legacy `contradiction_detector.py`'s other
+  strategies all need a hardcoded relation-name vocabulary with no analogue
+  for free-text Claim predicates, so they weren't ported.
+- **Buying-committee mapping**: only enumerates who's actually on the calls
+  and flags single-threaded deals. Real MEDDIC-style role classification
+  (Economic Buyer vs. Champion vs. Technical Buyer) isn't built — every
+  `StakeholderAssignment.role` is honestly `UNKNOWN`; classifying it would
+  need either an LLM or a much larger rule set than this vertical slice
+  justifies. See `src/resolution/stakeholder_inference.py`.
+- **Temporal queries**: "what's new since \<date\>" is real (filters on
+  `Claim.transaction_from`, populated at ingest). True point-in-time ("as of
+  \<past date\>") reconstruction is not built — `valid_to`/`transaction_to`
+  are never set by anything in this vertical slice, since no supersession-
+  closes-the-interval trigger exists. See `docs/evaluation.md`'s Known
+  measurement gaps.
+- **Cross-deal aggregation**: scoped by `seller_id` (real, exists on every
+  Opportunity), not region/territory — no such field exists on
+  Account/Opportunity/Seller in this vertical slice.
