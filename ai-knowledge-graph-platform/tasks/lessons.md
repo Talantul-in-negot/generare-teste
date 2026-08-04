@@ -5759,3 +5759,59 @@ neither `set_status` nor `publish_query` called when the store is down,
 200 when it succeeds, and a test proving the default `False` skips the
 session-store call entirely (`load_turns.assert_not_awaited()`). Full
 suite: 761 passed, 0 failed.
+
+## A157 — SPLADE impact measurement: latency measured, quality unmeasured (no data point disguised as one)
+
+User asked whether SPLADE (learned-sparse neural retrieval) was already a
+channel in the hybrid pipeline. It wasn't — zero mentions anywhere in the
+repo. My first answer to "why not" was a plausible-sounding justification
+(BM25+dense already cover both extremes) with **no actual measurement
+behind it** — caught by the user, who asked me to check lessons/metrics
+first, which confirmed there was nothing to check. Lesson reinforced: don't
+state an unmeasured rationale as if it were a finding — say "not measured"
+plainly, per the same discipline as A146/A148 (measure before hypothesizing).
+
+Built `scripts/benchmark_splade_impact.py` (standalone, not wired into
+`hybrid_retriever.py`/`bm25_search.py` — a measurement, not a feature) to
+answer it properly: rerank the existing BM25+vector RRF candidate pool
+(`_reciprocal_rank_fusion` in `bm25_search.py` is already variadic — a real
+3-channel integration would be a call-site change, not structural) using
+`naver/splade-cocondenser-ensembledistil` sparse dot-product scoring, and
+compare hit_rate/coverage/MRR (same metrics as `eval_hop_ranking.py`)
+before/after, plus the added CPU latency (confirmed CPU-only deployment —
+no GPU config anywhere, `reranker.py`'s cross-encoder choice is explicitly
+CPU-justified).
+
+**Latency: real, measured.** Mean +2072ms/query, p50 2008ms, p95 2424ms,
+max 2561ms, for a ~9-50 candidate pool, CPU-only, model-load time excluded
+(warmed up before the timed loop — the first unwarmed call folded ~80s of
+one-time model load into that question's number, a measurement artifact
+caught and fixed before trusting the numbers). That alone is a strong data
+point: it roughly doubles or triples current per-query retrieval latency
+for a single extra reranking pass on this hardware.
+
+**Quality delta: could NOT be measured, and I said so rather than reporting
+a fake result.** Running the full 33-question aerospace golden set gave
+hit_rate=0.000 on *both* arms — including the unmodified production
+baseline (`eval_hop_ranking.py --limit 3` confirmed the same 0.000 on the
+identical questions, proving this wasn't a bug in the new script). Root
+cause, checked directly against Neo4j: the aerospace corpus isn't currently
+ingested in this environment — `MATCH (d:Document) RETURN d.tenant, count(d)`
+returned only `pharma: 7`, zero for aerospace/automotive. A 0-vs-0 result is
+not "no difference," it's no signal at all, and reporting it as a finding
+would have repeated the exact mistake (stating a plausible-looking number
+without checking what it actually measures) that started this task. Asked
+the user how to proceed (re-ingest aerospace, use the small pharma corpus,
+or stop at the latency finding alone) rather than picking silently — user
+chose to stop at latency-only.
+
+**Decision**: SPLADE integration is not being built. The measured cost
+(CPU latency roughly 2x-3x today's per-query retrieval time) is high enough
+on its own, on this hardware, to not justify it without a measured quality
+gain to weigh against it — and that gain remains genuinely unmeasured, not
+assumed to be zero or assumed to be worth it either way.
+
+No tests added — this is a one-off measurement script
+(`evals/splade_impact_results.json` holds the raw run), same convention as
+`eval_hop_ranking.py`/`benchmark_retrieval_ablation.py`, neither of which
+has a test file. No production code touched.

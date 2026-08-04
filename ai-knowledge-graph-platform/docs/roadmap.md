@@ -42,6 +42,7 @@ deployed workload and monitoring data behind the claim.
 | Evaluation | RAGAS with 20% sampling; DeepSeek judge, Groq fallback, then Gemini compatibility fallback |
 | Authentication and privacy | OAuth 2.0, M2M JWT, GDPR erasure, cascade handling, and audit log |
 | Domain ontologies | YAML-configurable; aerospace regulatory, automotive IATF 16949 (30-doc corpus, 5-question golden set), and marketing/adtech domains |
+| Synthetic commercial-pharma demo | Tenant-scoped synthetic corpus, YAML ontology, RDF/OWL and SHACL structural validation, and deterministic commercial-content approval; intentionally excludes clinical decision support and Context Graph |
 | CI | GitHub Actions, pytest matrix, and Ruff linting |
 | Retrieval feedback | `graphrag/retrieval/feedback.py` — Neo4j-backed feedback capture, wired into `/feedback` API routes |
 | Confidence lifecycle & evidence tracking | `graphrag/graph/confidence_lifecycle.py`, `graphrag/graph/evidence.py` — real state-machine + audit trail, wired into `/kg/confidence` routes |
@@ -551,3 +552,20 @@ latency, or SLO reporting can no longer be served reliably by ordinary indexed
 queries. TimescaleDB is provisioned in both Compose files and the KPI cutover
 has passed a live initialize/write/read check; continuous aggregates remain a
 threshold-triggered optimization.
+
+## When to add a SPLADE retrieval channel
+
+Not currently planned. Measured via `scripts/benchmark_splade_impact.py`
+(see `tasks/lessons.md` A157): reranking the existing BM25+vector RRF
+candidate pool with `naver/splade-cocondenser-ensembledistil` costs a
+measured +2072ms mean / 2424ms p95 per query on CPU (this deployment has no
+GPU) — roughly doubling to tripling current per-query retrieval latency for
+one extra reranking pass. The retrieval-quality gain that cost would need
+to justify was **not measured** — the aerospace golden-set corpus wasn't
+ingested in the environment at the time (only `pharma`, 7 docs, was
+present), so no recall/MRR delta could be computed; the run wasn't
+extrapolated or guessed. Revisit only if the CPU latency budget changes
+(GPU becomes available) or a real recall gap shows up on non-lexical/
+non-semantic-similarity queries (SPLADE's actual niche) that BM25+dense
+already demonstrably miss — re-run the same script with the aerospace or
+automotive corpus ingested to get the other half of this decision.
