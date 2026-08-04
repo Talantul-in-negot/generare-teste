@@ -163,6 +163,17 @@ curl localhost:8000/api/v1/claims/<claim_id>/evidence -H "X-Workspace-Id: ws-dem
 Sample request payloads for every endpoint live under
 [`data/sample/`](data/sample/).
 
+## Visualizing the Context Graph
+
+`GET /viz` (open `http://localhost:8000/viz` in a browser once the API is
+running) is a small, self-contained debugging page — not part of docs/plan.md's
+required API surface — that calls `POST /api/v1/context/build` from the form
+inputs (workspace, subject/conversation id, max nodes) and renders the
+returned Claims as a subject→predicate→object node-link graph (hand-rolled
+force layout, no CDN dependency). Click an edge to fetch that Claim's exact
+evidence via `GET /api/v1/claims/{id}/evidence`, shown in the side panel.
+Edge color encodes polarity (green=AFFIRMED, red=NEGATED, yellow=HYPOTHETICAL).
+
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — module layout and data flow

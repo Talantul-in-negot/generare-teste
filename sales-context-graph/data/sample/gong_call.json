@@ -39,7 +39,123 @@
           ]
         }
       ]
+    },
+    {
+      "id": "call-acme-discovery",
+      "started": "2026-06-16T09:30:00Z",
+      "deleted": false,
+      "parties": [
+        {
+          "speakerId": "spk_1",
+          "name": "Alice Johnson",
+          "emailAddress": "alice.johnson@acme.com"
+        },
+        {
+          "speakerId": "spk_2",
+          "name": "Nina Novak",
+          "emailAddress": "nina@ourcompany.com"
+        }
+      ],
+      "transcript": [
+        {
+          "speakerId": "spk_1",
+          "sentences": [
+            {"text": "Thanks for hopping on. Acme Corp is evaluating a few vendors right now.", "start": 0, "end": 4500},
+            {"text": "Our main blocker is integration time — we can't afford a six month rollout.", "start": 4500, "end": 9000}
+          ]
+        },
+        {
+          "speakerId": "spk_2",
+          "sentences": [
+            {"text": "That's a fair concern. Most customers are live within three weeks using our standard connectors.", "start": 9000, "end": 14000}
+          ]
+        },
+        {
+          "speakerId": "spk_1",
+          "sentences": [
+            {"text": "Good to know. We're also worried about the per-seat pricing model at our headcount.", "start": 14000, "end": 18500}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "call-northwind-followup",
+      "started": "2026-06-17T15:00:00Z",
+      "deleted": false,
+      "parties": [
+        {
+          "speakerId": "spk_1",
+          "name": "Carla Mendes",
+          "emailAddress": "carla.mendes@northwindtraders.example"
+        },
+        {
+          "speakerId": "spk_2",
+          "name": "Nina Novak",
+          "emailAddress": "nina@ourcompany.com"
+        },
+        {
+          "speakerId": "spk_3"
+        }
+      ],
+      "transcript": [
+        {
+          "speakerId": "spk_1",
+          "sentences": [
+            {"text": "Following up from last week — the team liked the demo overall.", "start": 0, "end": 3000},
+            {"text": "One open item: can this integrate with our existing ERP system?", "start": 3000, "end": 7000}
+          ]
+        },
+        {
+          "speakerId": "spk_3",
+          "sentences": [
+            {"text": "I can confirm we already have a certified connector for that ERP.", "start": 7000, "end": 11000}
+          ]
+        },
+        {
+          "speakerId": "spk_2",
+          "sentences": [
+            {"text": "I'll send over the integration guide and a reference customer case study after this call.", "start": 11000, "end": 15500}
+          ]
+        },
+        {
+          "speakerId": "spk_1",
+          "sentences": [
+            {"text": "Great, and separately — security review is required before we can sign.", "start": 15500, "end": 19000}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "call-fabrikam-renewal-risk",
+      "started": "2026-06-18T11:15:00Z",
+      "deleted": false,
+      "parties": [
+        {
+          "speakerId": "spk_1",
+          "name": "Fiona Clarke",
+          "emailAddress": "fiona.clarke@fabrikam-logistics.example"
+        },
+        {
+          "speakerId": "spk_2",
+          "name": "Sam Seller",
+          "emailAddress": "sam@ourcompany.com"
+        }
+      ],
+      "transcript": [
+        {
+          "speakerId": "spk_1",
+          "sentences": [
+            {"text": "Honestly, usage has dropped off since our champion left the company.", "start": 0, "end": 4000},
+            {"text": "We're also concerned about the renewal price increase this cycle.", "start": 4000, "end": 8000}
+          ]
+        },
+        {
+          "speakerId": "spk_2",
+          "sentences": [
+            {"text": "I understand — let's schedule a business review to re-establish the value case.", "start": 8000, "end": 12500}
+          ]
+        }
+      ]
     }
   ]
 }
-

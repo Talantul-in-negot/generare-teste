@@ -21,6 +21,55 @@
       "url": "https://showpad.example/security-whitepaper",
       "type": "pdf",
       "tags": ["security", "compliance"]
+    },
+    {
+      "id": "asset-integration-guide",
+      "title": "Standard Connector Integration Guide",
+      "url": "https://showpad.example/integration-guide",
+      "type": "pdf",
+      "tags": ["integration", "onboarding"]
+    },
+    {
+      "id": "asset-erp-connector-datasheet",
+      "title": "ERP Connector Datasheet",
+      "url": "https://showpad.example/erp-connector-datasheet",
+      "type": "pdf",
+      "tags": ["integration", "erp"]
+    },
+    {
+      "id": "asset-onboarding-timeline",
+      "title": "Three-Week Onboarding Timeline Overview",
+      "url": "https://showpad.example/onboarding-timeline",
+      "type": "deck",
+      "tags": ["onboarding", "objection"]
+    },
+    {
+      "id": "asset-customer-case-study-northwind",
+      "title": "Reference Customer Case Study: Retail Distribution",
+      "url": "https://showpad.example/case-study-retail",
+      "type": "pdf",
+      "tags": ["case-study", "erp", "reference"]
+    },
+    {
+      "id": "asset-renewal-value-deck",
+      "title": "Renewal Business Review Value Deck",
+      "url": "https://showpad.example/renewal-value-deck",
+      "type": "deck",
+      "tags": ["renewal", "pricing", "value"]
+    },
+    {
+      "id": "asset-champion-transition-playbook",
+      "title": "Champion Transition Playbook",
+      "url": "https://showpad.example/champion-transition",
+      "type": "pdf",
+      "tags": ["renewal", "stakeholder", "objection"]
+    },
+    {
+      "id": "asset-per-seat-vs-usage-pricing",
+      "title": "Per-Seat vs. Usage-Based Pricing Comparison",
+      "url": "https://showpad.example/pricing-models-comparison",
+      "type": "spreadsheet",
+      "tags": ["pricing", "objection"]
     }
   ]
 }
