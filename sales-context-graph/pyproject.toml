@@ -1,0 +1,45 @@
+[project]
+name = "sales-context-graph"
+version = "0.1.0"
+description = "CRM + sales-call transcripts -> Neo4j knowledge graph -> query-specific context graphs for sales teams."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic>=2.9",
+    "uvicorn[standard]>=0.32",
+    "neo4j>=5.24",
+    "langgraph>=0.2",
+    "rapidfuzz>=3.10",
+    "structlog>=24.4",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "pydantic-settings>=2.3",
+    # Only used by src/graph/alias_registry.py's optional warm-cache path, which
+    # fails open (returns None) if Redis is unreachable — no Redis service is
+    # required to run this repo's tests.
+    "redis[asyncio]>=5.0",
+    # Embedding provider (Part 7 item 6, now resolved): local
+    # sentence-transformers (all-MiniLM-L6-v2, 384-dim) — no API key needed,
+    # fully offline/reproducible. See src/embedding/sentence_transformer_provider.py
+    # for why local over a hosted API, and src/resolution/scoring.py for the
+    # real measured calibration this choice drove.
+    "sentence-transformers>=3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.112",
+    "ruff>=0.7",
+    "mypy>=1.13",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
