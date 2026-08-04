@@ -1,7 +1,7 @@
 .PHONY: up down test test-unit test-integration demo lint format
 
 up:
-	docker compose up -d neo4j
+	docker compose up -d neo4j redis
 
 down:
 	docker compose down

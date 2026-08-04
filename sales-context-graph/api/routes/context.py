@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import get_workspace_id
+from api.dependencies import verify_api_key
 from src.context_graph.builder import ContextGraphBuilder, ContextGraphScope
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
@@ -25,8 +25,8 @@ class ContextBuildRequest(BaseModel):
 
 
 @router.post("/api/v1/context/build")
-async def build_context(body: ContextBuildRequest, workspace_id: str = Depends(get_workspace_id)) -> dict:
-    # §12: workspace_id always from authenticated context (get_workspace_id),
+async def build_context(body: ContextBuildRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+    # §12: workspace_id always from authenticated context (verify_api_key),
     # never the request body — ContextBuildRequest deliberately has no
     # workspace_id field at all.
     executor = GraphExecutor()
@@ -44,7 +44,7 @@ async def build_context(body: ContextBuildRequest, workspace_id: str = Depends(g
 
 
 @router.get("/api/v1/claims/{claim_id}/evidence")
-async def get_claim_evidence(claim_id: str, workspace_id: str = Depends(get_workspace_id)) -> dict:
+async def get_claim_evidence(claim_id: str, workspace_id: str = Depends(verify_api_key)) -> dict:
     executor = GraphExecutor()
     claim_repo = ClaimRepository(executor)
     claim = await claim_repo.get_claim(workspace_id, claim_id)

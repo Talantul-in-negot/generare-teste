@@ -13,6 +13,7 @@ from src.domain.conversation import Mention
 from src.domain.enums import ResolutionStatus
 from src.domain.identity import mention_id
 from src.graph.repositories.review_repository import ReviewRepository
+from tests.conftest import auth_headers
 
 pytestmark = pytest.mark.asyncio
 
@@ -21,8 +22,9 @@ def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
 
 
-async def test_list_and_resolve_unresolved_mention(executor):
+async def test_list_and_resolve_unresolved_mention(executor, monkeypatch):
     workspace_id = f"ws-review-api-{uuid4().hex[:8]}"
+    headers = auth_headers(monkeypatch, workspace_id)
     review_repo = ReviewRepository(executor)
     mention = Mention(
         mention_id=mention_id("seg-api", 0, 11, "volks wagen", "ORG"),
@@ -33,14 +35,14 @@ async def test_list_and_resolve_unresolved_mention(executor):
     await review_repo.upsert_mention(mention)
 
     async with _client() as client:
-        list_resp = await client.get("/api/v1/unresolved-mentions", headers={"X-Workspace-Id": workspace_id})
+        list_resp = await client.get("/api/v1/unresolved-mentions", headers=headers)
         assert list_resp.status_code == 200
         mentions = list_resp.json()["mentions"]
         assert any(m["mention_id"] == mention.mention_id for m in mentions)
 
         resolve_resp = await client.post(
             f"/api/v1/unresolved-mentions/{mention.mention_id}/resolve",
-            headers={"X-Workspace-Id": workspace_id},
+            headers=headers,
             json={
                 "reviewer_id": "reviewer@example.com",
                 "selected_entity_id": "account-vw-group",
@@ -52,26 +54,43 @@ async def test_list_and_resolve_unresolved_mention(executor):
         body = resolve_resp.json()
         assert body["selected_entity_id"] == "account-vw-group"
 
-        list_resp_after = await client.get("/api/v1/unresolved-mentions", headers={"X-Workspace-Id": workspace_id})
+        list_resp_after = await client.get("/api/v1/unresolved-mentions", headers=headers)
         remaining_ids = {m["mention_id"] for m in list_resp_after.json()["mentions"]}
         assert mention.mention_id not in remaining_ids  # no longer pending
 
 
-async def test_resolve_requires_selection_or_rejection():
+async def test_resolve_requires_selection_or_rejection(monkeypatch):
+    headers = auth_headers(monkeypatch, "ws-x")
     async with _client() as client:
         resp = await client.post(
             "/api/v1/unresolved-mentions/some-id/resolve",
-            headers={"X-Workspace-Id": "ws-x"},
+            headers=headers,
             json={"reviewer_id": "reviewer@example.com"},
         )
     assert resp.status_code == 422
 
 
-async def test_resolve_unknown_mention_is_404():
+async def test_resolve_unknown_mention_is_404(monkeypatch):
+    headers = auth_headers(monkeypatch, "ws-x")
     async with _client() as client:
         resp = await client.post(
             "/api/v1/unresolved-mentions/does-not-exist/resolve",
-            headers={"X-Workspace-Id": "ws-x"},
+            headers=headers,
             json={"reviewer_id": "reviewer@example.com", "selected_entity_id": "account-1"},
         )
     assert resp.status_code == 404
+
+
+async def test_unresolved_mentions_rejects_missing_or_wrong_api_key(monkeypatch):
+    headers = auth_headers(monkeypatch, "ws-authcheck")
+    async with _client() as client:
+        no_key_resp = await client.get("/api/v1/unresolved-mentions", headers={"X-Workspace-Id": "ws-authcheck"})
+        assert no_key_resp.status_code == 422
+
+        wrong_key_resp = await client.get(
+            "/api/v1/unresolved-mentions", headers={"X-Workspace-Id": "ws-authcheck", "X-Api-Key": "wrong"}
+        )
+        assert wrong_key_resp.status_code == 401
+
+        right_key_resp = await client.get("/api/v1/unresolved-mentions", headers=headers)
+        assert right_key_resp.status_code == 200

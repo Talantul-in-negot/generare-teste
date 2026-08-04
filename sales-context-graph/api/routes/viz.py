@@ -53,6 +53,9 @@ _PAGE = """<!doctype html>
   <label>Workspace ID
     <input id="workspaceId" value="ws-demo">
   </label>
+  <label>API Key
+    <input id="apiKey" type="password" placeholder="X-Api-Key">
+  </label>
   <label>Subject ID (contact/account/etc.)
     <input id="subjectId" placeholder="optional">
   </label>
@@ -97,11 +100,13 @@ async function build() {
   detailEl.innerHTML = "";
 
   const workspaceId = document.getElementById("workspaceId").value.trim();
+  const apiKey = document.getElementById("apiKey").value.trim();
   const subjectId = document.getElementById("subjectId").value.trim();
   const conversationId = document.getElementById("conversationId").value.trim();
   const maxNodesRaw = document.getElementById("maxNodes").value.trim();
 
   if (!workspaceId) { statusEl.textContent = "Workspace ID is required."; return; }
+  if (!apiKey) { statusEl.textContent = "API Key is required."; return; }
 
   const body = {};
   if (subjectId) body.subject_id = subjectId;
@@ -112,7 +117,7 @@ async function build() {
   try {
     resp = await fetch("/api/v1/context/build", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Workspace-Id": workspaceId },
+      headers: { "Content-Type": "application/json", "X-Workspace-Id": workspaceId, "X-Api-Key": apiKey },
       body: JSON.stringify(body),
     });
   } catch (e) {
@@ -133,10 +138,10 @@ async function build() {
     "unresolved_mentions: " + result.unresolved_mention_ids.length + "<br>" +
     "conflicts: " + result.conflicts.length;
 
-  buildGraph(result, workspaceId);
+  buildGraph(result, workspaceId, apiKey);
 }
 
-function buildGraph(result, workspaceId) {
+function buildGraph(result, workspaceId, apiKey) {
   const nodeById = new Map();
   edges = [];
 
@@ -155,7 +160,7 @@ function buildGraph(result, workspaceId) {
     edges.push({
       source: subj.id, target: obj.id,
       predicate: claim.predicate, polarity: claim.polarity,
-      claimId: claim.claim_id, workspaceId,
+      claimId: claim.claim_id, workspaceId, apiKey,
     });
   }
 
@@ -252,7 +257,7 @@ async function showEvidence(edge) {
   detailEl.innerHTML = "<h4>Loading evidence…</h4>";
   try {
     const resp = await fetch("/api/v1/claims/" + encodeURIComponent(edge.claimId) + "/evidence", {
-      headers: { "X-Workspace-Id": edge.workspaceId },
+      headers: { "X-Workspace-Id": edge.workspaceId, "X-Api-Key": edge.apiKey },
     });
     const data = await resp.json();
     detailEl.innerHTML =

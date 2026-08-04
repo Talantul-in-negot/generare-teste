@@ -46,9 +46,16 @@ def test_get_settings_is_a_cached_singleton():
 
 def test_production_with_default_password_raises():
     with pytest.raises(ValueError, match="neo4j_password"):
-        Settings(env="production", neo4j_password="scg_dev_local")
+        Settings(env="production", neo4j_password="scg_dev_local", workspace_api_keys={"ws-1": "k"})
 
 
-def test_production_with_changed_password_does_not_raise():
-    settings = Settings(env="production", neo4j_password="a-real-secret")
+def test_production_without_workspace_api_keys_raises():
+    with pytest.raises(ValueError, match="workspace_api_keys"):
+        Settings(env="production", neo4j_password="a-real-secret")
+
+
+def test_production_with_changed_password_and_api_keys_does_not_raise():
+    settings = Settings(
+        env="production", neo4j_password="a-real-secret", workspace_api_keys={"ws-1": "k"}
+    )
     assert settings.env == "production"

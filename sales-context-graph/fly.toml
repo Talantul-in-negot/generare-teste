@@ -1,0 +1,34 @@
+# Fly.io deploy config. See docs/deployment.md for the full setup walkthrough
+# (Neo4j AuraDB Free + `fly redis create` + `fly secrets set` + `fly deploy`).
+#
+# `app` must be globally unique on Fly — rename before your first `fly apps create`.
+app = "sales-context-graph"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENV = "production"
+  LOG_LEVEL = "INFO"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  # sentence-transformers (used for embedding-based entity resolution) pulls
+  # in torch — don't go smaller than this, the model alone needs real memory
+  # headroom once loaded.
+  size = "shared-cpu-1x"
+  memory = "1024mb"

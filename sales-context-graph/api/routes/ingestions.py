@@ -19,8 +19,8 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import get_workspace_id
-from api.state import IngestionJob, InMemoryIngestionStore
+from api.dependencies import verify_api_key
+from api.state import IngestionJob, get_ingestion_store
 from src.domain.enums import IngestionState
 from src.extraction.fixture_provider import FixtureExtractionProvider
 from src.graph.execution import GraphExecutor
@@ -36,7 +36,7 @@ from src.ingestion.pipeline import ContentIngestionPipeline, CrmIngestionPipelin
 from src.ingestion.transcript_pipeline import TranscriptIngestionPipeline
 
 router = APIRouter(prefix="/api/v1/ingestions", tags=["ingestions"])
-_store = InMemoryIngestionStore()
+_store = get_ingestion_store()
 
 
 class CrmIngestionRequest(BaseModel):
@@ -60,14 +60,14 @@ class TranscriptIngestionRequest(BaseModel):
 
 
 @router.post("/crm", status_code=202)
-async def ingest_crm(body: CrmIngestionRequest, workspace_id: str = Depends(get_workspace_id)) -> dict:
+async def ingest_crm(body: CrmIngestionRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
     ingestion_id = str(uuid4())
     now = datetime.now(timezone.utc)
     job = IngestionJob(
         ingestion_id=ingestion_id, workspace_id=workspace_id, kind="crm",
         state=IngestionState.ACCEPTED, created_at=now, updated_at=now,
     )
-    _store.put(job)
+    await _store.put(job)
 
     executor = GraphExecutor()
     pipeline = CrmIngestionPipeline(CrmRepository(executor), SourceRepository(executor), SalesforceAdapter())
@@ -93,14 +93,14 @@ async def ingest_crm(body: CrmIngestionRequest, workspace_id: str = Depends(get_
         job.state = IngestionState.FAILED_PERMANENT
         job.error = str(exc)
     job.updated_at = datetime.now(timezone.utc)
-    _store.put(job)
+    await _store.put(job)
 
     return {"ingestion_id": ingestion_id, "state": job.state.value}
 
 
 @router.post("/content-assets", status_code=202)
 async def ingest_content_assets(
-    body: ContentAssetIngestionRequest, workspace_id: str = Depends(get_workspace_id)
+    body: ContentAssetIngestionRequest, workspace_id: str = Depends(verify_api_key)
 ) -> dict:
     ingestion_id = str(uuid4())
     now = datetime.now(timezone.utc)
@@ -108,7 +108,7 @@ async def ingest_content_assets(
         ingestion_id=ingestion_id, workspace_id=workspace_id, kind="content-assets",
         state=IngestionState.ACCEPTED, created_at=now, updated_at=now,
     )
-    _store.put(job)
+    await _store.put(job)
 
     executor = GraphExecutor()
     pipeline = ContentIngestionPipeline(ContentRepository(executor), SourceRepository(executor), ShowpadAdapter())
@@ -125,14 +125,14 @@ async def ingest_content_assets(
         job.state = IngestionState.FAILED_PERMANENT
         job.error = str(exc)
     job.updated_at = datetime.now(timezone.utc)
-    _store.put(job)
+    await _store.put(job)
 
     return {"ingestion_id": ingestion_id, "state": job.state.value}
 
 
 @router.post("/transcripts", status_code=202)
 async def ingest_transcripts(
-    body: TranscriptIngestionRequest, workspace_id: str = Depends(get_workspace_id)
+    body: TranscriptIngestionRequest, workspace_id: str = Depends(verify_api_key)
 ) -> dict:
     ingestion_id = str(uuid4())
     now = datetime.now(timezone.utc)
@@ -140,7 +140,7 @@ async def ingest_transcripts(
         ingestion_id=ingestion_id, workspace_id=workspace_id, kind="transcripts",
         state=IngestionState.ACCEPTED, created_at=now, updated_at=now,
     )
-    _store.put(job)
+    await _store.put(job)
 
     executor = GraphExecutor()
     # Fixture extractor by default — pyproject.toml's own open item notes no
@@ -172,14 +172,14 @@ async def ingest_transcripts(
         job.state = IngestionState.FAILED_PERMANENT
         job.error = str(exc)
     job.updated_at = datetime.now(timezone.utc)
-    _store.put(job)
+    await _store.put(job)
 
     return {"ingestion_id": ingestion_id, "state": job.state.value}
 
 
 @router.get("/{ingestion_id}")
-async def get_ingestion(ingestion_id: str, workspace_id: str = Depends(get_workspace_id)) -> dict:
-    job = _store.get(ingestion_id)
+async def get_ingestion(ingestion_id: str, workspace_id: str = Depends(verify_api_key)) -> dict:
+    job = await _store.get(ingestion_id)
     if job is None or job.workspace_id != workspace_id:
         # Same 404 whether the job never existed or belongs to another
         # workspace — a 403 would confirm the id's existence to a caller who

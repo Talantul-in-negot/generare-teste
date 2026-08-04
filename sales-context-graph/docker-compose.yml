@@ -31,6 +31,19 @@ services:
       timeout: 10s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: scg_redis
+    ports:
+      # Shifted from the 6379 default — same reasoning as neo4j's 7475/7688:
+      # avoid clashing with another project's redis on this machine.
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: .
@@ -42,17 +55,22 @@ services:
     env_file: .env
     environment:
       NEO4J_URI: bolt://neo4j:7687
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       neo4j:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - .:/app
 
 # No RabbitMQ/worker/queue services yet — ingestion starts as a synchronous
 # API call. Add a queue when transcript backlog exceeds the freshness SLA
-# (see docs/roadmap.md "When to add an ingestion worker" once written) —
-# not before there's a measured reason. Same for Redis/TimescaleDB: add
-# when there's a real cache-latency or KPI-reporting need, not speculatively.
+# (see docs/roadmap.md "When to add an ingestion worker" once written) — not
+# before there's a measured reason. Redis (above) was added for a concrete,
+# already-measured need (api/state.py's durable ingestion job store), not
+# speculatively — this comment used to defer Redis entirely; that's the
+# thing that changed.
 
 volumes:
   neo4j_data:

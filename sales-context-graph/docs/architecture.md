@@ -111,8 +111,9 @@ Datalog-style KG completion inference).
 
 FastAPI routes are intentionally thin — see `api/routes/*.py`. Tenant
 isolation is enforced once, at the dependency layer (`api/dependencies.py`'s
-`get_workspace_id`, an `X-Workspace-Id` header — see security doc for why a
-header and not a body field), not re-implemented per route.
+`verify_api_key`, which composes `get_workspace_id`'s `X-Workspace-Id` header
+read with an `X-Api-Key` check — see security doc for why a header and not a
+body field, and for the auth model), not re-implemented per route.
 
 Ingestion runs synchronously in-process within the request
 (`api/routes/ingestions.py`), which §11 explicitly permits for the MVP; job

@@ -2,7 +2,8 @@
 # sales-context-graph's actual env surface (see .env.example). Dropped fields with
 # no analog here: google/openai/deepseek/groq-specific knobs, wikidata_linking_enabled,
 # llm_cache_enabled, llm_ingest_provider, rabbitmq_url, session/oauth/cors settings
-# (auth is explicitly deferred per docs/plan.md §13 until a real IdP exists).
+# (a real IdP is still deferred per docs/plan.md §13 — workspace_api_keys below is
+# an MVP API-key-per-workspace stand-in, not that).
 #
 # _load_yaml() no longer crashes when config/settings.yml is absent (it is, until
 # a later phase's ontology work adds one) — it now fails open to {} with a warning,
@@ -51,6 +52,15 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = "scg_dev_local"
 
+    # ── Auth (MVP: API key per workspace, see api/dependencies.py::verify_api_key) ─
+    # JSON map workspace_id -> secret key, e.g. WORKSPACE_API_KEYS='{"ws-demo":"..."}'.
+    # pydantic-settings JSON-decodes dict-typed fields from a single env var.
+    workspace_api_keys: dict[str, str] = {}
+
+    # ── Redis (durable ingestion job store, see api/state.py::get_ingestion_store) ─
+    # Empty means "no Redis configured" -> falls back to InMemoryIngestionStore.
+    redis_url: str = ""
+
     # ── App ───────────────────────────────────────────────────────────────────────
     log_level: str = "INFO"
     env: str = "development"
@@ -66,6 +76,10 @@ class Settings(BaseSettings):
         if self.env == "production" and self.neo4j_password == "scg_dev_local":
             raise ValueError(
                 "neo4j_password must be changed from the default 'scg_dev_local' in production."
+            )
+        if self.env == "production" and not self.workspace_api_keys:
+            raise ValueError(
+                "workspace_api_keys must be configured in production (WORKSPACE_API_KEYS)."
             )
         return self
 

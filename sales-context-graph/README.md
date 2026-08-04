@@ -12,8 +12,10 @@ evidence-backed, query-specific context for one sales workflow:
 ## Status
 
 The full P0–P4.5 vertical slice described in [`docs/plan.md`](docs/plan.md) is
-implemented and tested. 171 tests pass (unit, integration against a live
-Neo4j, security, and eval), run in 8 increments — see the completion report at
+implemented and tested, plus MVP cloud-readiness hardening (API-key auth,
+durable Redis-backed job store, Fly.io deploy artifacts — see
+[`docs/deployment.md`](docs/deployment.md)). 185 tests pass (unit, integration
+against a live Neo4j, security, and eval) — see the completion report at
 the end of this document for the phase-by-phase breakdown, real measured
 numbers, and known limitations.
 
@@ -88,13 +90,20 @@ Requires Docker and Python 3.12+ (developed/tested against 3.11.6 — see
 "Known limitations" below).
 
 ```bash
-docker compose up -d neo4j
+docker compose up -d neo4j redis
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
 `docker-compose.yml`'s `neo4j` service publishes on host ports **7475/7688**,
 not Neo4j's defaults (7474/7687) — see the comment in that file for why.
+`redis` (added for the durable ingestion job store) is shifted to **6380**
+for the same reason.
+
+Every route below `/health`/`/ready` now requires an `X-Api-Key` header
+(`docs/security-and-tenancy.md`'s auth section) matching the claimed
+workspace's key in `WORKSPACE_API_KEYS` — `.env.example` ships a placeholder
+key for `ws-demo`; the curl examples below use it as-is.
 
 ## Running the tests
 
@@ -124,41 +133,53 @@ uvicorn api.main:app --reload
 ```
 
 ```bash
-# health / readiness
+# health / readiness — the only routes that don't require X-Api-Key
 curl localhost:8000/health
 curl localhost:8000/ready
 
 # ingest CRM data (workspace_id comes from the header, never the body — §13)
 curl -X POST localhost:8000/api/v1/ingestions/crm \
-  -H "X-Workspace-Id: ws-demo" -H "Content-Type: application/json" \
+  -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: replace-with-a-generated-secret" \
+  -H "Content-Type: application/json" \
   -d '{"accounts": [{"Id": "001x", "Name": "Acme Corp", "Website": "acme.com", "IsDeleted": false}]}'
 
 # check ingestion status
-curl localhost:8000/api/v1/ingestions/<ingestion_id> -H "X-Workspace-Id: ws-demo"
+curl localhost:8000/api/v1/ingestions/<ingestion_id> \
+  -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: replace-with-a-generated-secret"
 
 # ingest a transcript (email_to_contact_id/email_to_seller_id are optional —
 # omitted here, so every speaker resolves to speaker_role=UNKNOWN; pass them
 # to get real BUYER/SELLER resolution, as demo_volkswagen.py does)
 curl -X POST localhost:8000/api/v1/ingestions/transcripts \
-  -H "X-Workspace-Id: ws-demo" -H "Content-Type: application/json" \
+  -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: replace-with-a-generated-secret" \
+  -H "Content-Type: application/json" \
   -d @data/sample/gong_call.json
 
 # list mentions awaiting human review
-curl localhost:8000/api/v1/unresolved-mentions -H "X-Workspace-Id: ws-demo"
+curl localhost:8000/api/v1/unresolved-mentions \
+  -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: replace-with-a-generated-secret"
 
 # resolve one
 curl -X POST localhost:8000/api/v1/unresolved-mentions/<mention_id>/resolve \
-  -H "X-Workspace-Id: ws-demo" -H "Content-Type: application/json" \
+  -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: replace-with-a-generated-secret" \
+  -H "Content-Type: application/json" \
   -d '{"reviewer_id": "reviewer@example.com", "selected_entity_id": "<account_id>"}'
 
 # build a context graph for a subject
 curl -X POST localhost:8000/api/v1/context/build \
-  -H "X-Workspace-Id: ws-demo" -H "Content-Type: application/json" \
+  -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: replace-with-a-generated-secret" \
+  -H "Content-Type: application/json" \
   -d '{"subject_id": "<contact_id>"}'
 
 # fetch a claim's exact evidence
-curl localhost:8000/api/v1/claims/<claim_id>/evidence -H "X-Workspace-Id: ws-demo"
+curl localhost:8000/api/v1/claims/<claim_id>/evidence \
+  -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: replace-with-a-generated-secret"
 ```
+
+`replace-with-a-generated-secret` above matches `.env.example`'s placeholder
+verbatim — fine for a local `cp .env.example .env` demo; generate a real key
+(`python -c "import secrets; print(secrets.token_urlsafe(32))"`) for anything
+beyond that. See [`docs/deployment.md`](docs/deployment.md) for Fly.io.
 
 Sample request payloads for every endpoint live under
 [`data/sample/`](data/sample/).
@@ -168,11 +189,13 @@ Sample request payloads for every endpoint live under
 `GET /viz` (open `http://localhost:8000/viz` in a browser once the API is
 running) is a small, self-contained debugging page — not part of docs/plan.md's
 required API surface — that calls `POST /api/v1/context/build` from the form
-inputs (workspace, subject/conversation id, max nodes) and renders the
-returned Claims as a subject→predicate→object node-link graph (hand-rolled
+inputs (workspace, API key, subject/conversation id, max nodes) and renders
+the returned Claims as a subject→predicate→object node-link graph (hand-rolled
 force layout, no CDN dependency). Click an edge to fetch that Claim's exact
 evidence via `GET /api/v1/claims/{id}/evidence`, shown in the side panel.
 Edge color encodes polarity (green=AFFIRMED, red=NEGATED, yellow=HYPOTHETICAL).
+The `/viz` route itself has no server-side auth (it's static HTML, no data) —
+the access boundary is the API calls it makes, which do require `X-Api-Key`.
 
 ## Documentation
 
@@ -183,6 +206,8 @@ Edge color encodes polarity (green=AFFIRMED, red=NEGATED, yellow=HYPOTHETICAL).
   calibration data behind the thresholds
 - [`docs/security-and-tenancy.md`](docs/security-and-tenancy.md) — tenant
   isolation mechanism and what's explicitly *not* production-authorized yet
+- [`docs/deployment.md`](docs/deployment.md) — Fly.io deploy topology and
+  exact setup commands
 - [`docs/evaluation.md`](docs/evaluation.md) — metric definitions and real
   measured results from this repo's own test runs
 - [`docs/plan.md`](docs/plan.md) — the original authoritative spec this
@@ -221,11 +246,12 @@ breakdown per module.
   generated candidates, which is what's wired today. See
   `docs/entity-resolution.md` for the real measured calibration
   (`DEFAULT_LEXICAL_WEIGHT=0.97`) this choice drove.
-- **In-process ingestion job store** (`api/state.py`) does not survive a
-  process restart — proven, not just described, by
-  `tests/unit/api/test_ingestion_store.py`. The interface is shaped so a
-  durable (Redis/Postgres) implementation can replace it without changing any
-  caller.
-- **No authentication/identity provider** — `X-Workspace-Id` is a trusted
-  header standing in for real auth (`api/dependencies.py`). See
-  `docs/security-and-tenancy.md`.
+- **Ingestion job store**: durable when `REDIS_URL` is configured
+  (`api/state.py::RedisIngestionStore`, backed by Redis — `docker-compose`
+  locally, `fly redis create` on Fly). Falls back to an in-process dict
+  (`InMemoryIngestionStore`) when it isn't — that fallback does not survive a
+  process restart, proven by `tests/unit/api/test_ingestion_store.py`.
+- **Auth**: MVP API-key-per-workspace (`X-Api-Key`, checked against
+  `WORKSPACE_API_KEYS` — `api/dependencies.py::verify_api_key`), not a real
+  identity provider. No self-serve key rotation/revocation, no OAuth/JWT. See
+  `docs/security-and-tenancy.md` for exactly what this does and doesn't cover.

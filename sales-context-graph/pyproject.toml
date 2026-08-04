@@ -14,9 +14,12 @@ dependencies = [
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
     "pydantic-settings>=2.3",
-    # Only used by src/graph/alias_registry.py's optional warm-cache path, which
-    # fails open (returns None) if Redis is unreachable — no Redis service is
-    # required to run this repo's tests.
+    # Used by src/core/redis_client.py (the durable ingestion job store, see
+    # api/state.py::RedisIngestionStore) when REDIS_URL is set, and by
+    # src/graph/alias_registry.py's optional warm-cache path, which fails open
+    # (returns None) if Redis is unreachable. No Redis service is required to
+    # run this repo's unit tests (fakeredis stands in — see dev deps below);
+    # docker-compose's redis service is required for integration tests.
     "redis[asyncio]>=5.0",
     # Embedding provider (Part 7 item 6, now resolved): local
     # sentence-transformers (all-MiniLM-L6-v2, 384-dim) — no API key needed,
@@ -33,6 +36,7 @@ dev = [
     "hypothesis>=6.112",
     "ruff>=0.7",
     "mypy>=1.13",
+    "fakeredis>=2.20",
 ]
 
 [tool.pytest.ini_options]

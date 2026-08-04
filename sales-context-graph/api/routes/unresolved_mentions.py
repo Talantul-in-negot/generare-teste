@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import get_workspace_id
+from api.dependencies import verify_api_key
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.review_repository import ReviewRepository
@@ -30,7 +30,7 @@ class ResolveMentionRequest(BaseModel):
 
 
 @router.get("")
-async def list_unresolved_mentions(workspace_id: str = Depends(get_workspace_id)) -> dict:
+async def list_unresolved_mentions(workspace_id: str = Depends(verify_api_key)) -> dict:
     executor = GraphExecutor()
     repo = ReviewRepository(executor)
     mentions = await repo.list_mentions_by_status(workspace_id, "PENDING_REVIEW")
@@ -50,7 +50,7 @@ async def list_unresolved_mentions(workspace_id: str = Depends(get_workspace_id)
 
 
 @router.post("/{mention_id}/resolve")
-async def resolve_mention(mention_id: str, body: ResolveMentionRequest, workspace_id: str = Depends(get_workspace_id)) -> dict:
+async def resolve_mention(mention_id: str, body: ResolveMentionRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
     if not body.rejected and not body.selected_entity_id:
         raise HTTPException(status_code=422, detail="selected_entity_id is required unless rejected=true")
 

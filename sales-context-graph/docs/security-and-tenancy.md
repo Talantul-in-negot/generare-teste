@@ -54,22 +54,31 @@ organizational/permission dimension *inside* a workspace, not itself a tenant
 boundary. They are not interchangeable; nothing in this repo authorizes access
 based on `division_id` alone.
 
-## Authentication — not implemented
+## Authentication — MVP API-key-per-workspace, not a real identity provider
 
 `api/dependencies.py::get_workspace_id` reads a trusted `X-Workspace-Id`
-header — **not** real authentication. It exists so every route depends on one
-function (never reads a header or, worse, a request-body field directly),
-which is what makes `workspace_id` "come from trusted request/authentication
-context, not a user-controlled body field" even before real auth exists:
-swapping this function's body for JWT/session-derived extraction later changes
-nothing about any route's signature.
+header. On its own that's not authentication — it exists so every route
+depends on one function (never reads a header or, worse, a request-body field
+directly), which is what makes `workspace_id` "come from trusted request/
+authentication context, not a user-controlled body field."
 
-**This repo is not production-authorized.** There is no identity provider, no
+`api/dependencies.py::verify_api_key` composes on top of it and is what
+authenticated routes actually depend on: it additionally requires an
+`X-Api-Key` header matching the claimed workspace's configured secret
+(`Settings.workspace_api_keys`, a `WORKSPACE_API_KEYS` JSON map env var,
+compared with `secrets.compare_digest` for timing-safety). `/health` and
+`/ready` deliberately stay on no auth at all (Fly.io's health-check prober
+can't attach secrets, and both return only process/schema status, no tenant
+data) — see `docs/deployment.md`.
+
+**This is still not a real identity provider** — no self-serve key rotation,
+no per-key revocation without a redeploy, no OAuth/JWT/session model, no
 authorization-policy interface beyond the workspace boundary, and no
-division/team/opportunity-level authorization hooks. Anyone who can set an
-`X-Workspace-Id` header can read/write that workspace. This mirrors the
-plan's own stated scope boundary (§13): "not described as production-
-authorized until a real identity provider and policy implementation exist."
+division/team/opportunity-level authorization hooks. Keys live in `fly
+secrets`/`.env` as plaintext env vars. This mirrors the plan's own stated
+scope boundary (§13): a real IdP and policy implementation is still future
+work — `verify_api_key` closes the "anyone can claim any workspace" gap, not
+the full §13 scope.
 
 ## PII and secrets
 
@@ -104,5 +113,6 @@ authorized until a real identity provider and policy implementation exist."
    deliberately has no `workspace_id` field (proven for one route in
    `tests/integration/test_context_api.py::
    test_context_build_workspace_id_comes_from_header_not_body`).
-3. Real auth: replace `get_workspace_id`'s header read with a verified
-   JWT/session claim before any non-demo deployment.
+3. Real auth: replace `verify_api_key`'s static-env-var key map with a
+   revocable, rotatable, ideally hashed key store (or a real JWT/session-
+   claim-based IdP) before onboarding beyond a handful of pilot workspaces.

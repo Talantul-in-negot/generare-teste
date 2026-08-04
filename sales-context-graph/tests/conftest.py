@@ -5,6 +5,8 @@ Neo4j default 7687). `docker compose up -d neo4j` before running this suite.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 import src.core.neo4j_client as neo4j_client_module
@@ -13,6 +15,24 @@ from src.core.neo4j_client import Neo4jClient
 from src.embedding.sentence_transformer_provider import SentenceTransformerEmbeddingProvider
 from src.graph.execution import GraphExecutor
 from src.graph.migrations.migration_001_init_schema import run as run_migration
+
+
+def auth_headers(monkeypatch, workspace_id: str, api_key: str = "test-key") -> dict:
+    """Registers `api_key` for `workspace_id` via WORKSPACE_API_KEYS and returns
+    the X-Workspace-Id/X-Api-Key header pair every authenticated route now
+    requires (api/dependencies.py::verify_api_key). Needed because integration
+    tests mint their own workspace ids per-test via uuid4(), so a single static
+    env value can't pre-enumerate them. Merges into any already-registered
+    workspaces (rather than overwriting) so a single test can call this more
+    than once — e.g. to register both the real workspace and a second
+    workspace used in a cross-tenant-isolation check."""
+    import os
+
+    existing = json.loads(os.environ.get("WORKSPACE_API_KEYS") or "{}")
+    existing[workspace_id] = api_key
+    monkeypatch.setenv("WORKSPACE_API_KEYS", json.dumps(existing))
+    get_settings.cache_clear()
+    return {"X-Workspace-Id": workspace_id, "X-Api-Key": api_key}
 
 
 @pytest.fixture(scope="session")
