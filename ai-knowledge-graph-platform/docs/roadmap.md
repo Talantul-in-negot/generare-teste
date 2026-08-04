@@ -569,3 +569,27 @@ extrapolated or guessed. Revisit only if the CPU latency budget changes
 non-semantic-similarity queries (SPLADE's actual niche) that BM25+dense
 already demonstrably miss — re-run the same script with the aerospace or
 automotive corpus ingested to get the other half of this decision.
+
+## When to add MMR (Maximal Marginal Relevance) reranking
+
+Not currently planned, though the cost case is favorable. Measured via
+`scripts/benchmark_mmr_latency.py` (see `tasks/lessons.md` A158, a
+fully-synthetic micro-benchmark — no Neo4j, no corpus dependency):
+selection cost is negligible, mean 0.36–0.49ms / p95 under 1.2ms per
+top-5/top-10 selection over a 50-candidate pool — roughly 4 orders of
+magnitude cheaper than SPLADE's measured cost above. Unlike SPLADE, this
+doesn't need a new model or dependency; `vector_search_chunks`
+(`graphrag/graph/neo4j_client.py:766`) would just need to also return
+`c.embedding`, and the natural integration point is the existing
+lexical-diversity step in `local_search.py:237-264` (same position,
+embedding-similarity check instead of filename/text-ratio).
+
+The retrieval-quality gain this would need to justify remains **unmeasured**,
+for the identical reason as SPLADE — the aerospace/automotive golden
+corpora aren't ingested in the current environment. A cheap-and-unproven
+mechanism isn't a green light on its own: revisit once a corpus is ingested
+and `expected_citations`-based coverage/MRR can actually be compared
+against the existing lexical-diversity mechanism (would MMR catch
+semantically-redundant chunks worded differently across documents that the
+filename/text-ratio checks miss — that's the concrete gap to check for,
+not "is MMR generically better").

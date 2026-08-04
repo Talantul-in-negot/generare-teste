@@ -5815,3 +5815,64 @@ No tests added — this is a one-off measurement script
 (`evals/splade_impact_results.json` holds the raw run), same convention as
 `eval_hop_ranking.py`/`benchmark_retrieval_ablation.py`, neither of which
 has a test file. No production code touched.
+
+## A158 — MMR latency: negligible, confirmed not assumed; quality unmeasured for the same reason as A157
+
+Follow-on to A157. User asked for the same treatment for MMR (Maximal
+Marginal Relevance). MMR isn't implemented anywhere in this repo — what
+exists instead is a **lexical-diversity** mechanism
+(`graphrag/retrieval/local_search.py:237-264`, filename-based
+document-coverage dedup; `graphrag/retrieval/context_builder.py:15-28`,
+near-duplicate TEXT filter via `SequenceMatcher` ratio ≥ 0.85). Same goal
+as MMR (avoid redundant context slots), different mechanism — string-based,
+not embedding-similarity-based. Real MMR would catch a case neither
+existing check does: two chunks from different documents, worded
+completely differently, that are semantically redundant.
+
+Raised proactively before starting (not discovered mid-task, unlike A157):
+a quality-delta measurement would hit the exact same wall as A157 — the
+aerospace/automotive golden corpora still aren't ingested in this Neo4j
+instance (only `pharma`, 7 docs, confirmed in A157). Asked the user how to
+proceed; this time chose **latency + design only**, no quality-delta
+measurement.
+
+That scoping made the whole approach different from A157, not just
+smaller: built `scripts/benchmark_mmr_latency.py` as a **fully synthetic**
+micro-benchmark — random unit-norm 3072-dim vectors (matches
+`Chunk.embedding`'s real dimension) and random relevance scores, standard
+greedy MMR selection (`λ*relevance - (1-λ)*max_sim_to_selected`, λ=0.5).
+No Neo4j connection, no LLM, no golden set, no model download (unlike
+SPLADE — MMR only needs cosine similarity over embeddings the pipeline
+already computes, `numpy` already a transitive dependency). This sidesteps
+the empty-corpus problem entirely rather than working around it with an
+unrepresentative 7-document pool — a 7-candidate MMR selection would
+produce a number that looks like a measurement but isn't a meaningful one,
+the same trap A157 was written to avoid.
+
+**Result: cost is negligible, and this was checked rather than assumed.**
+Over 200 trials, pool_size=50 (matches A157's candidate-pool convention):
+top_k=5 mean=0.36ms / p50=0.25ms / p95=0.98ms / max=2.37ms; top_k=10
+mean=0.49ms / p50=0.39ms / p95=1.16ms / max=1.89ms. Compare to SPLADE's
+measured +2072ms mean per query (A157) — roughly 4 orders of magnitude
+cheaper. The "MMR is basically free, unlike a neural reranker" intuition
+turned out correct here, but it was run, not stated on priors — same
+discipline as A146/A148/A157 (measure before hypothesizing), applied even
+when the answer was the boring/expected one.
+
+**Design note for a real integration (not built)**: `vector_search_chunks`
+(`graphrag/graph/neo4j_client.py:766`) returns `c.id, c.text, score` — no
+embedding vector — so a real MMR pass would need one extra field on that
+query (or a follow-up lookup, mirroring the `_chunk_doc_map` pattern used
+in both A157's script and `eval_hop_ranking.py`). Natural integration point
+is `local_search.py`'s existing lexical-diversity step (:237-264) — same
+position in the pipeline, swapping filename/text-ratio redundancy checks
+for embedding cosine-similarity ones, not a new pipeline stage.
+
+**Decision**: not building it now — the computational case is trivially
+favorable (sub-millisecond, unlike SPLADE), but the quality case remains
+genuinely unmeasured, same as SPLADE, for the same reason. Cheap-and-unproven
+isn't a green light on its own; it's one open input to a decision that
+still needs the corpus-ingestion half to be answerable.
+
+No tests added, no production code touched — same one-off-script
+convention as A157. `evals/mmr_latency_results.json` holds the raw run.
