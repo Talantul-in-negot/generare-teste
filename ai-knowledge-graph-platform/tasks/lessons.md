@@ -5943,3 +5943,20 @@ quality slightly worse — a data-backed "no," not an absence of data.
 
 No tests added, no production code touched.
 `evals/mmr_quality_results.json` holds the raw run.
+
+## A160 - Demo Context Graph recording is a fidelity compromise
+
+The development demo now exposes a `Record to Context Graph` action after each
+completed answer. It calls the existing WPP campaign-placement convenience
+endpoint and uses the page's tenant, so the same control works for every demo
+tenant. The user selects `allow`, `deny`, or `escalate` because that decision
+cannot be inferred safely from an answer bubble alone.
+
+The demo result currently exposes citations but not authoritative statement,
+chunk, or document version lineage. The UI therefore reuses the deduplicated
+citation values for those three reference arrays and supplies the placeholder
+version `v1`; an empty citation set uses `no-citations` only to satisfy the
+convenience endpoint's required statement reference. This is intentionally
+labelled as demo fidelity, not real provenance. A production-quality control
+must expose typed evidence references and their actual versions from the query
+result before recording a governed trace.

@@ -13,6 +13,8 @@ router = APIRouter()
 _GRAPH_HTML_PATHS = {
     "automotive": "graphify-out/graph.html",
     "marketing":  "data/wpp_demo/graphify-out/graph.html",
+    "pharma":    "data/pharma_commercial/graphify-out/graph.html",
+    "aerospace": "data/aerospace/graphify-out/graph.html",
 }
 
 _TENANT_META = {
@@ -53,6 +55,42 @@ _TENANT_META = {
             "What ad categories are excluded under the Nova Beverages SOW?",
             "Can we run sports-betting placements in Germany for the EU Q3 SummerRush campaign?",
             "Which document has the highest authority over campaign decisions?",
+        ],
+    },
+    "pharma": {
+        "title": "GraphRAG - Commercial Pharma",
+        "badge": "tenant: pharma - mode: hybrid",
+        "subtitle_ro": "Pune o intrebare despre corpusul sintetic de commercial pharma",
+        "subtitle_en": "Ask a question about the synthetic commercial-pharma corpus",
+        "placeholder_ro": "Scrie o intrebare despre documentele pharma...",
+        "placeholder_en": "Ask a question about the commercial-pharma documents...",
+        "suggestions_ro": [
+            "Ce content aprobat poate fi folosit pentru un cardiolog din Germania?",
+            "Este aprobata versiunea curenta pentru produs, indicatie si piata?",
+            "Ce document este expirat si trebuie respins?",
+        ],
+        "suggestions_en": [
+            "Which approved content can be used for a cardiology specialist in Germany?",
+            "Is the current version approved for the product, indication, and market?",
+            "Which document is expired and must be rejected?",
+        ],
+    },
+    "aerospace": {
+        "title": "GraphRAG - Aerospace Compliance",
+        "badge": "tenant: aerospace - mode: hybrid",
+        "subtitle_ro": "Pune o intrebare despre corpusul de reglementari aerospace",
+        "subtitle_en": "Ask a question about the aerospace regulatory corpus",
+        "placeholder_ro": "Scrie o intrebare despre documentele aerospace...",
+        "placeholder_en": "Ask a question about the aerospace documents...",
+        "suggestions_ro": [
+            "Ce cerinte se aplica pentru aceasta componenta aerospace?",
+            "Ce document reglementar are prioritate?",
+            "Exista dovezi suficiente pentru aceasta decizie?",
+        ],
+        "suggestions_en": [
+            "Which requirements apply to this aerospace component?",
+            "Which regulatory document has priority?",
+            "Is there sufficient evidence for this decision?",
         ],
     },
 }
@@ -121,6 +159,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     font-family: monospace;
   }
   .latency { font-size: 0.75rem; color: #475569; margin-top: 6px; }
+  .context-record {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid #334155;
+  }
+  .context-record select, .context-record button {
+    padding: 6px 10px; border-radius: 6px; font-size: 0.78rem;
+    border: 1px solid #334155; background: #0f172a; color: #cbd5e1;
+  }
+  .context-record button { background: #0f766e; color: #ecfeff; cursor: pointer; }
+  .context-record button:hover:not(:disabled) { background: #115e59; }
+  .context-record button:disabled { opacity: 0.65; cursor: wait; }
+  .context-record .recorded { color: #6ee7b7; font-size: 0.78rem; }
   .trace-step {
     font-size: 0.82rem; color: #94a3b8; padding: 2px 0;
     animation: fadein 0.3s ease;
@@ -305,6 +355,19 @@ async function ask(question) {
         html += `<div class="citations">Sources: ${chips}</div>`;
       }
       html += `<div class="latency">⏱ ${latency}s</div>`;
+      const uniqueCitations = [...new Set(result.citations || [])];
+      html += `<div class="context-record">
+        <select aria-label="Decision selection">
+          <option value="escalate" selected>Decision: escalate</option>
+          <option value="allow">Decision: allow</option>
+          <option value="deny">Decision: deny</option>
+        </select>
+        <button type="button"
+          data-question="${encodeURIComponent(question)}"
+          data-citations="${encodeURIComponent(JSON.stringify(uniqueCitations))}"
+          data-tenant="{tenant}"
+          onclick="recordTrace(this)">Record to Context Graph</button>
+      </div>`;
       addBubble(html, 'assistant');
     }
   } catch(e) {
@@ -313,6 +376,48 @@ async function ask(question) {
     addBubble('Error: ' + e.message, 'assistant');
   }
   send.disabled = false;
+}
+
+async function recordTrace(button) {
+  const wrapper = button.parentElement;
+  const select = wrapper.querySelector('select');
+  const selected = select.value;
+  button.disabled = true;
+  try {
+    const citations = JSON.parse(decodeURIComponent(button.dataset.citations || '%5B%5D'));
+    const evidence = citations.length ? citations : ['no-citations'];
+    const versions = values => values.map(() => 'v1');
+    const body = {
+      placement_id: 'demo-' + Date.now(),
+      question: decodeURIComponent(button.dataset.question),
+      statement_ids: evidence,
+      statement_versions: versions(evidence),
+      chunk_ids: citations,
+      chunk_versions: versions(citations),
+      document_ids: citations,
+      document_versions: versions(citations),
+      selected,
+      tenant: button.dataset.tenant
+    };
+    const tok = await getToken();
+    const response = await fetch('/context-graph/wpp/campaign-placement', {
+      method: 'POST',
+      headers: {'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+      throw new Error((await response.text()) || `HTTP ${response.status}`);
+    }
+    const result = await response.json();
+    const recorded = document.createElement('span');
+    recorded.className = 'recorded';
+    recorded.textContent = 'Recorded - decision: ' + result.decision_id;
+    wrapper.replaceChildren(recorded);
+  } catch (error) {
+    console.error('[demo] context graph record error', error);
+    button.disabled = false;
+    button.textContent = 'Record failed - retry';
+  }
 }
 
 function showTab(name) {
