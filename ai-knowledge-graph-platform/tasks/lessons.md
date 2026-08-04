@@ -5685,3 +5685,77 @@ succeeds first try, retries then succeeds, exhausts retries and raises, and
 confirms a failure on the *read* half of the function (prior-steps lookup)
 triggers a retry of the whole unit, not just the write half. Full suite:
 752 passed, 0 failed.
+
+## A156 — Async pipelines can't return a synchronous 503 for a failure that only happens later, in the worker
+
+Follow-on to A155. The user's request: a follow-up question that can't get
+its conversation history should get `503 Session context unavailable`
+rather than being silently answered as if it were the first message —
+strict continuity **only for follow-ups**, not the existing global
+`session_store_strict=true` (`session_store.py`), which is process-wide and
+would 503 the *first* message of every conversation too, even though a
+first message has no history to depend on.
+
+My first read of the request assumed threading a `requires_session_context`
+flag through the whole async pipeline: route → `QueryMessage` → RabbitMQ →
+`QueryConsumer.handle()` → `QueryAgent.run()` →
+`HybridRetriever.retrieve_and_answer()` → `LocalSearch.search()` →
+`SessionContext.enrich_query()` → `SessionStore.load_turns()` — 8 files.
+That was wrong for this architecture, and worth stating why rather than
+just the correction: `POST /query` returns immediately with a `query_id`
+and `"queued"`; an HTTP 503 cannot be produced by something that only fails
+later, inside the worker, after the original request already returned 200.
+A failure at that point could only ever surface via the client polling
+`GET /query/{id}`, which doesn't match "va primi 503" — a direct response
+to the request that asked for it. A155 already established the correct
+shape for exactly this constraint (the `set_status` pre-flight check before
+publishing) — this is the same pattern reused, not a new one.
+
+**Fix**: a real pre-flight check in `POST /query`, before enqueueing
+anything. `SessionStore.load_turns()` gets a `required: bool = False`
+parameter — a **per-call override, independent of the module's own
+`session_store_strict` setting** — that raises `SessionContextUnavailable`
+when Redis is configured but the read fails, instead of falling through to
+memory. `QueryRequest` gets `requires_session_context: bool = False`, set
+by the UI from the second message of a conversation onward. Explicitly
+**not** inferred from `session_id` server-side, per the user's own
+reasoning: a first message can already carry a freshly-generated
+`session_id`, so its presence doesn't distinguish "new conversation" from
+"continuing one." When true: no `session_id` → 400; session store raises →
+503, and neither `set_status` nor `publish_query` ever run; session store
+succeeds → proceeds exactly as before. When the flag is left at its
+default, no session-store call happens at all — a new, standalone question
+is completely unaffected and stays available even if Redis is down.
+
+**Scoped to the read path only**, matching A155's `push_progress` asymmetry
+precedent: `save_turn`/`clear` are untouched. Whether *this* answer is
+correct depends on successfully reading prior turns before generating it;
+recording the new turn afterward only affects some *future* follow-up, and
+failing an already-good, already-answered request over a write blip would
+be over-scoping past what was asked.
+
+**Deliberately not done, matching the user's explicit exclusions**: no
+in-memory fallback across workers (defeats the point — a memory dict in
+one process is invisible to another) and no global `session_store_strict`
+flip (would 503 every first message too, not just follow-ups).
+
+**Known limitation, stated rather than solved**: there's a real TOCTOU gap
+between the pre-flight check in the route and the worker's later actual
+read during retrieval — Redis could die in the few seconds between them.
+Same class of gap as A155's result-write retry (mitigated there, not
+eliminated). Not addressed here since the user didn't ask for an atomic
+end-to-end guarantee, and building one (e.g. a distributed lock, or a
+synchronous non-queued path for `requires_session_context` requests) would
+be solving a problem nobody has measured yet — same discipline as declining
+to add a Redis circuit breaker in A155.
+
+Tests: 14 new. `test_session_store.py` (new file) — `required=True` raises
+on Redis failure, returns normally on success, does NOT raise when Redis
+was never configured (the never-configured-vs-failing distinction, same as
+A155); two regression tests confirming `required=False` (the default)
+leaves both non-strict and strict module behavior completely unchanged.
+Extended `test_query_routes.py` — 400 with no `session_id`, 503 with
+neither `set_status` nor `publish_query` called when the store is down,
+200 when it succeeds, and a test proving the default `False` skips the
+session-store call entirely (`load_turns.assert_not_awaited()`). Full
+suite: 761 passed, 0 failed.

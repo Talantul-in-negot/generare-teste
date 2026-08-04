@@ -13,6 +13,7 @@ from api.auth.dependencies import require_scope
 from api.limiter import QUERY_LIMIT, limiter
 from graphrag.messaging.publishers import publish_query
 from graphrag.retrieval.result_store import ResultStoreUnavailable, get_result_store
+from graphrag.retrieval.session_store import SessionContextUnavailable, get_session_store
 
 router = APIRouter()
 
@@ -25,6 +26,12 @@ class QueryRequest(BaseModel):
     session_id: str = ""
     valid_at: str | None = None
     transaction_at: str | None = None
+    # Set by the UI from the second message of a conversation onward — never
+    # inferred from session_id server-side, since a first message can carry
+    # a freshly-generated session_id too. When true, a follow-up that can't
+    # get its history is refused (503) rather than silently answered without
+    # context. See tasks/lessons.md A156.
+    requires_session_context: bool = False
 
 
 class QueryResponse(BaseModel):
@@ -40,6 +47,21 @@ async def submit_query(request: Request, body: QueryRequest):
     Rate-limited to prevent LLM quota exhaustion.
     Default: 60 requests/minute per client IP (override via GRAPHRAG_RATE_LIMIT_QUERY).
     """
+    if body.requires_session_context:
+        if not body.session_id:
+            raise HTTPException(status_code=400,
+                detail="requires_session_context requires a session_id")
+        # A real read, not a generic ping — the exact operation the worker
+        # would later depend on to enrich this follow-up. required=True
+        # overrides the store's own strict/non-strict default for this one
+        # call: don't enqueue a real ~13-26s LLM retrieval for a follow-up
+        # that's already known to be unable to get correct context.
+        try:
+            await get_session_store().load_turns(body.session_id, required=True)
+        except SessionContextUnavailable as exc:
+            raise HTTPException(status_code=503,
+                detail=f"Session context unavailable: {exc}")
+
     from uuid import uuid4
     query_id = str(uuid4())
     # Write "queued" BEFORE publishing — prevents a fast cache-hit in the worker

@@ -65,6 +65,17 @@ SESSION_MAX_TURNS  = 10
 SESSION_TTL_SECONDS = 86_400   # 24 hours
 
 
+class SessionContextUnavailable(Exception):
+    """Raised by load_turns(required=True) when Redis is configured but the
+    read fails. A per-call override, independent of the module's own
+    strict/non-strict setting (`session_store_strict`) — used by
+    api/routes/query.py's requires_session_context pre-flight check so a
+    follow-up question can be refused with 503 rather than silently
+    answered without its history. Never raised for the deliberate
+    memory-only mode (Redis never configured) or a genuine cache miss.
+    """
+
+
 class SessionStore:
     """
     Persistent session turn store backed by Redis with in-memory fallback.
@@ -171,8 +182,15 @@ class SessionStore:
 
     # ── Core operations ────────────────────────────────────────────────────────
 
-    async def load_turns(self, session_id: str) -> deque[SessionTurn]:
-        """Return the turn history for a session (most recent last)."""
+    async def load_turns(self, session_id: str, required: bool = False) -> deque[SessionTurn]:
+        """Return the turn history for a session (most recent last).
+
+        `required=True` overrides the module's own strict/non-strict
+        setting for this one call: if Redis is configured but the read
+        fails, raises SessionContextUnavailable instead of falling through
+        to memory. Never raised when Redis was never configured at all —
+        that's a deliberate deployment choice, not a failure.
+        """
         if self._redis is not None:
             try:
                 raw_list = await self._redis.lrange(self._key(session_id), 0, -1)
@@ -184,6 +202,10 @@ class SessionStore:
                         pass   # skip corrupted entries
                 return turns
             except Exception as exc:
+                if required:
+                    log.error("session_store.redis_load_failed_required",
+                              session_id=session_id, error=str(exc))
+                    raise SessionContextUnavailable(str(exc)) from exc
                 self._log_op_failure("load", exc)
                 # Fall through to memory
 

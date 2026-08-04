@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from api.auth.dependencies import get_current_user
 from api.routes import query as query_routes
 from graphrag.retrieval.result_store import ResultStoreUnavailable
+from graphrag.retrieval.session_store import SessionContextUnavailable
 
 
 def _make_client() -> TestClient:
@@ -63,6 +64,86 @@ class TestSubmitQueryResultStoreDown:
 
         assert resp.status_code == 200
         mock_publish.assert_awaited_once()
+
+
+class TestRequiresSessionContext:
+    """A156: a follow-up marked requires_session_context must be refused
+    (not silently answered without history) if session storage can't be
+    reached — checked synchronously at enqueue time, since POST /query
+    returns immediately and a later worker-side failure could only ever
+    surface via polling, not as a direct response."""
+
+    def test_400_when_no_session_id(self):
+        client = _make_client()
+        with patch("api.routes.query.get_result_store", return_value=AsyncMock()):
+            resp = client.post("/query", json={
+                "question": "what about their engines?",
+                "requires_session_context": True,
+            })
+        assert resp.status_code == 400
+
+    def test_503_when_session_store_unavailable_and_never_publishes(self):
+        client = _make_client()
+        mock_session_store = AsyncMock()
+        mock_session_store.load_turns = AsyncMock(
+            side_effect=SessionContextUnavailable("Redis down")
+        )
+        mock_result_store = AsyncMock()
+
+        with (
+            patch("api.routes.query.get_session_store", return_value=mock_session_store),
+            patch("api.routes.query.get_result_store", return_value=mock_result_store),
+            patch("api.routes.query.publish_query", new_callable=AsyncMock) as mock_publish,
+        ):
+            resp = client.post("/query", json={
+                "question": "what about their engines?",
+                "session_id": "s1",
+                "requires_session_context": True,
+            })
+
+        assert resp.status_code == 503
+        mock_result_store.set_status.assert_not_awaited()
+        mock_publish.assert_not_awaited()
+
+    def test_200_when_session_store_available(self):
+        client = _make_client()
+        mock_session_store = AsyncMock()
+        mock_session_store.load_turns = AsyncMock(return_value=[])
+        mock_result_store = AsyncMock()
+        mock_result_store.set_status = AsyncMock(return_value=None)
+
+        with (
+            patch("api.routes.query.get_session_store", return_value=mock_session_store),
+            patch("api.routes.query.get_result_store", return_value=mock_result_store),
+            patch("api.routes.query.publish_query", new_callable=AsyncMock) as mock_publish,
+        ):
+            resp = client.post("/query", json={
+                "question": "what about their engines?",
+                "session_id": "s1",
+                "requires_session_context": True,
+            })
+
+        assert resp.status_code == 200
+        mock_publish.assert_awaited_once()
+
+    def test_default_false_skips_precheck_entirely(self):
+        """When requires_session_context is left at its default, no
+        session-store call should happen at all — existing single-question
+        callers are completely unaffected."""
+        client = _make_client()
+        mock_session_store = AsyncMock()
+        mock_result_store = AsyncMock()
+        mock_result_store.set_status = AsyncMock(return_value=None)
+
+        with (
+            patch("api.routes.query.get_session_store", return_value=mock_session_store),
+            patch("api.routes.query.get_result_store", return_value=mock_result_store),
+            patch("api.routes.query.publish_query", new_callable=AsyncMock),
+        ):
+            resp = client.post("/query", json={"question": "hello"})
+
+        assert resp.status_code == 200
+        mock_session_store.load_turns.assert_not_awaited()
 
 
 class TestGetQueryResultResultStoreDown:
