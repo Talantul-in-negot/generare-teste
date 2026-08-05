@@ -194,7 +194,19 @@ nodes lighting up in sequence as the voiceover names them.
    **open conflicts** on this same opportunity currently returns an empty
    list — this fixture doesn't carry a contradicting-claim pair yet, so
    don't demo that intent against this specific deal.)
-2. Click the **Alerts** tab (`data-tab="alerts"`) — same per-tab
+2. Still in Browse Intents, select **"What are the most common objections
+   across my pipeline?"** (`top-objections`) and fill **Seller ID** with
+   Nina Novak's id —
+   `ba07068819c1ae7302e92cb0ff50248dd43e6c7ac384540e494189f71430f8f0` —
+   click **Run**. Verified live: returns one group,
+   `{"object_value": "pricing", "count": 2, "example_claim_ids": [...]}` —
+   two independently-extracted pricing objections from two different deals
+   in Nina's open pipeline (Acme Corp Expansion and Northwind New Logo),
+   aggregated correctly. This is the moment that actually demonstrates
+   cross-deal aggregation, not a single-opportunity result relabeled — the
+   thing Scene 2's voiceover promises ("top objections across your open
+   pipeline") but nothing earlier in the script shows on screen.
+3. Click the **Alerts** tab (`data-tab="alerts"`) — same per-tab
    `Workspace`/`API Key` fields as Browse Intents (paste the key), leave
    Seller ID blank to scope the whole workspace, click **Get digest**
    (`#alertsRunBtn`). Verified live against `ws-demo`: 4 real signals came
@@ -333,9 +345,9 @@ Final frame holds on the repo URL / demo link.
      idempotent — the earlier segments collapse, only the new sentence adds
      a segment+Claim) makes `top-objections` for Nina return `pricing`
      `count: 2`, `example_claim_ids` pointing at both the Acme and Northwind
-     Claims — verified live. This is the moment worth using on screen for
-     **top-objections**, if Scene 6 is extended to demo it: two independent
-     deals, two independently-extracted Claims, aggregated correctly.
+     Claims — verified live. Now on screen as Scene 6 step 2: two
+     independent deals, two independently-extracted Claims, aggregated
+     correctly.
 - **Source of truth for claims made on screen:** [`docs/architecture.md`](architecture.md),
   [`docs/entity-resolution.md`](entity-resolution.md), [`README.md`](../README.md),
   `api/routes/viz.py` (UI element ids). Any number added later (test counts,
