@@ -106,19 +106,41 @@ nodes lighting up in sequence as the voiceover names them.
    match the process, leaving a stale server holding the old key in memory.
    Never commit the real value or paste it into this script file; `.env` is
    gitignored for exactly this reason.
-3. Click into the question textarea, type: *"what's blocking the Volkswagen
-   deal?"*
+3. Click into the question textarea, type: *"what content should I send to
+   Elena Popescu at Volkswagen to address her pricing objection?"* — use the
+   buyer contact's **full name**, not just "Elena": tested live against the
+   seeded fixture, and a first-name-only phrasing left `buyer_contact_id`
+   unresolved (the linker matched "Volkswagen" against Contact candidates
+   instead, with low scores, and the request came back `"answered": false`
+   with an ambiguity list instead of a recommendation). With the full name,
+   `POST /api/v1/ask` returns `intent_id: "recommend-content"` at
+   `confidence: 0.9`, both `opportunity_id` and `buyer_contact_id` resolved
+   (`Volkswagen Group`, `Elena Popescu`), and `"answered": true` with the
+   full recommendation payload — verified live, not assumed. Avoid vaguer
+   phrasings like "what's blocking this deal?": it classifies as
+   `open-commitments` (predicate `HAS_ACTION_ITEM`), which this fixture
+   carries none of — the deal only has `HAS_BLOCKER` and `RAISED_OBJECTION`
+   claims, so that phrasing returns an empty result even though the
+   underlying data is fine.
 4. Check **Include narrative summary**.
 5. Click the **Ask** button (`#askRunBtn`).
-6. The result panel (`#askResult`) renders progressively: the classified
-   intent, the resolved entity ("Volkswagen Group" — resolution shown as
-   AUTO_LINKED with its relational signals), the objection Claim with its
-   exact evidence span underlined against the source transcript sentence,
-   then the recommended content asset — with a second, previously-viewed
-   candidate visibly crossed out and labeled "excluded — already viewed."
-7. Below that, the narrative summary appears as two or three sentences, each
-   trailing a `[claim_id]` citation that highlights the matching Claim above
-   when hovered.
+6. The result panel (`#askResult`) renders — this is the actual `/viz`
+   markup, not a mockup: an **"Answer"** heading (it reads "Could not
+   answer" when `answered` is false), a line with the classified
+   `intent_id` and `confidence`, and the `reasoning` string the classifier
+   returned. Below that, a raw-but-readable JSON tree of `data.result` —
+   `opportunity_id`, `objection_claim_id`, `evidence_text`, the full
+   `recommended_asset` object, `ranked_candidates` (each with
+   `matched_tags` and `rank_score`), and `excluded_viewed_asset_ids`. There
+   is no syntax highlighting on the evidence span and no "crossed out" asset
+   styling — it's a plain nested key/value tree (`renderJson()` in
+   `api/routes/viz.py`); the exclusion is legible as a listed id, not a
+   visual strike-through.
+7. Below that, if narrative was requested: a **"Narrative"** heading, the
+   summary text as one paragraph, then each `[claim_id] excerpt` citation on
+   its own line underneath — plain text lines, not inline hover-linked
+   highlights back to a claim table (there isn't one rendered above it to
+   link to).
 
 **VOICEOVER:**
 > "It finds the most recent relevant call, identifies an objection actually
