@@ -77,6 +77,18 @@ nodes lighting up in sequence as the voiceover names them.
    default, showing an empty SVG canvas and a left-side control panel
    (`Workspace`, `X-Api-Key`, `Subject ID`, `Conversation ID`, `Max nodes`,
    a **Build** button).
+4. Paste the `ws-demo` API key, and fill **Conversation ID** with
+   `eb91dade3fd7c13bd32a60989af6d0ea1b2a1d61cd601c8b6a0b640619282dbe` (the VW
+   call). **This field is required for a result** — `ContextGraphBuilder`
+   only fetches candidates if `conversation_id` or `subject_id` is set
+   (`src/context_graph/builder.py`); Build with both left on their
+   `optional`/`default` placeholders returns `nodes_used: 0`, an empty
+   graph, honestly — not a bug, but easy to demo by accident if this field
+   is skipped. Click **Build**. Verified live: 4 Claims come back
+   (`HAS_BLOCKER`×2, `MENTIONS_ORG`, `RAISED_OBJECTION`), each scored
+   `0.6275` with the visible reason string (`confidence=0.75,
+   adjudication=UNREVIEWED, score=0.63`), `nodes_used: 4/50`,
+   `tokens_used: 12/4000`, `truncated: false`.
 
 **VOICEOVER:**
 > "This is the actual running app — no slides pretending to be software."
