@@ -92,7 +92,20 @@ nodes lighting up in sequence as the voiceover names them.
    Volkswagen raised?"*, a checkbox **Include narrative summary**, and
    optional scoping fields (Opportunity ID, Seller ID, Conversation ID,
    Subject ID, Buyer Contact ID).
-2. Click into the API key field, paste the demo key.
+2. Click into the API key field and paste the workspace's key — it's the
+   value for `"ws-demo"` inside `WORKSPACE_API_KEYS` in your local `.env`
+   (a JSON map, `{"ws-demo": "<the key>"}`). If that entry still shows the
+   placeholder `"replace-with-a-generated-secret"`, generate a real one
+   first (`.env.example` documents the one-liner:
+   `python -c "import secrets; print(secrets.token_urlsafe(32))"`), paste it
+   into `.env`, and **fully restart uvicorn** — config loads once at boot,
+   so an `.env` edit alone won't take effect on a running server. If a
+   restart doesn't seem to pick up the new key, confirm the *old* process is
+   actually dead first (`netstat -ano | grep :8000`, kill that PID) — on
+   Windows, `pkill -f "uvicorn api.main:app"` from Git Bash silently fails to
+   match the process, leaving a stale server holding the old key in memory.
+   Never commit the real value or paste it into this script file; `.env` is
+   gitignored for exactly this reason.
 3. Click into the question textarea, type: *"what's blocking the Volkswagen
    deal?"*
 4. Check **Include narrative summary**.

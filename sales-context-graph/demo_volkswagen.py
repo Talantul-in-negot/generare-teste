@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 """End-to-end demo: entity resolution (P4) + Context Graph recommendation (P4.5).
 
-Seeds a fresh workspace with the Volkswagen fixture (Volkswagen Group,
-Volkswagen Financial Services distractor, a "Volks Wagen" transcript mention,
-a seller-owned open Opportunity, an affirmed pricing objection, and two
-ContentAssets — one already viewed), then:
+Seeds workspace "ws-demo" (same default as /viz and WORKSPACE_API_KEYS in
+.env.example — override with DEMO_WORKSPACE_ID for an isolated run) with the
+Volkswagen fixture (Volkswagen Group, Volkswagen Financial Services
+distractor, a "Volks Wagen" transcript mention, a seller-owned open
+Opportunity, an affirmed pricing objection, and two ContentAssets — one
+already viewed), then:
 
 1. Resolves "Volks Wagen" via src/resolution/pipeline.py, using a real local
    embedding provider (src/embedding/sentence_transformer_provider.py — no
@@ -26,8 +28,8 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime, timezone
-from uuid import uuid4
 
 from src.core.neo4j_client import Neo4jClient
 from src.embedding.sentence_transformer_provider import SentenceTransformerEmbeddingProvider
@@ -64,7 +66,14 @@ async def main() -> None:
     executor = GraphExecutor(client)
     await run_migration(executor)
 
-    workspace_id = f"demo-vw-{uuid4().hex[:8]}"
+    # Fixed default ("ws-demo") so this lines up with /viz's pre-filled
+    # Workspace field and WORKSPACE_API_KEYS' default entry — no separate key
+    # to add, no workspace to retype in the UI. Every write below is a MERGE
+    # keyed off deterministic ids (crm_entity_id/mention_id/segment_id), so
+    # rerunning against the same workspace_id is a no-op on unchanged fields,
+    # not a collision (§6 identity, §11 idempotency) — override via
+    # DEMO_WORKSPACE_ID if you want an isolated one instead.
+    workspace_id = os.environ.get("DEMO_WORKSPACE_ID", "ws-demo")
     print(f"workspace_id = {workspace_id}")
 
     crm_repo = CrmRepository(executor)
