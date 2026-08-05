@@ -157,13 +157,23 @@ nodes lighting up in sequence as the voiceover names them.
 ## SCENE 6 — Live demo: what makes this seller-ready (2:35–3:25)
 
 **SCREEN ACTION, step by step:**
-1. Click the **Browse Intents** tab (`data-tab="qa"`) — a dropdown
-   (`#qaSelect`) lists the seven fixed intents (account objections, call
-   briefing, open commitments, content recommendation, open conflicts,
-   missing stakeholders, what's new since a date). Select **open conflicts**,
-   fill the opportunity ID field that appears, click **Run**
-   (`#qaRunBtn`) — the result shows two coexisting, contradicting Claims
-   side by side instead of one silently overwriting the other.
+1. Click the **Browse Intents** tab (`data-tab="qa"`) — **known gotcha,
+   verified live:** this tab has its own `Workspace`/`API Key` fields
+   (`#qaWorkspaceId`, pre-filled `ws-demo`; `#qaApiKey`, always empty), and
+   the `#qaSelect` dropdown only loads (`loadIntents()`,
+   `api/routes/viz.py`) at the moment you *switch onto* this tab — it does
+   not retry when you fill the key afterward. If the key is empty on first
+   click, the dropdown stays empty and `#qaStatus` shows "Enter Workspace ID
+   and API Key, then reopen this tab." **Fix for the recording:** paste the
+   API key into `#qaApiKey` *before* clicking this tab, or if you're already
+   on it with an empty dropdown, click **Ask**, then click **Browse
+   Intents** again — that second tab-switch is what triggers the reload.
+   Once loaded, the dropdown lists the seven fixed intents (account
+   objections, call briefing, open commitments, content recommendation,
+   open conflicts, missing stakeholders, what's new since a date). Select
+   **open conflicts**, fill the opportunity ID field that appears, click
+   **Run** (`#qaRunBtn`) — the result shows two coexisting, contradicting
+   Claims side by side instead of one silently overwriting the other.
 2. Click the **Alerts** tab (`data-tab="alerts"`) — fill `Workspace` and
    optionally a seller ID, click **Get digest** (`#alertsRunBtn`). The
    result renders the five proactive signal rules firing against the live
