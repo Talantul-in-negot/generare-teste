@@ -148,7 +148,7 @@ _PAGE = """<!doctype html>
   #detail h4 { margin: 0 0 6px 0; }
   #main { flex: 1; position: relative; overflow: auto; }
   #graph { position: absolute; inset: 0; }
-  svg { width: 100%; height: 100%; }
+  svg { width: 100%; height: 100%; user-select: none; }
   .node circle { stroke: #fff; stroke-width: 1.5px; cursor: pointer; }
   .node text { font-size: 10px; pointer-events: none; }
   .edge-label { font-size: 9px; fill: #555; pointer-events: none; }
