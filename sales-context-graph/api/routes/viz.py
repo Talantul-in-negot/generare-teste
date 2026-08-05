@@ -304,6 +304,28 @@ let nodes = [];
 let edges = [];
 let svgEl = document.getElementById("svg");
 
+// Drag-to-reposition: pointer capture lives on svgEl itself (not the
+// per-node <g>), because render() below does svgEl.innerHTML = "" on every
+// frame — a capture held by a <g> would be silently dropped the instant a
+// drag causes a re-render, killing the drag mid-motion.
+let draggingNode = null;
+let dragMoved = false;
+let currentWorkspaceId = null;
+
+svgEl.addEventListener("pointermove", (ev) => {
+  if (!draggingNode) return;
+  dragMoved = true;
+  const rect = svgEl.getBoundingClientRect();
+  const W = svgEl.clientWidth || 800, H = svgEl.clientHeight || 600;
+  draggingNode.x = Math.max(30, Math.min(W - 30, ev.clientX - rect.left));
+  draggingNode.y = Math.max(30, Math.min(H - 30, ev.clientY - rect.top));
+  draggingNode.vx = 0;
+  draggingNode.vy = 0;
+  render(currentWorkspaceId);
+});
+svgEl.addEventListener("pointerup", () => { draggingNode = null; });
+svgEl.addEventListener("pointercancel", () => { draggingNode = null; });
+
 document.getElementById("buildBtn").addEventListener("click", build);
 
 async function build() {
@@ -380,6 +402,7 @@ function buildGraph(result, workspaceId, apiKey) {
   }
 
   nodes = Array.from(nodeById.values());
+  currentWorkspaceId = workspaceId;
   runLayout();
   render(workspaceId);
 }
@@ -462,7 +485,16 @@ function render(workspaceId) {
     text.textContent = n.label;
     g.appendChild(text);
 
-    g.addEventListener("click", () => showNode(n));
+    g.style.cursor = "grab";
+    g.addEventListener("pointerdown", (ev) => {
+      draggingNode = n;
+      dragMoved = false;
+      svgEl.setPointerCapture(ev.pointerId);
+      ev.stopPropagation();
+    });
+    // click still fires after a drag's pointerup — dragMoved suppresses the
+    // detail panel from popping open on every drag release.
+    g.addEventListener("click", () => { if (!dragMoved) showNode(n); });
     svgEl.appendChild(g);
   }
 }
