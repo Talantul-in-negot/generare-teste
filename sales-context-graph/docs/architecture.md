@@ -35,7 +35,74 @@ Dependency direction is one-way: `api` depends on everything below it;
 
 ## Data flow
 
-See the Mermaid diagram in [`README.md`](../README.md#architecture).
+A larger, styled version of this diagram — with Claim anatomy, the tenant
+isolation model, and the dependency stack — is in
+[`architecture.html`](architecture.html) (open it directly in a browser).
+
+```mermaid
+flowchart TB
+    subgraph Sources
+        SF[Salesforce-shaped CRM export]
+        GONG[Gong-shaped call transcripts]
+        SP[Showpad-shaped content + views]
+    end
+
+    subgraph Ingestion["src/ingestion/"]
+        SFA[SalesforceAdapter]
+        GA[GongAdapter]
+        SPA[ShowpadAdapter]
+        RECON[reconciliation.py<br/>identical/changed/deleted]
+    end
+
+    subgraph Extraction["src/extraction/"]
+        WIN[windowing.py]
+        FIX[FixtureExtractionProvider]
+        LLM[LlmExtractionProvider]
+        PROMPT[prompt.py<br/>injection-resistant]
+    end
+
+    subgraph Resolution["src/resolution/ + src/review/"]
+        DET[Stage A<br/>deterministic]
+        CAND[candidate generation<br/>exact/fulltext/vector/relational]
+        SCORE[scoring.py<br/>lexical+semantic+relational]
+        POLICY[policy.py<br/>AUTO_LINKED/PENDING_REVIEW/UNRESOLVED]
+        REVIEW[ReviewService<br/>targeted reconciliation]
+    end
+
+    subgraph Graph["Neo4j (src/graph/)"]
+        EXEC[GraphExecutor<br/>tenant_query / schema_query / operational_query]
+        REPO[Repositories<br/>Account, Contact, Opportunity, Conversation,<br/>Claim, Mention, ContentAsset, SourceRecord]
+    end
+
+    subgraph Serving["src/context_graph/ + src/usecases/"]
+        CTX[ContextGraphBuilder<br/>scope → score → budget → diversity]
+        UC[ObjectionContentRecommendationUseCase]
+    end
+
+    API[FastAPI — api/]
+
+    SF --> SFA --> RECON
+    GONG --> GA --> WIN --> FIX & LLM
+    SP --> SPA --> RECON
+    PROMPT -.delimits transcript.-> LLM
+    FIX & LLM --> RECON
+    RECON --> EXEC
+    DET --> POLICY
+    CAND --> SCORE --> POLICY
+    POLICY --> REVIEW
+    EXEC --> REPO --> Graph
+    REPO --> CTX --> UC
+    API --> Ingestion
+    API --> Resolution
+    API --> Serving
+```
+
+Every node carries `workspace_id` (the tenant-isolation boundary); Showpad
+nodes additionally carry `division_id`. `GraphExecutor.tenant_query()`
+structurally rejects Cypher that doesn't scope a matched node by
+`workspace_id` — see [`security-and-tenancy.md`](security-and-tenancy.md).
+(Same diagram as [`README.md`](../README.md#architecture); kept in sync
+manually — update both on architectural change.)
 
 1. **Ingest.** An adapter parses one raw external record into a `(domain
    entity, external_id, object_type, content_hash)` tuple

@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sales Context Graph — Architecture</title>
+<style>
+@font-face {
+  font-family: 'Spline Sans Mono';
+  src: local('Spline Sans Mono');
+}
+
+:root {
+  --ink: #14171c;
+  --ink-soft: #3c4249;
+  --paper: #f6f4ef;
+  --paper-raised: #ffffff;
+  --line: #dcd7cc;
+  --accent: #b5651d;
+  --accent-soft: #e7d3b8;
+  --claim: #2f6f5e;
+  --claim-soft: #d9e9e2;
+  --mono: 'SFMono-Regular', 'Spline Sans Mono', 'JetBrains Mono', Consolas, monospace;
+  --display: 'Fraunces', Georgia, serif;
+  --body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --radius: 3px;
+}
+
+:root[data-theme="dark"] {
+  --ink: #eee9df;
+  --ink-soft: #a8a196;
+  --paper: #16181c;
+  --paper-raised: #1e2126;
+  --line: #33373d;
+  --accent: #e08a3e;
+  --accent-soft: #3a2c1c;
+  --claim: #6fbfa4;
+  --claim-soft: #1e3730;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #eee9df;
+    --ink-soft: #a8a196;
+    --paper: #16181c;
+    --paper-raised: #1e2126;
+    --line: #33373d;
+    --accent: #e08a3e;
+    --accent-soft: #3a2c1c;
+    --claim: #6fbfa4;
+    --claim-soft: #1e3730;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  padding: 48px 24px 96px;
+}
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* ---------- Header ---------- */
+
+header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 40px;
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+h1 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: clamp(32px, 4vw, 46px);
+  margin: 0;
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+}
+
+.tagline {
+  font-size: 16px;
+  color: var(--ink-soft);
+  max-width: 62ch;
+  line-height: 1.55;
+}
+
+.tagline code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1px 5px;
+}
+
+/* ---------- Legend ---------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* ---------- Pipeline ---------- */
+
+.pipeline-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  /* thin, theme-aware scrollbar so the affordance itself is visible */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-soft) transparent;
+}
+.pipeline-scroll::-webkit-scrollbar { height: 8px; }
+.pipeline-scroll::-webkit-scrollbar-thumb {
+  background: var(--ink-soft);
+  border-radius: 4px;
+}
+
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(230px, 1fr));
+  min-width: 1080px;
+  gap: 0;
+  position: relative;
+}
+
+.stage {
+  border-right: 1px dashed var(--line);
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.stage:last-child { border-right: none; }
+
+.stage-label {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 4px;
+}
+.stage-label b { color: var(--ink); font-weight: 700; }
+
+.node {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+  font-family: var(--mono);
+  font-size: 14.5px;
+  line-height: 1.5;
+  position: relative;
+}
+.node .name { color: var(--ink); font-weight: 600; display: block; margin-bottom: 3px; }
+.node .desc { color: var(--ink-soft); font-size: 13px; }
+
+.node.source { border-left: 3px solid var(--ink-soft); }
+.node.claim-bearing { border-left: 3px solid var(--claim); }
+.node.tenant { border-left: 3px solid var(--accent); }
+
+/* ---------- Data flow narrative strip ---------- */
+
+.section-title {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.section-sub {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+  max-width: 70ch;
+  line-height: 1.55;
+}
+
+.claim-card {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  margin-bottom: 56px;
+  overflow-x: auto;
+}
+
+.transcript-line {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.9;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  margin-bottom: 14px;
+}
+.transcript-line mark {
+  background: var(--accent-soft);
+  color: var(--ink);
+  border-bottom: 2px solid var(--accent);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+.claim-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-width: 520px;
+}
+.field {
+  background: var(--paper-raised);
+  padding: 10px 12px;
+}
+.field .k {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  display: block;
+  margin-bottom: 4px;
+}
+.field .v {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  font-weight: 600;
+}
+.field .v.affirmed { color: var(--claim); }
+
+/* ---------- Tenant isolation strip ---------- */
+
+.tenant-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 56px;
+}
+.tenant-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  padding: 18px 20px;
+}
+.tenant-box h4 {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  margin: 0 0 10px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+}
+.tenant-box .ws {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--ink);
+  border-radius: 2px;
+  padding: 2px 8px;
+  margin-bottom: 10px;
+}
+.tenant-box p {
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  margin: 0;
+}
+.reject {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--accent);
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+}
+
+/* ---------- Layer stack ---------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.stack-row {
+  background: var(--paper-raised);
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 0;
+}
+.stack-row .lbl {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 14px 16px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+}
+.stack-row .body {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+  display: flex;
+  align-items: center;
+}
+
+footer {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  /* .pipeline keeps its min-width and scrolls horizontally via
+     .pipeline-scroll instead of collapsing to one column — collapsing lost
+     the left-to-right flow that's the whole point of the diagram. */
+  .tenant-grid { grid-template-columns: 1fr; }
+  .stack-row { grid-template-columns: 1fr; }
+  .stack-row .lbl { border-right: none; border-bottom: 1px solid var(--line); }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">Architecture — as implemented</span>
+    <h1>Sales Context Graph</h1>
+    <p class="tagline">
+      Three untrusted-shaped sources — <code>Salesforce</code>, <code>Gong</code>,
+      <code>Showpad</code> — become tenant-isolated, evidence-backed <code>Claim</code>
+      nodes in Neo4j, then a bounded, scored selection served to one recommendation
+      workflow. Nothing is asserted without a source segment and a character span behind it.
+    </p>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--ink-soft)"></i> raw source</span>
+      <span><i class="swatch" style="background:var(--claim)"></i> evidence-bearing (Claim)</span>
+      <span><i class="swatch" style="background:var(--accent)"></i> tenant-scoped boundary</span>
+    </div>
+  </header>
+
+  <!-- PIPELINE -->
+  <div class="pipeline-scroll"><div class="pipeline">
+    <div class="stage">
+      <div class="stage-label"><b>01</b> · Sources</div>
+      <div class="node source"><span class="name">Salesforce-shaped export</span><span class="desc">Account · Contact · Opportunity</span></div>
+      <div class="node source"><span class="name">Gong-shaped transcripts</span><span class="desc">raw call segments</span></div>
+      <div class="node source"><span class="name">Showpad-shaped content</span><span class="desc">assets + view events</span></div>
+    </div>
+    <div class="stage">
+      <div class="stage-label"><b>02</b> · Ingestion</div>
+      <div class="node"><span class="name">Adapters</span><span class="desc">SalesforceAdapter · GongAdapter · ShowpadAdapter</span></div>
+      <div class="node"><span class="name">reconciliation.py</span><span class="desc">CREATED / NO_OP / SUPERSEDED / TOMBSTONED</span></div>
+      <div class="node"><span class="name">windowing.py</span><span class="desc">overlapping extraction windows</span></div>
+    </div>
+    <div class="stage">
+      <div class="stage-label"><b>03</b> · Extraction + Resolution</div>
+      <div class="node claim-bearing"><span class="name">Extraction provider</span><span class="desc">Fixture / LLM — same Protocol, injection-resistant prompt</span></div>
+      <div class="node"><span class="name">Stage A</span><span class="desc">deterministic, unique-match-only</span></div>
+      <div class="node"><span class="name">Candidates → scoring → policy</span><span class="desc">lexical + semantic + relational → AUTO_LINKED / PENDING_REVIEW / UNRESOLVED</span></div>
+    </div>
+    <div class="stage">
+      <div class="stage-label"><b>04</b> · Graph</div>
+      <div class="node tenant"><span class="name">GraphExecutor</span><span class="desc">tenant_query / schema_query / operational_query</span></div>
+      <div class="node claim-bearing"><span class="name">Claim, Mention, Conflict</span><span class="desc">span + polarity + confidence + adjudication</span></div>
+      <div class="node"><span class="name">Account, Opportunity, ContentAsset…</span><span class="desc">one repository per aggregate</span></div>
+    </div>
+    <div class="stage">
+      <div class="stage-label"><b>05</b> · Serving</div>
+      <div class="node"><span class="name">ContextGraphBuilder</span><span class="desc">scope → score → budget → diversity cap</span></div>
+      <div class="node claim-bearing"><span class="name">ObjectionContentRecommendation</span><span class="desc">objection → unviewed asset, ranked</span></div>
+      <div class="node"><span class="name">FastAPI (api/)</span><span class="desc">thin — no business logic in routes</span></div>
+    </div>
+  </div></div>
+
+  <!-- CLAIM ANATOMY -->
+  <div class="section-title">Anatomy of a Claim</div>
+  <p class="section-sub">A sentence in a transcript never becomes a graph fact directly.
+    It becomes evidence — traceable back to the exact character span it came from, and
+    coexisting peacefully with anything that contradicts it until arbitrated.</p>
+
+  <div class="claim-card">
+    <div class="transcript-line">"Honestly the <mark>pricing feels steep</mark> for what we're getting compared to the last vendor we evaluated."</div>
+    <div class="claim-fields">
+      <div class="field"><span class="k">predicate</span><span class="v">RAISES_OBJECTION</span></div>
+      <div class="field"><span class="k">polarity</span><span class="v affirmed">AFFIRMED</span></div>
+      <div class="field"><span class="k">speaker_role</span><span class="v">BUYER</span></div>
+      <div class="field"><span class="k">confidence</span><span class="v">0.91</span></div>
+      <div class="field"><span class="k">evidence_span</span><span class="v">char 214–256</span></div>
+      <div class="field"><span class="k">source_segment_id</span><span class="v">seg_4f2a…</span></div>
+      <div class="field"><span class="k">adjudication_status</span><span class="v">UNREVIEWED</span></div>
+      <div class="field"><span class="k">claim_id</span><span class="v">hash(span+subject+predicate)</span></div>
+    </div>
+  </div>
+
+  <!-- TENANT ISOLATION -->
+  <div class="section-title">Tenant isolation, structurally enforced</div>
+  <p class="section-sub">Not a convention — <code>GraphExecutor.tenant_query()</code> rejects
+    any Cypher whose matched nodes aren't scoped by <code>workspace_id</code>, including
+    full-text and vector procedure calls.</p>
+
+  <div class="tenant-grid">
+    <div class="tenant-box">
+      <h4>Workspace A</h4>
+      <span class="ws">workspace_id: acme-01</span>
+      <p>Account "Volkswagen Group", Contact "Elena Popescu" — same display name intentionally
+        duplicated in Workspace B to prove the boundary holds under collision.</p>
+    </div>
+    <div class="tenant-box">
+      <h4>Workspace B</h4>
+      <span class="ws">workspace_id: globex-02</span>
+      <p>Its own "Volkswagen Group", its own "Elena Popescu" — structurally unreachable from
+        Workspace A's reads, writes, full-text, or vector queries.</p>
+      <div class="reject">GraphExecutor → unscoped MATCH → rejected before execution</div>
+    </div>
+  </div>
+
+  <!-- LAYERING -->
+  <div class="section-title">Dependency direction</div>
+  <p class="section-sub">One-way. <code>api/</code> depends on everything below it;
+    <code>src/domain</code> depends on nothing in this repo — no Neo4j import, no I/O.</p>
+
+  <div class="stack">
+    <div class="stack-row"><div class="lbl">api/</div><div class="body">FastAPI routes — parse request, call a use case, shape response. No business logic.</div></div>
+    <div class="stack-row"><div class="lbl">src/usecases/</div><div class="body">objection → unviewed content, and the seller-experience layer (Q&A, digest, narrative summaries).</div></div>
+    <div class="stack-row"><div class="lbl">src/context_graph/</div><div class="body">bounded, scored Claim selection for one scope — node/token budget, diversity cap.</div></div>
+    <div class="stack-row"><div class="lbl">src/resolution/ · src/review/</div><div class="body">deterministic rules, candidate generation, scoring, decision policy, async human review.</div></div>
+    <div class="stack-row"><div class="lbl">src/extraction/</div><div class="body">windowing + extraction provider Protocol — fixture and LLM implementations, same interface.</div></div>
+    <div class="stack-row"><div class="lbl">src/ingestion/</div><div class="body">source adapters + reconciliation — identical / changed / deleted handled explicitly.</div></div>
+    <div class="stack-row"><div class="lbl">src/graph/</div><div class="body">tenant-safe execution modes, schema/indexes, migrations, one repository per aggregate.</div></div>
+    <div class="stack-row"><div class="lbl">src/domain/</div><div class="body">pure Pydantic v2 contracts + deterministic ID hashing. Nothing depends on it; it depends on nothing.</div></div>
+  </div>
+
+  <footer>
+    <span>sales-context-graph · docs/architecture.md</span>
+    <span>P0–P4.5 vertical slice + Increments 15–20</span>
+  </footer>
+
+</div>
+</body>
+</html>

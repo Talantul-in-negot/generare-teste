@@ -10,9 +10,12 @@
 
 ## SCENE 1 — Cold open (0:00–0:20)
 
-**SCREEN ACTION:** Black screen. No browser chrome yet. A terminal window is
-already open, sitting at the repo root (`sales-context-graph/`). A sentence
-types itself out live, one keystroke at a time:
+**SCREEN ACTION:** Pure black title card — no app, no browser, no terminal
+open yet. This is a text overlay, not a live product interaction: nothing to
+click, nothing running. It's produced separately (Keynote/After
+Effects/a plain HTML slide) as an animated typewriter effect, then cut in
+before the demo starts. The sentence types itself out, one letter at a time,
+white monospace text centered on black:
 *"Given an opportunity, identify the objection raised by a stakeholder in the
 latest relevant call and recommend an appropriate content asset the buyer
 hasn't already viewed — with exact evidence."*
