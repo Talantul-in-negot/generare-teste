@@ -294,22 +294,42 @@ Final frame holds on the repo URL / demo link.
      ```
      Verified live: adds 8 Accounts, 9 Contacts, 6 Opportunities, 12
      ContentAssets on top of the Volkswagen fixture (same VW records
-     MERGE-collapse, since both sources use the same external ids). **Does
-     not** enrich `top-objections` on its own — verified live, that endpoint
-     still returns a single `pricing` group (one deal's worth) after this
-     step, because none of the newly-added Opportunities have any linked
-     Conversation/Claim data (see the gap noted below — their transcripts
-     were never ingested). CRM/content records alone don't create Claims;
-     only a real transcript ingestion does.
-  4. **Known gap, don't demo this:** `data/sample/gong_call.json` posted
-     as-is to `/api/v1/ingestions/transcripts` does **not** link its calls
-     to any Opportunity — the raw file has no `opportunity_id`/`account_id`/
-     `email_to_contact_id` fields, and `TranscriptIngestionRequest` only
-     accepts one such mapping per POST (not per call inside the file). A
-     real integration resolves and supplies these per call; this sample
-     file is CRM/content data only, not a ready-to-post transcript payload.
-     Every conversation used on screen in Scenes 4–6 comes from
-     `demo_volkswagen.py`'s properly-wired `ingest_call()`, not this file.
+     MERGE-collapse, since both sources use the same external ids).
+     CRM/content records alone don't create Claims — `top-objections` stays
+     at a single group per seller until a transcript is actually ingested
+     for one of the new deals (step 4 below).
+  4. `data/sample/gong_call.json` **cannot** be posted as one file — the
+     raw file has no `opportunity_id`/`account_id`/`email_to_contact_id`
+     fields, and `TranscriptIngestionRequest` only accepts one such mapping
+     per POST, not per call inside the file (a real integration resolves
+     and supplies these per call before posting). Verified live: posted
+     each of its remaining three calls individually, with the matching
+     Opportunity/Account/Contact ids resolved from
+     `salesforce_accounts.json` —
+     ```bash
+     # one POST per call, e.g. call-acme-discovery:
+     curl -X POST localhost:8000/api/v1/ingestions/transcripts \
+       -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: $KEY" \
+       -H "Content-Type: application/json" \
+       -d '{"calls": [<the one call object>],
+            "opportunity_id": "<crm_entity_id(...,\"Opportunity\",\"006ACMEEXP\")>",
+            "account_id": "<crm_entity_id(...,\"Account\",\"001ACME\")>",
+            "email_to_contact_id": {"alice.johnson@acme.com": "<contact id>"},
+            "email_to_seller_id": {"nina@ourcompany.com": "005NINA"}}'
+     ```
+     Result, honestly reported — `top-objections` for Nina (owner of Acme,
+     Northwind, Fabrikam) still returns **one** `pricing` group, not several:
+     Fabrikam's opportunity is `is_open: false` (excluded by the query's own
+     `WHERE o.is_open = true`), and Northwind's transcript never mentions
+     pricing at all — it raises an ERP-integration question and a security
+     blocker (`HAS_BLOCKER`), correctly extracted as a *different* claim
+     type, not folded into `top-objections`. This is the system behaving
+     correctly on real, varied data, not a shortfall to hide: don't script
+     around it by claiming richer aggregation than the seeded data actually
+     supports. If a multi-objection aggregation moment is wanted for the
+     recording, it needs a second **open** deal under one seller whose
+     transcript genuinely raises a second pricing objection — not present
+     in `data/sample/` today.
 - **Source of truth for claims made on screen:** [`docs/architecture.md`](architecture.md),
   [`docs/entity-resolution.md`](entity-resolution.md), [`README.md`](../README.md),
   `api/routes/viz.py` (UI element ids). Any number added later (test counts,
