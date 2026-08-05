@@ -263,7 +263,8 @@ _PAGE = """<!doctype html>
         <div><span class="swatch" style="background:#16a34a"></span>AFFIRMED</div>
         <div><span class="swatch" style="background:#dc2626"></span>NEGATED</div>
         <div><span class="swatch" style="background:#ca8a04"></span>HYPOTHETICAL</div>
-        <div><span class="swatch" style="background:#6b7280"></span>entity node</div>
+        <div><span class="swatch" style="background:#2563eb"></span>entity node</div>
+        <div><span class="swatch" style="background:#6b7280"></span>literal value node</div>
       </div>
     </div>
   </div>
