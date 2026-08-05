@@ -267,11 +267,49 @@ Final frame holds on the repo URL / demo link.
 - **Music:** minimal ambient bed, no dramatic crescendo — let the animated
   graph carry the visual weight.
 - **Target runtime:** 3:50–4:15.
-- **Screen-recording checklist before shooting:** seed `ws-demo` with the
-  Volkswagen fixture set (`Volkswagen Group` + `Volkswagen Financial
-  Services` distractor, `Elena Popescu`, the pricing-objection transcript,
-  two ContentAssets, one prior AssetView) so every click in Scenes 4–6
-  returns real, non-empty results — never mock the response body.
+- **Screen-recording checklist before shooting** (verified live, this exact
+  sequence, on a freshly wiped `ws-demo`):
+  1. `docker compose down -v && docker compose up -d neo4j redis` — start
+     from a clean volume; this workspace accumulates test-suite leftovers
+     otherwise (verified: a `ws-demo` left running across many `pytest`
+     sessions had 912 Accounts / 495 Conversations of unrelated fixture
+     noise — `Acme Corp`, `Redis Check Corp`, `Viz Test Corp`, etc.).
+  2. `python demo_volkswagen.py` — seeds the Volkswagen fixture set
+     (`Volkswagen Group` + `Volkswagen Financial Services` distractor,
+     `Elena Popescu`, the pricing-objection transcript, two ContentAssets,
+     one prior AssetView) directly via the repository layer, into `ws-demo`
+     by default (see `demo_volkswagen.py`'s `DEMO_WORKSPACE_ID` override).
+  3. Optionally, layer on the rest of `data/sample/` through the *actual*
+     ingestion API — the path a real integration would use, not a direct
+     repository call:
+     ```bash
+     curl -X POST localhost:8000/api/v1/ingestions/crm \
+       -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: $KEY" \
+       -H "Content-Type: application/json" \
+       -d @data/sample/salesforce_accounts.json
+     curl -X POST localhost:8000/api/v1/ingestions/content-assets \
+       -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: $KEY" \
+       -H "Content-Type: application/json" \
+       -d @data/sample/showpad_content.json
+     ```
+     Verified live: adds 8 Accounts, 9 Contacts, 6 Opportunities, 12
+     ContentAssets on top of the Volkswagen fixture (same VW records
+     MERGE-collapse, since both sources use the same external ids). **Does
+     not** enrich `top-objections` on its own — verified live, that endpoint
+     still returns a single `pricing` group (one deal's worth) after this
+     step, because none of the newly-added Opportunities have any linked
+     Conversation/Claim data (see the gap noted below — their transcripts
+     were never ingested). CRM/content records alone don't create Claims;
+     only a real transcript ingestion does.
+  4. **Known gap, don't demo this:** `data/sample/gong_call.json` posted
+     as-is to `/api/v1/ingestions/transcripts` does **not** link its calls
+     to any Opportunity — the raw file has no `opportunity_id`/`account_id`/
+     `email_to_contact_id` fields, and `TranscriptIngestionRequest` only
+     accepts one such mapping per POST (not per call inside the file). A
+     real integration resolves and supplies these per call; this sample
+     file is CRM/content data only, not a ready-to-post transcript payload.
+     Every conversation used on screen in Scenes 4–6 comes from
+     `demo_volkswagen.py`'s properly-wired `ingest_call()`, not this file.
 - **Source of truth for claims made on screen:** [`docs/architecture.md`](architecture.md),
   [`docs/entity-resolution.md`](entity-resolution.md), [`README.md`](../README.md),
   `api/routes/viz.py` (UI element ids). Any number added later (test counts,
