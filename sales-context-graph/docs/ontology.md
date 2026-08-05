@@ -84,3 +84,14 @@ Defines `type_hierarchy`, and `relation_rules` including
 `src/usecases/objection_content_recommendation.py` implements at the data
 level. Replaces a leftover ad-tech-industry (advertiser/campaign/publisher)
 template that was in this file from the initial project scaffold.
+
+**Open TODO — predicate literals are disconnected from this file.**
+`relation_rules` defines `RAISED_OBJECTION` but not `HAS_BLOCKER`,
+`HAS_ACTION_ITEM`, or `MENTIONS_ORG` — the other three predicates
+`src/extraction/fixture_provider.py`'s `_RULES` actually emit (see the
+`TODO` comment there). Because `OntologyRegistry.load()` has no live call
+site, none of this constrains extraction at runtime today — a predicate
+typo in `fixture_provider.py` would not be caught by this ontology. Wiring
+it in (load the ontology once, validate/source predicate names against it,
+fill in the three missing `relation_rules` entries) is a real refactor, not
+started.
