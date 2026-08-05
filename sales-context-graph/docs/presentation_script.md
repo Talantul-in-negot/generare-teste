@@ -171,9 +171,17 @@ nodes lighting up in sequence as the voiceover names them.
    Once loaded, the dropdown lists the seven fixed intents (account
    objections, call briefing, open commitments, content recommendation,
    open conflicts, missing stakeholders, what's new since a date). Select
-   **open conflicts**, fill the opportunity ID field that appears, click
-   **Run** (`#qaRunBtn`) — the result shows two coexisting, contradicting
-   Claims side by side instead of one silently overwriting the other.
+   **missing stakeholders**, fill the opportunity ID field that appears
+   with the VW Group Renewal deal's id —
+   `14acbc36edf9af9616f29e2662a0fe9cd2ca16c843485c022780e4c75627ac32`
+   (the same id that returns the pricing objection under **account
+   objections**) — click **Run** (`#qaRunBtn`). Verified live: the result
+   returns `"single_threaded": true` with exactly one resolved buyer
+   contact (Elena Popescu) — a real, honest signal that this deal has only
+   one thread into the buying committee, not a fabricated example. (Note:
+   **open conflicts** on this same opportunity currently returns an empty
+   list — this fixture doesn't carry a contradicting-claim pair yet, so
+   don't demo that intent against this specific deal.)
 2. Click the **Alerts** tab (`data-tab="alerts"`) — fill `Workspace` and
    optionally a seller ID, click **Get digest** (`#alertsRunBtn`). The
    result renders the five proactive signal rules firing against the live
