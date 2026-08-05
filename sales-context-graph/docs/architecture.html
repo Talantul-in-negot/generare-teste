@@ -175,6 +175,13 @@ h1 {
 }
 .stage-label b { color: var(--ink); font-weight: 700; }
 
+.hint {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin: 0 0 14px;
+}
+
 .node {
   background: var(--paper-raised);
   border: 1px solid var(--line);
@@ -184,13 +191,77 @@ h1 {
   font-size: 14.5px;
   line-height: 1.5;
   position: relative;
+  cursor: help;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.node .name { color: var(--ink); font-weight: 600; display: block; margin-bottom: 3px; }
+.node[data-example]::after {
+  content: '?';
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.node[data-example]:hover,
+.node[data-example]:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.node[data-example]:hover::after,
+.node[data-example]:focus-visible::after {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.node .name { color: var(--ink); font-weight: 600; display: block; margin-bottom: 3px; padding-right: 14px; }
 .node .desc { color: var(--ink-soft); font-size: 13px; }
 
 .node.source { border-left: 3px solid var(--ink-soft); }
 .node.claim-bearing { border-left: 3px solid var(--claim); }
 .node.tenant { border-left: 3px solid var(--accent); }
+
+/* ---------- Example tooltip (JS-positioned, escapes the scroll container) ---------- */
+
+#example-tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: 380px;
+  background: var(--paper-raised);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 12px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+#example-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+#example-tooltip .src {
+  display: block;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  color: var(--accent);
+  font-size: 11px;
+}
 
 /* ---------- Data flow narrative strip ---------- */
 
@@ -362,6 +433,10 @@ footer {
   gap: 8px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .node, #example-tooltip { transition: none; }
+}
+
 @media (max-width: 860px) {
   /* .pipeline keeps its min-width and scrolls horizontally via
      .pipeline-scroll instead of collapsing to one column — collapsing lost
@@ -392,36 +467,37 @@ footer {
   </header>
 
   <!-- PIPELINE -->
+  <p class="hint">Hover or focus any box for a real example from the code.</p>
   <div class="pipeline-scroll"><div class="pipeline">
     <div class="stage">
       <div class="stage-label"><b>01</b> · Sources</div>
-      <div class="node source"><span class="name">Salesforce-shaped export</span><span class="desc">Account · Contact · Opportunity</span></div>
-      <div class="node source"><span class="name">Gong-shaped transcripts</span><span class="desc">raw call segments</span></div>
-      <div class="node source"><span class="name">Showpad-shaped content</span><span class="desc">assets + view events</span></div>
+      <div class="node source" tabindex="0" data-example="Account: {&quot;Id&quot;: &quot;001VWGROUP&quot;, &quot;Name&quot;: &quot;Volkswagen Group&quot;, &quot;Website&quot;: &quot;vw.com&quot;}&#10;Contact: {&quot;Id&quot;: &quot;003ELENA&quot;, &quot;AccountId&quot;: &quot;001VWGROUP&quot;, &quot;Email&quot;: &quot;elena.popescu@vw.com&quot;}&#10;&#10;demo_volkswagen.py:82"><span class="name">Salesforce-shaped export</span><span class="desc">Account · Contact · Opportunity</span></div>
+      <div class="node source" tabindex="0" data-example="segment: &quot;This is Volks Wagen calling, and we are&#10;concerned about pricing this quarter.&quot;&#10;speaker: spk_1 (Elena Popescu)&#10;call_id: call-vw-demo&#10;&#10;demo_volkswagen.py:113"><span class="name">Gong-shaped transcripts</span><span class="desc">raw call segments</span></div>
+      <div class="node source" tabindex="0" data-example="ContentAsset(content_asset_id=&quot;asset-pricing-guide-demo&quot;,&#10;  title=&quot;Pricing Objection Handling Guide&quot;,&#10;  tags=[&quot;pricing&quot;, &quot;objection&quot;])&#10;&#10;AssetView(viewer_contact_id=elena_id, viewed_at=...)&#10;→ already viewed&#10;&#10;demo_volkswagen.py:137"><span class="name">Showpad-shaped content</span><span class="desc">assets + view events</span></div>
     </div>
     <div class="stage">
       <div class="stage-label"><b>02</b> · Ingestion</div>
-      <div class="node"><span class="name">Adapters</span><span class="desc">SalesforceAdapter · GongAdapter · ShowpadAdapter</span></div>
-      <div class="node"><span class="name">reconciliation.py</span><span class="desc">CREATED / NO_OP / SUPERSEDED / TOMBSTONED</span></div>
-      <div class="node"><span class="name">windowing.py</span><span class="desc">overlapping extraction windows</span></div>
+      <div class="node" tabindex="0" data-example="SalesforceAdapter.parse_opportunity(&#10;  {&quot;Id&quot;: &quot;006VWDEAL&quot;, &quot;StageName&quot;: &quot;Negotiation&quot;, &quot;IsClosed&quot;: false})&#10;→ ParsedRecord(entity=Opportunity(stage=&quot;Negotiation&quot;,&#10;    is_open=True), content_hash=...)&#10;&#10;src/ingestion/adapters/salesforce.py:119"><span class="name">Adapters</span><span class="desc">SalesforceAdapter · GongAdapter · ShowpadAdapter</span></div>
+      <div class="node" tabindex="0" data-example="CREATED    — no prior SourceRecord → new record + snapshot v1&#10;NO_OP      — hash unchanged → only last_seen_at bumped&#10;SUPERSEDED — hash differs → snapshot v(n+1), old marked superseded&#10;TOMBSTONED — only if adapter supports a deletion signal&#10;  (Showpad's doesn't → raises ValueError if attempted)&#10;&#10;src/ingestion/reconciliation.py:38"><span class="name">reconciliation.py</span><span class="desc">CREATED / NO_OP / SUPERSEDED / TOMBSTONED</span></div>
+      <div class="node" tabindex="0" data-example="build_windows(max_duration_ms=90_000, max_tokens=200,&#10;  overlap_segments=1, topic_gap_ms=3_000)&#10;&#10;flushes on: 3s silence gap, 90s duration, or 200 words&#10;last segment of the call is always kept, never dropped&#10;&#10;src/extraction/windowing.py:36"><span class="name">windowing.py</span><span class="desc">overlapping extraction windows</span></div>
     </div>
     <div class="stage">
       <div class="stage-label"><b>03</b> · Extraction + Resolution</div>
-      <div class="node claim-bearing"><span class="name">Extraction provider</span><span class="desc">Fixture / LLM — same Protocol, injection-resistant prompt</span></div>
-      <div class="node"><span class="name">Stage A</span><span class="desc">deterministic, unique-match-only</span></div>
-      <div class="node"><span class="name">Candidates → scoring → policy</span><span class="desc">lexical + semantic + relational → AUTO_LINKED / PENDING_REVIEW / UNRESOLVED</span></div>
+      <div class="node claim-bearing" tabindex="0" data-example="input: &quot;we are concerned about pricing this quarter&quot;&#10;regex pric(e|ing) matches&#10;→ ExtractedAssertion(predicate=&quot;RAISED_OBJECTION&quot;,&#10;    object_text=&quot;pricing&quot;, polarity=AFFIRMED)&#10;&#10;src/extraction/fixture_provider.py:38"><span class="name">Extraction provider</span><span class="desc">Fixture / LLM — same Protocol, injection-resistant prompt</span></div>
+      <div class="node" tabindex="0" data-example="rule A2_EXACT_NORMALIZED_EMAIL, 1 candidate (003ELENA)&#10;→ auto-link&#10;&#10;duplicate exact Account names in one workspace&#10;→ refuses, returns None (never deterministic-links)&#10;&#10;src/resolution/deterministic.py:31"><span class="name">Stage A</span><span class="desc">deterministic, unique-match-only</span></div>
+      <div class="node" tabindex="0" data-example="&quot;Volks Wagen&quot; vs &quot;Volkswagen Group&quot;:&#10;  lexical=0.7407  semantic=0.1718  base≈0.741&#10;  + relational signals → final ≥0.90 → AUTO_LINKED&#10;&#10;distractor &quot;Volkswagen Financial Services&quot;:&#10;  lexical=0.50 → stays below threshold&#10;&#10;thresholds: base≥0.70, final≥0.90, margin≥0.08, ≥1 signal&#10;src/resolution/policy.py:39"><span class="name">Candidates → scoring → policy</span><span class="desc">lexical + semantic + relational → AUTO_LINKED / PENDING_REVIEW / UNRESOLVED</span></div>
     </div>
     <div class="stage">
       <div class="stage-label"><b>04</b> · Graph</div>
-      <div class="node tenant"><span class="name">GraphExecutor</span><span class="desc">tenant_query / schema_query / operational_query</span></div>
-      <div class="node claim-bearing"><span class="name">Claim, Mention, Conflict</span><span class="desc">span + polarity + confidence + adjudication</span></div>
-      <div class="node"><span class="name">Account, Opportunity, ContentAsset…</span><span class="desc">one repository per aggregate</span></div>
+      <div class="node tenant" tabindex="0" data-example="MATCH (a:Account {workspace_id: $workspace_id,&#10;                   account_id: $account_id})&#10;RETURN a&#10;&#10;an unscoped MATCH raises TenantScopingError&#10;before the query ever executes&#10;&#10;src/graph/execution.py:67"><span class="name">GraphExecutor</span><span class="desc">tenant_query / schema_query / operational_query</span></div>
+      <div class="node claim-bearing" tabindex="0" data-example="Claim(claim_id=&quot;claim-a&quot;, predicate=&quot;RAISED_OBJECTION&quot;,&#10;  object_value=&quot;pricing&quot;, polarity=AFFIRMED,&#10;  speaker_role=BUYER, confidence=0.9,&#10;  evidence_char_start=0, evidence_char_end=5)&#10;&#10;two contradicting Claims, same subject+predicate&#10;→ Conflict(conflict_type=CONTRADICTORY_CLAIM)&#10;&#10;tests/unit/resolution/test_conflict_detection.py:14"><span class="name">Claim, Mention, Conflict</span><span class="desc">span + polarity + confidence + adjudication</span></div>
+      <div class="node" tabindex="0" data-example="crm_repository.upsert_account():&#10;MERGE (a:Account {workspace_id: $workspace_id,&#10;                   account_id: $account_id})&#10;SET a.name = $name, a.domain = $domain&#10;&#10;Claims never attach directly to Account — routed&#10;through Conversation / TranscriptSegment (§10)&#10;&#10;src/graph/repositories/crm_repository.py:48"><span class="name">Account, Opportunity, ContentAsset…</span><span class="desc">one repository per aggregate</span></div>
     </div>
     <div class="stage">
       <div class="stage-label"><b>05</b> · Serving</div>
-      <div class="node"><span class="name">ContextGraphBuilder</span><span class="desc">scope → score → budget → diversity cap</span></div>
-      <div class="node claim-bearing"><span class="name">ObjectionContentRecommendation</span><span class="desc">objection → unviewed asset, ranked</span></div>
-      <div class="node"><span class="name">FastAPI (api/)</span><span class="desc">thin — no business logic in routes</span></div>
+      <div class="node" tabindex="0" data-example="build(scope, max_nodes=50, max_tokens=4000,&#10;  predicate_diversity_cap=5)&#10;&#10;per-claim score =&#10;  0.5·confidence + 0.3·recency + 0.2·adjudication_weight&#10;&#10;src/context_graph/builder.py:90"><span class="name">ContextGraphBuilder</span><span class="desc">scope → score → budget → diversity cap</span></div>
+      <div class="node claim-bearing" tabindex="0" data-example="given Elena's affirmed &quot;pricing&quot; objection:&#10;excludes asset-pricing-guide-demo (already viewed)&#10;recommends &quot;Enterprise Pricing ROI Calculator&quot;&#10;  (asset-roi-calculator-demo)&#10;mapping_source = &quot;content_asset.tags&quot;&#10;&#10;demo_volkswagen.py:201"><span class="name">ObjectionContentRecommendation</span><span class="desc">objection → unviewed asset, ranked</span></div>
+      <div class="node" tabindex="0" data-example="POST /api/v1/context/build&#10;body: conversation_id, max_nodes, max_tokens&#10;&#10;workspace_id always injected via&#10;Depends(verify_api_key) — never read from the body&#10;&#10;api/routes/context.py:27"><span class="name">FastAPI (api/)</span><span class="desc">thin — no business logic in routes</span></div>
     </div>
   </div></div>
 
@@ -489,5 +565,80 @@ footer {
   </footer>
 
 </div>
+
+<div id="example-tooltip" role="tooltip"></div>
+
+<script>
+(function () {
+  var tooltip = document.getElementById('example-tooltip');
+  var nodes = document.querySelectorAll('.node[data-example]');
+  var current = null;
+
+  function splitSource(text) {
+    // last non-empty line that looks like a file:line reference is shown
+    // as a distinct "source" line at the tooltip's foot.
+    var lines = text.split('\n');
+    var last = lines[lines.length - 1];
+    if (/^[\w./]+\.(py|md|html):\d+$/.test(last.trim())) {
+      lines.pop();
+      while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+      return { body: lines.join('\n'), src: last.trim() };
+    }
+    return { body: text, src: null };
+  }
+
+  function show(el) {
+    var parsed = splitSource(el.getAttribute('data-example'));
+    tooltip.textContent = parsed.body;
+    if (parsed.src) {
+      var src = document.createElement('span');
+      src.className = 'src';
+      src.textContent = parsed.src;
+      tooltip.appendChild(src);
+    }
+    tooltip.classList.add('visible');
+    current = el;
+    position(el);
+  }
+
+  function hide() {
+    tooltip.classList.remove('visible');
+    current = null;
+  }
+
+  function position(el) {
+    var r = el.getBoundingClientRect();
+    var tw = tooltip.offsetWidth || 380;
+    var th = tooltip.offsetHeight || 120;
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+
+    var left = r.left + r.width / 2 - tw / 2;
+    left = Math.max(12, Math.min(left, vw - tw - 12));
+
+    var top = r.bottom + 10;
+    if (top + th > vh - 12) top = r.top - th - 10; // flip above if no room below
+    top = Math.max(12, top);
+
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+  }
+
+  nodes.forEach(function (el) {
+    el.addEventListener('mouseenter', function () { show(el); });
+    el.addEventListener('mouseleave', hide);
+    el.addEventListener('focus', function () { show(el); });
+    el.addEventListener('blur', hide);
+    el.addEventListener('click', function () {
+      // touch devices: tap toggles, since there's no hover/focus there
+      if (current === el) { hide(); } else { show(el); }
+    });
+  });
+
+  window.addEventListener('scroll', function () { if (current) position(current); }, true);
+  window.addEventListener('resize', function () { if (current) position(current); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
+})();
+</script>
 </body>
 </html>
