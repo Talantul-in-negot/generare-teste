@@ -6,7 +6,8 @@ as they ship.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from api.dependencies import verify_api_key
 from src.graph.execution import GraphExecutor
@@ -16,8 +17,10 @@ from src.graph.repositories.content_repository import ContentRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
 from src.graph.repositories.crm_repository import CrmRepository
 from src.graph.repositories.stakeholder_repository import StakeholderRepository
+from src.llm.chat import LlmNotConfiguredError, build_chat_fn
+from src.usecases import serialization as ser
 from src.usecases.buying_committee import BuyingCommitteeUseCase
-from src.usecases.conflicts import ConflictsUseCase
+from src.usecases.conflicts import ClaimNotFoundError, ConflictNotFoundError, ConflictsUseCase, InvalidWinnerError
 from src.usecases.content_effectiveness import ContentEffectivenessUseCase
 from src.usecases.pipeline_insights import TopObjectionsForSellerUseCase
 
@@ -29,19 +32,7 @@ async def content_effectiveness(opportunity_id: str, workspace_id: str = Depends
     executor = GraphExecutor()
     usecase = ContentEffectivenessUseCase(ContentRepository(executor), CrmRepository(executor))
     report = await usecase.analyze(workspace_id, opportunity_id)
-    return {
-        "opportunity_id": report.opportunity_id,
-        "shares": [
-            {
-                "share_id": s.share_id, "content_asset_id": s.content_asset_id,
-                "shared_at": s.shared_at.isoformat(), "triggered_by_claim_id": s.triggered_by_claim_id,
-                "opened": s.opened, "opened_at": s.opened_at.isoformat() if s.opened_at else None,
-                "stage_at_share_time": s.stage_at_share_time, "latest_stage": s.latest_stage,
-                "stage_changed_after_share": s.stage_changed_after_share,
-            }
-            for s in report.shares
-        ],
-    }
+    return ser.serialize_content_effectiveness(report)
 
 
 @router.get("/opportunities/{opportunity_id}/conflicts")
@@ -49,24 +40,58 @@ async def opportunity_conflicts(opportunity_id: str, workspace_id: str = Depends
     executor = GraphExecutor()
     usecase = ConflictsUseCase(ClaimRepository(executor), ConflictRepository(executor))
     conflicts = await usecase.detect_for_opportunity(workspace_id, opportunity_id)
-    return {
-        "opportunity_id": opportunity_id,
-        "conflicts": [c.model_dump(mode="json") for c in conflicts],
-    }
+    return ser.serialize_conflicts(opportunity_id, conflicts)
+
+
+class ResolveConflictRequest(BaseModel):
+    winner_claim_id: str | None = None
+
+
+@router.post("/opportunities/{opportunity_id}/conflicts/{conflict_id}/resolve")
+async def resolve_conflict(
+    opportunity_id: str, conflict_id: str, body: ResolveConflictRequest,
+    workspace_id: str = Depends(verify_api_key),
+) -> dict:
+    """Increment 19. `opportunity_id` is not used to scope the query (the
+    Conflict is looked up directly by conflict_id, already workspace-scoped) —
+    it's kept in the path purely for REST consistency with the other
+    opportunity-scoped conflict routes; a conflict_id belonging to a different
+    opportunity than the one in the URL is still resolved correctly, since
+    conflict_id alone is the real key. Without winner_claim_id, resolution is
+    automatic via src/resolution/conflict_arbitration.py; when arbitration is
+    undecided (no signal to pick a winner), the conflict stays open and
+    `resolved: false` is returned — never a forced, arbitrary pick."""
+    executor = GraphExecutor()
+    usecase = ConflictsUseCase(ClaimRepository(executor), ConflictRepository(executor))
+    try:
+        resolution = await usecase.resolve(workspace_id, conflict_id, winner_claim_id=body.winner_claim_id)
+    except ConflictNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ClaimNotFoundError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except InvalidWinnerError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ser.serialize_conflict_resolution(resolution)
 
 
 @router.get("/opportunities/{opportunity_id}/buying-committee")
-async def buying_committee(opportunity_id: str, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def buying_committee(
+    opportunity_id: str, classify_roles: bool = False, workspace_id: str = Depends(verify_api_key)
+) -> dict:
     executor = GraphExecutor()
-    usecase = BuyingCommitteeUseCase(ConversationRepository(executor), StakeholderRepository(executor))
-    inference = await usecase.analyze(workspace_id, opportunity_id)
-    return {
-        "opportunity_id": inference.opportunity_id,
-        "distinct_buyer_contact_ids": inference.distinct_buyer_contact_ids,
-        "single_threaded": inference.single_threaded,
-        "no_resolved_buyer_contacts": inference.no_resolved_buyer_contacts,
-        "assignments": [a.model_dump(mode="json") for a in inference.assignments],
-    }
+    chat_fn = None
+    if classify_roles:
+        try:
+            chat_fn = build_chat_fn()
+        except LlmNotConfiguredError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    usecase = BuyingCommitteeUseCase(
+        ConversationRepository(executor), StakeholderRepository(executor),
+        ClaimRepository(executor) if classify_roles else None, chat_fn,
+    )
+    inference = await usecase.analyze(workspace_id, opportunity_id, classify_roles=classify_roles)
+    return ser.serialize_buying_committee(inference)
 
 
 @router.get("/sellers/{seller_id}/top-objections")
@@ -74,10 +99,4 @@ async def top_objections(seller_id: str, workspace_id: str = Depends(verify_api_
     executor = GraphExecutor()
     usecase = TopObjectionsForSellerUseCase(ClaimRepository(executor))
     report = await usecase.top_objections(workspace_id, seller_id)
-    return {
-        "seller_id": report.seller_id,
-        "groups": [
-            {"object_value": g.object_value, "count": g.count, "example_claim_ids": g.example_claim_ids}
-            for g in report.groups
-        ],
-    }
+    return ser.serialize_top_objections(report)

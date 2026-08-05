@@ -34,7 +34,43 @@ durable Redis-backed job store, Fly.io deploy artifacts — see
 - **Cross-deal aggregation** — top objections across one seller's open
   pipeline (`GET /api/v1/sellers/{id}/top-objections`).
 
-226 tests pass (unit, integration against a live Neo4j, security, and eval) —
+A second pass (Increments 15–20) closed the gaps between "a tested engine" and
+"an assistant a seller would actually use":
+
+- **Natural-language questions** — `POST /api/v1/ask` classifies free text
+  ("what's new at Volkswagen?") against the closed intent catalog
+  (`src/nlq/catalog.py`), resolves company/contact names via the existing
+  entity-resolution stack, and dispatches to the real use case — never
+  free-text-to-Cypher, and an unresolvable/ambiguous name refuses rather than
+  guessing. Requires `LLM_PROVIDER=anthropic` + `LLM_API_KEY`; every LLM-backed
+  route returns `503` (not a fabricated answer) when unconfigured.
+- **Grounded narrative summaries** — `include_narrative: true` on `/ask`, or
+  `POST /api/v1/narrative/summarize`, turns a claim table into a few cited
+  sentences. `src/narrative/grounding.py` mechanically verifies every
+  `[claim_id]` citation against the claims actually supplied — a hallucinated
+  citation rejects the whole summary rather than shipping it.
+- **Proactive signals + Slack digest** — `GET /api/v1/digest` /
+  `POST /api/v1/digest/deliver` run five rules (single-threaded deal, objection
+  with no follow-up content, shared content never opened, unresolved conflict,
+  stalled deal) across a workspace's or seller's open pipeline. No in-process
+  scheduler — an external cron calls `/deliver` (see `docs/operations.md`).
+- **LLM stakeholder role classification** — opt-in (`?classify_roles=true`)
+  on the buying-committee endpoints; a contact with no evidence, or a
+  below-confidence-floor classification, stays honestly `UNKNOWN`
+  (`src/resolution/stakeholder_classification.py`).
+- **Conflict resolution + true point-in-time queries** — `POST
+  /api/v1/opportunities/{id}/conflicts/{conflict_id}/resolve` picks a winner
+  (confidence, then recency, then honestly `undecided`) and closes the
+  loser's bitemporal interval, which is what makes `POST /api/v1/qa/as-of`
+  ("what did we believe as of \<date\>") a real reconstruction rather than the
+  previously-documented gap.
+- **Seller-facing surfaces** — `/viz` gained "Ask" and "Alerts" tabs (its
+  intent-runner tab is now driven by `GET /api/v1/qa/intents`, not a hardcoded
+  list), and `GET /viz/panel?opportunity_id=...` is a compact,
+  iframe-embeddable single-deal view for embedding in Salesforce/Showpad — an
+  embeddable panel, not a packaged app (no OAuth, no AppExchange packaging).
+
+347 tests pass (unit, integration against a live Neo4j, security, and eval) —
 see the completion report at the end of this document for the phase-by-phase
 breakdown, real measured numbers, and known limitations.
 
@@ -203,18 +239,46 @@ beyond that. See [`docs/deployment.md`](docs/deployment.md) for Fly.io.
 Sample request payloads for every endpoint live under
 [`data/sample/`](data/sample/).
 
-## Visualizing the Context Graph
+## Visualizing the Context Graph and asking questions
 
 `GET /viz` (open `http://localhost:8000/viz` in a browser once the API is
 running) is a small, self-contained debugging page — not part of docs/plan.md's
-required API surface — that calls `POST /api/v1/context/build` from the form
-inputs (workspace, API key, subject/conversation id, max nodes) and renders
-the returned Claims as a subject→predicate→object node-link graph (hand-rolled
-force layout, no CDN dependency). Click an edge to fetch that Claim's exact
-evidence via `GET /api/v1/claims/{id}/evidence`, shown in the side panel.
-Edge color encodes polarity (green=AFFIRMED, red=NEGATED, yellow=HYPOTHETICAL).
-The `/viz` route itself has no server-side auth (it's static HTML, no data) —
-the access boundary is the API calls it makes, which do require `X-Api-Key`.
+required API surface — with four tabs:
+
+- **Context Graph**: calls `POST /api/v1/context/build` from the form inputs
+  (workspace, API key, subject/conversation id, max nodes) and renders the
+  returned Claims as a subject→predicate→object node-link graph (hand-rolled
+  force layout, no CDN dependency). Click an edge to fetch that Claim's exact
+  evidence via `GET /api/v1/claims/{id}/evidence`, shown in the side panel.
+  Edge color encodes polarity (green=AFFIRMED, red=NEGATED, yellow=HYPOTHETICAL).
+- **Browse Intents**: a generic runner over every Q&A/insights endpoint
+  (`api/routes/qa.py`, `api/routes/insights.py`). Since Increment 20 the
+  dropdown is populated from `GET /api/v1/qa/intents`
+  (`src/nlq/catalog.py`'s single source of truth) instead of a hardcoded JS
+  array — the field list can no longer drift from the real API surface. Pick
+  a question, fill in the generated fields, and the JSON response renders as a
+  readable nested table (one generic renderer, not one bespoke UI per intent).
+- **Ask**: free-text question → `POST /api/v1/ask` (Increment 15/16) — shows
+  the resolved intent, confidence, any ambiguities the system refused to guess
+  through (an unresolvable company name, an account with two open deals),
+  the grounded narrative summary if requested, and the underlying structured
+  result. Requires `LLM_PROVIDER`/`LLM_API_KEY` configured server-side;
+  otherwise renders the honest `503`.
+- **Alerts**: `GET /api/v1/digest` (Increment 17) — the five proactive signals
+  across a workspace's or one seller's open pipeline.
+
+Separately, `GET /viz/panel?workspace_id=...&api_key=...&opportunity_id=...`
+is a compact, single-opportunity, **iframe-embeddable** view (alerts + open
+objections + buying committee) meant for embedding in Salesforce/Showpad. This
+is an embeddable panel, not a packaged Salesforce/Showpad app — no OAuth flow,
+no AppExchange packaging, credentials passed as query params by whatever
+embeds it. `EMBED_ALLOWED_ORIGINS` (`.env.example`) sets which origins may
+iframe it via `Content-Security-Policy: frame-ancestors`; empty (the default)
+denies all embedding.
+
+The `/viz` and `/viz/panel` routes themselves have no server-side auth (static
+HTML, no data) — the access boundary is the API calls they make, which do
+require `X-Api-Key`.
 
 ## Documentation
 
@@ -227,6 +291,8 @@ the access boundary is the API calls it makes, which do require `X-Api-Key`.
   isolation mechanism and what's explicitly *not* production-authorized yet
 - [`docs/deployment.md`](docs/deployment.md) — Fly.io deploy topology and
   exact setup commands
+- [`docs/operations.md`](docs/operations.md) — running the proactive digest
+  (why there's no in-process scheduler, and how to trigger it via cron)
 - [`docs/evaluation.md`](docs/evaluation.md) — metric definitions and real
   measured results from this repo's own test runs
 - [`docs/plan.md`](docs/plan.md) — the original authoritative spec this
@@ -274,23 +340,40 @@ breakdown per module.
   `WORKSPACE_API_KEYS` — `api/dependencies.py::verify_api_key`), not a real
   identity provider. No self-serve key rotation/revocation, no OAuth/JWT. See
   `docs/security-and-tenancy.md` for exactly what this does and doesn't cover.
-- **Conflict detection**: one strategy only (same subject+predicate, differing
-  object, both AFFIRMED, neither superseded — `src/resolution/
-  conflict_detection.py`). The legacy `contradiction_detector.py`'s other
-  strategies all need a hardcoded relation-name vocabulary with no analogue
-  for free-text Claim predicates, so they weren't ported.
-- **Buying-committee mapping**: only enumerates who's actually on the calls
-  and flags single-threaded deals. Real MEDDIC-style role classification
-  (Economic Buyer vs. Champion vs. Technical Buyer) isn't built — every
-  `StakeholderAssignment.role` is honestly `UNKNOWN`; classifying it would
-  need either an LLM or a much larger rule set than this vertical slice
-  justifies. See `src/resolution/stakeholder_inference.py`.
-- **Temporal queries**: "what's new since \<date\>" is real (filters on
-  `Claim.transaction_from`, populated at ingest). True point-in-time ("as of
-  \<past date\>") reconstruction is not built — `valid_to`/`transaction_to`
-  are never set by anything in this vertical slice, since no supersession-
-  closes-the-interval trigger exists. See `docs/evaluation.md`'s Known
-  measurement gaps.
+- **Conflict detection**: one detection strategy only (same subject+predicate,
+  differing object, both AFFIRMED, neither superseded —
+  `src/resolution/conflict_detection.py`). The legacy `contradiction_detector.py`'s
+  other strategies all need a hardcoded relation-name vocabulary with no
+  analogue for free-text Claim predicates, so they weren't ported. Resolution
+  (Increment 19, `src/resolution/conflict_arbitration.py`) is real now — higher
+  confidence wins, a confidence tie falls back to recency, and a genuine
+  double-tie stays `undecided` (no arbitrary tie-break) rather than being
+  forced.
+- **Buying-committee mapping**: `single_threaded`/`distinct_buyer_contact_ids`
+  come from real enumeration of who's actually on the calls
+  (`src/resolution/stakeholder_inference.py`). Role *classification* (Economic
+  Buyer vs. Champion vs. Technical Buyer) is now real too, but opt-in
+  (`?classify_roles=true`, Increment 18,
+  `src/resolution/stakeholder_classification.py`) — off by default so the
+  plain DB-only path stays fast and LLM-free. A contact with no evidence, or a
+  classification below the confidence floor, stays honestly `UNKNOWN`.
+- **Temporal queries**: "what's new since \<date\>" (filters on
+  `Claim.transaction_from`) and true point-in-time ("as of \<past date\>")
+  reconstruction (`POST /api/v1/qa/as-of`) are both real. The latter is only
+  as complete as `valid_to`/`transaction_to` closure — Increment 19 wired that
+  closure into `ConflictsUseCase.resolve()`, but a Claim reconciled via
+  `ReviewService`'s subject_id-rewrite path (not conflict resolution) still
+  doesn't close its interval. See `docs/evaluation.md`'s Known measurement
+  gaps for the precise remaining scope.
 - **Cross-deal aggregation**: scoped by `seller_id` (real, exists on every
   Opportunity), not region/territory — no such field exists on
   Account/Opportunity/Seller in this vertical slice.
+- **LLM vendor lock-in**: `src/llm/chat.py` only implements an Anthropic-backed
+  `ChatFn`. The `ChatFn` protocol itself is vendor-agnostic (a plain
+  `Callable[[str], Awaitable[str]]`, same shape `LlmExtractionProvider` has
+  used since P3) — adding another vendor means one new file, not a redesign.
+- **No in-process scheduler**: proactive digest delivery
+  (`POST /api/v1/digest/deliver`) is triggered by an external cron, not a
+  timer this process runs itself — a deliberate choice consistent with
+  `docker-compose.yml`'s existing "no worker until measured need" stance. See
+  `docs/operations.md`.

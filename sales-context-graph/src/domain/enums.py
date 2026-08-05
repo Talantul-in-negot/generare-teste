@@ -86,6 +86,17 @@ class StakeholderRole(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class RoleSource(StrEnum):
+    """Increment 18 — how a StakeholderAssignment.role value was produced, so a
+    consumer can always tell a real classification from the honest default.
+    INFERRED_UNKNOWN covers both "never classified" and "classified below the
+    confidence floor, downgraded to UNKNOWN" (src/resolution/
+    stakeholder_classification.py) — both are the same trust level from a
+    caller's perspective."""
+    INFERRED_UNKNOWN = "inferred_unknown"
+    LLM_CLASSIFIED = "llm_classified"
+
+
 class ConflictType(StrEnum):
     """Increment 11 — what kind of contradiction a Conflict records. Only one
     strategy is implemented (same subject+predicate, differing object) — the

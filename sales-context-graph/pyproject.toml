@@ -27,6 +27,11 @@ dependencies = [
     # for why local over a hosted API, and src/resolution/scoring.py for the
     # real measured calibration this choice drove.
     "sentence-transformers>=3.0",
+    # LLM vendor for the Increment 15 natural-language layer, narrative
+    # summaries, and role classification. src/llm/chat.py imports it lazily and
+    # only when LLM_PROVIDER=anthropic, so the entire test suite (which runs on
+    # deterministic stub chat_fns) never touches it.
+    "anthropic>=0.40",
 ]
 
 [project.optional-dependencies]

@@ -63,6 +63,15 @@ class ConflictRepository:
             resolved_at=conflict.resolved_at.isoformat() if conflict.resolved_at else None,
         )
 
+    async def get_conflict(self, workspace_id: str, conflict_id: str) -> Conflict | None:
+        match = scoped_match("Conflict", "cf", conflict_id="conflict_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN {_CONFLICT_RETURN}",
+            workspace_id=workspace_id,
+            conflict_id=conflict_id,
+        )
+        return Conflict(**rows[0]) if rows else None
+
     async def list_open_conflicts_for_subject(self, workspace_id: str, subject_id: str) -> list[Conflict]:
         match = scoped_match("Claim", "cl", subject_id="subject_id")
         rows = await self._executor.tenant_query(

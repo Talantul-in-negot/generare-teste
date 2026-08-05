@@ -13,7 +13,9 @@ _ASSIGNMENT_RETURN = (
     "sa.assignment_id AS assignment_id, sa.workspace_id AS workspace_id, "
     "sa.opportunity_id AS opportunity_id, sa.contact_id AS contact_id, "
     "sa.role AS role, sa.influence AS influence, sa.sentiment AS sentiment, "
-    "sa.authority AS authority, sa.updated_at AS updated_at"
+    "sa.authority AS authority, sa.updated_at AS updated_at, "
+    "sa.role_source AS role_source, sa.confidence AS confidence, "
+    "coalesce(sa.evidence_claim_ids, []) AS evidence_claim_ids"
 )
 
 
@@ -42,7 +44,10 @@ class StakeholderRepository:
                 sa.influence = $influence,
                 sa.sentiment = $sentiment,
                 sa.authority = $authority,
-                sa.updated_at = $updated_at
+                sa.updated_at = $updated_at,
+                sa.role_source = $role_source,
+                sa.confidence = $confidence,
+                sa.evidence_claim_ids = $evidence_claim_ids
             MERGE (o)-[:HAS_ASSIGNMENT]->(sa)
             MERGE (sa)-[:ASSIGNS]->(c)
             """,
@@ -55,6 +60,9 @@ class StakeholderRepository:
             sentiment=assignment.sentiment,
             authority=assignment.authority,
             updated_at=assignment.updated_at.isoformat(),
+            role_source=assignment.role_source.value,
+            confidence=assignment.confidence,
+            evidence_claim_ids=assignment.evidence_claim_ids,
         )
 
     async def list_assignments_for_opportunity(

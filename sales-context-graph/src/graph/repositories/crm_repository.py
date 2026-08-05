@@ -240,6 +240,33 @@ class CrmRepository:
         )
         return [OpportunityStageChange(**row) for row in rows]
 
+    async def list_open_opportunities(
+        self, workspace_id: str, *, account_id: str | None = None, seller_id: str | None = None
+    ) -> list[Opportunity]:
+        """Open deals, optionally narrowed to one account (Increment 15: mapping
+        a company name the seller typed to the deal they meant) or one seller
+        (Increment 17: the proactive digest iterates a rep's open pipeline).
+
+        account_id/seller_id are applied as parameterized WHERE clauses rather
+        than being folded into scoped_match() — scoped_match builds the
+        workspace-scoped node pattern, and adding optional keys to it
+        conditionally would make the tenant-scoping guard's input depend on
+        caller arguments. The workspace key stays unconditional.
+        """
+        match = scoped_match("Opportunity", "o")
+        filters = ["o.is_open = true"]
+        if account_id is not None:
+            filters.append("o.account_id = $account_id")
+        if seller_id is not None:
+            filters.append("o.seller_id = $seller_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} WHERE {' AND '.join(filters)} RETURN {_OPPORTUNITY_RETURN} ORDER BY o.name",
+            workspace_id=workspace_id,
+            account_id=account_id,
+            seller_id=seller_id,
+        )
+        return [Opportunity(**row) for row in rows]
+
     async def get_opportunity(self, workspace_id: str, opportunity_id: str) -> Opportunity | None:
         match = scoped_match("Opportunity", "o", opportunity_id="opportunity_id")
         rows = await self._executor.tenant_query(

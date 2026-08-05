@@ -12,7 +12,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from src.domain.enums import StakeholderRole
+from src.domain.enums import RoleSource, StakeholderRole
 
 
 class StakeholderAssignment(BaseModel):
@@ -25,3 +25,10 @@ class StakeholderAssignment(BaseModel):
     sentiment: str | None = None
     authority: str | None = None
     updated_at: datetime
+    # Increment 18 — LLM role classification. role_source tells a caller
+    # whether `role` is a real classification or the honest inferred default;
+    # confidence/evidence_claim_ids are only meaningful when role_source is
+    # LLM_CLASSIFIED (see src/resolution/stakeholder_classification.py).
+    role_source: RoleSource = RoleSource.INFERRED_UNKNOWN
+    confidence: float | None = None
+    evidence_claim_ids: list[str] = []

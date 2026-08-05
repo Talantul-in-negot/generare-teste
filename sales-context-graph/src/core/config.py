@@ -39,9 +39,14 @@ def _load_yaml() -> dict:
 
 
 class Settings(BaseSettings):
-    # ── LLM provider for structured extraction (P3) ──────────────────────────────
+    # ── LLM provider for structured extraction (P3) + the Increment 15 LLM layer ──
+    # llm_provider="anthropic" + a non-empty llm_api_key is what src/llm/chat.py
+    # requires to build a real ChatFn. Left blank, every LLM-backed route returns
+    # 503 rather than a fabricated answer (see src/llm/chat.py).
     llm_provider: str = ""
     llm_api_key: str = ""
+    llm_model: str = "claude-sonnet-5"
+    llm_max_output_tokens: int = 2048
 
     # ── Embedding provider (candidate generation / vector retrieval) ─────────────
     embedding_provider: str = ""
@@ -60,6 +65,20 @@ class Settings(BaseSettings):
     # ── Redis (durable ingestion job store, see api/state.py::get_ingestion_store) ─
     # Empty means "no Redis configured" -> falls back to InMemoryIngestionStore.
     redis_url: str = ""
+
+    # ── Proactive digest (Increment 17, see src/usecases/digest.py) ──────────────
+    # Empty slack_webhook_url means POST /api/v1/digest/deliver returns 503 rather
+    # than posting nowhere; GET /api/v1/digest (JSON, no delivery) works regardless.
+    slack_webhook_url: str = ""
+    digest_stale_share_days: int = 7
+    digest_stalled_deal_days: int = 21
+
+    # ── Embeddable panel (Increment 20, see api/routes/viz.py's /viz/panel) ──────
+    # Space-separated list of origins allowed to iframe /viz/panel (sets
+    # Content-Security-Policy: frame-ancestors). Empty means no origin is
+    # allowed to embed it — the panel still works when opened directly, but
+    # embedding is denied by default rather than left open.
+    embed_allowed_origins: str = ""
 
     # ── App ───────────────────────────────────────────────────────────────────────
     log_level: str = "INFO"

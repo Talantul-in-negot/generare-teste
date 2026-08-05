@@ -1,0 +1,223 @@
+"""AskUseCase — free text in, a real grounded answer (or an honest refusal) out.
+
+Pipeline: classify against the closed catalog -> resolve each required parameter
+-> dispatch to the existing use case.
+
+The parameter-resolution step is where this stays honest. A required parameter
+that cannot be filled from the question or the caller's context produces an
+Ambiguity and the request is answered=False — it never falls back to "the first
+opportunity in the workspace" or an empty result that looks like a real "no".
+Three parameter kinds are structurally *not* derivable from natural language,
+and say so rather than pretending:
+
+  SELLER       — there is no Seller node in the graph, only a seller_id property
+                 on Opportunity; there is nothing to match a name against.
+  SUBJECT      — Claim.subject_id is an opaque speaker_label, not a CRM contact
+                 id (the mismatch found while building Increment 9).
+  CONVERSATION — call ids are not spoken about by name.
+
+All three come from caller context (the signed-in rep, the call being viewed),
+which is exactly where a real UI has them.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+from src.graph.repositories.crm_repository import CrmRepository
+from src.llm.chat import ChatFn
+from src.llm.json_completion import complete_json
+from src.nlq.catalog import IntentSpec, ParamKind, get_intent
+from src.nlq.entity_linking import EntityLinker
+from src.nlq.models import Ambiguity, AskResult, CandidateOption, IntentClassification, ResolvedEntity
+from src.nlq.prompt import build_intent_prompt
+from src.usecases.nlq.dispatch import IntentDispatcher
+
+
+@dataclass(frozen=True)
+class AskContext:
+    """What the calling UI already knows about the user's situation."""
+
+    seller_id: str | None = None
+    opportunity_id: str | None = None
+    conversation_id: str | None = None
+    subject_id: str | None = None
+    buyer_contact_id: str | None = None
+
+
+class AskUseCase:
+    def __init__(
+        self,
+        chat_fn: ChatFn,
+        entity_linker: EntityLinker,
+        crm_repo: CrmRepository,
+        dispatcher: IntentDispatcher,
+    ):
+        self._chat_fn = chat_fn
+        self._linker = entity_linker
+        self._crm = crm_repo
+        self._dispatcher = dispatcher
+
+    async def ask(
+        self, workspace_id: str, question: str, *, context: AskContext | None = None,
+        now: datetime | None = None,
+    ) -> AskResult:
+        context = context or AskContext()
+        now = now or datetime.now(timezone.utc)
+
+        classification = await complete_json(
+            self._chat_fn,
+            build_intent_prompt(question, now_iso=now.isoformat()),
+            IntentClassification,
+            label="intent_classification",
+        )
+        spec = get_intent(classification.intent_id)
+
+        params, entities, ambiguities = await self._resolve_params(
+            workspace_id, spec, classification, context
+        )
+
+        result = AskResult(
+            question=question,
+            intent_id=spec.intent_id,
+            confidence=classification.confidence,
+            reasoning=classification.reasoning,
+            resolved_params={k: _jsonable(v) for k, v in params.items()},
+            resolved_entities=entities,
+            ambiguities=ambiguities,
+        )
+        if ambiguities:
+            return result
+
+        payload = await self._dispatcher.dispatch(spec.intent_id, workspace_id, params)
+        return result.model_copy(update={"answered": True, "result": payload})
+
+    async def _resolve_params(
+        self, workspace_id: str, spec: IntentSpec, classification: IntentClassification,
+        context: AskContext,
+    ) -> tuple[dict, list[ResolvedEntity], list[Ambiguity]]:
+        params: dict = {}
+        entities: list[ResolvedEntity] = []
+        ambiguities: list[Ambiguity] = []
+
+        for param in spec.params:
+            value, entity, ambiguity = await self._resolve_one(
+                workspace_id, param, classification, context
+            )
+            if entity is not None:
+                entities.append(entity)
+            if value is not None:
+                params[param.name] = value
+            elif param.required and ambiguity is not None:
+                ambiguities.append(ambiguity)
+
+        # call-briefing takes conversation_id XOR subject_id — neither is
+        # individually required, but one of them must be present.
+        if spec.intent_id == "call-briefing" and not params:
+            ambiguities.append(Ambiguity(
+                param="conversation_id",
+                reason=(
+                    "a briefing needs a specific call or speaker; supply conversation_id "
+                    "(or subject_id) from the call you are looking at"
+                ),
+            ))
+
+        return params, entities, ambiguities
+
+    async def _resolve_one(
+        self, workspace_id: str, param, classification: IntentClassification, context: AskContext,
+    ) -> tuple[object | None, ResolvedEntity | None, Ambiguity | None]:
+        from_context = getattr(context, param.name, None)
+        if from_context:
+            return from_context, None, None
+
+        if param.kind is ParamKind.DATETIME:
+            if classification.since is None:
+                return None, None, Ambiguity(
+                    param=param.name,
+                    reason="the question names no time boundary; say e.g. 'since last Monday'",
+                )
+            return classification.since, None, None
+
+        if param.kind in (ParamKind.SELLER, ParamKind.SUBJECT, ParamKind.CONVERSATION):
+            return None, None, Ambiguity(
+                param=param.name,
+                reason=_OPAQUE_PARAM_REASONS[param.kind],
+            )
+
+        if param.kind is ParamKind.CONTACT:
+            return await self._resolve_contact(workspace_id, param, classification)
+
+        return await self._resolve_opportunity(workspace_id, param, classification)
+
+    async def _resolve_contact(self, workspace_id: str, param, classification: IntentClassification):
+        if not classification.entity_mentions:
+            return None, None, Ambiguity(param=param.name, reason="the question names no person")
+        last_ambiguity = None
+        for mention in classification.entity_mentions:
+            outcome = await self._linker.link(workspace_id, mention, "Contact")
+            if outcome.entity is not None:
+                return outcome.entity.entity_id, outcome.entity, None
+            last_ambiguity = outcome.ambiguity
+        return None, None, _with_param(last_ambiguity, param.name)
+
+    async def _resolve_opportunity(self, workspace_id: str, param, classification: IntentClassification):
+        if not classification.entity_mentions:
+            return None, None, Ambiguity(
+                param=param.name, reason="the question names no account or deal"
+            )
+
+        last_ambiguity = None
+        for mention in classification.entity_mentions:
+            outcome = await self._linker.link(workspace_id, mention, "Account")
+            if outcome.entity is None:
+                last_ambiguity = outcome.ambiguity
+                continue
+
+            opportunities = await self._crm.list_open_opportunities(
+                workspace_id, account_id=outcome.entity.entity_id
+            )
+            if len(opportunities) == 1:
+                return opportunities[0].opportunity_id, outcome.entity, None
+            if not opportunities:
+                last_ambiguity = Ambiguity(
+                    mention=mention, param=param.name,
+                    reason=f"{outcome.entity.name} has no open opportunity",
+                )
+                continue
+            last_ambiguity = Ambiguity(
+                mention=mention, param=param.name,
+                reason=f"{outcome.entity.name} has {len(opportunities)} open opportunities; pick one",
+                candidates=[
+                    CandidateOption(entity_id=o.opportunity_id, name=o.name, score=1.0)
+                    for o in opportunities
+                ],
+            )
+        return None, None, _with_param(last_ambiguity, param.name)
+
+
+_OPAQUE_PARAM_REASONS = {
+    ParamKind.SELLER: (
+        "seller_id cannot be resolved from a name — the graph stores it as an id on "
+        "Opportunity, not as a named entity. Supply the signed-in seller's id."
+    ),
+    ParamKind.SUBJECT: (
+        "subject_id is an opaque speaker label from the transcript, not a CRM contact id, "
+        "so it cannot be derived from a name. Supply it from the call you are looking at."
+    ),
+    ParamKind.CONVERSATION: (
+        "conversation_id cannot be derived from the question. Supply it from the call you "
+        "are looking at."
+    ),
+}
+
+
+def _with_param(ambiguity: Ambiguity | None, param_name: str) -> Ambiguity:
+    if ambiguity is None:
+        return Ambiguity(param=param_name, reason="could not resolve this parameter")
+    return ambiguity.model_copy(update={"param": param_name})
+
+
+def _jsonable(value):
+    return value.isoformat() if isinstance(value, datetime) else value

@@ -33,6 +33,9 @@ from src.graph.repositories.conflict_repository import ConflictRepository
 from src.graph.repositories.content_repository import ContentRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
 from src.graph.repositories.stakeholder_repository import StakeholderRepository
+from src.llm.chat import LlmNotConfiguredError, build_chat_fn
+from src.nlq.catalog import INTENT_CATALOG
+from src.usecases import serialization as ser
 from src.usecases.buying_committee import BuyingCommitteeUseCase
 from src.usecases.conflicts import ConflictsUseCase
 from src.usecases.objection_content_recommendation import (
@@ -41,6 +44,7 @@ from src.usecases.objection_content_recommendation import (
     ObjectionContentRecommendationUseCase,
 )
 from src.usecases.qa.account_objections import AccountObjectionsUseCase
+from src.usecases.qa.as_of import AsOfUseCase
 from src.usecases.qa.call_briefing import CallBriefingUseCase
 from src.usecases.qa.open_commitments import OpenCommitmentsUseCase
 from src.usecases.qa.whats_new import WhatsNewUseCase
@@ -50,6 +54,10 @@ router = APIRouter(prefix="/api/v1/qa", tags=["qa"])
 
 class OpportunityScopedRequest(BaseModel):
     opportunity_id: str
+
+
+class MissingStakeholdersRequest(OpportunityScopedRequest):
+    classify_roles: bool = False
 
 
 class CallBriefingRequest(BaseModel):
@@ -69,40 +77,43 @@ class WhatsNewRequest(BaseModel):
     since: datetime
 
 
+class AsOfRequest(BaseModel):
+    subject_id: str
+    as_of: datetime
+
+
+@router.get("/intents")
+async def list_intents(workspace_id: str = Depends(verify_api_key)) -> dict:
+    """The intent catalog (src/nlq/catalog.py) — what this system can be asked,
+    served so clients (including /viz) render one list instead of maintaining
+    their own copy."""
+    return {
+        "intents": [
+            {
+                "intent_id": spec.intent_id, "question": spec.question,
+                "description": spec.description, "method": spec.method, "path": spec.path,
+                "params": [
+                    {"name": p.name, "kind": p.kind.value, "required": p.required}
+                    for p in spec.params
+                ],
+            }
+            for spec in INTENT_CATALOG
+        ],
+    }
+
+
 @router.post("/account-objections")
 async def account_objections(body: OpportunityScopedRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
     executor = GraphExecutor()
     usecase = AccountObjectionsUseCase(ClaimRepository(executor), ConversationRepository(executor))
-    result = await usecase.list_objections(workspace_id, body.opportunity_id)
-    return {
-        "opportunity_id": result.opportunity_id,
-        "objections": [
-            {
-                "claim_id": o.claim_id, "object_value": o.object_value,
-                "evidence_text": o.evidence_text, "speaker_role": o.speaker_role.value,
-                "source_timestamp": o.source_timestamp.isoformat(),
-            }
-            for o in result.objections
-        ],
-    }
+    return ser.serialize_account_objections(await usecase.list_objections(workspace_id, body.opportunity_id))
 
 
 @router.post("/open-commitments")
 async def open_commitments(body: OpportunityScopedRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
     executor = GraphExecutor()
     usecase = OpenCommitmentsUseCase(ClaimRepository(executor), ConversationRepository(executor))
-    result = await usecase.list_commitments(workspace_id, body.opportunity_id)
-    return {
-        "opportunity_id": result.opportunity_id,
-        "commitments": [
-            {
-                "claim_id": c.claim_id, "object_value": c.object_value,
-                "evidence_text": c.evidence_text, "speaker_role": c.speaker_role.value,
-                "source_timestamp": c.source_timestamp.isoformat(),
-            }
-            for c in result.commitments
-        ],
-    }
+    return ser.serialize_open_commitments(await usecase.list_commitments(workspace_id, body.opportunity_id))
 
 
 @router.post("/call-briefing")
@@ -119,17 +130,7 @@ async def call_briefing(body: CallBriefingRequest, workspace_id: str = Depends(v
     briefing = await usecase.brief(
         workspace_id, conversation_id=body.conversation_id, subject_id=body.subject_id, **kwargs
     )
-    return {
-        "conversation_id": briefing.conversation_id,
-        "subject_id": briefing.subject_id,
-        "objections": [c.model_dump(mode="json") for c in briefing.objections],
-        "blockers": [c.model_dump(mode="json") for c in briefing.blockers],
-        "action_items": [c.model_dump(mode="json") for c in briefing.action_items],
-        "other_claims": [c.model_dump(mode="json") for c in briefing.other_claims],
-        "unresolved_mention_ids": briefing.unresolved_mention_ids,
-        "conflicts": [c.model_dump(mode="json") for c in briefing.conflicts],
-        "truncated": briefing.truncated,
-    }
+    return ser.serialize_call_briefing(briefing)
 
 
 @router.post("/open-conflicts")
@@ -140,26 +141,31 @@ async def open_conflicts(body: OpportunityScopedRequest, workspace_id: str = Dep
     executor = GraphExecutor()
     usecase = ConflictsUseCase(ClaimRepository(executor), ConflictRepository(executor))
     conflicts = await usecase.detect_for_opportunity(workspace_id, body.opportunity_id)
-    return {
-        "opportunity_id": body.opportunity_id,
-        "conflicts": [c.model_dump(mode="json") for c in conflicts],
-    }
+    return ser.serialize_conflicts(body.opportunity_id, conflicts)
 
 
 @router.post("/missing-stakeholders")
-async def missing_stakeholders(body: OpportunityScopedRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def missing_stakeholders(
+    body: MissingStakeholdersRequest, workspace_id: str = Depends(verify_api_key)
+) -> dict:
     """Increment 12 — thin re-exposure of BuyingCommitteeUseCase under /qa/
     for consistency with the other intents; same logic as GET
-    /api/v1/opportunities/{id}/buying-committee."""
+    /api/v1/opportunities/{id}/buying-committee. Increment 18 adds the same
+    opt-in classify_roles path as that GET route."""
     executor = GraphExecutor()
-    usecase = BuyingCommitteeUseCase(ConversationRepository(executor), StakeholderRepository(executor))
-    inference = await usecase.analyze(workspace_id, body.opportunity_id)
-    return {
-        "opportunity_id": inference.opportunity_id,
-        "distinct_buyer_contact_ids": inference.distinct_buyer_contact_ids,
-        "single_threaded": inference.single_threaded,
-        "no_resolved_buyer_contacts": inference.no_resolved_buyer_contacts,
-    }
+    chat_fn = None
+    if body.classify_roles:
+        try:
+            chat_fn = build_chat_fn()
+        except LlmNotConfiguredError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    usecase = BuyingCommitteeUseCase(
+        ConversationRepository(executor), StakeholderRepository(executor),
+        ClaimRepository(executor) if body.classify_roles else None, chat_fn,
+    )
+    inference = await usecase.analyze(workspace_id, body.opportunity_id, classify_roles=body.classify_roles)
+    return ser.serialize_buying_committee(inference)
 
 
 @router.post("/whats-new")
@@ -167,18 +173,20 @@ async def whats_new(body: WhatsNewRequest, workspace_id: str = Depends(verify_ap
     executor = GraphExecutor()
     usecase = WhatsNewUseCase(ClaimRepository(executor), ConversationRepository(executor))
     result = await usecase.whats_new(workspace_id, body.subject_id, body.since)
-    return {
-        "subject_id": result.subject_id,
-        "since": result.since.isoformat(),
-        "claims": [
-            {
-                "claim_id": c.claim_id, "predicate": c.predicate, "object_value": c.object_value,
-                "evidence_text": c.evidence_text, "source_timestamp": c.source_timestamp.isoformat(),
-                "transaction_from": c.transaction_from.isoformat(),
-            }
-            for c in result.claims
-        ],
-    }
+    return ser.serialize_whats_new(result)
+
+
+@router.post("/as-of")
+async def as_of(body: AsOfRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+    """Increment 19 — true point-in-time reconstruction, unblocked now that
+    ConflictsUseCase.resolve() (see api/routes/insights.py's conflict-resolve
+    route) actually closes a superseded Claim's bitemporal interval. Was
+    deliberately withheld through Increment 14 (see whats-new above) precisely
+    because that wiring didn't exist yet."""
+    executor = GraphExecutor()
+    usecase = AsOfUseCase(ClaimRepository(executor), ConversationRepository(executor))
+    result = await usecase.as_of(workspace_id, body.subject_id, body.as_of)
+    return ser.serialize_as_of(result)
 
 
 @router.post("/recommend-content")
@@ -198,17 +206,4 @@ async def recommend_content(body: RecommendContentRequest, workspace_id: str = D
     except NoObjectionFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    return {
-        "opportunity_id": rec.opportunity_id,
-        "conversation_id": rec.conversation_id,
-        "objection_claim_id": rec.objection_claim.claim_id,
-        "evidence_text": rec.evidence_text,
-        "recommended_asset": rec.recommended_asset.model_dump(mode="json") if rec.recommended_asset else None,
-        "ranked_candidates": [
-            {"asset": r.asset.model_dump(mode="json"), "matched_tags": r.matched_tags, "rank_score": r.rank_score}
-            for r in rec.ranked_candidates
-        ],
-        "excluded_viewed_asset_ids": rec.excluded_viewed_asset_ids,
-        "mapping_source": rec.mapping_source,
-        "explanation": rec.explanation,
-    }
+    return ser.serialize_recommendation(rec)

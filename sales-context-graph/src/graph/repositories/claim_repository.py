@@ -270,3 +270,61 @@ class ClaimRepository:
             predicate=predicate,
         )
         return [Claim(**row) for row in rows]
+
+    async def close_claim_interval(
+        self, workspace_id: str, claim_id: str, *, valid_to: datetime, transaction_to: datetime
+    ) -> None:
+        """Increment 19 — marks a Claim superseded and closes both bitemporal
+        intervals. A narrow SET on the existing node (mirroring
+        conflict_repository.py's resolve_conflict style) rather than a full
+        re-persist through create_claim — this only ever runs as the losing
+        side of ConflictsUseCase.resolve(), and touching only the three fields
+        that actually change keeps the write's blast radius obvious.
+
+        Before this method, nothing in the codebase ever set valid_to/
+        transaction_to/is_superseded (see docs/evaluation.md's prior "Known
+        measurement gaps" entry) — this is the first and only writer.
+        """
+        match = scoped_match("Claim", "cl", claim_id="claim_id")
+        await self._executor.tenant_query(
+            f"""
+            MATCH {match}
+            SET cl.valid_to = $valid_to,
+                cl.transaction_to = $transaction_to,
+                cl.is_superseded = true
+            """,
+            workspace_id=workspace_id,
+            claim_id=claim_id,
+            valid_to=valid_to.isoformat(),
+            transaction_to=transaction_to.isoformat(),
+        )
+
+    async def list_claims_as_of(self, workspace_id: str, subject_id: str, as_of: datetime) -> list[Claim]:
+        """True point-in-time reconstruction: every Claim whose transaction
+        interval was open at `as_of` — recorded by then
+        (transaction_from <= as_of) and not yet superseded by then
+        (transaction_to IS NULL OR transaction_to > as_of). This is only
+        honest as of Increment 19 because close_claim_interval above is now a
+        real writer of transaction_to; before this increment every Claim's
+        interval looked permanently open (see docs/evaluation.md) and this
+        query would have silently returned every Claim regardless of `as_of`.
+
+        Still narrower than "everything ever superseded": a Claim reconciled
+        via ReviewService's subject_id rewrite (src/review/service.py) does
+        not go through close_claim_interval and so does not close its
+        interval — documented explicitly in docs/evaluation.md, not silently
+        assumed away.
+        """
+        match = scoped_match("Claim", "cl", subject_id="subject_id")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {match}
+            WHERE cl.transaction_from <= $as_of
+              AND (cl.transaction_to IS NULL OR cl.transaction_to > $as_of)
+            RETURN {_CLAIM_RETURN}
+            """,
+            workspace_id=workspace_id,
+            subject_id=subject_id,
+            as_of=as_of.isoformat(),
+        )
+        return [Claim(**row) for row in rows]

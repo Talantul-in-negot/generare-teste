@@ -1,36 +1,46 @@
 # Evaluation
 
 Real results from this repo's own test suite, run against a live Neo4j
-container (`docker-compose.yml`'s `neo4j` service) and, since the MVP
-cloud-readiness pass, a live Redis container (`docker-compose.yml`'s `redis`
-service). Original P0-P4.5 run on 2026-08-04; updated 2026-08-04 after wiring
-a real local embedding provider (`src/embedding/`); updated again 2026-08-04
-after adding API-key-per-workspace auth and a durable Redis-backed ingestion
-job store. Reproduce with `make test` (or `pytest tests/` directly, after
-`docker compose up -d neo4j redis`).
+container (`docker-compose.yml`'s `neo4j` service) and a live Redis container
+(`docker-compose.yml`'s `redis` service). Original P0-P4.5 run on 2026-08-04;
+updated the same day after wiring a real local embedding provider, after
+adding API-key auth + a durable Redis job store, and again on 2026-08-05 after
+the Increment 15-20 seller-experience pass (natural-language questions,
+narrative summaries, proactive digest, LLM role classification, conflict
+resolution + point-in-time queries, seller-facing UI). Reproduce with `make
+test` (or `pytest tests/` directly, after `docker compose up -d neo4j redis`).
 
 ## Test suite results
 
 ```
-185 passed, 9 warnings in 30.72s
+347 passed, 25 warnings in 87.09s
 ```
 
 | Suite | Count | What it proves |
 |---|---|---|
-| `tests/unit/domain/` | 27 | ID determinism, round-trip fidelity (all 34 domain models, Hypothesis-driven), Claim identity split, source versioning, Mention span validation — no DB. |
+| `tests/unit/domain/` | 27 | ID determinism, round-trip fidelity (all domain models, Hypothesis-driven), Claim identity split, source versioning, Mention span validation — no DB. |
 | `tests/unit/graph/` | 7 | `GraphExecutor.tenant_query()`'s structural scoping guard, both accepted forms, both rejected forms. |
 | `tests/unit/graph_legacy/` | 31 | The 8 forked modules import cleanly and their cross-file wiring survives the `graphrag.*` -> `src.*` rewrite; the sales ontology YAML validates; production-safety validator covers both the Neo4j-password and workspace-API-key checks. |
-| `tests/unit/extraction/` | 18 | Fixture-extractor byte-stability, polarity detection, window construction (duration/token/topic-boundary triggers, overlap, never-drop-closing-portion), bounded LLM retry/repair -> explicit permanent failure. |
-| `tests/unit/resolution/` | 27 | Scoring formula (including real cosine-similarity helper tests), decision-policy guard rails (all four, isolated), Stage A uniqueness. |
-| `tests/unit/embedding/` | 4 | Local embedding provider: correct dimension, normalized vectors, deterministic output, correctly orders similar vs. unrelated names. |
-| `tests/unit/api/` | 12 | `verify_api_key`'s cross-workspace-key-reuse rejection (4 tests); `InMemoryIngestionStore`'s restart-loses-data limitation, now proven async (3 tests); `RedisIngestionStore`'s put/get round-trip and cross-instance durability via `fakeredis` (4 tests); the `/viz` page serves HTML (1 test). |
-| `tests/integration/` | 55 | Everything above, end to end, against live Neo4j: tenant isolation (identical names/subjects/statuses across two workspaces), CRM reconciliation (identical/changed/merged/converted/archived/deleted), transcript ingestion (opaque speakers, evidence-span mapping, overlap dedup, idempotent re-ingest), the full VW fixture suite (including a real-embedding-provider variant), async review + targeted Claim reconciliation, Context Graph budget/diversity enforcement, the objection-recommendation use case end to end, every required API endpoint retrofitted with `X-Api-Key` auth, and a regression guard that `/health`/`/ready` stay unauthenticated. |
+| `tests/unit/extraction/` | 18 | Fixture-extractor byte-stability, polarity detection, window construction, bounded LLM retry/repair -> explicit permanent failure. |
+| `tests/unit/resolution/` | 52 | Scoring formula, decision-policy guard rails, Stage A uniqueness, conflict detection, buying-committee inference, conflict arbitration tie-break (Increment 19), stakeholder role classification honesty guards (Increment 18). |
+| `tests/unit/embedding/` | 4 | Local embedding provider: dimension, normalization, determinism, ordering. |
+| `tests/unit/api/` | 16 | `verify_api_key` rejection, ingestion store behavior, `/viz` HTML + tabs + `/viz/panel` embed headers (Increment 20). |
+| `tests/unit/llm/` | 12 | The generic bounded retry/repair JSON-completion loop (Increment 15) and `build_chat_fn`'s configuration guard — both offline, no API key. |
+| `tests/unit/nlq/` | 16 | Intent-catalog structural guards (every route catalogued, every catalog entry dispatchable), intent-classification prompt fencing and schema validation. |
+| `tests/unit/narrative/` | 19 | Citation grounding (hallucinated citation rejected, uncited sentences flagged), generic claim extraction across every intent result shape, the narrative use case end to end against a stub. |
+| `tests/unit/signals/` | 16 | Each of the five proactive-signal rules, fire/don't-fire/boundary. |
+| `tests/unit/delivery/` | 3 | Slack Block Kit digest formatting, no network. |
+| `tests/unit/usecases/` | 5 | Content-effectiveness stage-as-of reconstruction. |
+| `tests/unit/ingestion/` | 3 | Showpad adapter parsing (asset views, shares). |
+| `tests/integration/` | 114 | Everything above, end to end, against live Neo4j: tenant isolation, CRM reconciliation, transcript ingestion, the full VW fixture suite, async review, Context Graph budget/diversity enforcement, content effectiveness, conflict detection + resolution, buying-committee + LLM role classification, cross-deal aggregation, temporal + point-in-time queries, natural-language ask (including tenant-isolated entity linking and every refusal path), narrative summaries, and the proactive digest. |
 | `tests/eval/` | 1 | Blocking recall (see below). |
 | `tests/security/` | 3 | Prompt delimiting, size limits, injected-instruction containment. |
 
-No test is skipped, xfailed, or marked slow-and-ignored. `demo_volkswagen.py`
-is a runnable script, not a test, but its output is deterministic given the
-fixture data it seeds (see below).
+No test is skipped, xfailed, or marked slow-and-ignored. Every LLM-backed test
+(Increments 15/16/18) runs against a deterministic stub `chat_fn` — the suite
+needs no API key and stays offline. `demo_volkswagen.py` is a runnable script,
+not a test, but its output is deterministic given the fixture data it seeds
+(see below).
 
 ## Entity resolution
 
@@ -169,7 +179,10 @@ have.
   the legacy `contradiction_detector.py`'s other strategies (directional
   reversal, exclusive-state pairs, functional-relation violations) all need a
   hardcoded relation-name vocabulary with no analogue for free-text Claim
-  predicates, so they weren't ported.
+  predicates, so they weren't ported. Increment 19 added the other half —
+  `ConflictsUseCase.resolve()` actually picks a winner (or honestly refuses
+  to) and closes the loser's bitemporal interval; see the "Known measurement
+  gaps" entry below for what that unblocks.
 
 ## Known measurement gaps
 
@@ -181,17 +194,26 @@ have.
 - No load/latency testing — `max_tokens`/`max_nodes` budgets are enforced
   correctly but their wall-clock cost under realistic Claim volumes is
   unmeasured.
-- **No true point-in-time ("as of") reconstruction of what was known before a
-  given moment.** `Claim.valid_from`/`transaction_from` are populated at
-  ingest and genuinely queryable (Increment 14's `list_claims_recorded_since`
-  — "what's new since \<date\>", filtering on `transaction_from`, real and
-  tested). `valid_to`/`transaction_to` are a different story: **nothing in
-  this vertical slice ever sets them** — no Claim is ever marked as having
-  stopped being valid when it's superseded or contradicted, because no
-  supersession-closes-the-interval trigger exists (the natural trigger would
-  be Increment 11's conflict resolution or `ReviewService`'s reconciliation
-  marking a losing Claim as superseded, and that wiring wasn't built).
-  Shipping an "as of \<past date\>" query without that wiring would silently
-  return wrong answers for every Claim that predates it, since every Claim's
-  validity interval looks permanently open — worse than not having the
-  feature, so it was deliberately not built rather than shipped half-working.
+- **True point-in-time ("as of") reconstruction — closed for one supersession
+  path, still open for another.** Increment 19 wired the trigger this gap
+  previously said was missing: `ConflictsUseCase.resolve()`
+  (`src/usecases/conflicts.py`) picks a winner between two contradicting
+  Claims — via `src/resolution/conflict_arbitration.py`'s pure tie-break
+  (higher confidence, then later `source_timestamp`, then honestly
+  `undecided` rather than an arbitrary pick) or an explicit human-supplied
+  winner — and calls `ClaimRepository.close_claim_interval()` to set the
+  loser's `valid_to`/`transaction_to` and `is_superseded=True`. `POST
+  /api/v1/qa/as-of` (`ClaimRepository.list_claims_as_of`) now genuinely
+  reconstructs "what was believed as of \<date\>" for every Claim superseded
+  through that path, proven by
+  `tests/integration/test_as_of_queries.py`'s boundary test (closed at T2 ->
+  visible at T1, invisible at T3).
+
+  **What's still not covered**: `src/review/service.py`'s `ReviewService.resolve()`
+  reconciles a Claim by rewriting its `subject_id` and re-persisting — it does
+  not call `close_claim_interval`, so a Claim reconciled that way never closes
+  its interval and always appears at every `as_of` query, including dates
+  before it was superseded by review. This is the one remaining gap from the
+  original entry, narrowed rather than silently declared fully solved — a
+  future increment would need to route `ReviewService`'s reconciliation
+  through the same interval-closing call.
