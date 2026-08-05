@@ -182,12 +182,19 @@ nodes lighting up in sequence as the voiceover names them.
    **open conflicts** on this same opportunity currently returns an empty
    list — this fixture doesn't carry a contradicting-claim pair yet, so
    don't demo that intent against this specific deal.)
-2. Click the **Alerts** tab (`data-tab="alerts"`) — fill `Workspace` and
-   optionally a seller ID, click **Get digest** (`#alertsRunBtn`). The
-   result renders the five proactive signal rules firing against the live
-   pipeline: a single-threaded deal, an objection with no follow-up content,
-   shared content never opened, an unresolved conflict, a stalled deal —
-   the same payload that `POST /api/v1/digest/deliver` would push to Slack.
+2. Click the **Alerts** tab (`data-tab="alerts"`) — same per-tab
+   `Workspace`/`API Key` fields as Browse Intents (paste the key), leave
+   Seller ID blank to scope the whole workspace, click **Get digest**
+   (`#alertsRunBtn`). Verified live against `ws-demo`: 4 real signals came
+   back, not a mock — including, on the VW Group Renewal deal itself, both
+   `single_threaded_deal` ("Only one buyer-side contact has appeared on
+   every call for this deal") and `objection_without_follow_up` ("An
+   objection (pricing) has no content shared in response"), each with a
+   `severity` and the exact `evidence_claim_ids` behind it — the same
+   payload `POST /api/v1/digest/deliver` would push to Slack. Two more
+   `objection_without_follow_up` signals fire on other deals in the
+   workspace, showing this runs across the whole pipeline, not one
+   hand-picked opportunity.
 3. Cut briefly to a terminal `curl` call showing
    `GET /api/v1/sellers/{id}/top-objections` — the JSON response ranks the
    top objections across that seller's entire open pipeline, not just one
