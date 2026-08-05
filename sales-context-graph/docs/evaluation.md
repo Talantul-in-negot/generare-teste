@@ -217,3 +217,21 @@ have.
   original entry, narrowed rather than silently declared fully solved — a
   future increment would need to route `ReviewService`'s reconciliation
   through the same interval-closing call.
+
+- **Predicate literals are disconnected from `config/ontologies/sales.yml`.**
+  `src/extraction/fixture_provider.py`'s `_RULES` hardcode `RAISED_OBJECTION`,
+  `HAS_BLOCKER`, `HAS_ACTION_ITEM`, `MENTIONS_ORG` as free strings. The
+  ontology YAML defines `RAISED_OBJECTION` but not the other three, and
+  `OntologyRegistry.load()` (`src/graph/ontology_registry.py`) has no live
+  call site anywhere in `src/` or `api/` — the YAML currently constrains
+  nothing at runtime, so a predicate typo in `fixture_provider.py` would go
+  undetected. See the `TODO` in `fixture_provider.py` and
+  `docs/ontology.md`'s matching note. Not started.
+
+- **Ingestion is synchronous in-process, not a durable queue.**
+  `api/routes/ingestions.py` runs each pipeline call directly inside the HTTP
+  request handler — permitted for the MVP by §11 of `docs/plan.md`, but a
+  process crash mid-ingestion loses the in-flight work (only the job
+  *status*, via `RedisIngestionStore`, is durable today). Full design in
+  [`docs/adr-0001-durable-ingestion-queue.md`](adr-0001-durable-ingestion-queue.md)
+  (RQ over the existing Redis instance). Design only — no code changed.

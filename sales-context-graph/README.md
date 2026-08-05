@@ -72,7 +72,10 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
 
 347 tests pass (unit, integration against a live Neo4j, security, and eval) —
 see the completion report at the end of this document for the phase-by-phase
-breakdown, real measured numbers, and known limitations.
+breakdown, real measured numbers, and known limitations. Open TODOs and
+deferred work are centralized in
+[`docs/evaluation.md`'s "Known measurement gaps"](docs/evaluation.md#known-measurement-gaps)
+— not scattered across code comments alone.
 
 ## Architecture
 
