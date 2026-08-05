@@ -317,19 +317,25 @@ Final frame holds on the repo URL / demo link.
             "email_to_contact_id": {"alice.johnson@acme.com": "<contact id>"},
             "email_to_seller_id": {"nina@ourcompany.com": "005NINA"}}'
      ```
-     Result, honestly reported — `top-objections` for Nina (owner of Acme,
-     Northwind, Fabrikam) still returns **one** `pricing` group, not several:
-     Fabrikam's opportunity is `is_open: false` (excluded by the query's own
-     `WHERE o.is_open = true`), and Northwind's transcript never mentions
-     pricing at all — it raises an ERP-integration question and a security
-     blocker (`HAS_BLOCKER`), correctly extracted as a *different* claim
-     type, not folded into `top-objections`. This is the system behaving
-     correctly on real, varied data, not a shortfall to hide: don't script
-     around it by claiming richer aggregation than the seeded data actually
-     supports. If a multi-objection aggregation moment is wanted for the
-     recording, it needs a second **open** deal under one seller whose
-     transcript genuinely raises a second pricing objection — not present
-     in `data/sample/` today.
+     First result, honestly reported — `top-objections` for Nina (owner of
+     Acme, Northwind, Fabrikam) returned **one** `pricing` group, not
+     several: Fabrikam's opportunity is `is_open: false` (excluded by the
+     query's own `WHERE o.is_open = true`), and Northwind's transcript only
+     raised an ERP-integration question and a security blocker
+     (`HAS_BLOCKER`) — a genuinely different claim type, correctly not
+     folded into `top-objections`.
+  5. **Fixed by adding one real line, not by inventing an aggregation the
+     data didn't support:** `data/sample/gong_call.json`'s
+     `call-northwind-followup` now has one more sentence from Carla —
+     *"One more thing — the renewal pricing came in higher than we expected
+     for this tier."* — a genuine second, affirmed pricing objection on an
+     **open** deal under the same seller. Re-posting that one call (MERGE is
+     idempotent — the earlier segments collapse, only the new sentence adds
+     a segment+Claim) makes `top-objections` for Nina return `pricing`
+     `count: 2`, `example_claim_ids` pointing at both the Acme and Northwind
+     Claims — verified live. This is the moment worth using on screen for
+     **top-objections**, if Scene 6 is extended to demo it: two independent
+     deals, two independently-extracted Claims, aggregated correctly.
 - **Source of truth for claims made on screen:** [`docs/architecture.md`](architecture.md),
   [`docs/entity-resolution.md`](entity-resolution.md), [`README.md`](../README.md),
   `api/routes/viz.py` (UI element ids). Any number added later (test counts,

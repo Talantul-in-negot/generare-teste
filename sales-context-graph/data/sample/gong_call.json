@@ -120,7 +120,8 @@
         {
           "speakerId": "spk_1",
           "sentences": [
-            {"text": "Great, and separately — security review is required before we can sign.", "start": 15500, "end": 19000}
+            {"text": "Great, and separately — security review is required before we can sign.", "start": 15500, "end": 19000},
+            {"text": "One more thing — the renewal pricing came in higher than we expected for this tier.", "start": 19000, "end": 23500}
           ]
         }
       ]
