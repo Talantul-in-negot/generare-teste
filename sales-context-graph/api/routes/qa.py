@@ -25,7 +25,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import verify_api_key
+from api.dependencies import verify_api_key, verify_api_key_or_panel_token
 from src.context_graph.builder import ContextGraphBuilder
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
@@ -103,7 +103,12 @@ async def list_intents(workspace_id: str = Depends(verify_api_key)) -> dict:
 
 
 @router.post("/account-objections")
-async def account_objections(body: OpportunityScopedRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def account_objections(
+    body: OpportunityScopedRequest, workspace_id: str = Depends(verify_api_key_or_panel_token)
+) -> dict:
+    # verify_api_key_or_panel_token, not verify_api_key -- /viz/panel's own
+    # JS calls this endpoint (api/routes/viz.py). See that dependency's
+    # docstring for what a panel token does and doesn't scope.
     executor = GraphExecutor()
     usecase = AccountObjectionsUseCase(ClaimRepository(executor), ConversationRepository(executor))
     return ser.serialize_account_objections(await usecase.list_objections(workspace_id, body.opportunity_id))

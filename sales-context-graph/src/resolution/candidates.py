@@ -24,6 +24,17 @@ DEFAULT_CAP = 50
 
 _ID_FIELD = {"Account": "account_id", "Contact": "contact_id"}
 
+# vector_candidates() over-fetch multiplier -- see the docstring on that
+# method for why this exists. 20x plus a 200-row floor is generous enough
+# that, at this vertical slice's data scale, a workspace's own top-`limit`
+# matches are essentially never crowded out of the pre-filter window by
+# other tenants; it is not a scale-proof fix (see docs/evaluation.md's B5
+# note: this whole path stays behind reranker_enabled=False and an
+# unpopulated index until a real workspace-partitioned or pre-filtered
+# vector query is available).
+_VECTOR_OVERFETCH_MULTIPLIER = 20
+_VECTOR_OVERFETCH_FLOOR = 200
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -81,12 +92,31 @@ class CandidateGenerator:
     async def vector_candidates(
         self, workspace_id: str, embedding: list[float], *, limit: int = DEFAULT_CAP
     ) -> list[Candidate]:
+        """Tenant-isolation fix (docs/evaluation.md's Showpad-compatibility
+        analysis, item 1): `db.index.vector.queryNodes`'s second argument is
+        `numberOfNearestNeighbours`, computed by Neo4j *before* any WHERE
+        clause runs -- passing `limit` directly there, as this method used
+        to, meant the procedure could return another tenant's closer
+        matches, fill the entire top-`limit` window with them, and leave
+        this workspace's own candidates filtered out to zero rows, not
+        merely reordered. That is a live cross-tenant leak once the index
+        is populated, unlike fulltext_candidates() above, whose `LIMIT`
+        already runs after the tenant `WHERE`.
+
+        Fix: ask the procedure for a much larger candidate pool
+        (`_VECTOR_OVERFETCH_MULTIPLIER`x `limit`, floor
+        `_VECTOR_OVERFETCH_FLOOR`), apply the same tenant `WHERE` as before,
+        then truncate to `limit` in Python -- the tenant filter now narrows
+        a pool large enough that this workspace's real matches survive it.
+        See tests/security/test_vector_candidates_tenant_isolation.py.
+        """
+        overfetch = max(limit * _VECTOR_OVERFETCH_MULTIPLIER, _VECTOR_OVERFETCH_FLOOR)
         rows = await self._executor.tenant_query(
-            "CALL db.index.vector.queryNodes('contact_embeddings_v1', $limit, $embedding) YIELD node, score "
+            "CALL db.index.vector.queryNodes('contact_embeddings_v1', $overfetch, $embedding) YIELD node, score "
             "WHERE node.workspace_id = $workspace_id "
             "RETURN node.contact_id AS entity_id, node.name AS name, score "
-            "ORDER BY score DESC",
-            workspace_id=workspace_id, embedding=embedding, limit=limit,
+            "ORDER BY score DESC LIMIT $limit",
+            workspace_id=workspace_id, embedding=embedding, overfetch=overfetch, limit=limit,
         )
         return [
             Candidate(entity_id=r["entity_id"], entity_type="Contact", name=r["name"], sources=frozenset({"vector"}))

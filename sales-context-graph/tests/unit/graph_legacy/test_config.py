@@ -58,11 +58,23 @@ def test_production_with_default_password_raises():
 
 def test_production_without_workspace_api_keys_raises():
     with pytest.raises(ValueError, match="workspace_api_keys"):
-        Settings(_env_file=None, env="production", neo4j_password="a-real-secret")
+        Settings(
+            _env_file=None, env="production", neo4j_password="a-real-secret",
+            panel_token_secret="a-real-panel-secret",
+        )
+
+
+def test_production_without_panel_token_secret_raises():
+    with pytest.raises(ValueError, match="panel_token_secret"):
+        Settings(
+            _env_file=None, env="production", neo4j_password="a-real-secret",
+            workspace_api_keys={"ws-1": "k"},
+        )
 
 
 def test_production_with_changed_password_and_api_keys_does_not_raise():
     settings = Settings(
-        env="production", neo4j_password="a-real-secret", workspace_api_keys={"ws-1": "k"}
+        env="production", neo4j_password="a-real-secret", workspace_api_keys={"ws-1": "k"},
+        panel_token_secret="a-real-panel-secret",
     )
     assert settings.env == "production"

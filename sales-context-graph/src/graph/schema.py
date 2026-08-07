@@ -41,6 +41,24 @@ INDEX_STATEMENTS: list[str] = [
     # Historical identity corrections are queried by subject and transaction
     # interval for point-in-time reconstruction.
     "CREATE INDEX claim_revision_workspace_subject_time IF NOT EXISTS FOR (n:ClaimRevision) ON (n.workspace_id, n.subject_id, n.transaction_from, n.transaction_to)",
+    # Six added 2026-08-07 (docs/evaluation.md's Showpad-compatibility
+    # analysis, item 5) for repository methods that previously had no
+    # supporting index for their MATCH predicate:
+    # (workspace_id, subject_id) — ClaimRepository.list_claims_by_subject.
+    "CREATE INDEX claim_workspace_subject_id IF NOT EXISTS FOR (n:Claim) ON (n.workspace_id, n.subject_id)",
+    # (workspace_id, predicate) — ClaimRepository.list_claims_by_predicate_for_seller
+    # and list_claims_by_opportunity_and_predicate.
+    "CREATE INDEX claim_workspace_predicate IF NOT EXISTS FOR (n:Claim) ON (n.workspace_id, n.predicate)",
+    # (workspace_id, seller_id, is_open) — CrmRepository.list_open_opportunities,
+    # the digest use case's own driving query.
+    "CREATE INDEX opportunity_workspace_seller_open IF NOT EXISTS FOR (n:Opportunity) ON (n.workspace_id, n.seller_id, n.is_open)",
+    # (workspace_id, opportunity_id) — ConversationRepository.list_conversations_by_opportunity.
+    "CREATE INDEX conversation_workspace_opportunity_id IF NOT EXISTS FOR (n:Conversation) ON (n.workspace_id, n.opportunity_id)",
+    # (workspace_id, opportunity_id) — ContentRepository.list_shares_for_opportunity.
+    "CREATE INDEX share_workspace_opportunity_id IF NOT EXISTS FOR (n:Share) ON (n.workspace_id, n.opportunity_id)",
+    # (workspace_id, viewer_contact_id) — ContentRepository.list_viewed_asset_ids
+    # and list_views_for_asset_and_contact.
+    "CREATE INDEX asset_view_workspace_viewer_contact_id IF NOT EXISTS FOR (n:AssetView) ON (n.workspace_id, n.viewer_contact_id)",
 ]
 
 FULLTEXT_STATEMENTS: list[str] = [
@@ -76,6 +94,12 @@ ALL_INDEX_NAMES: list[str] = [
     "conversation_workspace_occurred_at",
     "claim_workspace_adjudication",
     "claim_revision_workspace_subject_time",
+    "claim_workspace_subject_id",
+    "claim_workspace_predicate",
+    "opportunity_workspace_seller_open",
+    "conversation_workspace_opportunity_id",
+    "share_workspace_opportunity_id",
+    "asset_view_workspace_viewer_contact_id",
     "account_contact_names",
     "contact_embeddings_v1",
 ]

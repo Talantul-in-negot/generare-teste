@@ -161,7 +161,14 @@ async def test_qa_routes_reject_missing_api_key(monkeypatch):
             headers={"X-Workspace-Id": "ws-qa-authcheck"},
             json={"opportunity_id": "opp-x"},
         )
-        assert no_key_resp.status_code == 422
+        # 401, not FastAPI's usual 422-for-a-missing-required-header: this
+        # route accepts an X-Api-Key *or* an X-Panel-Token
+        # (api/dependencies.py::verify_api_key_or_panel_token, since
+        # /viz/panel's own JS calls this endpoint) -- both are optional at
+        # the FastAPI-signature level, so "neither was supplied" is a
+        # manually raised 401, which is arguably the more correct status
+        # for an authentication failure anyway.
+        assert no_key_resp.status_code == 401
 
         wrong_key_resp = await client.post(
             "/api/v1/qa/account-objections",

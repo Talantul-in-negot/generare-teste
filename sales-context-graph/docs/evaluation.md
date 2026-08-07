@@ -735,6 +735,22 @@ described as. `EMBED_ALLOWED_ORIGINS` sets `frame-ancestors` on that one
 route (`viz.py:44-51`) and is a **single global space-separated string, not
 per-workspace** — every tenant shares one embedding allowlist.
 
+✅ **Fixed 2026-08-07 (Phase 1)**, the credentials-in-URL half of this: `GET
+/viz/panel` now requires `Depends(verify_panel_token)` (`api/dependencies.py`)
+and takes only `?token=...` — a long-lived, workspace+opportunity-scoped,
+independently revocable panel token minted by `POST /viz/panel-token`
+(requires the real `X-Api-Key`; see `src/viz/panel_tokens.py`), never the
+real API key itself. The 3 endpoints the panel's own JS calls (buying-
+committee, account-objections, digest) accept that token via a new
+`X-Panel-Token` header as an alternative to `X-Api-Key`
+(`verify_api_key_or_panel_token`). A real limitation, stated plainly rather
+than glossed over: this scopes access to the token's *workspace*, not
+strictly to its *opportunity* — the 3 endpoints don't share a uniform
+opportunity-scoping shape (path param / body field / none at all for a
+workspace-wide digest), so tightening that further is future work, not
+claimed here. `EMBED_ALLOWED_ORIGINS` being a single global string, not
+per-workspace, remains open — not touched by this fix.
+
 ### 3. Scalability and performance — the honest ceiling
 
 Measured, not assumed (`tests/eval/test_context_graph_latency.py`): Context
@@ -797,6 +813,15 @@ The vector index is a **1536-dim placeholder that stays unpopulated**
 (`schema.py:52-59`, `README.md:330-333`) — `vector_candidates()` queries an
 empty index.
 
+✅ **Fixed 2026-08-07 (Phase 1)**: all 6 named indexes above added to
+`INDEX_STATEMENTS`/`ALL_INDEX_NAMES` (`schema.py`), applied idempotently by
+the existing `migration_001_init_schema.py` runner — no new migration
+mechanism needed. `tests/integration/test_index_readiness.py` (pre-existing,
+unmodified — it reads `ALL_INDEX_NAMES` generically) confirms all 20 indexes
+come `ONLINE`. **Still open, not touched by this fix**: zero uniqueness
+constraints anywhere in the schema — that's a distinct gap (data integrity,
+not query performance) outside this phase's scope.
+
 **Other ceilings:** connection pool is a hardcoded `max_connection_pool_size=50`
 (`neo4j_client.py:35`) — not a settings field, with no acquisition timeout or
 connection lifetime configured; every query is autocommit on a fresh session
@@ -855,6 +880,22 @@ placeholder (`schema.py:52-59`), so nothing reaches this path in practice
 yet. It becomes a live cross-tenant retrieval defect the moment an embedding
 provider is pinned and the index is backfilled — i.e. it will surface exactly
 when the system starts being useful, which is the worst time to discover it.
+
+✅ **Fixed 2026-08-07 (Phase 1)**, ahead of the index ever being populated
+(the required ordering — fix before backfill, see Phase 7 below).
+`vector_candidates()` now over-fetches (`max(limit * 20, 200)`
+`numberOfNearestNeighbours`) before the same tenant `WHERE`, then applies
+`LIMIT $limit` in Cypher after it — the same shape `fulltext_candidates()`
+already used. This is a mitigation bounded by the over-fetch window, not a
+scale-proof fix: a single workspace with more near-identical vectors than
+the over-fetch window could still crowd out another tenant's real matches
+in principle, which is exactly why this stays behind an unpopulated index
+and `reranker_enabled=False` until Phase 7. Proven by
+`tests/security/test_vector_candidates_tenant_isolation.py`, which
+constructs the crowding-out scenario directly (one workspace with 3x
+`DEFAULT_CAP` near-identical vectors, another with a handful of real,
+meaningfully-less-similar ones) and — verified by temporarily reverting the
+fix — fails against the old code and passes against the new code.
 
 **Key management, not isolation, is the scaling wall.**
 `WORKSPACE_API_KEYS` is a single JSON blob in one env var

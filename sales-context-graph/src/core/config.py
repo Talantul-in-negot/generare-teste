@@ -86,6 +86,21 @@ class Settings(BaseSettings):
     # embedding is denied by default rather than left open.
     embed_allowed_origins: str = ""
 
+    # HMAC secret for the panel token (src/viz/panel_tokens.py) that replaced
+    # putting the real workspace API key in /viz/panel's URL (docs/
+    # evaluation.md's Showpad-compatibility analysis, item 3). Empty means
+    # /viz/panel-token (the minting endpoint) and /viz/panel itself both
+    # return 503 rather than issuing/accepting an unsigned or weakly-signed
+    # token — same "fail loud, never silently degrade" posture as
+    # src/llm/chat.py's LlmNotConfiguredError.
+    panel_token_secret: str = ""
+    # ~1 year: the panel is a static, admin-configured iframe src with no
+    # OAuth flow to refresh it (see README.md), so this deliberately isn't a
+    # short-lived session token — revocation (bumping the stored version in
+    # Redis, see panel_tokens.py) is the mechanism for invalidating one
+    # early, not a short TTL forcing every embed to be re-minted constantly.
+    panel_token_ttl_seconds: int = 60 * 60 * 24 * 365
+
     # ── App ───────────────────────────────────────────────────────────────────────
     log_level: str = "INFO"
     env: str = "development"
@@ -105,6 +120,11 @@ class Settings(BaseSettings):
         if self.env == "production" and not self.workspace_api_keys:
             raise ValueError(
                 "workspace_api_keys must be configured in production (WORKSPACE_API_KEYS)."
+            )
+        if self.env == "production" and not self.panel_token_secret:
+            raise ValueError(
+                "panel_token_secret must be configured in production (PANEL_TOKEN_SECRET) "
+                "for /viz/panel to mint or verify tokens."
             )
         return self
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import verify_api_key
+from api.dependencies import verify_api_key, verify_api_key_or_panel_token
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conflict_repository import ConflictRepository
@@ -76,8 +76,12 @@ async def resolve_conflict(
 
 @router.get("/opportunities/{opportunity_id}/buying-committee")
 async def buying_committee(
-    opportunity_id: str, classify_roles: bool = False, workspace_id: str = Depends(verify_api_key)
+    opportunity_id: str, classify_roles: bool = False, workspace_id: str = Depends(verify_api_key_or_panel_token)
 ) -> dict:
+    # verify_api_key_or_panel_token, not verify_api_key -- this is one of
+    # the 3 endpoints /viz/panel's own JS calls (api/routes/viz.py). See
+    # that dependency's docstring for what a panel token does and doesn't
+    # scope.
     executor = GraphExecutor()
     chat_fn = None
     if classify_roles:

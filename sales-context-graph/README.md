@@ -270,18 +270,25 @@ required API surface — with four tabs:
 - **Alerts**: `GET /api/v1/digest` (Increment 17) — the five proactive signals
   across a workspace's or one seller's open pipeline.
 
-Separately, `GET /viz/panel?workspace_id=...&api_key=...&opportunity_id=...`
-is a compact, single-opportunity, **iframe-embeddable** view (alerts + open
-objections + buying committee) meant for embedding in Salesforce/Showpad. This
-is an embeddable panel, not a packaged Salesforce/Showpad app — no OAuth flow,
-no AppExchange packaging, credentials passed as query params by whatever
-embeds it. `EMBED_ALLOWED_ORIGINS` (`.env.example`) sets which origins may
-iframe it via `Content-Security-Policy: frame-ancestors`; empty (the default)
-denies all embedding.
+Separately, `GET /viz/panel?token=...` is a compact, single-opportunity,
+**iframe-embeddable** view (alerts + open objections + buying committee)
+meant for embedding in Salesforce/Showpad. This is an embeddable panel, not a
+packaged Salesforce/Showpad app — no OAuth flow, no AppExchange packaging.
+`token` is a long-lived, workspace+opportunity-scoped panel token, not the
+real workspace API key: mint one with `POST /viz/panel-token` (requires
+`X-Api-Key`, body `{"opportunity_id": "..."}`) once, out of band, when
+configuring the embed, and put only the returned token in the iframe `src` —
+the real API key never reaches the browser. See `src/viz/panel_tokens.py` for
+the token's format, expiry (`PANEL_TOKEN_TTL_SECONDS`), and how to revoke one
+early (bump that workspace's version rather than rotating
+`WORKSPACE_API_KEYS`). `EMBED_ALLOWED_ORIGINS` (`.env.example`) separately
+sets which origins may iframe the page via `Content-Security-Policy:
+frame-ancestors`; empty (the default) denies all embedding.
 
-The `/viz` and `/viz/panel` routes themselves have no server-side auth (static
-HTML, no data) — the access boundary is the API calls they make, which do
-require `X-Api-Key`.
+`GET /viz/panel` itself now requires a valid token (`Depends(verify_panel_token)`)
+before it renders anything. `GET /viz` (the full debugging UI, not the
+embeddable panel) still has no server-side auth — the access boundary there
+is the API calls it makes, which do require `X-Api-Key`.
 
 ## Documentation
 

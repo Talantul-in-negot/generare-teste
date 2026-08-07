@@ -25,12 +25,38 @@ Salesforce/Showpad app (no OAuth, no AppExchange packaging; see README.md).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Response
-from fastapi.responses import HTMLResponse
+import json
 
+from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
+
+from api.dependencies import verify_api_key, verify_panel_token
 from src.core.config import get_settings
+from src.viz.panel_tokens import PanelTokenClaims, PanelTokenError, mint_panel_token
 
 router = APIRouter(tags=["viz"])
+
+
+class PanelTokenRequest(BaseModel):
+    opportunity_id: str
+
+
+@router.post("/viz/panel-token")
+async def create_panel_token(body: PanelTokenRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+    """Mints the token GET /viz/panel now requires, replacing the raw
+    X-Api-Key that used to sit directly in the panel's URL (docs/
+    evaluation.md's Showpad-compatibility analysis, item 3). Requires the
+    real API key -- whoever configures the Salesforce/Showpad embed calls
+    this once, out of band, and only the returned token goes into the
+    iframe src; the real key never reaches the browser. See
+    src/viz/panel_tokens.py for the token's shape, expiry, and revocation.
+    """
+    try:
+        token = await mint_panel_token(workspace_id, body.opportunity_id)
+    except PanelTokenError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"token": token, "panel_url": f"/viz/panel?token={token}"}
 
 
 @router.get("/viz", response_class=HTMLResponse)
@@ -39,7 +65,7 @@ async def context_graph_viz() -> str:
 
 
 @router.get("/viz/panel", response_class=HTMLResponse)
-async def opportunity_panel(response: Response) -> str:
+async def opportunity_panel(response: Response, token: str, claims: PanelTokenClaims = Depends(verify_panel_token)) -> str:
     settings = get_settings()
     allowed = settings.embed_allowed_origins.strip()
     # No CORSMiddleware is registered for this single-purpose header (see
@@ -49,7 +75,16 @@ async def opportunity_panel(response: Response) -> str:
     response.headers["Content-Security-Policy"] = (
         f"frame-ancestors {allowed}" if allowed else "frame-ancestors 'none'"
     )
-    return _PANEL_PAGE
+    # workspace_id/opportunity_id come from the *validated token*, not
+    # re-parsed from client-supplied query params -- a caller can no longer
+    # claim a different opportunity_id than the one their token was minted
+    # for. `token` itself is re-embedded verbatim so the page's own JS can
+    # present it as X-Panel-Token on its 3 downstream fetches below.
+    page = _PANEL_PAGE
+    page = page.replace("__PANEL_TOKEN_JSON__", json.dumps(token))
+    page = page.replace("__WORKSPACE_ID_JSON__", json.dumps(claims.workspace_id))
+    page = page.replace("__OPPORTUNITY_ID_JSON__", json.dumps(claims.opportunity_id))
+    return page
 
 
 # Shared between /viz and /viz/panel so both pages render JSON identically
@@ -804,21 +839,23 @@ _PANEL_PAGE = """<!doctype html>
 <div id="status"></div>
 <div id="content"></div>
 <script>
-const qs = new URLSearchParams(window.location.search);
-const workspaceId = qs.get("workspace_id");
-const apiKey = qs.get("api_key");
-const opportunityId = qs.get("opportunity_id");
+// Injected server-side by GET /viz/panel (api/routes/viz.py) from the
+// *validated* panel token -- never re-parsed from client-editable query
+// params. See src/viz/panel_tokens.py.
+const workspaceId = __WORKSPACE_ID_JSON__;
+const opportunityId = __OPPORTUNITY_ID_JSON__;
+const panelToken = __PANEL_TOKEN_JSON__;
 const statusEl = document.getElementById("status");
 const contentEl = document.getElementById("content");
 
 """ + _RENDER_JSON_JS + """
 
 async function loadPanel() {
-  if (!workspaceId || !apiKey || !opportunityId) {
-    statusEl.textContent = "Missing required query params: workspace_id, api_key, opportunity_id.";
-    return;
-  }
-  const headers = { "X-Workspace-Id": workspaceId, "X-Api-Key": apiKey };
+  // Only the scoped panel token -- the real workspace API key never
+  // reaches this page. api/dependencies.py::verify_api_key_or_panel_token
+  // accepts this header on the 3 endpoints below as an alternative to a
+  // real API key.
+  const headers = { "X-Panel-Token": panelToken };
 
   await section("Buying committee", async () => {
     const r = await fetch("/api/v1/opportunities/" + encodeURIComponent(opportunityId) + "/buying-committee", { headers });
