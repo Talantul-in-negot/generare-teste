@@ -1098,6 +1098,33 @@ cost measurably before any vector-similarity cache is justified. Start with
 exact-match; the brief jumps to semantic similarity, which risks serving a
 near-miss answer as if exact.
 
+✅ **Fixed 2026-08-07 (Phase 5)**: new `src/core/cache/query_cache.py` —
+exact-match, workspace-scoped-by-construction (the key is built from a
+real `workspace_id` parameter, not left to an assembled string a caller
+could get wrong), on the shared `get_redis()` singleton (not
+`alias_registry.py`'s own separate connection, already flagged elsewhere
+in this document as legacy/inconsistent). Wired into `AskUseCase.ask()`
+(keyed on question + every `AskContext` field, deliberately excluding
+`now` — see the code comment for why including it would make the cache a
+guaranteed miss) and `NarrativeSummaryUseCase.summarize()` (opt-in via a
+new `workspace_id` parameter; `CallSummaryUseCase` doesn't pass one and
+keeps its own separate caching unaffected). A cache-invalidation hook
+(`invalidate_workspace_cache`) is ready for `ErasureEvent.erasure_scope`'s
+`"cache"` value — **honestly not wired to anything**: confirmed by search
+that no erasure *execution* pathway exists anywhere in `src/` yet
+(`ErasureEvent` is only ever referenced by its own domain module and the
+generic model-roundtrip test) — same root gap already noted against the
+`Claims ... erased` metric in Phase 0's entry above, not a new one.
+Verified: 6 new `tests/unit/core/test_query_cache.py` tests (miss/hit,
+cross-workspace isolation, disabled/no-Redis fail-open, TTL, invalidation)
+plus 3 new integration tests proving the LLM call is actually skipped on a
+repeat and NOT skipped when context or workspace differ, plus 2 new
+narrative-cache unit tests. One pre-existing test
+(`test_narrative_summary_route.py`) had to disable the cache explicitly —
+its own methodology (same question, two different stubbed LLM responses,
+checking grounding against each) is inherently incompatible with response
+caching, which is new, correct, real behavior now, not a bug.
+
 **B3. No PII redaction before persistence or LLM submission.** Verified:
 no redaction, NER, or scrubbing module exists (`grep` for
 `redact|anonymi|presidio|NER` → nothing). `docs/plan.md` §13 requires

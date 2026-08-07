@@ -17,6 +17,7 @@ import pytest
 
 import api.routes.ask as ask_route
 from api.main import app
+from src.core.config import get_settings
 from src.domain.identity import crm_entity_id
 from src.extraction.fixture_provider import FixtureExtractionProvider
 from src.graph.repositories.claim_repository import ClaimRepository
@@ -87,6 +88,14 @@ async def _seed_vw_deal(executor, workspace_id: str) -> str:
 
 
 async def test_ask_with_include_narrative_returns_a_grounded_summary(executor, monkeypatch):
+    # Phase 5's query/narrative cache is keyed on (question, context) /
+    # (focus, claims) -- this test deliberately asks the *identical*
+    # question twice with two different stubbed LLM responses to check
+    # grounding against each, which the cache would otherwise short-circuit
+    # on the second call (same question -> same cached answer, exactly the
+    # intended behavior in production, just not what this test is probing).
+    monkeypatch.setenv("QUERY_CACHE_ENABLED", "false")
+    get_settings.cache_clear()
     workspace_id = f"ws-narr-{uuid4().hex[:8]}"
     headers = auth_headers(monkeypatch, workspace_id)
     await _seed_vw_deal(executor, workspace_id)

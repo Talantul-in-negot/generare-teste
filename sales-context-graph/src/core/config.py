@@ -79,6 +79,13 @@ class Settings(BaseSettings):
     # extraction, the only LLM-backed ingestion kind) -- 5 minutes default.
     ingestion_visibility_timeout_seconds: int = 300
 
+    # ── Query result cache (Phase 5, docs/evaluation.md's semantic/result-cache ──
+    # item) -- exact-match, workspace-scoped, see src/core/cache/query_cache.py.
+    # On by default; still a no-op wherever REDIS_URL is unset, same fail-open
+    # shape as everything else optional-Redis in this codebase.
+    query_cache_enabled: bool = True
+    query_cache_ttl_seconds: int = 300
+
     # ── Proactive digest (Increment 17, see src/usecases/digest.py) ──────────────
     # Empty slack_webhook_url means POST /api/v1/digest/deliver returns 503 rather
     # than posting nowhere; GET /api/v1/digest (JSON, no delivery) works regardless.

@@ -236,6 +236,78 @@ async def test_entity_linking_does_not_see_another_workspaces_accounts(executor)
     assert result.resolved_params["opportunity_id"] == seeded_a["opportunity_id"]
 
 
+# ── Phase 5: exact-match result cache (docs/evaluation.md) ────────────────────
+
+def _counting_chat_fn(**classification):
+    """Same shape as _stub_chat_fn, but tracks how many times it was
+    actually invoked -- the cache's whole point is to skip this call."""
+    body = {
+        "intent_id": "account-objections", "entity_mentions": [], "since": None,
+        "confidence": 0.92, "reasoning": "stubbed",
+    }
+    payload = json.dumps({**body, **classification})
+    calls = {"n": 0}
+
+    async def chat_fn(prompt: str) -> str:
+        calls["n"] += 1
+        return payload
+
+    chat_fn.calls = calls
+    return chat_fn
+
+
+async def test_repeated_identical_question_and_context_skips_the_llm_call(executor, monkeypatch):
+    monkeypatch.setenv("QUERY_CACHE_ENABLED", "true")
+    get_settings.cache_clear()
+    workspace_id = f"ws-ask-cache-{uuid4().hex[:8]}"
+    await _seed_vw_deal(executor, workspace_id)
+    chat_fn = _counting_chat_fn(entity_mentions=["Volkswagen Group"])
+    usecase = _usecase(executor, chat_fn)
+
+    first = await usecase.ask(workspace_id, "what objections has Volkswagen raised?")
+    second = await usecase.ask(workspace_id, "what objections has Volkswagen raised?")
+
+    assert chat_fn.calls["n"] == 1  # classification only ran once
+    assert first.model_dump() == second.model_dump()
+    get_settings.cache_clear()
+
+
+async def test_same_question_different_context_is_a_cache_miss(executor, monkeypatch):
+    """AskContext affects resolution (_resolve_one's from_context check) --
+    two callers asking the identical text with different context must
+    never share a cached answer."""
+    monkeypatch.setenv("QUERY_CACHE_ENABLED", "true")
+    get_settings.cache_clear()
+    workspace_id = f"ws-ask-cache-ctx-{uuid4().hex[:8]}"
+    await _seed_vw_deal(executor, workspace_id)
+
+    chat_fn = _counting_chat_fn(intent_id="call-briefing")
+    usecase = _usecase(executor, chat_fn)
+
+    await usecase.ask(workspace_id, "what should I know?", context=AskContext(conversation_id="conv-a"))
+    await usecase.ask(workspace_id, "what should I know?", context=AskContext(conversation_id="conv-b"))
+
+    assert chat_fn.calls["n"] == 2  # different context -> both actually ran
+    get_settings.cache_clear()
+
+
+async def test_same_question_different_workspace_is_a_cache_miss(executor, monkeypatch):
+    monkeypatch.setenv("QUERY_CACHE_ENABLED", "true")
+    get_settings.cache_clear()
+    workspace_a = f"ws-ask-cache-w1-{uuid4().hex[:8]}"
+    workspace_b = f"ws-ask-cache-w2-{uuid4().hex[:8]}"
+    await _seed_vw_deal(executor, workspace_a)
+    await _seed_vw_deal(executor, workspace_b)
+    chat_fn = _counting_chat_fn(entity_mentions=["Volkswagen Group"])
+    usecase = _usecase(executor, chat_fn)
+
+    await usecase.ask(workspace_a, "what objections has Volkswagen raised?")
+    await usecase.ask(workspace_b, "what objections has Volkswagen raised?")
+
+    assert chat_fn.calls["n"] == 2  # workspace-scoped -- no cross-tenant cache hit
+    get_settings.cache_clear()
+
+
 # ── the route ────────────────────────────────────────────────────────────────
 
 async def test_ask_route_returns_503_when_no_llm_is_configured(executor, monkeypatch):

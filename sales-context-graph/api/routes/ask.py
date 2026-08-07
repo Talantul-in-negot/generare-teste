@@ -83,7 +83,7 @@ async def ask(body: AskRequest, workspace_id: str = Depends(verify_api_key)) -> 
     if body.include_narrative and result.answered:
         narrative_usecase = NarrativeSummaryUseCase(chat_fn)
         try:
-            narrative = await narrative_usecase.summarize(result.result, focus=body.question)
+            narrative = await narrative_usecase.summarize(result.result, focus=body.question, workspace_id=workspace_id)
         except NoCitableClaimsError:
             pass
         except (JsonCompletionFailedPermanently, HallucinatedCitationError) as exc:
@@ -103,7 +103,7 @@ async def summarize_narrative(body: NarrativeRequest, workspace_id: str = Depend
 
     usecase = NarrativeSummaryUseCase(chat_fn)
     try:
-        narrative = await usecase.summarize(body.result, focus=body.focus)
+        narrative = await usecase.summarize(body.result, focus=body.focus, workspace_id=workspace_id)
     except NoCitableClaimsError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except (JsonCompletionFailedPermanently, HallucinatedCitationError) as exc:

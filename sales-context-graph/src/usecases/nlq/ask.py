@@ -22,9 +22,10 @@ which is exactly where a real UI has them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 
+from src.core.cache.query_cache import cache_result, get_cached_result
 from src.graph.repositories.crm_repository import CrmRepository
 from src.llm.chat import ChatFn
 from src.llm.json_completion import complete_json
@@ -66,6 +67,22 @@ class AskUseCase:
         context = context or AskContext()
         now = now or datetime.now(timezone.utc)
 
+        # Phase 5 (docs/evaluation.md's semantic/result-cache item): exact-
+        # match on (question, context) -- not `now`, deliberately. `now`
+        # differs by microseconds on every real call, so including it would
+        # make every lookup a guaranteed miss; excluding it means a
+        # relative-time classification (e.g. "since last week") can be up
+        # to query_cache_ttl_seconds stale, an accepted, small trade-off of
+        # caching at all, not a correctness bug. `context` IS included --
+        # two different callers asking identical question text with
+        # different AskContext (e.g. a different conversation_id) must
+        # never share a cached answer, since _resolve_one's from_context
+        # check means context can change what a question resolves to.
+        cache_key = _ask_cache_key(question, context)
+        cached = await get_cached_result(workspace_id, cache_key)
+        if cached is not None:
+            return AskResult.model_validate_json(cached)
+
         classification = await complete_json(
             self._chat_fn,
             build_intent_prompt(question, now_iso=now.isoformat()),
@@ -88,10 +105,13 @@ class AskUseCase:
             ambiguities=ambiguities,
         )
         if ambiguities:
+            await cache_result(workspace_id, cache_key, result.model_dump_json())
             return result
 
         payload = await self._dispatcher.dispatch(spec.intent_id, workspace_id, params)
-        return result.model_copy(update={"answered": True, "result": payload})
+        final = result.model_copy(update={"answered": True, "result": payload})
+        await cache_result(workspace_id, cache_key, final.model_dump_json())
+        return final
 
     async def _resolve_params(
         self, workspace_id: str, spec: IntentSpec, classification: IntentClassification,
@@ -221,3 +241,15 @@ def _with_param(ambiguity: Ambiguity | None, param_name: str) -> Ambiguity:
 
 def _jsonable(value):
     return value.isoformat() if isinstance(value, datetime) else value
+
+
+def _ask_cache_key(question: str, context: AskContext) -> str:
+    """Normalizes the question (case/whitespace only -- still exact-match,
+    not fuzzy) and folds in every AskContext field so two callers with
+    different caller-supplied context never share a cached answer. See
+    ask()'s own comment for why `now` is deliberately excluded."""
+    normalized_question = " ".join(question.strip().lower().split())
+    context_repr = ",".join(
+        f"{f.name}={getattr(context, f.name)}" for f in fields(context)
+    )
+    return f"ask:{normalized_question}:{context_repr}"
