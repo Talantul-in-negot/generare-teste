@@ -105,6 +105,16 @@ INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS = Gauge(
     "queue. 0 when the queue is empty.",
 )
 
+# --- Phase 6 addition: prompt-injection guardrail flags ---------------------
+# Not one of docs/plan.md §14's original 9 -- added when the guardrail
+# itself was (src/extraction/guardrail.py), same "count every real signal
+# this system produces" discipline as the rest of this file.
+GUARDRAIL_FLAG_TOTAL = Counter(
+    "scg_guardrail_flag_total",
+    "Extraction windows flagged by the prompt-injection heuristic guardrail, "
+    "regardless of enforcement mode (log_only vs block).",
+)
+
 
 def record_blocking_recall(value: float) -> None:
     """Called by tests/eval/* after scoring a labeled run's blocking output

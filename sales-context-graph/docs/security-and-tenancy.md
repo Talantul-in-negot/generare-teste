@@ -93,7 +93,9 @@ the full §13 scope.
   `tests/security/test_prompt_injection_fixture.py`.
 - No transcript text or email appears in `structlog` INFO-level log calls
   anywhere in this codebase (all logging is IDs/counts/enums — spot-check any
-  `log.info(...)` call in `src/`).
+  `log.info(...)` call in `src/`). As of Phase 6 (2026-08-07) this is also a
+  mechanical safeguard, not only a code-review discipline — see "PII
+  handling" below.
 - `Claim.retention_class` and `Claim.erasure_status`
   (`src/domain/enums.py::ErasureStatus`) exist on the model; `ErasureEvent`
   exists as an audit-record type. **No erasure-propagation implementation
@@ -101,6 +103,37 @@ the full §13 scope.
   summaries on an erasure request) — the fields are the contract a future
   phase implements against, not a working feature today.
 - No legal-hold state is modeled.
+
+## PII handling — raw at rest, redacted at egress (added Phase 6, 2026-08-07)
+
+A deliberate choice, not an oversight: `TranscriptSegment` (`src/domain/
+conversation.py`) stays verbatim in Neo4j. This system's entire evidence
+model depends on it — a `Claim`'s `evidence_char_start`/`evidence_char_end`
+index into the real segment text, and a reviewer adjudicating a Claim (or a
+future erasure-propagation implementation, see above) needs the actual
+original span, not a redacted stand-in. Redacting before persistence would
+silently break that contract.
+
+Instead, redaction (`src/redaction/pii.py`, regex-based — email, phone,
+SSN- and credit-card-shaped patterns) applies only at the two points raw
+text actually leaves the system boundary:
+
+- **LLM prompts** — `src/extraction/llm_provider.py::_extract_one` redacts
+  `window_text` immediately before `src/extraction/prompt.py::
+  build_extraction_prompt()` is called. The extraction LLM never sees an
+  unredacted transcript.
+- **Logs** — `src/core/logging.py`'s central `structlog.configure()` runs
+  every string-valued log field through the same `redact_pii()`, blanket
+  (every field, not a hand-maintained list of "fields known to carry raw
+  text" — that list rots the moment a new log call is added elsewhere).
+
+Both are gated by `PII_REDACTION_ENABLED` (default `true`). Regex-only,
+not NER: this vertical slice's fixture-driven test corpus gives no signal
+on whether a name/org NER pass would meaningfully improve recall over
+these structured-PII patterns, and adding one (e.g. spaCy) speculatively —
+a real new dependency, a downloaded model — isn't justified without that
+measurement. See `src/redaction/pii.py`'s own docstring for the full
+reasoning; this is a documented deferral, not a silent gap.
 
 ## What an adversarial reviewer should check next
 

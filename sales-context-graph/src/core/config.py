@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import structlog
 import yaml
@@ -85,6 +86,22 @@ class Settings(BaseSettings):
     # shape as everything else optional-Redis in this codebase.
     query_cache_enabled: bool = True
     query_cache_ttl_seconds: int = 300
+
+    # ── PII redaction at egress (Phase 6, docs/evaluation.md's PII item) ────────
+    # See src/redaction/pii.py's module docstring for the locked-in design:
+    # raw text stays verbatim at rest (evidence-model requirement), redacted
+    # only at LLM-prompt and log egress points. On by default.
+    pii_redaction_enabled: bool = True
+
+    # ── Prompt-injection guardrail (Phase 6, additive to the existing ───────────
+    # structural defenses in src/extraction/prompt.py) — see
+    # src/extraction/guardrail.py. log_only (default) flags and metrics a
+    # suspected injection attempt but never blocks extraction; "block" rejects
+    # the window outright. log_only is the locked-in default: a probabilistic
+    # heuristic classifier becoming a new hard-failure mode on top of the
+    # existing deterministic defenses is a worse trade than staying
+    # observability-only until real data justifies blocking.
+    guardrail_enforcement_mode: Literal["log_only", "block"] = "log_only"
 
     # ── Proactive digest (Increment 17, see src/usecases/digest.py) ──────────────
     # Empty slack_webhook_url means POST /api/v1/digest/deliver returns 503 rather

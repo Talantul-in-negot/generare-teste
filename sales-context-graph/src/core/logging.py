@@ -23,8 +23,27 @@ import sys
 import structlog
 
 from src.core.config import get_settings
+from src.redaction.pii import redact_pii
 
 _CONFIGURED = False
+
+
+def _redact_pii_processor(logger, method_name, event_dict):
+    """Phase 6 (docs/evaluation.md's PII item). Every string value in the
+    event dict is run through redact_pii() -- blanket, not limited to
+    keys "tagged" as carrying raw text, since enumerating call sites by
+    name is exactly the kind of thing that silently rots as new log calls
+    get added. redact_pii() is a cheap no-op on strings with no PII-shaped
+    substring (ids, counts, etc.), so this costs nothing on the common
+    case. Runs after exception/stack rendering (so it still sees raw
+    tracebacks that might embed transcript text) and before the renderer
+    (so nothing unredacted reaches the sink)."""
+    if not get_settings().pii_redaction_enabled:
+        return event_dict
+    for key, value in event_dict.items():
+        if isinstance(value, str):
+            event_dict[key] = redact_pii(value)
+    return event_dict
 
 
 def configure_logging() -> None:
@@ -47,13 +66,7 @@ def configure_logging() -> None:
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            # Phase 6 (docs/evaluation.md PII redaction item) wires a
-            # redaction processor in at this exact point -- after
-            # exception/stack rendering (so it can still see raw
-            # tracebacks that might embed transcript text) and before the
-            # renderer (so nothing unredacted reaches the sink). Left as a
-            # named extension point rather than a silent no-op function so
-            # the seam is visible without needing to touch this file again.
+            _redact_pii_processor,
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(level),

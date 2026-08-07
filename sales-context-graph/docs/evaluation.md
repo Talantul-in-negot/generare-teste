@@ -1135,6 +1135,27 @@ a fixture-driven slice that is fine; for real customer calls it is a
 compliance blocker, and it interacts with the erasure-propagation
 requirement §13 also states.
 
+✅ **Fixed 2026-08-07 (Phase 6)**, at egress only — persistence is
+unchanged and deliberately so: new `src/redaction/pii.py` (regex-based:
+email, phone, SSN- and credit-card-shaped patterns) runs at the two points
+raw text actually leaves the system boundary. `src/extraction/
+llm_provider.py::_extract_one` redacts `window_text` immediately before
+`build_extraction_prompt()` — the extraction LLM never sees an unredacted
+transcript. `src/core/logging.py`'s central `structlog.configure()` runs
+every string-valued log field through the same redaction, blanket rather
+than a hand-maintained "known to carry raw text" field list. `Transcript
+Segment` stays verbatim in Neo4j — the locked-in decision from this
+document's plan-approval discussion: this system's evidence model needs
+the real span behind a Claim, and redacting before persistence would
+silently break that; see `docs/security-and-tenancy.md`'s new "PII
+handling" section for the full reasoning. Regex-only, not NER — the
+fixture-driven test corpus gives no signal on whether spaCy-class NER
+would meaningfully improve recall over structured-PII patterns, so that
+remains a documented deferral, not built speculatively. Verified: 8 new
+`tests/unit/redaction/test_pii.py` tests, 3 new `tests/unit/core/
+test_logging.py` tests, plus a new security-fixture test proving PII
+never reaches the actual prompt text sent to the model.
+
 **B4. Retrieval is single-layer; the brief's dual-layer split is a genuine
 fit.** This repo retrieves micro-level Claims only. There is no call-level
 summary document — verified, no summarisation/map-reduce module exists. A
@@ -1214,6 +1235,19 @@ plus `blpop`-without-visibility-timeout described above.
   is structural: transcripts are delimited data, the extractor is given no
   tools, and outputs are schema-validated. A classifier in front adds a
   probabilistic filter to a problem currently handled deterministically.
+
+  ⤷ **Implemented anyway 2026-08-07 (Phase 6)**, per the explicit,
+  reaffirmed direction to build literally everything in this document,
+  including items flagged as premature — this rejection stands as the
+  reasoning, not as a description of what shipped.
+  `src/extraction/guardrail.py`: a heuristic regex scan, additive to the
+  structural defenses above (never a replacement — the same 3-layer proof
+  in `tests/security/test_prompt_injection_fixture.py` is unmodified),
+  default `log_only` (flags + `scg_guardrail_flag_total`, never blocks;
+  `block` mode exists and is tested but isn't the default). Full reasoning
+  in `docs/adr-0002-prompt-injection-guardrail.md`. Verified: 7 new
+  `tests/unit/extraction/test_guardrail.py` tests plus 2 new
+  security-fixture tests (log-only doesn't block; block mode does).
 - **Vendor SLO targets as stated.** See B6 — adopting 5,000 RPS or
   TTFT < 1.2 s as goals would be copying numbers with no measured basis in
   this system.

@@ -15,9 +15,12 @@ from typing import Awaitable, Callable
 import structlog
 from pydantic import ValidationError
 
+from src.core.config import get_settings
 from src.core.telemetry import EXTRACTION_PROVIDER_CALLS_TOTAL, EXTRACTION_WINDOWS_TOTAL
+from src.extraction.guardrail import scan_for_injection_attempt
 from src.extraction.prompt import build_extraction_prompt
 from src.extraction.provider import ExtractionInput, ExtractionResult
+from src.redaction.pii import redact_pii
 
 log = structlog.get_logger(__name__)
 
@@ -47,6 +50,17 @@ class LlmExtractionProvider:
     async def _extract_one(self, item: ExtractionInput) -> ExtractionResult:
         EXTRACTION_WINDOWS_TOTAL.inc()
         window_text = "\n".join(f"[{s.speaker_label}] {s.text}" for s in item.segments)
+
+        # Phase 6: guardrail scan runs on the real text (checking the raw
+        # window catches an injection attempt regardless of whether it
+        # happens to overlap with something redact_pii() would also
+        # rewrite); PII redaction runs after, since only the redacted text
+        # actually reaches the LLM prompt below -- src/domain/conversation.py's
+        # TranscriptSegment stays verbatim at rest, this is egress-only.
+        scan_for_injection_attempt(window_text, window_id=item.window.window_id)
+        if get_settings().pii_redaction_enabled:
+            window_text = redact_pii(window_text)
+
         base_prompt = build_extraction_prompt(window_text)
 
         last_error = ""
