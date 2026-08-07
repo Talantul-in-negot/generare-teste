@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import re
+
 import httpx
 import pytest
 
 from api.main import app
+from api.routes import viz
 from src.core.config import get_settings
 
 pytestmark = pytest.mark.asyncio
@@ -102,3 +105,80 @@ async def test_panel_route_allows_configured_origins(monkeypatch, panel_token) -
 
     assert resp.headers["content-security-policy"] == "frame-ancestors https://example.my.salesforce.com"
     get_settings.cache_clear()
+
+
+# ── Phase 9: brand/CSS theming (docs/evaluation.md's "Brand and visual
+# layer" finding) ────────────────────────────────────────────────────────
+# The bug this finding described wasn't the wrong colors -- it was that the
+# same semantic color existed as multiple independent hex literals (CSS,
+# inline style=, innerHTML, JS constants) with no shared token, so they
+# could silently drift apart. These tests prove the fix is structural, not
+# cosmetic: every one of those surfaces is generated from BRAND_PALETTE,
+# not hand-typed a second time.
+
+async def test_root_css_vars_declares_every_brand_palette_entry() -> None:
+    css = viz._root_css_vars()
+    assert css.startswith(":root {")
+    for key, value in viz.BRAND_PALETTE.items():
+        assert f"--color-{key}: {value};" in css
+    for key, value in viz.TYPOGRAPHY.items():
+        assert f"--font-{key}: {value};" in css
+
+
+async def test_js_color_constants_values_match_brand_palette_exactly() -> None:
+    """The core anti-drift proof: polarityColor/entityColor/literalColor's
+    hex values are read out of BRAND_PALETTE, not retyped -- so it is
+    structurally impossible for the JS graph renderer's colors to differ
+    from the CSS custom properties the rest of the page uses for the same
+    role."""
+    js = viz._js_color_constants()
+
+    polarity_match = re.search(r"const polarityColor = \{([^}]*)\};", js)
+    assert polarity_match is not None
+    polarity_body = polarity_match.group(1)
+    assert f'AFFIRMED: "{viz.BRAND_PALETTE["affirmed"]}"' in polarity_body
+    assert f'NEGATED: "{viz.BRAND_PALETTE["negated"]}"' in polarity_body
+    assert f'HYPOTHETICAL: "{viz.BRAND_PALETTE["hypothetical"]}"' in polarity_body
+
+    assert f'const entityColor = "{viz.BRAND_PALETTE["entity"]}";' in js
+    assert f'const literalColor = "{viz.BRAND_PALETTE["literal"]}";' in js
+
+
+async def test_legend_swatches_reference_the_same_css_vars_as_the_js_constants() -> None:
+    """A swatch and its corresponding JS/CSS color trace back to the same
+    dict key -- proves the legend can't show a different color than the
+    graph it's labeling."""
+    legend = viz._legend_swatches_html()
+    for role in ("affirmed", "negated", "hypothetical", "entity", "literal"):
+        assert f"var(--color-{role})" in legend
+
+
+async def test_viz_page_contains_no_hardcoded_hex_literals_outside_the_palette() -> None:
+    """Regression guard for the original finding (docs/evaluation.md:
+    "~25 places across two languages"): every hex literal on the page must
+    trace back to a BRAND_PALETTE value, not be a second, independent
+    hand-typed copy of one."""
+    known_hex_values = {v.lower() for v in viz.BRAND_PALETTE.values() if v.startswith("#")}
+    # "#fff"/"#000"-shaped shorthand and any hex not in BRAND_PALETTE would
+    # both fail this -- collect every hex literal actually present and
+    # diff against the palette.
+    found = {m.lower() for m in re.findall(r"#[0-9a-fA-F]{3,8}\b", viz._PAGE)}
+    assert found <= known_hex_values, f"undeclared hex literals leaked into _PAGE: {found - known_hex_values}"
+
+
+async def test_viz_and_panel_pages_load_the_same_root_css_vars() -> None:
+    """_SHARED_STYLES is the single inclusion point for _root_css_vars() --
+    both pages must carry the identical :root block, not two independently
+    maintained copies."""
+    assert viz._root_css_vars() in viz._PAGE
+    assert viz._root_css_vars() in viz._PANEL_PAGE
+
+
+async def test_viz_page_serves_the_generated_palette_end_to_end() -> None:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/viz")
+
+    text = resp.text
+    assert f"--color-navy: {viz.BRAND_PALETTE['navy']};" in text
+    assert "polarityColor" in text
+    assert viz.BRAND_PALETTE["affirmed"] in text

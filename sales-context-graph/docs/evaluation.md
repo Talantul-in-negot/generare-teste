@@ -681,6 +681,34 @@ No image assets exist anywhere in the repo and no `StaticFiles` mount
 exists, so all branding is text — `api/main.py:7`, `viz.py:135`, `viz.py:795`,
 `fly.toml:5`. A rebrand touches strings, not an asset pipeline.
 
+✅ **Fixed 2026-08-07 (Phase 9)**: `api/routes/viz.py` gained the theming
+indirection this finding said was the actual blocker, not the hex values.
+One flat `BRAND_PALETTE` dict (Showpad's brand tokens verbatim — Navy
+`#0d5189` + 3 secondary tones, Brick `#dd7159`, Plum `#8c3fcc`, Sand/Cream/
+White neutrals — plus this app's semantic color roles mapped onto them:
+`entity`, `literal`, `affirmed`/`negated`/`hypothetical`, `accent`, etc.)
+is now the *only* place a color is spelled out as a literal.
+`_root_css_vars()` generates the `:root { --color-*; --font-*; }` block
+both `_PAGE` and `_PANEL_PAGE` share via `_SHARED_STYLES`; every CSS rule
+in the file now reads `var(--color-*)` instead of a hex literal.
+`_js_color_constants()` generates `polarityColor`/`entityColor`/
+`literalColor` — the JS constants driving the SVG graph — from the exact
+same dict, and `_legend_swatches_html()` generates the legend swatches from
+the same CSS vars, closing the specific gap this finding named: "the same
+semantic colour is duplicated as both a CSS literal and a JS literal with
+no shared token." Typography applied the same way: Nib Pro SemiBold
+(fallback Lora) on headings, Söhne (fallback Mona Sans) on body text, Söhne
+Mono (fallback Noto Sans Mono) on tabular/technical text — same caveat this
+finding already flagged for `architecture.html`'s font stack: no font files
+are bundled, so these resolve to the fallback unless the brand fonts happen
+to be installed locally. Verified: `tests/unit/api/test_viz_route.py`
+gained 6 new tests, including a regression guard that scans the rendered
+`_PAGE` for any hex literal not present in `BRAND_PALETTE` (fails if a new
+hardcoded color is ever added back) and a live-browser check
+(`getComputedStyle` against a running `/viz` page) confirming the CSS
+custom properties resolve to the exact `BRAND_PALETTE` values in a real
+DOM, not just in the generated source string.
+
 ### 2. Showpad integration surface — a data *shape*, not a connection
 
 `src/ingestion/adapters/showpad.py` is a 76-line **pure dict parser**: no

@@ -87,6 +87,116 @@ async def opportunity_panel(response: Response, token: str, claims: PanelTokenCl
     return page
 
 
+# ── Brand tokens (Phase 9, docs/evaluation.md's "Brand and visual layer"
+# finding) ────────────────────────────────────────────────────────────────
+# Before this, the same semantic color existed as up to 4 independent hex
+# literals across this file: CSS strings (_SHARED_STYLES), inline style=
+# attributes, string-concatenated innerHTML, and JS constants
+# (polarityColor/entityColor/literalColor) driving the SVG graph -- no
+# shared token, so the legend and the JS could (and did) drift apart. This
+# one flat dict is now the *only* place a color is spelled out as a
+# literal: every CSS rule below reads var(--color-*), the legend swatches
+# read the same var(), and _js_color_constants() generates the JS object
+# from these exact same values -- not hand-typed a second time. Palette
+# values are Showpad's public brand tokens (brandcenter.showpad.com):
+# primary Navy with 3 secondary tones, Brick/Plum accents, warm Sand/Cream/
+# White neutrals.
+BRAND_PALETTE = {
+    # Raw Showpad brand tokens, verbatim.
+    "navy": "#0d5189",
+    "navy-dark": "#15254e",
+    "navy-mid": "#0b4472",
+    "navy-light": "#539dc4",
+    "brick": "#dd7159",
+    "plum": "#8c3fcc",
+    "sand": "#e8ded4",
+    "cream": "#f0ece8",
+    "white": "#eeeeee",
+    # Context Graph tab semantics (edge polarity + node kind) -- the exact
+    # values the legend swatches and the JS polarityColor/entityColor/
+    # literalColor constants below are generated from.
+    "entity": "#0d5189",        # was Tailwind blue #2563eb -> Showpad Navy
+    "literal": "#6b6258",       # was cool grey #6b7280 -> warmed neutral
+    "affirmed": "#1f7a4d",      # was Tailwind green #16a34a -> warmed green
+    "negated": "#dd7159",       # was Tailwind red #dc2626 -> Showpad Brick
+    "hypothetical": "#c98a2c",  # was Tailwind amber #ca8a04 -> warmed amber
+    # Interactive controls (buttons, active tab)
+    "accent": "#8c3fcc",        # Plum
+    "accent-hover": "#7530ad",  # darkened Plum for :hover
+    "on-accent": "#ffffff",     # text/icon color drawn on an accent background
+    # Layout / base text
+    "border": "#ddd0c4",        # warmed border grey, was #ddd
+    "surface": "#f0ece8",       # Cream, was #f3f4f6
+    "surface-alt": "#e8ded4",   # Sand, was #e5e7eb
+    "text": "#15254e",          # navy-dark, was implicit black/#555/#374151
+    "text-muted": "#6b6258",
+    # Status badges / ambiguity callouts
+    "success-bg": "#dbeee1",
+    "danger-bg": "#f7e3dd",
+    "danger-text": "#b3492f",   # was #b91c1c / #991b1b (two slightly
+                                 # different reds for the same "error" role)
+    "warning-bg": "#f5e7c6",
+    "warning-border": "#c98a2c",
+    "legend-bg": "rgba(240,236,232,0.92)",  # Cream, translucent
+}
+
+# Showpad's type system (docs/evaluation.md): Nib Pro SemiBold for
+# headlines (fallback Lora), Söhne for body (fallback Mona Sans), Söhne
+# Mono for tabular/technical text (fallback Noto Sans Mono). No font files
+# are bundled (no StaticFiles mount in this repo, docs/evaluation.md notes
+# branding here is text-only) -- these resolve to the fallback unless the
+# brand fonts happen to be installed locally, same caveat
+# docs/architecture.html already carries for its own font stack.
+TYPOGRAPHY = {
+    "headline": "'Nib Pro SemiBold', Lora, serif",
+    "body": "Söhne, 'Mona Sans', system-ui, sans-serif",
+    "mono": "'Söhne Mono', 'Noto Sans Mono', monospace",
+}
+
+
+def _root_css_vars() -> str:
+    """The single generation point for every --color-*/--font-* custom
+    property this file's CSS reads. See BRAND_PALETTE's module comment."""
+    color_lines = "\n".join(f"  --color-{key}: {value};" for key, value in BRAND_PALETTE.items())
+    font_lines = "\n".join(f"  --font-{key}: {value};" for key, value in TYPOGRAPHY.items())
+    return ":root {\n" + color_lines + "\n" + font_lines + "\n}"
+
+
+def _js_color_constants() -> str:
+    """Generates polarityColor/entityColor/literalColor straight from
+    BRAND_PALETTE -- the JS the SVG graph renderer reads can no longer
+    drift from the CSS custom properties or the legend swatches below; all
+    three now trace back to the same dict keys instead of 3 independent
+    hand-typed copies."""
+    polarity_entries = ", ".join(
+        f'{polarity}: "{BRAND_PALETTE[role]}"'
+        for polarity, role in (("AFFIRMED", "affirmed"), ("NEGATED", "negated"), ("HYPOTHETICAL", "hypothetical"))
+    )
+    return (
+        f"const polarityColor = {{ {polarity_entries} }};\n"
+        f'const entityColor = "{BRAND_PALETTE["entity"]}";\n'
+        f'const literalColor = "{BRAND_PALETTE["literal"]}";'
+    )
+
+
+def _legend_swatches_html() -> str:
+    """Same source as _js_color_constants() above -- each swatch reads the
+    CSS custom property (itself generated from BRAND_PALETTE), so a legend
+    swatch and its corresponding JS graph color can never show a different
+    hex for the same semantic role."""
+    rows = (
+        ("affirmed", "AFFIRMED"),
+        ("negated", "NEGATED"),
+        ("hypothetical", "HYPOTHETICAL"),
+        ("entity", "entity node"),
+        ("literal", "literal value node"),
+    )
+    return "\n".join(
+        f'        <div><span class="swatch" style="background:var(--color-{key})"></span>{label}</div>'
+        for key, label in rows
+    )
+
+
 # Shared between /viz and /viz/panel so both pages render JSON identically
 # without duplicating the renderer.
 _RENDER_JSON_JS = """
@@ -152,15 +262,17 @@ function renderJson(value) {
 """
 
 _SHARED_STYLES = """
-  body { font-family: system-ui, sans-serif; }
-  table.result { border-collapse: collapse; margin: 6px 0 14px 0; font-size: 12px; }
-  table.result td, table.result th { border: 1px solid #ddd; padding: 4px 8px; text-align: left; vertical-align: top; }
-  table.result th { background: #f3f4f6; }
-  .result-key { font-weight: 600; color: #374151; margin-top: 10px; }
+""" + _root_css_vars() + """
+  body { font-family: var(--font-body); color: var(--color-text); }
+  h3, h4 { font-family: var(--font-headline); }
+  table.result { border-collapse: collapse; margin: 6px 0 14px 0; font-size: 12px; font-family: var(--font-mono); }
+  table.result td, table.result th { border: 1px solid var(--color-border); padding: 4px 8px; text-align: left; vertical-align: top; }
+  table.result th { background: var(--color-surface); }
+  .result-key { font-weight: 600; color: var(--color-text); margin-top: 10px; font-family: var(--font-body); }
   .result-scalar { font-size: 13px; margin: 4px 0; }
-  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; background: #e5e7eb; }
-  .badge.true { background: #dcfce7; color: #166534; }
-  .badge.false { background: #fee2e2; color: #991b1b; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; background: var(--color-surface-alt); }
+  .badge.true { background: var(--color-success-bg); color: var(--color-affirmed); }
+  .badge.false { background: var(--color-danger-bg); color: var(--color-danger-text); }
 """
 
 _PAGE = """<!doctype html>
@@ -171,33 +283,33 @@ _PAGE = """<!doctype html>
 <style>
 """ + _SHARED_STYLES + """
   body { margin: 0; display: flex; height: 100vh; }
-  #panel { width: 380px; padding: 16px; box-sizing: border-box; border-right: 1px solid #ddd; overflow-y: auto; }
-  #panel label { display: block; margin-top: 10px; font-size: 12px; color: #555; }
+  #panel { width: 380px; padding: 16px; box-sizing: border-box; border-right: 1px solid var(--color-border); overflow-y: auto; }
+  #panel label { display: block; margin-top: 10px; font-size: 12px; color: var(--color-text-muted); }
   #panel input, #panel select, #panel textarea { width: 100%; padding: 6px; box-sizing: border-box; margin-top: 2px; font-family: inherit; }
-  #panel button { margin-top: 14px; width: 100%; padding: 8px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
-  #panel button:hover { background: #1d4ed8; }
+  #panel button { margin-top: 14px; width: 100%; padding: 8px; background: var(--color-accent); color: var(--color-on-accent); border: none; border-radius: 4px; cursor: pointer; font-family: var(--font-body); }
+  #panel button:hover { background: var(--color-accent-hover); }
   #panel input[type=checkbox] { width: auto; }
-  #status, #qaStatus, #askStatus, #alertsStatus { margin-top: 10px; font-size: 12px; color: #b91c1c; white-space: pre-wrap; }
-  #meta { margin-top: 14px; font-size: 12px; color: #444; }
-  #detail { margin-top: 14px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 12px; }
+  #status, #qaStatus, #askStatus, #alertsStatus { margin-top: 10px; font-size: 12px; color: var(--color-danger-text); white-space: pre-wrap; }
+  #meta { margin-top: 14px; font-size: 12px; color: var(--color-text-muted); }
+  #detail { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--color-border); font-size: 12px; }
   #detail h4 { margin: 0 0 6px 0; }
   #main { flex: 1; position: relative; overflow: auto; }
   #graph { position: absolute; inset: 0; }
   svg { width: 100%; height: 100%; user-select: none; }
-  .node circle { stroke: #fff; stroke-width: 1.5px; cursor: pointer; }
-  .node text { font-size: 10px; pointer-events: none; }
-  .edge-label { font-size: 9px; fill: #555; pointer-events: none; }
-  .legend { position: absolute; bottom: 10px; left: 10px; font-size: 11px; background: rgba(255,255,255,0.9); padding: 8px; border-radius: 4px; }
+  .node circle { stroke: var(--color-on-accent); stroke-width: 1.5px; cursor: pointer; }
+  .node text { font-size: 10px; pointer-events: none; font-family: var(--font-mono); }
+  .edge-label { font-size: 9px; fill: var(--color-text-muted); pointer-events: none; font-family: var(--font-mono); }
+  .legend { position: absolute; bottom: 10px; left: 10px; font-size: 11px; background: var(--color-legend-bg); padding: 8px; border-radius: 4px; }
   .legend div { display: flex; align-items: center; margin-bottom: 3px; }
   .legend span.swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-  .tabs { display: flex; border-bottom: 1px solid #ddd; flex-wrap: wrap; }
-  .tab { flex: 1; padding: 10px 6px; text-align: center; cursor: pointer; font-size: 12px; color: #555; border-bottom: 2px solid transparent; }
-  .tab.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; }
+  .tabs { display: flex; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; }
+  .tab { flex: 1; padding: 10px 6px; text-align: center; cursor: pointer; font-size: 12px; color: var(--color-text-muted); border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 600; }
   .tabpage { display: none; padding: 20px; }
   .tabpage.active { display: block; }
-  .citation { font-size: 11px; color: #555; margin: 2px 0; }
-  .uncited { font-size: 11px; color: #b91c1c; margin: 2px 0; }
-  .ambiguity { background: #fef3c7; border: 1px solid #fbbf24; padding: 8px; border-radius: 4px; margin: 6px 0; font-size: 12px; }
+  .citation { font-size: 11px; color: var(--color-text-muted); margin: 2px 0; }
+  .uncited { font-size: 11px; color: var(--color-danger-text); margin: 2px 0; }
+  .ambiguity { background: var(--color-warning-bg); border: 1px solid var(--color-warning-border); padding: 8px; border-radius: 4px; margin: 6px 0; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -250,7 +362,7 @@ _PAGE = """<!doctype html>
 
   <div id="ask-controls" style="display:none">
     <h3>Ask</h3>
-    <p style="font-size:12px;color:#666">Free-form question -&gt; natural-language intent layer (Increment 15). Requires LLM_PROVIDER configured server-side.</p>
+    <p style="font-size:12px;color:var(--color-text-muted)">Free-form question -&gt; natural-language intent layer (Increment 15). Requires LLM_PROVIDER configured server-side.</p>
     <label>Workspace ID
       <input id="askWorkspaceId" value="ws-demo">
     </label>
@@ -275,7 +387,7 @@ _PAGE = """<!doctype html>
 
   <div id="alerts-controls" style="display:none">
     <h3>Alerts</h3>
-    <p style="font-size:12px;color:#666">Proactive signals (Increment 17): single-threaded deals, unanswered objections, unopened content, unresolved conflicts, stalled deals.</p>
+    <p style="font-size:12px;color:var(--color-text-muted)">Proactive signals (Increment 17): single-threaded deals, unanswered objections, unopened content, unresolved conflicts, stalled deals.</p>
     <label>Workspace ID
       <input id="alertsWorkspaceId" value="ws-demo">
     </label>
@@ -295,11 +407,7 @@ _PAGE = """<!doctype html>
     <div id="graph">
       <svg id="svg"></svg>
       <div class="legend">
-        <div><span class="swatch" style="background:#16a34a"></span>AFFIRMED</div>
-        <div><span class="swatch" style="background:#dc2626"></span>NEGATED</div>
-        <div><span class="swatch" style="background:#ca8a04"></span>HYPOTHETICAL</div>
-        <div><span class="swatch" style="background:#2563eb"></span>entity node</div>
-        <div><span class="swatch" style="background:#6b7280"></span>literal value node</div>
+""" + _legend_swatches_html() + """
       </div>
     </div>
   </div>
@@ -331,9 +439,7 @@ for (const tab of document.querySelectorAll(".tab")) {
 }
 
 /* ── Context Graph (unchanged from the original single-tab page) ────────── */
-const polarityColor = { AFFIRMED: "#16a34a", NEGATED: "#dc2626", HYPOTHETICAL: "#ca8a04" };
-const entityColor = "#2563eb";
-const literalColor = "#6b7280";
+""" + _js_color_constants() + """
 
 let nodes = [];
 let edges = [];
@@ -490,7 +596,7 @@ function render(workspaceId) {
     const line = document.createElementNS(ns, "line");
     line.setAttribute("x1", a.x); line.setAttribute("y1", a.y);
     line.setAttribute("x2", b.x); line.setAttribute("y2", b.y);
-    line.setAttribute("stroke", polarityColor[e.polarity] || "#999");
+    line.setAttribute("stroke", polarityColor[e.polarity] || literalColor);
     line.setAttribute("stroke-width", "1.5");
     line.style.cursor = "pointer";
     line.addEventListener("click", () => showEvidence(e));
@@ -549,7 +655,7 @@ async function showEvidence(edge) {
       "speaker_role: " + data.speaker_role + "<br>" +
       "confidence: " + data.confidence + "<br>" +
       "adjudication: " + data.adjudication_status + "<br>" +
-      "<blockquote style='margin:6px 0;padding:6px;background:#f3f4f6;'>" +
+      "<blockquote style='margin:6px 0;padding:6px;background:var(--color-surface);'>" +
       (data.excerpt || "(no excerpt)") + "</blockquote>";
   } catch (e) {
     detailEl.textContent = "Failed to load evidence: " + e;
@@ -832,7 +938,7 @@ _PANEL_PAGE = """<!doctype html>
 """ + _SHARED_STYLES + """
   body { margin: 0; padding: 12px; font-size: 13px; }
   h4 { margin: 14px 0 4px 0; }
-  #status { color: #b91c1c; font-size: 12px; }
+  #status { color: var(--color-danger-text); font-size: 12px; }
 </style>
 </head>
 <body>
