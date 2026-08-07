@@ -105,19 +105,38 @@ blocking_recall@50 on a 600-entity pool: 2/5 = 0.40
   mid/late-created (idx>=300) recall: 0.00
 ```
 `CandidateGenerator.all_names_in_workspace` has no `ORDER BY`, and
-`union_candidates()` truncates by Python dict insertion order
-(`src/resolution/candidates.py:168`) — which tracks Neo4j's unordered MATCH
-return order, which for `MERGE`-created nodes correlates with creation
-order. The practical consequence, now measured rather than theorized: **an
-entity created after roughly the first `cap` accounts in a workspace can be
-invisible to candidate generation entirely**, before scoring ever runs —
-not a near-miss, a hard zero for every target index at or past the
-mid-point. This is worse than "not stress-tested," which is what the prior
-version of this entry said; it is a **confirmed correctness gap** at
-realistic workspace sizes, and the fix (order the query by relevance —
-e.g. a trigram/full-text score — or query indexed by name-prefix around the
-mention text rather than fetching the unordered full pool) is not yet
-implemented. Not filed as a separate ADR; tracked here until it is.
+`union_candidates()` truncated by Python dict insertion order
+(`src/resolution/candidates.py`'s old `list(merged.values())[:cap]`) —
+which tracks Neo4j's unordered MATCH return order, which for
+`MERGE`-created nodes correlates with creation order. The practical
+consequence, measured before the fix below: **an entity created after
+roughly the first `cap` accounts in a workspace was invisible to candidate
+generation entirely**, before scoring ever ran — not a near-miss, a hard
+zero for every target index at or past the pool's mid-point.
+
+**Fixed, same day, verified live.** `union_candidates()` now takes an
+optional `mention_surface` parameter: when given, it sorts the merged pool
+by lexical similarity (`src/resolution/scoring.py::lexical_score`) to the
+mention *before* truncating to `cap`, instead of truncating blind.
+`src/resolution/pipeline.py::resolve_mention` — the only real caller —
+passes `mention.normalized_surface` through it, so every actual resolution
+call now benefits; the mention text was already available at that point in
+the pipeline, this was a genuine oversight, not a missing capability.
+Re-measured on the identical 600-entity pool, same 5 target positions:
+```
+[no mention context]                  blocking_recall@50 = 0.40 (unchanged — any
+                                       future caller that omits mention_surface still hits this)
+[with mention context, as             blocking_recall@50 = 1.00 — every target found
+ resolve_mention wires it]            regardless of creation position
+```
+This does not fix the underlying scale limitation (`all_names_in_workspace`
+still fetches the full tenant pool rather than a DB-native trigram/ANN
+index — fine at this vertical slice's data volumes, a real bottleneck at
+enterprise scale) — it fixes the specific correctness bug where a correct
+match existed in the pool but was silently dropped before ever being
+scored. Not filed as a separate ADR; the fix is in `union_candidates()` and
+`resolve_mention`, tested in
+`tests/eval/test_blocking_recall_at_scale.py`.
 
 ### Auto-link precision / review rate / unresolved recall
 
@@ -210,15 +229,19 @@ have.
 
 - No precision/recall study against a labeled corpus (would need a larger,
   human-annotated dataset than this vertical slice's fixtures provide).
-- **Blocking recall at scale — now measured, and it's a real gap, not a
-  reassurance.** `tests/eval/test_blocking_recall_at_scale.py` (2026-08-05)
-  found `blocking_recall@50 = 0.40` on a 600-entity pool, dropping to `0.00`
-  for entities created after roughly the first `cap` accounts in a
-  workspace — `union_candidates()`'s insertion-order truncation
-  (`src/resolution/candidates.py:168`) with no relevance ordering upstream.
-  See "Blocking recall" above for the full measurement. Fix (order
-  candidate generation by relevance instead of fetching the unordered full
-  pool) not yet implemented.
+- **Blocking recall at scale — found and fixed the same day.**
+  `tests/eval/test_blocking_recall_at_scale.py` (2026-08-05) found
+  `blocking_recall@50 = 0.40` on a 600-entity pool, dropping to `0.00` for
+  entities created after roughly the first `cap` accounts in a workspace —
+  `union_candidates()`'s insertion-order truncation with no relevance
+  ordering upstream. Fixed by adding an optional `mention_surface`
+  parameter to `union_candidates()` that lexically sorts the pool before
+  capping, wired through `resolve_mention` (the only real caller) — the
+  mention text was already available at that call site, unused. Re-measured
+  after the fix: `1.00` regardless of creation position. The underlying
+  full-tenant-pool-fetch scale limitation (no DB-native trigram/ANN index)
+  remains open; this fix closes the correctness bug, not the scale
+  ceiling. See "Blocking recall" above for both measurements.
 - **Load/latency — now measured once, honestly, not a load test.**
   `tests/eval/test_context_graph_latency.py` (added 2026-08-05) seeds 300
   Claims on one Conversation (an order of magnitude past every other fixture

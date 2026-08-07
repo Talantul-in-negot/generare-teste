@@ -154,7 +154,27 @@ class CandidateGenerator:
         ]
 
 
-def union_candidates(*candidate_lists: list[Candidate], cap: int = DEFAULT_CAP) -> list[Candidate]:
+def union_candidates(
+    *candidate_lists: list[Candidate], cap: int = DEFAULT_CAP, mention_surface: str | None = None
+) -> list[Candidate]:
+    """Merge and cap.
+
+    `mention_surface`, when given, orders the merged pool by lexical
+    similarity to it before truncating to `cap` — see
+    tests/eval/test_blocking_recall_at_scale.py's measured finding: without
+    this, truncation follows whatever order the union happened to build in
+    (effectively Neo4j's unordered MATCH return order for the
+    all_names_in_workspace pool, which correlates with entity creation
+    order for MERGE-created nodes), so an entity created after roughly the
+    first `cap` accounts in a workspace could be entirely invisible to
+    candidate generation regardless of how close a lexical match it is —
+    measured at blocking_recall@50=0.00 for such entities on a 600-entity
+    pool before this fix. Callers with no mention context (none currently)
+    keep the old insertion-order behavior by omitting this argument — it
+    does not change candidate *scoring* (src/resolution/scoring.py runs
+    afterward on whatever survives this cap), only which candidates survive
+    the cap to be scored at all.
+    """
     merged: dict[str, Candidate] = {}
     for candidates in candidate_lists:
         for c in candidates:
@@ -165,4 +185,9 @@ def union_candidates(*candidate_lists: list[Candidate], cap: int = DEFAULT_CAP) 
                 )
             else:
                 merged[c.entity_id] = c
-    return list(merged.values())[:cap]
+    ordered = list(merged.values())
+    if mention_surface is not None:
+        from src.resolution.scoring import lexical_score  # local: avoid import at module load for callers that never sort
+
+        ordered.sort(key=lambda c: lexical_score(mention_surface, c.name), reverse=True)
+    return ordered[:cap]

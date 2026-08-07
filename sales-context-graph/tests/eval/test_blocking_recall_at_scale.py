@@ -11,15 +11,24 @@ honestly measurable without a labeled dataset.
 Design: seed 600 Account names (an order of magnitude past DEFAULT_CAP=50)
 into one workspace, with 5 "expected" target names deliberately controlled
 for position — this is the part that makes the measurement meaningful rather
-than another accidental 100%: union_candidates() truncates by insertion/
-dict order (src/resolution/candidates.py:168, list(merged.values())[:cap]),
-which follows Neo4j's MATCH return order for an unordered query, not
-relevance-scored order. If that return order roughly tracks creation order
-(plausible for MERGE-created nodes with no explicit ORDER BY), an expected
-entity created LATE in a large pool is genuinely at risk of never reaching
-the top `cap` candidates before any scoring happens — a real ranking gap,
-not a hypothetical one. This test seeds targets at both extremes to measure
-whether that risk is real here, and reports it exactly either way.
+than another accidental 100%.
+
+Two scenarios are measured, not one, because the fix landed mid-investigation
+(src/resolution/candidates.py's union_candidates() gained an optional
+`mention_surface` parameter that lexically sorts the merged pool before
+capping, and src/resolution/pipeline.py::resolve_mention wires the real
+mention text through it):
+
+1. **No mention context** (`union_candidates(pool, cap=CAP)`, no
+   `mention_surface`): truncation still follows plain merge/insertion order
+   — this is the historical bug, still reachable by any caller that doesn't
+   supply mention text, and still measured honestly here rather than only
+   testing the now-fixed path.
+2. **With mention context** (`mention_surface=<the exact target name>`,
+   what `resolve_mention` actually does on every real resolution call): the
+   pool is sorted by lexical similarity to the mention before the cap is
+   applied, so a near-exact-match candidate survives the cap regardless of
+   where in the workspace it was created.
 """
 
 from __future__ import annotations
@@ -65,38 +74,42 @@ async def test_blocking_recall_at_600_entities_position_dependent(executor):
     pool = await generator.all_names_in_workspace(workspace_id, "Account")
     assert len(pool) == _POOL_SIZE  # sanity: every seeded Account is actually retrievable pre-cap
 
-    candidates = union_candidates(pool, cap=_CAP)
-    assert len(candidates) == _CAP  # the cap is actually binding at this scale, unlike the small fixture
-    names_in_capped_pool = {c.name for c in candidates}
-
-    hits: dict[int, bool] = {}
-    for idx in sorted(_EXPECTED_INDICES):
-        hits[idx] = _synthetic_name(idx) in names_in_capped_pool
-
-    hit_count = sum(hits.values())
-    recall_at_cap = hit_count / len(_EXPECTED_INDICES)
-
+    # --- Scenario 1: no mention context — the historical bug, still real ---
+    unordered_capped = union_candidates(pool, cap=_CAP)
+    assert len(unordered_capped) == _CAP
+    names_in_unordered_pool = {c.name for c in unordered_capped}
+    unordered_hits = {idx: _synthetic_name(idx) in names_in_unordered_pool for idx in sorted(_EXPECTED_INDICES)}
+    unordered_hit_count = sum(unordered_hits.values())
+    early = {i for i in _EXPECTED_INDICES if i < 300}
+    late = {i for i in _EXPECTED_INDICES if i >= 300}
     print(
-        f"\nblocking_recall@{_CAP} on a {_POOL_SIZE}-entity pool: "
-        f"{hit_count}/{len(_EXPECTED_INDICES)} = {recall_at_cap:.2f} "
-        f"(per-index hits: {hits})"
+        f"\n[no mention context] blocking_recall@{_CAP} on a {_POOL_SIZE}-entity pool: "
+        f"{unordered_hit_count}/{len(_EXPECTED_INDICES)} = {unordered_hit_count / len(_EXPECTED_INDICES):.2f} "
+        f"(per-index hits: {unordered_hits})\n"
+        f"  early-created (idx<300) recall: {sum(unordered_hits[i] for i in early) / len(early):.2f}; "
+        f"mid/late-created (idx>=300) recall: {sum(unordered_hits[i] for i in late) / len(late):.2f}"
+    )
+    # Document the residual limitation plainly — this is not asserted away.
+    # Any caller of union_candidates() that omits mention_surface still hits
+    # this. resolve_mention (the only real caller) no longer does, per
+    # Scenario 2 below.
+
+    # --- Scenario 2: with mention context — what resolve_mention actually does ---
+    ordered_hits: dict[int, bool] = {}
+    for idx in sorted(_EXPECTED_INDICES):
+        target_name = _synthetic_name(idx)
+        ordered_capped = union_candidates(pool, cap=_CAP, mention_surface=target_name)
+        ordered_hits[idx] = target_name in {c.name for c in ordered_capped}
+    ordered_hit_count = sum(ordered_hits.values())
+    print(
+        f"[with mention context, as resolve_mention wires it] "
+        f"blocking_recall@{_CAP} on a {_POOL_SIZE}-entity pool: "
+        f"{ordered_hit_count}/{len(_EXPECTED_INDICES)} = {ordered_hit_count / len(_EXPECTED_INDICES):.2f} "
+        f"(per-index hits: {ordered_hits})"
     )
 
-    # The real, honest finding this test exists to surface: whether
-    # insertion-order truncation costs recall for entities created late in a
-    # large pool. Report it plainly — this assertion documents the ACTUAL
-    # measured behavior, it is not tuned to force a particular outcome.
-    early_indices = {i for i in _EXPECTED_INDICES if i < 300}
-    late_indices = {i for i in _EXPECTED_INDICES if i >= 300}
-    early_recall = sum(hits[i] for i in early_indices) / len(early_indices) if early_indices else None
-    late_recall = sum(hits[i] for i in late_indices) / len(late_indices) if late_indices else None
-    print(f"early-created (idx<300) recall: {early_recall}; mid/late-created (idx>=300) recall: {late_recall}")
-
-    # This is the regression guard: candidate_generation_miss (§8) must be
-    # reported, not silently absorbed into an ordinary "unresolved" result,
-    # regardless of which specific indices miss. The test fails only if the
-    # measurement itself is broken (e.g. seeding didn't work), not on a
-    # particular recall value — recall degrading at scale is the honest
-    # finding this file exists to surface, not a bug to hide by asserting
-    # away.
-    assert 0 <= hit_count <= len(_EXPECTED_INDICES)
+    # The regression guard this test exists to enforce: relevance-ordered
+    # candidate generation (Scenario 2) must find every deliberately-seeded
+    # target regardless of creation position — the actual fix for the gap
+    # this file discovered, verified here, not just claimed in a docstring.
+    assert ordered_hit_count == len(_EXPECTED_INDICES)

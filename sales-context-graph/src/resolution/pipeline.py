@@ -86,7 +86,9 @@ async def resolve_mention(
         )
 
     pool = await candidate_generator.all_names_in_workspace(workspace_id, entity_type)
-    candidates: list[Candidate] = union_candidates(exact_matches, pool, cap=candidate_cap)
+    candidates: list[Candidate] = union_candidates(
+        exact_matches, pool, cap=candidate_cap, mention_surface=mention.normalized_surface
+    )
 
     # One batched embed() call for the mention + every candidate name — never
     # one call per candidate (same N+1-avoidance principle as the rest of
