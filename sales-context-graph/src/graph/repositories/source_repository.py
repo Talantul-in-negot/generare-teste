@@ -102,7 +102,9 @@ class SourceRepository:
         )
         return SourceSnapshot(**rows[0]) if rows else None
 
-    async def list_snapshots(self, workspace_id: str, source_record_id: str) -> list[SourceSnapshot]:
+    async def list_snapshots(
+        self, workspace_id: str, source_record_id: str, *, limit: int = 100, offset: int = 0
+    ) -> list[SourceSnapshot]:
         """Full version history, newest first — used to verify that superseding a
         snapshot preserves rather than overwrites the prior one (§6)."""
         record_match = scoped_match("SourceRecord", "r", source_record_id="source_record_id")
@@ -112,9 +114,12 @@ class SourceRepository:
             MATCH (r)-[:HAS_SNAPSHOT]->(s:SourceSnapshot)
             RETURN {_SNAPSHOT_RETURN}
             ORDER BY s.source_version DESC
+            SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             source_record_id=source_record_id,
+            offset=offset,
+            limit=limit,
         )
         return [SourceSnapshot(**row) for row in rows]
 

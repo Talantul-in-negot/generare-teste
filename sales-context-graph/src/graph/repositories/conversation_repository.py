@@ -70,12 +70,16 @@ class ConversationRepository:
         )
         return Conversation(**rows[0]) if rows else None
 
-    async def list_conversations_by_opportunity(self, workspace_id: str, opportunity_id: str) -> list[Conversation]:
+    async def list_conversations_by_opportunity(
+        self, workspace_id: str, opportunity_id: str, *, limit: int = 100, offset: int = 0
+    ) -> list[Conversation]:
         match = scoped_match("Conversation", "c", opportunity_id="opportunity_id")
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN {_CONVERSATION_RETURN}",
+            f"MATCH {match} RETURN {_CONVERSATION_RETURN} ORDER BY c.occurred_at SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             opportunity_id=opportunity_id,
+            offset=offset,
+            limit=limit,
         )
         return [Conversation(**row) for row in rows]
 
@@ -132,7 +136,16 @@ class ConversationRepository:
         )
         return TranscriptSegment(**rows[0]) if rows else None
 
-    async def list_segments(self, workspace_id: str, conversation_id: str) -> list[TranscriptSegment]:
+    async def list_segments(
+        self, workspace_id: str, conversation_id: str, *, limit: int = 2000, offset: int = 0
+    ) -> list[TranscriptSegment]:
+        # Default limit is 2000, not this file's usual 100 -- segments are
+        # the frozen, source-level evidence text a Claim's evidence_char_
+        # start/end indexes into (docs/ontology.md), not a "top N" listing;
+        # a long call can genuinely have hundreds of speaker turns, and
+        # silently truncating evidence is a correctness bug, not just a
+        # performance one. 2000 is a generous, still-bounded ceiling rather
+        # than no bound at all.
         conv_match = scoped_match("Conversation", "c", conversation_id="conversation_id")
         rows = await self._executor.tenant_query(
             f"""
@@ -140,9 +153,12 @@ class ConversationRepository:
             MATCH (c)-[:HAS_SEGMENT]->(seg:TranscriptSegment)
             RETURN {_SEGMENT_RETURN}
             ORDER BY seg.source_segment_index
+            SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             conversation_id=conversation_id,
+            offset=offset,
+            limit=limit,
         )
         return [TranscriptSegment(**row) for row in rows]
 
@@ -169,16 +185,21 @@ class ConversationRepository:
             role=participant.role.value,
         )
 
-    async def list_participants(self, workspace_id: str, conversation_id: str) -> list[Participant]:
+    async def list_participants(
+        self, workspace_id: str, conversation_id: str, *, limit: int = 100, offset: int = 0
+    ) -> list[Participant]:
         conv_match = scoped_match("Conversation", "c", conversation_id="conversation_id")
         rows = await self._executor.tenant_query(
             f"""
             MATCH {conv_match}
             MATCH (c)-[:HAS_PARTICIPANT]->(p:Participant)
             RETURN {_PARTICIPANT_RETURN}
+            ORDER BY p.participant_id SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             conversation_id=conversation_id,
+            offset=offset,
+            limit=limit,
         )
         return [Participant(**row) for row in rows]
 

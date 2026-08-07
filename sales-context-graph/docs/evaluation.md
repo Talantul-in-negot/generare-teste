@@ -723,6 +723,18 @@ in this repo authorizes access based on `division_id` alone." Any claim of
 Showpad-compatible access control is false until a division-scoped read path
 exists next to the (genuinely enforced) `workspace_id` scoping.
 
+✅ **Partially fixed 2026-08-07 (Phase 2)**: `get_content_asset` and
+`list_content_assets` (`content_repository.py`) now accept an optional
+`division_id` filter, implemented deliberately as **content scoping, not
+access control** — the framing `docs/security-and-tenancy.md` already
+states. Genuinely open, not resolved by this: no index on `division_id`
+(the 6 indexes Phase 1 added didn't include one — it wasn't in that list),
+no `Division` node type, and no caller anywhere actually passes
+`division_id` yet (no route/use-case threads a division claim through to
+these methods) — the filter exists and is tested, but nothing in this
+vertical slice currently exercises it end-to-end. A real Showpad-compatible
+division-scoped access-control path is still future work.
+
 ⚠ **The embeddable panel takes credentials in the URL.** `/viz/panel`
 (`viz.py:807-810`) reads `workspace_id` and **`api_key` from
 `URLSearchParams`** — the API key travels as a query parameter, landing in
@@ -771,6 +783,28 @@ Every other listing method — 22 of them, enumerated across
 fan-out below. The Context Graph budget is applied **in Python after the
 full fetch** (`builder.py:107-137`), so `max_nodes` caps what is *served*,
 never what is *retrieved*.
+
+✅ **Fixed 2026-08-07 (Phase 2)**: all 21 methods (this document's original
+count of 22 included one outside `src/graph/repositories/` proper, already
+counted separately above under candidate generation) now take
+`limit`/`offset`, following `list_accounts`'s existing `ORDER BY ... SKIP
+$offset LIMIT $limit` shape. Defaults are **not** uniformly small: most use
+100 (matching `list_accounts`'s prior art), but Claim- and
+TranscriptSegment-listing methods use 1000/2000 respectively — silently
+truncating evidence (a Claim's or a segment's real content) would be a
+correctness bug, not merely a performance one, so those defaults are
+deliberately generous rather than copying the generic 100 blindly.
+`get_content_asset`/`list_content_assets` additionally gained the
+`division_id` filter from this section's own earlier finding, in the same
+pass. `ContextGraphBuilder.build()`'s own separate in-Python budget
+(`builder.py:107-137`, unchanged by this phase) still applies *on top of*
+these now-bounded fetches, not instead of them. New
+`tests/integration/test_repository_pagination.py` covers a representative
+method per repository file (not all 21 — identical Cypher shape) plus both
+`division_id`-filtered methods. **Not touched by this phase, still open**:
+the N+1s immediately below (that's Phase 3) and candidate generation's own
+full-table-scan shape (a bound, not a real index — see "Candidate
+generation is a confirmed full-table scan" below).
 
 **Confirmed N+1s, worst first:**
 - **Digest** — `digest.py:72` fetches *all* open opportunities unbounded,

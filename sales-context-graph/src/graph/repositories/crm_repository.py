@@ -74,15 +74,19 @@ class CrmRepository:
         )
         return Account(**rows[0]) if rows else None
 
-    async def find_accounts_by_name(self, workspace_id: str, name: str) -> list[Account]:
+    async def find_accounts_by_name(
+        self, workspace_id: str, name: str, *, limit: int = 100, offset: int = 0
+    ) -> list[Account]:
         """Exact-name lookup, tenant-scoped. Used by the duplicate-exact-names
         isolation fixture — two workspaces may each have an Account named
         identically, and this must never return the other workspace's row."""
         match = scoped_match("Account", "a", name="name")
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN {_ACCOUNT_RETURN}",
+            f"MATCH {match} RETURN {_ACCOUNT_RETURN} ORDER BY a.account_id SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             name=name,
+            offset=offset,
+            limit=limit,
         )
         return [Account(**row) for row in rows]
 
@@ -226,7 +230,9 @@ class CrmRepository:
             changed_at=changed_at,
         )
 
-    async def list_stage_changes(self, workspace_id: str, opportunity_id: str) -> list[OpportunityStageChange]:
+    async def list_stage_changes(
+        self, workspace_id: str, opportunity_id: str, *, limit: int = 100, offset: int = 0
+    ) -> list[OpportunityStageChange]:
         match = scoped_match("Opportunity", "o", opportunity_id="opportunity_id")
         rows = await self._executor.tenant_query(
             f"""
@@ -234,14 +240,18 @@ class CrmRepository:
             MATCH (o)-[:HAS_STAGE_CHANGE]->(chg:OpportunityStageChange)
             RETURN {_STAGE_CHANGE_RETURN}
             ORDER BY chg.changed_at
+            SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             opportunity_id=opportunity_id,
+            offset=offset,
+            limit=limit,
         )
         return [OpportunityStageChange(**row) for row in rows]
 
     async def list_open_opportunities(
-        self, workspace_id: str, *, account_id: str | None = None, seller_id: str | None = None
+        self, workspace_id: str, *, account_id: str | None = None, seller_id: str | None = None,
+        limit: int = 100, offset: int = 0,
     ) -> list[Opportunity]:
         """Open deals, optionally narrowed to one account (Increment 15: mapping
         a company name the seller typed to the deal they meant) or one seller
@@ -260,10 +270,13 @@ class CrmRepository:
         if seller_id is not None:
             filters.append("o.seller_id = $seller_id")
         rows = await self._executor.tenant_query(
-            f"MATCH {match} WHERE {' AND '.join(filters)} RETURN {_OPPORTUNITY_RETURN} ORDER BY o.name",
+            f"MATCH {match} WHERE {' AND '.join(filters)} RETURN {_OPPORTUNITY_RETURN} "
+            "ORDER BY o.name SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             account_id=account_id,
             seller_id=seller_id,
+            offset=offset,
+            limit=limit,
         )
         return [Opportunity(**row) for row in rows]
 

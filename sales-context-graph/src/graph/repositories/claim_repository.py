@@ -163,17 +163,26 @@ class ClaimRepository:
         )
         return Claim(**rows[0]) if rows else None
 
-    async def list_claims_by_subject(self, workspace_id: str, subject_id: str) -> list[Claim]:
+    async def list_claims_by_subject(
+        self, workspace_id: str, subject_id: str, *, limit: int = 1000, offset: int = 0
+    ) -> list[Claim]:
+        # 1000, not the repository-package norm of 100 -- Claims are
+        # evidence (docs/ontology.md), and this feeds ContextGraphBuilder
+        # directly; silently truncating evidence is a correctness bug, not
+        # only a performance one (same reasoning as
+        # conversation_repository.py::list_segments).
         match = scoped_match("Claim", "cl", subject_id="subject_id")
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN {_CLAIM_RETURN}",
+            f"MATCH {match} RETURN {_CLAIM_RETURN} ORDER BY cl.claim_id SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             subject_id=subject_id,
+            offset=offset,
+            limit=limit,
         )
         return [Claim(**row) for row in rows]
 
     async def list_claims_recorded_since(
-        self, workspace_id: str, subject_id: str, since: datetime
+        self, workspace_id: str, subject_id: str, since: datetime, *, limit: int = 1000, offset: int = 0
     ) -> list[Claim]:
         """Increment 14 — 'what's new on this subject since <date>', filtering
         on transaction_from (populated at ingest, real — see
@@ -191,14 +200,19 @@ class ClaimRepository:
             MATCH {match}
             WHERE cl.transaction_from >= $since
             RETURN {_CLAIM_RETURN}
+            ORDER BY cl.claim_id SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             subject_id=subject_id,
             since=since.isoformat(),
+            offset=offset,
+            limit=limit,
         )
         return [Claim(**row) for row in rows]
 
-    async def list_claims_for_conversation(self, workspace_id: str, conversation_id: str) -> list[Claim]:
+    async def list_claims_for_conversation(
+        self, workspace_id: str, conversation_id: str, *, limit: int = 1000, offset: int = 0
+    ) -> list[Claim]:
         """Routed through Conversation -[:HAS_SEGMENT]-> TranscriptSegment
         -[:HAS_CLAIM]-> Claim (§10) — never a bare property-match on
         source_segment_id, which would bypass the workspace-scoped traversal
@@ -209,14 +223,17 @@ class ClaimRepository:
             MATCH {conv_match}
             MATCH (c)-[:HAS_SEGMENT]->(:TranscriptSegment)-[:HAS_CLAIM]->(cl:Claim)
             RETURN {_CLAIM_RETURN}
+            ORDER BY cl.claim_id SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             conversation_id=conversation_id,
+            offset=offset,
+            limit=limit,
         )
         return [Claim(**row) for row in rows]
 
     async def list_claims_by_predicate_for_seller(
-        self, workspace_id: str, seller_id: str, predicate: str
+        self, workspace_id: str, seller_id: str, predicate: str, *, limit: int = 1000, offset: int = 0
     ) -> list[Claim]:
         """Increment 13 — cross-Opportunity aggregation for one seller's OPEN
         deals (e.g. 'top objections in this seller's pipeline'). Routes
@@ -235,14 +252,19 @@ class ClaimRepository:
             MATCH (c:Conversation {{workspace_id: $workspace_id, opportunity_id: o.opportunity_id}})
             MATCH (c)-[:HAS_SEGMENT]->(:TranscriptSegment)-[:HAS_CLAIM]->(cl:Claim {{predicate: $predicate}})
             RETURN {_CLAIM_RETURN}
+            ORDER BY cl.claim_id SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             seller_id=seller_id,
             predicate=predicate,
+            offset=offset,
+            limit=limit,
         )
         return [Claim(**row) for row in rows]
 
-    async def list_claims_by_opportunity(self, workspace_id: str, opportunity_id: str) -> list[Claim]:
+    async def list_claims_by_opportunity(
+        self, workspace_id: str, opportunity_id: str, *, limit: int = 1000, offset: int = 0
+    ) -> list[Claim]:
         """Same routing as list_claims_by_opportunity_and_predicate, without
         the predicate filter — every Claim across every Conversation
         belonging to one Opportunity. Backs Increment 11's conflict-detection
@@ -253,14 +275,17 @@ class ClaimRepository:
             MATCH {conv_match}
             MATCH (c)-[:HAS_SEGMENT]->(:TranscriptSegment)-[:HAS_CLAIM]->(cl:Claim)
             RETURN {_CLAIM_RETURN}
+            ORDER BY cl.claim_id SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             opportunity_id=opportunity_id,
+            offset=offset,
+            limit=limit,
         )
         return [Claim(**row) for row in rows]
 
     async def list_claims_by_opportunity_and_predicate(
-        self, workspace_id: str, opportunity_id: str, predicate: str
+        self, workspace_id: str, opportunity_id: str, predicate: str, *, limit: int = 1000, offset: int = 0
     ) -> list[Claim]:
         """Every Claim with the given predicate across every Conversation
         belonging to one Opportunity — Conversation carries opportunity_id as
@@ -278,10 +303,13 @@ class ClaimRepository:
             MATCH {conv_match}
             MATCH (c)-[:HAS_SEGMENT]->(:TranscriptSegment)-[:HAS_CLAIM]->(cl:Claim {{predicate: $predicate}})
             RETURN {_CLAIM_RETURN}
+            ORDER BY cl.claim_id SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             opportunity_id=opportunity_id,
             predicate=predicate,
+            offset=offset,
+            limit=limit,
         )
         return [Claim(**row) for row in rows]
 
@@ -355,7 +383,9 @@ class ClaimRepository:
         )
         return bool(rows)
 
-    async def list_claims_as_of(self, workspace_id: str, subject_id: str, as_of: datetime) -> list[Claim]:
+    async def list_claims_as_of(
+        self, workspace_id: str, subject_id: str, as_of: datetime, *, limit: int = 1000, offset: int = 0
+    ) -> list[Claim]:
         """True point-in-time reconstruction: every Claim whose transaction
         interval was open at `as_of` — recorded by then
         (transaction_from <= as_of) and not yet superseded by then
@@ -384,9 +414,12 @@ class ClaimRepository:
             WHERE revision.transaction_from <= $as_of
               AND (revision.transaction_to IS NULL OR revision.transaction_to > $as_of)
             RETURN {_claim_return("revision")}
+            ORDER BY claim_id SKIP $offset LIMIT $limit
             """,
             workspace_id=workspace_id,
             subject_id=subject_id,
             as_of=as_of.isoformat(),
+            offset=offset,
+            limit=limit,
         )
         return [Claim(**row) for row in rows]

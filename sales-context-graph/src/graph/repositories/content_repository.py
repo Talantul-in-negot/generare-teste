@@ -52,20 +52,45 @@ class ContentRepository:
             tags=asset.tags,
         )
 
-    async def get_content_asset(self, workspace_id: str, content_asset_id: str) -> ContentAsset | None:
+    async def get_content_asset(
+        self, workspace_id: str, content_asset_id: str, *, division_id: str | None = None
+    ) -> ContentAsset | None:
+        """division_id, when given, additionally requires the asset belong to
+        that division — a content-scoping filter, not a tenant/security
+        boundary (docs/security-and-tenancy.md's "Workspace vs. division"
+        section: workspace_id alone is the security boundary). Omitted
+        (default) means no division narrowing, matching every existing
+        caller's behavior unchanged."""
         match = scoped_match("ContentAsset", "n", content_asset_id="content_asset_id")
+        filters = []
+        if division_id is not None:
+            filters.append("n.division_id = $division_id")
+        where = f" WHERE {' AND '.join(filters)}" if filters else ""
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN {_ASSET_RETURN}",
+            f"MATCH {match}{where} RETURN {_ASSET_RETURN}",
             workspace_id=workspace_id,
             content_asset_id=content_asset_id,
+            division_id=division_id,
         )
         return ContentAsset(**rows[0]) if rows else None
 
-    async def list_content_assets(self, workspace_id: str) -> list[ContentAsset]:
+    async def list_content_assets(
+        self, workspace_id: str, *, division_id: str | None = None, limit: int = 100, offset: int = 0
+    ) -> list[ContentAsset]:
+        """See get_content_asset's docstring for what division_id does and
+        does not scope."""
         match = scoped_match("ContentAsset", "n")
+        filters = []
+        if division_id is not None:
+            filters.append("n.division_id = $division_id")
+        where = f" WHERE {' AND '.join(filters)}" if filters else ""
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN {_ASSET_RETURN}",
+            f"MATCH {match}{where} RETURN {_ASSET_RETURN} "
+            "ORDER BY n.content_asset_id SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
+            division_id=division_id,
+            offset=offset,
+            limit=limit,
         )
         return [ContentAsset(**row) for row in rows]
 
@@ -85,18 +110,24 @@ class ContentRepository:
             viewed_at=view.viewed_at.isoformat(),
         )
 
-    async def list_viewed_asset_ids(self, workspace_id: str, viewer_contact_id: str) -> set[str]:
+    async def list_viewed_asset_ids(
+        self, workspace_id: str, viewer_contact_id: str, *, limit: int = 100, offset: int = 0
+    ) -> set[str]:
         """§12 — 'exclude assets already viewed by that buyer.'"""
         match = scoped_match("AssetView", "v", viewer_contact_id="viewer_contact_id")
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN DISTINCT v.content_asset_id AS content_asset_id",
+            f"MATCH {match} RETURN DISTINCT v.content_asset_id AS content_asset_id "
+            "ORDER BY v.content_asset_id SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             viewer_contact_id=viewer_contact_id,
+            offset=offset,
+            limit=limit,
         )
         return {row["content_asset_id"] for row in rows}
 
     async def list_views_for_asset_and_contact(
-        self, workspace_id: str, content_asset_id: str, viewer_contact_id: str
+        self, workspace_id: str, content_asset_id: str, viewer_contact_id: str,
+        *, limit: int = 100, offset: int = 0,
     ) -> list[AssetView]:
         """Increment 10 — every view of one asset by one contact, oldest first.
         Used by ContentEffectivenessUseCase to find the first view *after* a
@@ -106,10 +137,12 @@ class ContentRepository:
             "AssetView", "v", content_asset_id="content_asset_id", viewer_contact_id="viewer_contact_id"
         )
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN {_VIEW_RETURN} ORDER BY v.viewed_at",
+            f"MATCH {match} RETURN {_VIEW_RETURN} ORDER BY v.viewed_at SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             content_asset_id=content_asset_id,
             viewer_contact_id=viewer_contact_id,
+            offset=offset,
+            limit=limit,
         )
         return [AssetView(**row) for row in rows]
 
@@ -135,11 +168,15 @@ class ContentRepository:
             triggered_by_claim_id=share.triggered_by_claim_id,
         )
 
-    async def list_shares_for_opportunity(self, workspace_id: str, opportunity_id: str) -> list[Share]:
+    async def list_shares_for_opportunity(
+        self, workspace_id: str, opportunity_id: str, *, limit: int = 100, offset: int = 0
+    ) -> list[Share]:
         match = scoped_match("Share", "s", opportunity_id="opportunity_id")
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN {_SHARE_RETURN}",
+            f"MATCH {match} RETURN {_SHARE_RETURN} ORDER BY s.shared_at SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             opportunity_id=opportunity_id,
+            offset=offset,
+            limit=limit,
         )
         return [Share(**row) for row in rows]

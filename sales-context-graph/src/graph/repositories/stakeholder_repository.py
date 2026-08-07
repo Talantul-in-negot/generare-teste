@@ -77,12 +77,14 @@ class StakeholderRepository:
         )
 
     async def list_assignments_for_opportunity(
-        self, workspace_id: str, opportunity_id: str
+        self, workspace_id: str, opportunity_id: str, *, limit: int = 100, offset: int = 0
     ) -> list[StakeholderAssignment]:
         match = scoped_match("StakeholderAssignment", "sa", opportunity_id="opportunity_id")
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN {_ASSIGNMENT_RETURN}",
+            f"MATCH {match} RETURN {_ASSIGNMENT_RETURN} ORDER BY sa.assignment_id SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             opportunity_id=opportunity_id,
+            offset=offset,
+            limit=limit,
         )
         return [StakeholderAssignment(**row) for row in rows]

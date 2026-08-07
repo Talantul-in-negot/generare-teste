@@ -78,12 +78,16 @@ class ReviewRepository:
         )
         return Mention(**rows[0]) if rows else None
 
-    async def list_mentions_by_status(self, workspace_id: str, resolution_status: str) -> list[Mention]:
+    async def list_mentions_by_status(
+        self, workspace_id: str, resolution_status: str, *, limit: int = 100, offset: int = 0
+    ) -> list[Mention]:
         match = scoped_match("Mention", "m", resolution_status="resolution_status")
         rows = await self._executor.tenant_query(
-            f"MATCH {match} RETURN {_MENTION_RETURN}",
+            f"MATCH {match} RETURN {_MENTION_RETURN} ORDER BY m.mention_id SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             resolution_status=resolution_status,
+            offset=offset,
+            limit=limit,
         )
         return [Mention(**row) for row in rows]
 
