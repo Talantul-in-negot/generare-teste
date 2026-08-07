@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 
 from api.state import IngestionJob, get_ingestion_store
+from src.core.logging import configure_logging
+from src.core.telemetry import INGESTION_JOB_DURATION_SECONDS, INGESTION_JOBS_TOTAL
 from src.domain.enums import IngestionState
 from src.extraction.fixture_provider import FixtureExtractionProvider
 from src.graph.execution import GraphExecutor
@@ -23,7 +26,7 @@ from src.ingestion.adapters.gong import GongAdapter
 from src.ingestion.adapters.salesforce import SalesforceAdapter
 from src.ingestion.adapters.showpad import ShowpadAdapter
 from src.ingestion.pipeline import ContentIngestionPipeline, CrmIngestionPipeline
-from src.ingestion.queue import dequeue, record_worker_heartbeat, retry_or_dead_letter
+from src.ingestion.queue import dequeue, record_worker_heartbeat, retry_or_dead_letter, sample_queue_metrics
 from src.ingestion.transcript_pipeline import TranscriptIngestionPipeline
 
 log = logging.getLogger(__name__)
@@ -35,6 +38,7 @@ async def _run(message, store) -> None:
         log.error("ingestion job missing or cross-workspace", extra={"ingestion_id": message.ingestion_id})
         return
     now = datetime.now(timezone.utc)
+    started_at = time.monotonic()
     executor = GraphExecutor()
     try:
         job.state = IngestionState.PERSISTING
@@ -96,12 +100,20 @@ async def _run(message, store) -> None:
             job.state = IngestionState.FAILED_PERMANENT
             job.updated_at = datetime.now(timezone.utc)
             await store.put(job)
+    finally:
+        # job.state is whatever the branch above landed on -- COMPLETED,
+        # FAILED_PERMANENT, or FAILED_RETRYABLE (still requeued, not yet a
+        # terminal outcome but worth counting so retry volume is visible).
+        INGESTION_JOBS_TOTAL.labels(kind=message.kind, status=job.state.value).inc()
+        INGESTION_JOB_DURATION_SECONDS.labels(kind=message.kind).observe(time.monotonic() - started_at)
 
 
 async def run_worker() -> None:
+    configure_logging()
     store = get_ingestion_store()
     while True:
         await record_worker_heartbeat()
+        await sample_queue_metrics()
         message = await dequeue(timeout=5)
         if message is not None:
             await _run(message, store)

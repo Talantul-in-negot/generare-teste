@@ -17,11 +17,20 @@ from __future__ import annotations
 import structlog
 from neo4j import AsyncDriver, AsyncGraphDatabase
 from neo4j.exceptions import ServiceUnavailable, TransientError
+from opentelemetry import trace
 
 from src.core.config import get_settings
 from src.core.retry import with_retry
 
 log = structlog.get_logger(__name__)
+
+# No official `opentelemetry-instrumentation-neo4j` package exists on PyPI
+# (checked at the time this was added) -- every other driver this repo
+# touches (FastAPI) gets auto-instrumentation; Neo4j gets a manual span
+# wrapped around the one method every query in the codebase funnels
+# through, which gives the same "one span per DB round trip" shape without
+# a dependency that doesn't exist.
+_tracer = trace.get_tracer(__name__)
 
 
 class Neo4jClient:
@@ -41,9 +50,19 @@ class Neo4jClient:
 
     @with_retry(exceptions=(TransientError, ServiceUnavailable), max_attempts=3)
     async def run(self, cypher: str, **params) -> list[dict]:
-        async with self._driver.session() as session:
-            result = await session.run(cypher, parameters=params)
-            return [record.data() async for record in result]
+        with _tracer.start_as_current_span("neo4j.run") as span:
+            span.set_attribute("db.system", "neo4j")
+            # Never the raw statement or params -- both can carry
+            # transcript text/PII (docs/plan.md §13's "no raw transcript
+            # text or email" rule applies to spans exactly as it does to
+            # logs); only the shape, never the content.
+            span.set_attribute("db.statement_length", len(cypher))
+            span.set_attribute("db.param_count", len(params))
+            async with self._driver.session() as session:
+                result = await session.run(cypher, parameters=params)
+                rows = [record.data() async for record in result]
+            span.set_attribute("db.row_count", len(rows))
+            return rows
 
 
 # ── Module-level singleton ───────────────────────────────────────────────────────

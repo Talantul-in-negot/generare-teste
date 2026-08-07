@@ -10,11 +10,13 @@ bounded number of attempts.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, replace
 from typing import Any
 
 from src.core.config import get_settings
 from src.core.redis_client import get_redis
+from src.core.telemetry import INGESTION_QUEUE_DEPTH, INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS
 
 QUEUE_KEY = "scg:ingestion:queue"
 DLQ_KEY = "scg:ingestion:dlq"
@@ -30,6 +32,13 @@ class IngestionQueueMessage:
     kind: str
     payload: dict[str, Any]
     attempt: int = 0
+    # Epoch seconds this job first entered the queue. Added for the "oldest
+    # job age" metric (docs/plan.md Sec 14) -- it needs a stamp that
+    # survives requeues, so retry_or_dead_letter() below carries the
+    # original value forward rather than resetting it. Defaults to 0.0 so
+    # decode() never breaks on a message enqueued before this field
+    # existed; 0.0 is treated as "unknown" by the age gauge, not "ancient".
+    enqueued_at: float = 0.0
 
     def encode(self) -> str:
         return json.dumps({
@@ -38,6 +47,7 @@ class IngestionQueueMessage:
             "kind": self.kind,
             "payload": self.payload,
             "attempt": self.attempt,
+            "enqueued_at": self.enqueued_at,
         }, separators=(",", ":"), sort_keys=True)
 
     @classmethod
@@ -49,6 +59,7 @@ class IngestionQueueMessage:
             kind=data["kind"],
             payload=data["payload"],
             attempt=int(data.get("attempt", 0)),
+            enqueued_at=float(data.get("enqueued_at", 0.0)),
         )
 
 
@@ -75,7 +86,11 @@ async def enqueue(message: IngestionQueueMessage) -> bool:
     inserted = await client.set(marker, "1", nx=True, ex=60 * 60 * 24 * 30)
     if not inserted:
         return False
-    await client.rpush(QUEUE_KEY, message.encode())
+    # Stamp first-entry time here rather than trusting a caller-supplied
+    # value, unless one was already set (retry_or_dead_letter() re-enqueues
+    # through this same path in spirit, but pushes directly -- see there).
+    stamped = message if message.enqueued_at else replace(message, enqueued_at=time.time())
+    await client.rpush(QUEUE_KEY, stamped.encode())
     return True
 
 
@@ -110,6 +125,35 @@ async def queue_health() -> dict[str, int | bool]:
     }
 
 
+async def sample_queue_metrics() -> None:
+    """Refresh the queue-depth and oldest-job-age gauges (docs/plan.md Sec 14).
+
+    Prometheus gauges are push-model, not computed on scrape, and the
+    /metrics route is synchronous while this needs an async Redis round
+    trip -- so the worker's own poll loop is the natural sampling point
+    (called alongside record_worker_heartbeat(), same cadence). A missing
+    Redis client is a no-op rather than an error: metrics degrade quietly,
+    matching queue_health()'s existing fail-open shape.
+    """
+    client = get_redis()
+    if client is None:
+        return
+    depth = await client.llen(QUEUE_KEY)
+    INGESTION_QUEUE_DEPTH.set(depth)
+    if depth == 0:
+        INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS.set(0)
+        return
+    # blpop pops from the head (left); the oldest waiting job is therefore
+    # at index 0, not the tail rpush() just wrote to.
+    head = await client.lindex(QUEUE_KEY, 0)
+    if head is None:
+        INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS.set(0)
+        return
+    oldest = IngestionQueueMessage.decode(head)
+    age = (time.time() - oldest.enqueued_at) if oldest.enqueued_at else 0
+    INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS.set(max(0, age))
+
+
 async def retry_or_dead_letter(message: IngestionQueueMessage, error: str) -> bool:
     client = get_redis()
     if client is None:
@@ -121,6 +165,9 @@ async def retry_or_dead_letter(message: IngestionQueueMessage, error: str) -> bo
         kind=message.kind,
         payload={**message.payload, "_last_error": error[:2000]},
         attempt=message.attempt + 1,
+        # Preserve the original enqueue time across retries so the age
+        # gauge reflects total time-in-system, not time-since-last-retry.
+        enqueued_at=message.enqueued_at or time.time(),
     )
     if next_message.attempt >= max_attempts:
         await client.rpush(DLQ_KEY, next_message.encode())

@@ -227,23 +227,39 @@ have.
 
 ## Known measurement gaps
 
-- ⚠ **Observability (`docs/plan.md` §14) is unimplemented — nothing here is
-  measured from the running system.** §4 pins "OpenTelemetry API/SDK and
-  FastAPI/Neo4j instrumentation" as a dependency and §14 specifies one span
-  per workflow stage plus nine named metrics (ingestion count/duration by
-  status, extraction windows and provider calls, extraction failures and
-  retries, candidate-generation latency, blocking recall, auto-link/review/
-  unresolved counts, Claims created/superseded/conflicted/erased, Context
-  Graph latency and truncation, queue depth and oldest-job age). Verified
-  2026-08-07: `opentelemetry` appears **nowhere** in the codebase and is not
-  in `pyproject.toml`; there is no `/metrics` endpoint and no metric of any
-  kind. `structlog` *is* used across 16 modules, so §14 is roughly one-third
-  done — structured logs yes, traces no, metrics no. Consequence worth
-  stating plainly: **every operational number in this document comes from a
-  test run, never from a running system**, and several other known gaps
-  (queue depth, oldest-job age, ingestion failure rate) are literally
-  unobservable until this exists. Surfaced by the external-architecture
-  cross-check at the end of this document; previously untracked here.
+- ✅ **Observability (`docs/plan.md` §14) implemented 2026-08-07** (Phase 0
+  of the full-`evaluation.md` implementation plan) — `src/core/logging.py`
+  (central `structlog.configure()`, one JSON sink), `src/core/telemetry.py`
+  (all 9 named metrics as `prometheus_client` objects, wired at their real
+  call sites: `src/ingestion/worker.py`+`queue.py`, `src/extraction/
+  llm_provider.py`, `src/resolution/pipeline.py`, `src/graph/repositories/
+  {claim,conflict,review}_repository.py`, `src/context_graph/builder.py`),
+  `GET /metrics` (`api/main.py`), request spans via
+  `FastAPIInstrumentor`, manual Neo4j-call spans (`src/core/
+  neo4j_client.py::run()`, no official `opentelemetry-instrumentation-neo4j`
+  package exists). `make smoke` boots the api service and curls both
+  `/health` and `/metrics`. Verified: `tests/unit/core/test_telemetry.py`
+  (13 tests) plus the full 377-test suite (256 unit + 121 integration/eval/
+  security) green against real Neo4j/Redis.
+  Two honest caveats, not glossed over:
+  - **`Claims ... erased` has no increment call site.** No erasure-execution
+    writer exists anywhere in `src/` (confirmed by direct search) —
+    `erasure_status` is only ever set as a pass-through field on
+    `create_claim`, never computed/transitioned. The metric is defined
+    (fixed label set includes `erased`) but will read zero until an actual
+    erasure use case is built — a real gap, not something this phase could
+    close, since there's nothing to instrument yet.
+  - **OTel FastAPI instrumentation degrades to a no-op if unavailable**,
+    wrapped in `try/except` rather than a hard dependency. This machine's
+    shared, non-isolated Python environment (many unrelated projects
+    installed into the same site-packages) had a version-lockstep break
+    between `opentelemetry-instrumentation-fastapi` (0.61b0) and
+    `opentelemetry-util-http` (0.58b0) at implementation time; forcing a fix
+    would have meant upgrading a package other unrelated local projects
+    pin against, so the app logs a warning and continues rather than
+    failing to boot over a transitive conflict it doesn't own. Neo4j spans
+    and all 9 metrics are unaffected by this — only FastAPI's own
+    auto-generated request spans degrade.
 - No precision/recall study against a labeled corpus (would need a larger,
   human-annotated dataset than this vertical slice's fixtures provide).
 - **Blocking recall at scale — found and fixed the same day.**

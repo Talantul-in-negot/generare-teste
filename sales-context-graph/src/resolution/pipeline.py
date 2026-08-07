@@ -7,9 +7,11 @@ and ResolutionDecision via src/graph/repositories/review_repository.py.
 from __future__ import annotations
 
 import hashlib
+import time
 from dataclasses import dataclass
 from datetime import datetime
 
+from src.core.telemetry import CANDIDATE_GENERATION_DURATION_SECONDS, RESOLUTION_DECISIONS_TOTAL
 from src.domain.assertion import ResolutionDecision
 from src.domain.conversation import Mention
 from src.domain.enums import ResolutionStatus
@@ -79,16 +81,19 @@ async def resolve_mention(
 
     if deterministic is not None:
         status = decide_deterministic(deterministic.entity_id)
+        RESOLUTION_DECISIONS_TOTAL.labels(status=status.value.lower()).inc()
         return _build_outcome(
             mention=mention, workspace_id=workspace_id, decided_at=decided_at,
             resolved_entity_id=deterministic.entity_id, status=status,
             top1=None, margin=None, candidates_shown=[deterministic.entity_id],
         )
 
+    _candidate_gen_started = time.monotonic()
     pool = await candidate_generator.all_names_in_workspace(workspace_id, entity_type)
     candidates: list[Candidate] = union_candidates(
         exact_matches, pool, cap=candidate_cap, mention_surface=mention.normalized_surface
     )
+    CANDIDATE_GENERATION_DURATION_SECONDS.observe(time.monotonic() - _candidate_gen_started)
 
     # One batched embed() call for the mention + every candidate name — never
     # one call per candidate (same N+1-avoidance principle as the rest of
@@ -116,6 +121,7 @@ async def resolve_mention(
     ranking = rank_candidates(scored)
     top1 = ranking.ranked[0] if ranking.ranked else None
     status = decide(top1, ranking.margin, thresholds=thresholds)
+    RESOLUTION_DECISIONS_TOTAL.labels(status=status.value.lower()).inc()
     resolved_entity_id = top1.entity_id if (top1 and status == ResolutionStatus.AUTO_LINKED) else None
 
     return _build_outcome(

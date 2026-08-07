@@ -15,6 +15,7 @@ from typing import Awaitable, Callable
 import structlog
 from pydantic import ValidationError
 
+from src.core.telemetry import EXTRACTION_PROVIDER_CALLS_TOTAL, EXTRACTION_WINDOWS_TOTAL
 from src.extraction.prompt import build_extraction_prompt
 from src.extraction.provider import ExtractionInput, ExtractionResult
 
@@ -44,6 +45,7 @@ class LlmExtractionProvider:
         return [await self._extract_one(item) for item in inputs]
 
     async def _extract_one(self, item: ExtractionInput) -> ExtractionResult:
+        EXTRACTION_WINDOWS_TOTAL.inc()
         window_text = "\n".join(f"[{s.speaker_label}] {s.text}" for s in item.segments)
         base_prompt = build_extraction_prompt(window_text)
 
@@ -59,14 +61,19 @@ class LlmExtractionProvider:
             except json.JSONDecodeError as exc:
                 last_error = f"invalid JSON: {exc}"
                 log.warning("llm_extraction.invalid_json", window_id=item.window.window_id, attempt=attempt)
+                EXTRACTION_PROVIDER_CALLS_TOTAL.labels(outcome="retry").inc()
                 continue
             try:
                 data.setdefault("window_id", item.window.window_id)
-                return ExtractionResult.model_validate(data)
+                result = ExtractionResult.model_validate(data)
+                EXTRACTION_PROVIDER_CALLS_TOTAL.labels(outcome="success").inc()
+                return result
             except ValidationError as exc:
                 last_error = str(exc)
                 log.warning("llm_extraction.schema_validation_failed", window_id=item.window.window_id, attempt=attempt)
+                EXTRACTION_PROVIDER_CALLS_TOTAL.labels(outcome="retry").inc()
                 continue
 
         log.error("llm_extraction.permanent_failure", window_id=item.window.window_id, attempts=self._max_attempts)
+        EXTRACTION_PROVIDER_CALLS_TOTAL.labels(outcome="permanent_failure").inc()
         raise ExtractionFailedPermanently(item.window.window_id, self._max_attempts, last_error)

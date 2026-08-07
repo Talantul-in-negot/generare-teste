@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime
 
+from src.core.telemetry import CLAIMS_TOTAL
 from src.domain.assertion import Claim
 from src.graph.execution import GraphExecutor, scoped_match
 
@@ -115,6 +116,12 @@ class ClaimRepository:
                 """,
                 **params,
             )
+            # "Claims created" (docs/plan.md Sec 14). MERGE makes this call
+            # idempotent (docstring above), and GraphExecutor.tenant_query
+            # doesn't surface Neo4j's created-vs-matched result-summary
+            # counters, so this counts write attempts, not strictly
+            # distinct new nodes -- an honest approximation, not exact.
+            CLAIMS_TOTAL.labels(event="created").inc()
             return
         await self._executor.tenant_query(
             f"""
@@ -145,6 +152,7 @@ class ClaimRepository:
             """,
             **params,
         )
+        CLAIMS_TOTAL.labels(event="created").inc()  # see note above
 
     async def get_claim(self, workspace_id: str, claim_id: str) -> Claim | None:
         match = scoped_match("Claim", "cl", claim_id="claim_id")
@@ -304,6 +312,7 @@ class ClaimRepository:
             valid_to=valid_to.isoformat(),
             transaction_to=transaction_to.isoformat(),
         )
+        CLAIMS_TOTAL.labels(event="superseded").inc()
 
     async def reconcile_claim_subject(
         self,

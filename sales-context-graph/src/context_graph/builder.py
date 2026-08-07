@@ -33,10 +33,16 @@ I/O, bounded by the (typically small) number of actual contradictions found.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from src.context_graph.models import ContextGraphResult, EvidenceReference, SelectedItem
+from src.core.telemetry import (
+    CONTEXT_GRAPH_BUILD_DURATION_SECONDS,
+    CONTEXT_GRAPH_RESULT_COUNT,
+    CONTEXT_GRAPH_TRUNCATED_TOTAL,
+)
 from src.domain.assertion import Claim
 from src.domain.enums import AdjudicationStatus
 from src.graph.repositories.claim_repository import ClaimRepository
@@ -102,6 +108,7 @@ class ContextGraphBuilder:
         now: datetime | None = None,
     ) -> ContextGraphResult:
         now = now or datetime.now(timezone.utc)
+        started_at = time.monotonic()
 
         if scope.conversation_id:
             candidates = await self._claim_repo.list_claims_for_conversation(
@@ -122,13 +129,16 @@ class ContextGraphBuilder:
         tokens_used = 0
         predicate_counts: dict[str, int] = {}
         truncated = False
+        truncated_reason: str | None = None  # first cap hit wins, for the metric label below
         for claim, score in scored:
             if len(selected) >= max_nodes:
                 truncated = True
+                truncated_reason = truncated_reason or "max_nodes"
                 break
             claim_tokens = _claim_tokens(claim)
             if tokens_used + claim_tokens > max_tokens:
                 truncated = True
+                truncated_reason = truncated_reason or "max_tokens"
                 continue
             if predicate_counts.get(claim.predicate, 0) >= predicate_diversity_cap:
                 continue
@@ -149,6 +159,11 @@ class ContextGraphBuilder:
         conflicts = detect_conflicting_claims([c for c, _ in selected], now=now)
         for conflict in conflicts:
             await self._conflict_repo.create_conflict(conflict)
+
+        CONTEXT_GRAPH_BUILD_DURATION_SECONDS.observe(time.monotonic() - started_at)
+        CONTEXT_GRAPH_RESULT_COUNT.observe(len(selected))
+        if truncated_reason is not None:
+            CONTEXT_GRAPH_TRUNCATED_TOTAL.labels(reason=truncated_reason).inc()
 
         return ContextGraphResult(
             workspace_id=scope.workspace_id,

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 
+from src.core.telemetry import RESOLUTION_DECISIONS_TOTAL
 from src.domain.assertion import ResolutionDecision, ReviewDecision
 from src.domain.conversation import Mention
 from src.graph.execution import GraphExecutor, scoped_match
@@ -168,6 +169,13 @@ class ReviewRepository:
             affected_claim_ids=decision.affected_claim_ids,
             previous_review_decision_id=decision.previous_review_decision_id,
         )
+        # "auto-link, review, unresolved, and rejection counts" (docs/plan.md
+        # Sec 14) -- auto_linked/pending_review/unresolved are counted where
+        # the automated decision is made (src/resolution/pipeline.py);
+        # "rejected" only exists as a human ReviewDecision outcome, counted
+        # here at the point it's actually committed.
+        if decision.rejected:
+            RESOLUTION_DECISIONS_TOTAL.labels(status="rejected").inc()
 
     async def get_review_decision(self, workspace_id: str, review_decision_id: str) -> ReviewDecision | None:
         mention_match = scoped_match("Mention", "m")

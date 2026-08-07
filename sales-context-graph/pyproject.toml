@@ -32,6 +32,15 @@ dependencies = [
     # only when LLM_PROVIDER=anthropic, so the entire test suite (which runs on
     # deterministic stub chat_fns) never touches it.
     "anthropic>=0.40",
+    # Observability (docs/plan.md §14 -- Phase 0 of docs/evaluation.md's
+    # implementation plan). prometheus-client serves GET /metrics directly
+    # (api/main.py) with no collector service required. OTel gives request
+    # spans (FastAPI auto-instrumentation) and manual Neo4j-call spans
+    # (src/core/neo4j_client.py) -- an operator wires an OTLP exporter via
+    # standard OTEL_* env vars; unconfigured, spans are created and dropped.
+    "prometheus-client>=0.20",
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
 ]
 
 [project.optional-dependencies]

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from src.core.telemetry import CLAIMS_TOTAL
 from src.domain.assertion import Conflict
 from src.domain.enums import ConflictStatus
 from src.graph.execution import GraphExecutor, scoped_match
@@ -62,6 +63,10 @@ class ConflictRepository:
             detected_at=conflict.detected_at.isoformat(),
             resolved_at=conflict.resolved_at.isoformat() if conflict.resolved_at else None,
         )
+        # "Claims ... conflicted" (docs/plan.md Sec 14) -- one Conflict
+        # record touches two Claims, so count both. Same idempotent-MERGE
+        # caveat as claim_repository.py's create_claim applies here too.
+        CLAIMS_TOTAL.labels(event="conflicted").inc(2)
 
     async def get_conflict(self, workspace_id: str, conflict_id: str) -> Conflict | None:
         match = scoped_match("Conflict", "cf", conflict_id="conflict_id")
