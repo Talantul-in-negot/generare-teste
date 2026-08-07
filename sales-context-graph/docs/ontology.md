@@ -101,13 +101,17 @@ predicate typo in `src/extraction/fixture_provider.py`'s `_RULES` therefore
 fails at ingestion instead of silently creating an off-ontology Claim.
 Adding an extraction rule requires adding its predicate here too.
 
-**Still open, deliberately:** `relation_rules` (the *graph edge* vocabulary,
-as opposed to claim predicates) has no runtime enforcement. Of its five
-documented entries, only `HAS_ASSIGNMENT`/`ASSIGNS`
-(`src/graph/repositories/stakeholder_repository.py`) are actually written
-as Cypher relationships anywhere in this codebase — `ADDRESSES_OBJECTION`
-documents intent that the real implementation satisfies via
-`content_asset.tags` instead of a materialized edge, and `CONVERTED_TO`/
-`MERGED_INTO` (§5) aren't implemented at all yet. See `docs/evaluation.md`'s
-"Known measurement gaps" for why building enforcement now would cover 2 of
-5 entries and isn't worth it until the missing write paths exist.
+### Relation rules (`relation_rules`) — runtime-enforced for all 5, wired for 2
+
+`relation_rules` (the *graph edge* vocabulary, as opposed to claim
+predicates) is validated by `src/graph/sales_ontology.py::validate_relation()`
+against each entry's `domain`/`target` lists, with `type_hierarchy` ancestry
+resolved on both sides. All 5 documented entries validate correctly
+(`tests/unit/graph/test_sales_ontology_runtime.py`), but only
+`HAS_ASSIGNMENT`/`ASSIGNS` (`src/graph/repositories/stakeholder_repository.py`)
+have a real write path to wire it into today —
+`ADDRESSES_OBJECTION` documents intent that the real implementation
+satisfies via `content_asset.tags` instead of a materialized edge, and
+`CONVERTED_TO`/`MERGED_INTO` (§5) aren't implemented at all yet. Wiring
+those 3 in is a one-line `validate_relation(...)` call whenever their write
+paths land — see `docs/evaluation.md`'s "Known measurement gaps".

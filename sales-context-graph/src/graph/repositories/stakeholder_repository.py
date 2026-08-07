@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from src.domain.stakeholder import StakeholderAssignment
 from src.graph.execution import GraphExecutor, scoped_match
+from src.graph.sales_ontology import validate_relation
 
 _ASSIGNMENT_RETURN = (
     "sa.assignment_id AS assignment_id, sa.workspace_id AS workspace_id, "
@@ -29,7 +30,17 @@ class StakeholderRepository:
         the first place because CRM ingestion already created that Contact
         (src/resolution/speaker.py's resolve_speaker() resolves against a
         known Contact directory), so this MATCH requirement mirrors real data
-        dependency, not an arbitrary restriction."""
+        dependency, not an arbitrary restriction.
+
+        Both relationships this method writes are validated against
+        config/ontologies/sales.yml's relation_rules before the Cypher runs
+        — a live regression guard (not a typo guard, since the relationship
+        type strings below are hardcoded literals, not derived from input)
+        against a future edit accidentally writing the wrong edge shape,
+        e.g. swapping which side ASSIGNS points at.
+        """
+        validate_relation("HAS_ASSIGNMENT", "OPPORTUNITY", "STAKEHOLDER_ASSIGNMENT")
+        validate_relation("ASSIGNS", "STAKEHOLDER_ASSIGNMENT", "CONTACT")
         opp_match = scoped_match("Opportunity", "o", opportunity_id="opportunity_id")
         contact_match = scoped_match("Contact", "c", contact_id="contact_id")
         assignment_match = scoped_match("StakeholderAssignment", "sa", assignment_id="assignment_id")

@@ -13,13 +13,13 @@ test` (or `pytest tests/` directly, after `docker compose up -d neo4j redis`).
 ## Test suite results
 
 ```
-356 passed in 157.80s (2026-08-05, this session's final full run)
+367 passed in 173.20s (2026-08-05, this session's final full run)
 ```
 
 | Suite | Count | What it proves |
 |---|---|---|
 | `tests/unit/domain/` | 27 | ID determinism, round-trip fidelity (all domain models, Hypothesis-driven), Claim identity split, source versioning, Mention span validation — no DB. |
-| `tests/unit/graph/` | 10 | `GraphExecutor.tenant_query()`'s structural scoping guard (both accepted/rejected forms); `sales_ontology.py`'s `validate_claim_predicate()` against a live ontology load. |
+| `tests/unit/graph/` | 21 | `GraphExecutor.tenant_query()`'s structural scoping guard (both accepted/rejected forms); `sales_ontology.py`'s `validate_claim_predicate()` and `validate_relation()` (all 5 `relation_rules` entries, type-hierarchy ancestry, rejection of unknown relation types and wrong domain/target labels). |
 | `tests/unit/graph_legacy/` | 31 | The 8 forked modules import cleanly and their cross-file wiring survives the `graphrag.*` -> `src.*` rewrite; the sales ontology YAML validates; production-safety validator covers both the Neo4j-password and workspace-API-key checks. |
 | `tests/unit/extraction/` | 18 | Fixture-extractor byte-stability, polarity detection, window construction, bounded LLM retry/repair -> explicit permanent failure. |
 | `tests/unit/resolution/` | 52 | Scoring formula, decision-policy guard rails, Stage A uniqueness, conflict detection, buying-committee inference, conflict arbitration tie-break (Increment 19), stakeholder role classification honesty guards (Increment 18). |
@@ -302,19 +302,24 @@ have.
   is built — a typo raises `UnknownClaimPredicate` at ingestion. See
   `docs/ontology.md`'s matching section.
 
-  **`relation_rules` (the separate, graph-*edge* vocabulary) is not
-  enforced, and deliberately not being built out further right now**: of
-  its five entries, only `HAS_ASSIGNMENT`/`ASSIGNS`
-  (`src/graph/repositories/stakeholder_repository.py`) are actual
-  materialized Cypher relationships anywhere in this codebase.
-  `ADDRESSES_OBJECTION` documents the Objection-ContentAsset mapping's
-  *intent* but the real implementation
-  (`src/usecases/objection_content_recommendation.py`) matches on
-  `content_asset.tags`, never writes that edge; `CONVERTED_TO` and
-  `MERGED_INTO` (Lead conversion, Account merge, §5) aren't implemented at
-  all in this vertical slice. Building a `relation_rules` validator today
-  would exercise 2 real edges out of 5 documented ones — not worth the
-  surface area until the missing write paths exist to validate.
+  **`relation_rules` (the graph-*edge* vocabulary) is now validated too —
+  built for all 5 entries despite only 2 having a real write path today.**
+  `src/graph/sales_ontology.py::validate_relation(relation_type,
+  domain_label, target_label)` checks a relationship against
+  `relation_rules`' domain/target lists, resolving `type_hierarchy`
+  ancestry on both sides (e.g. a rule requiring `ORG` would accept
+  `ACCOUNT`, since `type_hierarchy` declares `ACCOUNT` a subtype). Wired
+  into the one call site with real writes —
+  `src/graph/repositories/stakeholder_repository.py::upsert_assignment()`
+  validates `HAS_ASSIGNMENT` and `ASSIGNS` before their `MERGE`s run.
+  `ADDRESSES_OBJECTION`, `CONVERTED_TO`, `MERGED_INTO` have no materializing
+  write path yet (the objection-content mapping uses `content_asset.tags`
+  instead of an edge; Lead conversion and Account merge, §5, aren't
+  implemented at all) — `validate_relation()` already accepts their
+  documented endpoints correctly (`tests/unit/graph/
+  test_sales_ontology_runtime.py` parametrizes all 5), so wiring those 3 in
+  is a one-line addition whenever their write paths exist, not a design
+  question left open.
 
 - **Ingestion is durable when `INGESTION_QUEUE_ENABLED=true`; synchronous only in local fallback.**
   `api/routes/ingestions.py` runs each pipeline call directly inside the HTTP
