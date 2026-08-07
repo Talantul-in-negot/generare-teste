@@ -1203,6 +1203,47 @@ fixing the global-top-k tenant-filter bug documented in the Showpad section
 above would turn a latent cross-tenant leak into a live one. **Fix the
 filter, then populate, then consider reranking.**
 
+✅ **Fixed 2026-08-07 (Phase 7)**, in that order — the fix (Phase 1) shipped
+and was re-verified live before this phase started, not just assumed.
+**Dimension resolved with the user directly** (not assumed): add a real
+1536-dim provider matching the index's already-declared dimensionality,
+not shrink the index to 384 to match the existing local model — new
+`src/embedding/openai_embedding_provider.py` (`text-embedding-3-small`,
+lazy-imported `openai`, wired through the already-present-but-previously-
+unused `embedding_provider`/`embedding_api_key` settings). New
+`src/embedding/backfill.py` — an explicit, one-workspace-at-a-time batch
+job (`python -m src.embedding.backfill <workspace_id>`), deliberately not
+"every workspace this cluster has" — there is no cross-tenant listing
+anywhere else in this codebase and this stays consistent with that.
+Verified end to end: `tests/integration/test_embedding_backfill.py`
+proves backfilled embeddings are actually queryable through
+`CandidateGenerator.vector_candidates()` — the exact path Phase 1's
+tenant-isolation test protects, now exercised against real (backfilled,
+not synthetic) data.
+
+**Reranker corrected from the original plan's placement, not built where
+first specified.** Implementing this surfaced a real mismatch: the
+approved plan located the reranker inside `ContextGraphBuilder`'s Claim
+scoring, but that builder has no free-text query to rerank against
+(`ContextGraphScope` carried none), and `src/resolution/scoring.py` — the
+codebase's actual "dense + BM25 hybrid" pipeline the brief meant — already
+has a *measured* calibration (`DEFAULT_LEXICAL_WEIGHT = 0.97`) showing
+general-purpose embeddings are the *weaker* signal for short proper-noun
+name matching; bolting a cross-encoder onto that system risked disturbing
+something already correct, not fixing a gap. Resolution: added
+`ContextGraphScope.query_text` (new, optional) and a real cross-encoder
+(`src/context_graph/reranker.py`, `sentence-transformers`'
+`cross-encoder/ms-marco-MiniLM-L-6-v2`, no new dependency, lazily loaded)
+that reranks Claims by relevance to that query text — genuinely closing
+the gap `_score_claim`'s own docstring names ("free-text question ranking
+against the whole graph… a materially different (and unbuilt) ranking
+problem"), rather than a decorative hook with nothing real to rerank.
+`reranker_enabled` defaults to `false`. Verified: a fast wiring test with a
+stubbed reranker (`tests/integration/test_context_graph_reranker.py`) plus
+one slower test against the real model
+(`tests/unit/context_graph/test_reranker.py`) proving actual relevance
+differentiation, not just that the call succeeds.
+
 **B6. Concurrency load testing.** The brief asks for K6/Locust against
 ingestion, retrieval, and LLM concurrency, with explicit SLOs. This repo has
 one single-threaded latency measurement (300 Claims, one run, one machine)

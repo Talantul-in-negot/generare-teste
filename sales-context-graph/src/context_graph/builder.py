@@ -38,6 +38,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from src.context_graph.models import ContextGraphResult, EvidenceReference, SelectedItem
+from src.context_graph.reranker import rerank
+from src.core.config import get_settings
 from src.core.telemetry import (
     CONTEXT_GRAPH_BUILD_DURATION_SECONDS,
     CONTEXT_GRAPH_RESULT_COUNT,
@@ -67,6 +69,14 @@ class ContextGraphScope:
     workspace_id: str
     conversation_id: str | None = None
     subject_id: str | None = None
+    # Phase 7 (docs/evaluation.md's B5 item): optional free-text question to
+    # rerank the scoped Claims against. Absent (default) means no reranking
+    # regardless of reranker_enabled -- _score_claim's own docstring already
+    # states relevance-to-a-question is "a materially different (and
+    # unbuilt) ranking problem" from what it computes; this field is what
+    # makes that ranking problem answerable when a caller actually has a
+    # question to rank against.
+    query_text: str | None = None
 
 
 def _claim_tokens(claim: Claim) -> int:
@@ -92,6 +102,13 @@ def _score_claim(claim: Claim, *, now: datetime) -> float:
 
 def _explain(claim: Claim, score: float) -> str:
     return f"confidence={claim.confidence:.2f}, adjudication={claim.adjudication_status.value}, score={score:.2f}"
+
+
+def _claim_rerank_text(claim: Claim) -> str:
+    """The cross-encoder's "passage" side of the (query_text, passage) pair
+    -- predicate plus whatever object the Claim actually carries (exactly
+    one of object_value/object_id is ever set, same as _claim_tokens)."""
+    return f"{claim.predicate}: {claim.object_value or claim.object_id or ''}"
 
 
 class ContextGraphBuilder:
@@ -136,6 +153,22 @@ class ContextGraphBuilder:
             key=lambda pair: pair[1],
             reverse=True,
         )
+
+        # Phase 7 reranker (docs/evaluation.md's B5 item): off unless both
+        # reranker_enabled and scope.query_text are set -- a caller with no
+        # question to rank against gets exactly the pre-Phase-7 confidence/
+        # recency/adjudication ordering, unchanged. Reordering happens on
+        # the already-fully-in-memory `scored` list, no extra DB fetch;
+        # the relevance score *replaces* the displayed score below so
+        # SelectedItem.score always matches the actual sort basis.
+        if get_settings().reranker_enabled and scope.query_text and scored:
+            claims_in_order = [c for c, _ in scored]
+            relevance_scores = await rerank(
+                scope.query_text, [_claim_rerank_text(c) for c in claims_in_order]
+            )
+            scored = sorted(
+                zip(claims_in_order, relevance_scores), key=lambda pair: pair[1], reverse=True
+            )
 
         selected: list[tuple[Claim, float]] = []
         tokens_used = 0

@@ -103,6 +103,12 @@ class Settings(BaseSettings):
     # observability-only until real data justifies blocking.
     guardrail_enforcement_mode: Literal["log_only", "block"] = "log_only"
 
+    # ── Vector index population + reranker (Phase 7, docs/evaluation.md's ──────
+    # B5 item) — off by default until both the tenant-filter fix (Phase 1,
+    # already shipped) and a real backfill (src/embedding/backfill.py) are
+    # verified live in an environment. See src/context_graph/reranker.py.
+    reranker_enabled: bool = False
+
     # ── Proactive digest (Increment 17, see src/usecases/digest.py) ──────────────
     # Empty slack_webhook_url means POST /api/v1/digest/deliver returns 503 rather
     # than posting nowhere; GET /api/v1/digest (JSON, no delivery) works regardless.

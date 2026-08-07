@@ -130,6 +130,36 @@ class CrmRepository:
         )
         return Contact(**rows[0]) if rows else None
 
+    async def list_contacts(
+        self, workspace_id: str, *, limit: int = 100, offset: int = 0
+    ) -> list[Contact]:
+        """Phase 7 (docs/evaluation.md's B5 item) -- pages every Contact in
+        one workspace for src/embedding/backfill.py. Same ORDER BY ...
+        SKIP $offset LIMIT $limit shape as list_accounts."""
+        match = scoped_match("Contact", "c")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN {_CONTACT_RETURN} ORDER BY c.contact_id SKIP $offset LIMIT $limit",
+            workspace_id=workspace_id,
+            offset=offset,
+            limit=limit,
+        )
+        return [Contact(**row) for row in rows]
+
+    async def set_contact_embedding(self, workspace_id: str, contact_id: str, embedding: list[float]) -> None:
+        """Narrow SET on the existing node (mirroring
+        claim_repository.py::close_claim_interval's style), not routed
+        through upsert_contact -- `embedding` isn't a Contact domain-model
+        field (see src/domain/crm.py), it's a raw property the
+        contact_embeddings_v1 vector index (src/graph/schema.py) reads
+        directly. Written only by src/embedding/backfill.py today."""
+        match = scoped_match("Contact", "c", contact_id="contact_id")
+        await self._executor.tenant_query(
+            f"MATCH {match} SET c.embedding = $embedding",
+            workspace_id=workspace_id,
+            contact_id=contact_id,
+            embedding=embedding,
+        )
+
     async def upsert_lead(self, lead: Lead) -> None:
         match = scoped_match("Lead", "l", lead_id="lead_id")
         await self._executor.tenant_query(

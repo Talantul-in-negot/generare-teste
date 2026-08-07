@@ -41,6 +41,11 @@ dependencies = [
     "prometheus-client>=0.20",
     "opentelemetry-sdk>=1.27",
     "opentelemetry-instrumentation-fastapi>=0.48b0",
+    # 1536-dim hosted embedding provider (Phase 7, docs/evaluation.md's B5
+    # item) -- src/embedding/openai_embedding_provider.py. Imported lazily
+    # there, same pattern as src/llm/chat.py's `anthropic` import, so the
+    # test suite never needs this installed or a real key.
+    "openai>=1.50",
 ]
 
 [project.optional-dependencies]
