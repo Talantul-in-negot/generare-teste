@@ -13,13 +13,13 @@ test` (or `pytest tests/` directly, after `docker compose up -d neo4j redis`).
 ## Test suite results
 
 ```
-347 passed, 25 warnings in 87.09s
+355 passed in 126.55s (2026-08-05, this session's final full run)
 ```
 
 | Suite | Count | What it proves |
 |---|---|---|
 | `tests/unit/domain/` | 27 | ID determinism, round-trip fidelity (all domain models, Hypothesis-driven), Claim identity split, source versioning, Mention span validation — no DB. |
-| `tests/unit/graph/` | 7 | `GraphExecutor.tenant_query()`'s structural scoping guard, both accepted forms, both rejected forms. |
+| `tests/unit/graph/` | 10 | `GraphExecutor.tenant_query()`'s structural scoping guard (both accepted/rejected forms); `sales_ontology.py`'s `validate_claim_predicate()` against a live ontology load. |
 | `tests/unit/graph_legacy/` | 31 | The 8 forked modules import cleanly and their cross-file wiring survives the `graphrag.*` -> `src.*` rewrite; the sales ontology YAML validates; production-safety validator covers both the Neo4j-password and workspace-API-key checks. |
 | `tests/unit/extraction/` | 18 | Fixture-extractor byte-stability, polarity detection, window construction, bounded LLM retry/repair -> explicit permanent failure. |
 | `tests/unit/resolution/` | 52 | Scoring formula, decision-policy guard rails, Stage A uniqueness, conflict detection, buying-committee inference, conflict arbitration tie-break (Increment 19), stakeholder role classification honesty guards (Increment 18). |
@@ -31,9 +31,9 @@ test` (or `pytest tests/` directly, after `docker compose up -d neo4j redis`).
 | `tests/unit/signals/` | 16 | Each of the five proactive-signal rules, fire/don't-fire/boundary. |
 | `tests/unit/delivery/` | 3 | Slack Block Kit digest formatting, no network. |
 | `tests/unit/usecases/` | 5 | Content-effectiveness stage-as-of reconstruction. |
-| `tests/unit/ingestion/` | 3 | Showpad adapter parsing (asset views, shares). |
-| `tests/integration/` | 114 | Everything above, end to end, against live Neo4j: tenant isolation, CRM reconciliation, transcript ingestion, the full VW fixture suite, async review, Context Graph budget/diversity enforcement, content effectiveness, conflict detection + resolution, buying-committee + LLM role classification, cross-deal aggregation, temporal + point-in-time queries, natural-language ask (including tenant-isolated entity linking and every refusal path), narrative summaries, and the proactive digest. |
-| `tests/eval/` | 1 | Blocking recall (see below). |
+| `tests/unit/ingestion/` | 6 | Showpad adapter parsing (asset views, shares); `src/ingestion/queue.py`'s enqueue-once idempotency, retry-then-dead-letter, and `queue_enabled()` flag gating. |
+| `tests/integration/` | 115 | Everything above, end to end, against live Neo4j: tenant isolation, CRM reconciliation, transcript ingestion, the full VW fixture suite, async review (now closing the reviewed Claim's bitemporal interval), Context Graph budget/diversity enforcement, content effectiveness, conflict detection + resolution, buying-committee + LLM role classification, cross-deal aggregation, temporal + point-in-time queries (including the review-path interval-closing case), natural-language ask (including tenant-isolated entity linking and every refusal path), narrative summaries, and the proactive digest. |
+| `tests/eval/` | 2 | Blocking recall; Context Graph build latency at 300 Claims (see below). |
 | `tests/security/` | 3 | Prompt delimiting, size limits, injected-instruction containment. |
 
 No test is skipped, xfailed, or marked slow-and-ignored. Every LLM-backed test
@@ -191,9 +191,29 @@ have.
 - Blocking recall is measured honestly but at a scale where it's close to
   vacuous (see above) — meaningful only once candidate generation moves beyond
   full-pool fetching.
-- No load/latency testing — `max_tokens`/`max_nodes` budgets are enforced
-  correctly but their wall-clock cost under realistic Claim volumes is
-  unmeasured.
+- **Load/latency — now measured once, honestly, not a load test.**
+  `tests/eval/test_context_graph_latency.py` (added 2026-08-05) seeds 300
+  Claims on one Conversation (an order of magnitude past every other fixture
+  in this repo) and times `ContextGraphBuilder.build()` both at the
+  repository layer and through the full `POST /api/v1/context/build` HTTP
+  stack, 10 repeated builds against the same seeded data. Measured on one
+  local machine, one run:
+  ```
+  ContextGraphBuilder.build() (repository layer): min=55.8ms mean=103.3ms max=293.6ms
+  POST /api/v1/context/build (full HTTP stack):    min=56.9ms mean=72.0ms  max=82.3ms
+  ```
+  (The HTTP-stack numbers are not slower than the repository-layer numbers
+  because of caching or a fluke measurement window — not investigated
+  further; both are well within the test's generous regression-guard
+  thresholds.) At this data size, selection lands on `nodes_used=20` — the
+  predicate-diversity cap (5 × the 4 real governed predicates in
+  `config/ontologies/sales.yml`) binds before the `max_nodes=50` budget ever
+  does, so this specific run measures diversity-bound latency, not
+  node-budget-bound latency; the ontology would need more than 4 predicates
+  to measure the latter honestly. **Still not a load test**: single machine,
+  single workspace, no concurrent requests, one run (no p95 across repeated
+  sessions) — a real load test needs dedicated infrastructure this vertical
+  slice doesn't have.
 - **True point-in-time ("as of") reconstruction — closed for one supersession
   path, still open for another.** Increment 19 wired the trigger this gap
   previously said was missing: `ConflictsUseCase.resolve()`
