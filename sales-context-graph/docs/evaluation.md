@@ -907,6 +907,24 @@ the message immediately with **no visibility timeout or in-flight tracking**
 neither on the queue nor in the DLQ. That is a real qualifier on the
 "durable ingestion" claim made earlier in this document.
 
+✅ **Fixed 2026-08-07 (Phase 4)** — the visibility-timeout half of this
+(head-of-line blocking across tenants remains open, unchanged, still
+deliberately deferred per `docs/adr-0001`): `dequeue()` now uses
+`BLMOVE ... LEFT LEFT` instead of `BLPOP`, atomically moving a claimed job
+into the claiming worker's own processing list
+(`scg:ingestion:processing:{worker_id}`) rather than deleting it, plus a
+claim timestamp. New `reap_stale_processing_lists()`, called every
+iteration of the worker's own poll loop, puts back anything whose claim
+has sat past `INGESTION_VISIBILITY_TIMEOUT_SECONDS` (default 300s) — through
+the *same* bounded retry/dead-letter path an ordinary failure uses, so a
+job that reliably crashes its worker still reaches the DLQ eventually
+rather than reaping forever. See `docs/adr-0001-durable-ingestion-queue.md`'s
+2026-08-07 addendum for the full design and what's still deferred. Verified
+by 7 new `tests/unit/ingestion/test_queue.py` tests including a simulated
+worker-crash scenario (claim backdated past the timeout, reaper recovers
+the job) and a poison-job scenario (repeatedly reaped until it lands in
+the DLQ, not looping indefinitely).
+
 ### 4. Multi-tenancy at scale
 
 Isolation is the strongest part of this codebase and is **structurally**

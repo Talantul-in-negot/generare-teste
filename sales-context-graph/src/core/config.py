@@ -71,6 +71,13 @@ class Settings(BaseSettings):
     ingestion_queue_enabled: bool = False
     ingestion_queue_max_attempts: int = 3
     ingestion_worker_heartbeat_seconds: int = 60
+    # Phase 4 (docs/evaluation.md's ingestion-reliability item, ADR-0001's
+    # addendum) -- SQS-style visibility timeout: how long a job may sit
+    # claimed-but-unfinished in a worker's own processing list before the
+    # reaper assumes that worker crashed and puts it back on the main
+    # queue. Must comfortably exceed the slowest real job (transcript
+    # extraction, the only LLM-backed ingestion kind) -- 5 minutes default.
+    ingestion_visibility_timeout_seconds: int = 300
 
     # ── Proactive digest (Increment 17, see src/usecases/digest.py) ──────────────
     # Empty slack_webhook_url means POST /api/v1/digest/deliver returns 503 rather

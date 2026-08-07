@@ -10,6 +10,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from api.state import IngestionJob, get_ingestion_store
 from src.core.logging import configure_logging
@@ -26,16 +27,31 @@ from src.ingestion.adapters.gong import GongAdapter
 from src.ingestion.adapters.salesforce import SalesforceAdapter
 from src.ingestion.adapters.showpad import ShowpadAdapter
 from src.ingestion.pipeline import ContentIngestionPipeline, CrmIngestionPipeline
-from src.ingestion.queue import dequeue, record_worker_heartbeat, retry_or_dead_letter, sample_queue_metrics
+from src.ingestion.queue import (
+    complete,
+    dequeue,
+    reap_stale_processing_lists,
+    record_worker_heartbeat,
+    retry_or_dead_letter,
+    sample_queue_metrics,
+)
 from src.ingestion.transcript_pipeline import TranscriptIngestionPipeline
 
 log = logging.getLogger(__name__)
 
 
-async def _run(message, store) -> None:
+async def _run(message, store, *, worker_id: str) -> None:
     job = await store.get(message.ingestion_id)
     if job is None or job.workspace_id != message.workspace_id:
         log.error("ingestion job missing or cross-workspace", extra={"ingestion_id": message.ingestion_id})
+        # Non-retryable (no job record will ever appear), but still routed
+        # through the normal bounded retry/dead-letter path rather than
+        # discarded outright -- reusing existing machinery, and it
+        # preserves the message in the DLQ for inspection instead of
+        # silently vanishing. Also clears this claim either way: dequeue()
+        # already moved it into this worker's processing list, and nothing
+        # else will if this early-return path doesn't.
+        await retry_or_dead_letter(message, "ingestion job missing or cross-workspace", worker_id=worker_id)
         return
     now = datetime.now(timezone.utc)
     started_at = time.monotonic()
@@ -85,17 +101,22 @@ async def _run(message, store) -> None:
         job.error = None
         job.updated_at = datetime.now(timezone.utc)
         await store.put(job)
+        await complete(message, worker_id=worker_id)
     except (ValueError, KeyError, TypeError) as exc:
         job.state = IngestionState.FAILED_PERMANENT
         job.error = str(exc)
         job.updated_at = datetime.now(timezone.utc)
         await store.put(job)
+        # Not retryable -- these are malformed-input errors, not transient
+        # ones -- but the claim still needs clearing so the reaper doesn't
+        # later mistake this finished (if failed) job for a crashed one.
+        await complete(message, worker_id=worker_id)
     except Exception as exc:  # transient DB/LLM/network failures are retryable
         job.state = IngestionState.FAILED_RETRYABLE
         job.error = str(exc)
         job.updated_at = datetime.now(timezone.utc)
         await store.put(job)
-        requeued = await retry_or_dead_letter(message, str(exc))
+        requeued = await retry_or_dead_letter(message, str(exc), worker_id=worker_id)
         if not requeued:
             job.state = IngestionState.FAILED_PERMANENT
             job.updated_at = datetime.now(timezone.utc)
@@ -111,12 +132,20 @@ async def _run(message, store) -> None:
 async def run_worker() -> None:
     configure_logging()
     store = get_ingestion_store()
+    # One id for this process's lifetime -- identifies its own processing
+    # list (src/ingestion/queue.py's PROCESSING_KEY_PREFIX) so multiple
+    # worker replicas never share, or corrupt, each other's in-flight claim.
+    worker_id = uuid4().hex
+    log.info("ingestion_worker.started", extra={"worker_id": worker_id})
     while True:
         await record_worker_heartbeat()
         await sample_queue_metrics()
-        message = await dequeue(timeout=5)
+        reaped = await reap_stale_processing_lists()
+        if reaped:
+            log.warning("ingestion_worker.reaped_stale_claims", extra={"count": reaped})
+        message = await dequeue(worker_id=worker_id, timeout=5)
         if message is not None:
-            await _run(message, store)
+            await _run(message, store, worker_id=worker_id)
 
 
 if __name__ == "__main__":

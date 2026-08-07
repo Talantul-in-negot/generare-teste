@@ -5,6 +5,17 @@ stack instead of adding a second broker. Delivery is at-least-once; pipeline
 reconciliation supplies idempotent writes, while the job id prevents duplicate
 enqueue on caller retries. Poison jobs are moved to a dead-letter list after a
 bounded number of attempts.
+
+Phase 4 (docs/evaluation.md's ingestion-reliability item, ADR-0001's
+addendum) adds an SQS-style visibility timeout, closing the gap ADR-0001
+named up front as not yet done: a worker crashing mid-job used to lose that
+job entirely (BLPOP removes it from the queue the instant it's claimed;
+nothing put it back if the worker died before finishing). Now dequeue()
+atomically moves a job into the claiming worker's own processing list
+(BLMOVE) rather than deleting it outright, and reap_stale_processing_lists()
+-- called from every worker's own poll loop -- puts back anything whose
+claim has sat unfinished past ingestion_visibility_timeout_seconds, on the
+assumption its worker crashed.
 """
 
 from __future__ import annotations
@@ -22,7 +33,19 @@ QUEUE_KEY = "scg:ingestion:queue"
 DLQ_KEY = "scg:ingestion:dlq"
 ENQUEUED_PREFIX = "scg:ingestion:enqueued:"
 WORKER_HEARTBEAT_KEY = "scg:ingestion:worker:heartbeat"
+# Per-worker (keyed by a process-lifetime worker_id, see worker.py) so
+# multiple worker replicas never share -- and can't corrupt -- each other's
+# in-flight claim. PROCESSING_KEY_PREFIX holds the claimed job itself (a
+# real Redis list, scanned by the reaper via key pattern); CLAIMED_AT_PREFIX
+# holds just the claim timestamp, checked against
+# ingestion_visibility_timeout_seconds.
+PROCESSING_KEY_PREFIX = "scg:ingestion:processing:"
+CLAIMED_AT_PREFIX = "scg:ingestion:claimed_at:"
 MAX_ATTEMPTS_DEFAULT = 3
+
+
+def processing_key(worker_id: str) -> str:
+    return PROCESSING_KEY_PREFIX + worker_id
 
 
 @dataclass(frozen=True)
@@ -94,12 +117,35 @@ async def enqueue(message: IngestionQueueMessage) -> bool:
     return True
 
 
-async def dequeue(*, timeout: int = 5) -> IngestionQueueMessage | None:
+async def dequeue(*, worker_id: str, timeout: int = 5) -> IngestionQueueMessage | None:
+    """Atomically moves one job from the shared queue into this worker's own
+    processing list (BLMOVE ... LEFT LEFT -- pop-from-head like the BLPOP
+    this replaced, so FIFO order relative to enqueue()'s RPUSH is
+    unchanged) and stamps a claim timestamp, instead of BLPOP's delete-on-
+    claim. The job stays visible (in the processing list) until complete()
+    or retry_or_dead_letter() explicitly removes it -- a crash between
+    those two points is exactly what reap_stale_processing_lists() below
+    recovers from.
+    """
     client = get_redis()
     if client is None:
         raise RuntimeError("worker requires REDIS_URL")
-    item = await client.blpop(QUEUE_KEY, timeout=timeout)
-    return IngestionQueueMessage.decode(item[1]) if item else None
+    raw = await client.blmove(QUEUE_KEY, processing_key(worker_id), timeout, src="LEFT", dest="LEFT")
+    if raw is None:
+        return None
+    await client.set(CLAIMED_AT_PREFIX + worker_id, str(time.time()))
+    return IngestionQueueMessage.decode(raw)
+
+
+async def complete(message: IngestionQueueMessage, *, worker_id: str) -> None:
+    """Call after a job finishes successfully -- clears its claim so
+    reap_stale_processing_lists() never mistakes a finished job for a
+    crashed one."""
+    client = get_redis()
+    if client is None:
+        raise RuntimeError("worker requires REDIS_URL")
+    await client.lrem(processing_key(worker_id), 1, message.encode())
+    await client.delete(CLAIMED_AT_PREFIX + worker_id)
 
 
 async def record_worker_heartbeat() -> None:
@@ -154,10 +200,19 @@ async def sample_queue_metrics() -> None:
     INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS.set(max(0, age))
 
 
-async def retry_or_dead_letter(message: IngestionQueueMessage, error: str) -> bool:
+async def retry_or_dead_letter(message: IngestionQueueMessage, error: str, *, worker_id: str) -> bool:
     client = get_redis()
     if client is None:
         raise RuntimeError("worker requires REDIS_URL")
+    # Clears this job's claim first -- same reasoning as complete(): once
+    # the retry/dead-letter decision below has been written, the original
+    # claim must not still look "in flight" to the reaper.
+    await client.lrem(processing_key(worker_id), 1, message.encode())
+    await client.delete(CLAIMED_AT_PREFIX + worker_id)
+    return await _requeue_or_dead_letter(client, message, error)
+
+
+async def _requeue_or_dead_letter(client, message: IngestionQueueMessage, error: str) -> bool:
     max_attempts = max(1, get_settings().ingestion_queue_max_attempts or MAX_ATTEMPTS_DEFAULT)
     next_message = IngestionQueueMessage(
         ingestion_id=message.ingestion_id,
@@ -174,3 +229,42 @@ async def retry_or_dead_letter(message: IngestionQueueMessage, error: str) -> bo
         return False
     await client.rpush(QUEUE_KEY, next_message.encode())
     return True
+
+
+async def reap_stale_processing_lists() -> int:
+    """SQS-style visibility-timeout reaper. Any worker's processing list
+    whose claim is older than ingestion_visibility_timeout_seconds -- or
+    whose claim marker is simply missing, which is treated as maximally
+    stale rather than trusted -- is assumed to belong to a crashed worker:
+    its job goes back through the same attempt-counting retry/dead-letter
+    path retry_or_dead_letter() uses, so a job that reliably crashes its
+    worker still eventually reaches the DLQ instead of reaping forever.
+
+    Safe to call from every worker's own poll loop each iteration --
+    idempotent (a list that's already been reaped or was never stale is a
+    no-op), and the SCAN this uses is non-blocking and cheap at this
+    vertical slice's key-count scale (at most one processing key per live
+    worker process).
+    """
+    client = get_redis()
+    if client is None:
+        return 0
+    timeout = get_settings().ingestion_visibility_timeout_seconds
+    now = time.time()
+    reaped = 0
+    async for key in client.scan_iter(match=f"{PROCESSING_KEY_PREFIX}*"):
+        worker_id = key[len(PROCESSING_KEY_PREFIX):]
+        items = await client.lrange(key, 0, -1)
+        if not items:
+            continue
+        claimed_at_raw = await client.get(CLAIMED_AT_PREFIX + worker_id)
+        age = (now - float(claimed_at_raw)) if claimed_at_raw else float("inf")
+        if age < timeout:
+            continue
+        for raw in items:
+            message = IngestionQueueMessage.decode(raw)
+            await _requeue_or_dead_letter(client, message, f"reaped: claim exceeded {timeout}s visibility timeout")
+            await client.lrem(key, 1, raw)
+            reaped += 1
+        await client.delete(CLAIMED_AT_PREFIX + worker_id)
+    return reaped

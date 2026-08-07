@@ -127,3 +127,38 @@ worker. Exactly-once delivery, per-workspace fairness and horizontal worker
 tuning remain operational follow-ups, while graph writes remain safe under
 at-least-once delivery because the existing reconciliation/MERGE paths are
 idempotent.
+
+## Addendum, 2026-08-07 — visibility timeout (docs/evaluation.md)
+
+Closes one specific gap this ADR left open: **a worker crashing mid-job used
+to lose that job entirely.** `dequeue()` used `BLPOP`, which deletes a job
+from the queue the instant it's claimed — if the worker then crashed before
+finishing (OOM, process kill, infra restart), nothing put the job back;
+`RedisIngestionStore` would show it permanently stuck at whatever state it
+last reached, with no queue entry left to retry it. Same architectural
+decision as the rest of this ADR (reuse Redis primitives already in the
+stack, no new broker), extended:
+
+- `dequeue()` now uses `BLMOVE ... LEFT LEFT` instead of `BLPOP` — the job
+  moves atomically from the shared queue into the claiming worker's own
+  processing list (`scg:ingestion:processing:{worker_id}`) rather than
+  being deleted outright, plus a claim timestamp
+  (`scg:ingestion:claimed_at:{worker_id}`).
+- `complete()` (new) clears the claim on success;
+  `retry_or_dead_letter()` clears it before its existing retry/dead-letter
+  decision.
+- `reap_stale_processing_lists()` (new), called every iteration of every
+  worker's own poll loop: any processing list whose claim has sat past
+  `INGESTION_VISIBILITY_TIMEOUT_SECONDS` (default 300s) is assumed to
+  belong to a crashed worker and goes back through the same bounded
+  retry/dead-letter path an ordinary failure would — a job that reliably
+  crashes its worker still reaches the DLQ eventually, not an infinite
+  reap loop.
+- `worker_id` is a per-process UUID generated once in `run_worker()` —
+  correct if multiple worker replicas are ever run (each gets its own
+  processing list, never sharing or corrupting another's claim), though
+  this repo's own `docker-compose.yml`/`fly.toml` still run exactly one
+  `worker` process today.
+
+Still deferred, unchanged from this ADR's original scope: exactly-once
+delivery, per-workspace fairness, horizontal worker tuning.
