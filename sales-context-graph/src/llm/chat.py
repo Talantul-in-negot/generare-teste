@@ -46,18 +46,24 @@ def build_chat_fn(
     provider: str | None = None,
     api_key: str | None = None,
     model: str | None = None,
+    base_url: str | None = None,
 ) -> ChatFn:
-    """`provider`/`api_key`/`model` override the corresponding Settings
-    fields when given -- added Phase 8 so src/llm/gateway.py can build a
-    *second* chat_fn (the fallback provider) without a second Settings
-    instance. Every existing caller (build_chat_fn() or
-    build_chat_fn(settings)) is unaffected: the overrides default to
-    settings' own fields, identical to before this parameter existed.
+    """`provider`/`api_key`/`model`/`base_url` override the corresponding
+    Settings fields when given -- `provider`/`api_key`/`model` added Phase 8
+    so src/llm/gateway.py can build a *second* chat_fn (the fallback
+    provider) without a second Settings instance; `base_url` added Phase 10
+    so loadtest/ can point the real SDK at a local mock server (see
+    loadtest/README.md) instead of the real vendor endpoint, without a
+    third way of constructing a ChatFn. Every existing caller
+    (build_chat_fn() or build_chat_fn(settings)) is unaffected: every
+    override defaults to settings' own fields, identical to before these
+    parameters existed.
     """
     settings = settings or get_settings()
     provider = provider or settings.llm_provider
     api_key = api_key if api_key is not None else settings.llm_api_key
     model = model or settings.llm_model
+    base_url = base_url if base_url is not None else settings.llm_base_url
 
     if not provider:
         raise LlmNotConfiguredError(
@@ -72,11 +78,15 @@ def build_chat_fn(
         raise LlmNotConfiguredError(f"LLM_API_KEY is empty; an API key is required for LLM_PROVIDER={provider}")
 
     if provider == "openai":
-        return _build_openai_chat_fn(api_key=api_key, model=model, max_tokens=settings.llm_max_output_tokens)
-    return _build_anthropic_chat_fn(api_key=api_key, model=model, max_tokens=settings.llm_max_output_tokens)
+        return _build_openai_chat_fn(
+            api_key=api_key, model=model, max_tokens=settings.llm_max_output_tokens, base_url=base_url or None
+        )
+    return _build_anthropic_chat_fn(
+        api_key=api_key, model=model, max_tokens=settings.llm_max_output_tokens, base_url=base_url or None
+    )
 
 
-def _build_anthropic_chat_fn(*, api_key: str, model: str, max_tokens: int) -> ChatFn:
+def _build_anthropic_chat_fn(*, api_key: str, model: str, max_tokens: int, base_url: str | None = None) -> ChatFn:
     # Imported lazily so the `anthropic` package is only required when a real
     # provider is actually built. The whole test suite runs on stub chat_fns and
     # must not depend on the SDK being installed.
@@ -87,7 +97,10 @@ def _build_anthropic_chat_fn(*, api_key: str, model: str, max_tokens: int) -> Ch
             "LLM_PROVIDER=anthropic requires the `anthropic` package (pip install anthropic)"
         ) from exc
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    # base_url=None is the SDK's own default (the real Anthropic API) --
+    # only loadtest/ (or an explicit LLM_BASE_URL) ever sets this to
+    # something else, see build_chat_fn()'s docstring above.
+    client = anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url)
 
     async def chat_fn(prompt: str) -> str:
         response = await client.messages.create(
@@ -102,7 +115,7 @@ def _build_anthropic_chat_fn(*, api_key: str, model: str, max_tokens: int) -> Ch
     return chat_fn
 
 
-def _build_openai_chat_fn(*, api_key: str, model: str, max_tokens: int) -> ChatFn:
+def _build_openai_chat_fn(*, api_key: str, model: str, max_tokens: int, base_url: str | None = None) -> ChatFn:
     """Phase 8: the fallback provider src/llm/gateway.py falls back to.
     Lazy import, same reasoning as the anthropic branch above."""
     try:
@@ -112,7 +125,7 @@ def _build_openai_chat_fn(*, api_key: str, model: str, max_tokens: int) -> ChatF
             "LLM_PROVIDER=openai requires the `openai` package (pip install openai)"
         ) from exc
 
-    client = openai.AsyncOpenAI(api_key=api_key)
+    client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     async def chat_fn(prompt: str) -> str:
         response = await client.chat.completions.create(

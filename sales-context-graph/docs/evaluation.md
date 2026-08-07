@@ -1282,6 +1282,44 @@ with no basis here and should **not** be adopted as SLOs — but the
 layer in particular has an untested failure mode: the single serial worker
 plus `blpop`-without-visibility-timeout described above.
 
+✅ **Fixed 2026-08-07 (Phase 10)**: new `loadtest/` — k6 across the three
+layers, exactly this structure. `loadtest/k6_ingestion_throughput.js`
+repeats `POST /api/v1/ingestions/crm`; `loadtest/k6_context_retrieval.js`
+repeats `POST /api/v1/context/build`; `loadtest/k6_llm_concurrency.js`
+repeats `POST /api/v1/ask` against `loadtest/mock_llm_server.py` (a small
+stdlib-only mock of Anthropic's Messages API, not the real vendor —
+running real concurrency against a billed API was never the point, and
+this document's own B6 text says so explicitly). `src/llm/chat.py` gained
+an `llm_base_url` override (`LLM_BASE_URL` setting) so the real `anthropic`
+SDK client can point at the mock without a second code path. The brief's
+specific vendor-scale numbers are **not** adopted as thresholds anywhere
+in this work — `loadtest/run_baseline.sh` produces a dated report of this
+system's own measured behavior on the machine it's run on
+(`make loadtest`); the run itself is the artifact, not a pass/fail gate.
+
+Two real bugs were caught by actually running this end to end, not by
+inspecting the scripts: (1) `run_baseline.sh`'s first draft defaulted
+`NEO4J_URI` to the standard port `7687`, which on this machine belongs to
+a *different* local project's Neo4j container, not this repo's own
+(compose-shifted to `7688` specifically to avoid that collision, per
+`docker-compose.yml`'s own comment) — the dedicated api process this
+script starts was silently talking to the wrong database, or to nothing,
+depending what else happened to be running. Caught via the LLM-concurrency
+layer's `/ask` calls surfacing a raw `neo4j.exceptions.ServiceUnavailable`
+500, traced back through `docker port scg_neo4j`, fixed, and reverified
+with a full clean 3-layer run. (2) The ingestion layer's k6 check initially
+treated `state ∈ {ACCEPTED, PERSISTING, COMPLETED, FAILED_PERMANENT,
+FAILED_RETRYABLE}` as "pass" — `api/routes/ingestions.py` always answers
+`202` even when the pipeline failed, so this check silently reported 100%
+success while every single request was actually failing server-side (the
+same Neo4j-port bug). Fixed to only pass on the non-failure states, which
+is what actually caught bug (1) instead of masking it. Verified final
+baseline (all three layers, clean Neo4j port, corrected check): ingestion
+2370/2370 checks passed, avg 728 ms/p95 1.06 s; retrieval 178,876/178,876
+checks passed, avg 23 ms/p95 47 ms (against this workspace's small/empty
+graph — see `loadtest/README.md` for how to point it at a populated one);
+LLM concurrency 432/432 checks passed, avg 2.21 s/p95 4.55 s.
+
 ### C. Recommended by the brief, wrong for this system now
 
 - **Kafka / Kinesis event bus.** The brief says "never process heavy payloads

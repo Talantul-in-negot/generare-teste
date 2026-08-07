@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "claude-sonnet-5"
     llm_max_output_tokens: int = 2048
+    # Empty means "use the real vendor endpoint" (the SDK's own default) --
+    # only set for loadtest/'s LLM-call-concurrency layer (Phase 10,
+    # docs/evaluation.md's B6), which points this at a local mock server
+    # (loadtest/mock_llm_server.py) instead of spending real API calls
+    # under load. See src/llm/chat.py::build_chat_fn().
+    llm_base_url: str = ""
 
     # ── Embedding provider (candidate generation / vector retrieval) ─────────────
     embedding_provider: str = ""

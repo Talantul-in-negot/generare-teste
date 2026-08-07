@@ -1,4 +1,4 @@
-.PHONY: up down smoke test test-unit test-integration demo lint format
+.PHONY: up down smoke test test-unit test-integration demo lint format loadtest
 
 up:
 	docker compose up -d neo4j redis
@@ -36,3 +36,11 @@ lint:
 
 format:
 	ruff format src api tests
+
+# Phase 10 (docs/evaluation.md's B6) -- k6 across 3 layers (ingestion
+# throughput, Context Graph retrieval latency, LLM-call concurrency
+# against a local mock, not real API spend). Requires `API_KEY=<real key
+# from WORKSPACE_API_KEYS>` and Docker (for the grafana/k6 image -- no
+# local k6 install needed). See loadtest/README.md.
+loadtest: up
+	bash loadtest/run_baseline.sh

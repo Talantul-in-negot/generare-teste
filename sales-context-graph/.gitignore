@@ -9,3 +9,6 @@ venv/
 *.egg-info/
 dist/
 build/
+
+# Phase 10 (loadtest/) -- dated per-run baseline reports/logs, not source.
+loadtest/results/
