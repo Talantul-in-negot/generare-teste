@@ -232,6 +232,33 @@ class ClaimRepository:
         )
         return [Claim(**row) for row in rows]
 
+    async def list_claims_for_conversations(
+        self, workspace_id: str, conversation_ids: list[str]
+    ) -> dict[str, list[Claim]]:
+        """Batched sibling of list_claims_for_conversation (Phase 3,
+        docs/evaluation.md's "buying committee — three levels deep" N+1:
+        BuyingCommitteeUseCase._gather_evidence previously called this once
+        per participant). One round trip for every conversation_id in the
+        given (already-bounded) list, grouped by conversation_id in Python.
+        No per-conversation limit -- same reasoning as
+        ConversationRepository.list_participants_for_conversations."""
+        if not conversation_ids:
+            return {}
+        rows = await self._executor.tenant_query(
+            """
+            MATCH (c:Conversation {workspace_id: $workspace_id})
+            WHERE c.conversation_id IN $conversation_ids
+            MATCH (c)-[:HAS_SEGMENT]->(:TranscriptSegment)-[:HAS_CLAIM]->(cl:Claim)
+            RETURN c.conversation_id AS _batch_conversation_id, """ + _CLAIM_RETURN,
+            workspace_id=workspace_id,
+            conversation_ids=conversation_ids,
+        )
+        grouped: dict[str, list[Claim]] = {cid: [] for cid in conversation_ids}
+        for row in rows:
+            conversation_id = row.pop("_batch_conversation_id")
+            grouped[conversation_id].append(Claim(**row))
+        return grouped
+
     async def list_claims_by_predicate_for_seller(
         self, workspace_id: str, seller_id: str, predicate: str, *, limit: int = 1000, offset: int = 0
     ) -> list[Claim]:

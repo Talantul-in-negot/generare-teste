@@ -136,6 +136,29 @@ class ConversationRepository:
         )
         return TranscriptSegment(**rows[0]) if rows else None
 
+    async def get_segments(self, workspace_id: str, segment_ids: list[str]) -> dict[str, TranscriptSegment]:
+        """Batched sibling of get_segment (Phase 3, docs/evaluation.md's
+        "one get_segment query per claim" N+1 -- src/usecases/qa/common.py's
+        evidence_excerpt, called in a loop by 4 use-cases). One workspace-
+        scoped scan filtered by an IN list, instead of one full-workspace
+        conversation scan per segment_id. Returns only ids actually found,
+        keyed by segment_id -- callers already handle a missing segment as
+        an empty excerpt (see evidence_excerpt/evidence_excerpts)."""
+        if not segment_ids:
+            return {}
+        conv_match = scoped_match("Conversation", "c")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {conv_match}
+            MATCH (c)-[:HAS_SEGMENT]->(seg:TranscriptSegment)
+            WHERE seg.segment_id IN $segment_ids
+            RETURN {_SEGMENT_RETURN}
+            """,
+            workspace_id=workspace_id,
+            segment_ids=segment_ids,
+        )
+        return {row["segment_id"]: TranscriptSegment(**row) for row in rows}
+
     async def list_segments(
         self, workspace_id: str, conversation_id: str, *, limit: int = 2000, offset: int = 0
     ) -> list[TranscriptSegment]:
@@ -202,6 +225,32 @@ class ConversationRepository:
             limit=limit,
         )
         return [Participant(**row) for row in rows]
+
+    async def list_participants_for_conversations(
+        self, workspace_id: str, conversation_ids: list[str]
+    ) -> dict[str, list[Participant]]:
+        """Batched sibling of list_participants (Phase 3, docs/evaluation.md's
+        "buying committee — three levels deep" N+1: BuyingCommitteeUseCase
+        previously called list_participants once per conversation). One
+        round trip for every conversation_id in the given (already-bounded)
+        list, grouped by conversation_id in Python -- no per-conversation
+        limit here, since participant counts per call are always small; the
+        caller controls how many conversation_ids it passes in."""
+        if not conversation_ids:
+            return {}
+        rows = await self._executor.tenant_query(
+            """
+            MATCH (c:Conversation {workspace_id: $workspace_id})
+            WHERE c.conversation_id IN $conversation_ids
+            MATCH (c)-[:HAS_PARTICIPANT]->(p:Participant)
+            RETURN """ + _PARTICIPANT_RETURN,
+            workspace_id=workspace_id,
+            conversation_ids=conversation_ids,
+        )
+        grouped: dict[str, list[Participant]] = {cid: [] for cid in conversation_ids}
+        for row in rows:
+            grouped[row["conversation_id"]].append(Participant(**row))
+        return grouped
 
     async def upsert_speaker_resolution(self, resolution: SpeakerResolution) -> None:
         conv_match = scoped_match("Conversation", "c", conversation_id="conversation_id")

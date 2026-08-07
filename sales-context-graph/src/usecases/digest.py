@@ -11,10 +11,13 @@ consumer of existing logic, not a parallel implementation of it.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 from pydantic import BaseModel
 
+from src.domain.crm import OpportunityStageChange
+from src.domain.knowledge import Share
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conflict_repository import ConflictRepository
 from src.graph.repositories.content_repository import ContentRepository
@@ -70,23 +73,56 @@ class DigestUseCase:
     async def build(self, workspace_id: str, *, seller_id: str | None = None) -> Digest:
         now = datetime.now(timezone.utc)
         opportunities = await self._crm_repo.list_open_opportunities(workspace_id, seller_id=seller_id)
+        opportunity_ids = [opp.opportunity_id for opp in opportunities]
 
-        signals: list[Signal] = []
-        for opp in opportunities:
-            signals.extend(await self._signals_for_opportunity(workspace_id, opp.opportunity_id, now=now))
+        # Phase 3 (docs/evaluation.md's digest N+1: "fetches all open
+        # opportunities unbounded, then loops issuing six sequential
+        # repository calls per opportunity"). Two of the six were direct
+        # repository fetches with no internal fan-out of their own -- those
+        # are now single batched calls across every opportunity instead of
+        # one call per opportunity in the loop below.
+        shares_by_opportunity = await self._content_repo.list_shares_for_opportunities(workspace_id, opportunity_ids)
+        stage_changes_by_opportunity = await self._crm_repo.list_stage_changes_for_opportunities(
+            workspace_id, opportunity_ids
+        )
+
+        # The remaining four checks each still make their own per-opportunity
+        # call into a separate use case (BuyingCommitteeUseCase,
+        # AccountObjectionsUseCase, ContentEffectivenessUseCase,
+        # ConflictsUseCase) -- collapsing those into opportunity-list
+        # variants would mean redesigning each use case's own public API, a
+        # larger and separate change from this phase's scope. What Phase 3
+        # already did fix (list_participants_for_conversations,
+        # list_claims_for_conversations, evidence_excerpts) makes each of
+        # those per-opportunity calls internally O(1) round trips instead
+        # of O(conversations) or O(claims); running them concurrently
+        # rather than serially here is the remaining win available without
+        # that larger redesign.
+        results = await asyncio.gather(*(
+            self._signals_for_opportunity(
+                workspace_id, opp.opportunity_id, now=now,
+                shares=shares_by_opportunity.get(opp.opportunity_id, []),
+                stage_changes=stage_changes_by_opportunity.get(opp.opportunity_id, []),
+            )
+            for opp in opportunities
+        ))
+        signals = [signal for sublist in results for signal in sublist]
 
         return Digest(
             workspace_id=workspace_id, seller_id=seller_id, generated_at=now,
             opportunity_count=len(opportunities), signals=signals,
         )
 
-    async def _signals_for_opportunity(self, workspace_id: str, opportunity_id: str, *, now: datetime) -> list[Signal]:
-        committee = await self._committee_usecase.analyze(workspace_id, opportunity_id)
-        objections_result = await self._objections_usecase.list_objections(workspace_id, opportunity_id)
-        shares = await self._content_repo.list_shares_for_opportunity(workspace_id, opportunity_id)
-        effectiveness = await self._content_usecase.analyze(workspace_id, opportunity_id)
-        conflicts = await self._conflicts_usecase.detect_for_opportunity(workspace_id, opportunity_id)
-        stage_changes = await self._crm_repo.list_stage_changes(workspace_id, opportunity_id)
+    async def _signals_for_opportunity(
+        self, workspace_id: str, opportunity_id: str, *, now: datetime,
+        shares: list[Share], stage_changes: list[OpportunityStageChange],
+    ) -> list[Signal]:
+        committee, objections_result, effectiveness, conflicts = await asyncio.gather(
+            self._committee_usecase.analyze(workspace_id, opportunity_id),
+            self._objections_usecase.list_objections(workspace_id, opportunity_id),
+            self._content_usecase.analyze(workspace_id, opportunity_id),
+            self._conflicts_usecase.detect_for_opportunity(workspace_id, opportunity_id),
+        )
 
         found: list[Signal] = []
         threaded = single_threaded_deal(committee, now=now)

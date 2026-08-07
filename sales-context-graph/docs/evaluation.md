@@ -828,6 +828,43 @@ generation is a confirmed full-table scan" below).
   (The repo does batch correctly in one place — embeddings for
   mention + all candidates go in a single call, `resolution/pipeline.py:98-105`.)
 
+✅ **Fixed 2026-08-07 (Phase 3), the first two (worst) of these**:
+- **Buying committee**: `ConversationRepository.list_participants_for_conversations`
+  and `ClaimRepository.list_claims_for_conversations` (new, batched siblings
+  of the per-conversation methods) collapse `analyze()`'s per-conversation
+  participant fetch and `_gather_evidence`'s per-participant claim fetch
+  into one round trip each. `qa/common.py::evidence_excerpts` (new, batched
+  sibling of `evidence_excerpt`) collapses the per-claim evidence lookup
+  into one `ConversationRepository.get_segments` call. New
+  `tests/integration/test_buying_committee_batching.py` proves this with a
+  call-count assertion (6 conversations × 2 claims stays at 5 round trips,
+  not dozens) rather than only checking behavior is unchanged.
+  `evidence_excerpts` is also wired into the 3 Q&A-intent sites listed
+  right above (`account_objections.py`, `open_commitments.py`, `as_of.py`)
+  — the identical per-claim N+1, closed in the same pass since it's the
+  same helper.
+- **Digest**: the two direct repository calls in the per-opportunity loop
+  (`list_shares_for_opportunity`, `list_stage_changes`) are now batched
+  once across every open opportunity
+  (`ContentRepository.list_shares_for_opportunities`,
+  `CrmRepository.list_stage_changes_for_opportunities`). **Honestly only a
+  partial fix, not full elimination**: the remaining four per-opportunity
+  calls (`BuyingCommitteeUseCase.analyze`, `AccountObjectionsUseCase.
+  list_objections`, `ContentEffectivenessUseCase.analyze`,
+  `ConflictsUseCase.detect_for_opportunity`) still make one call each per
+  opportunity — collapsing those into opportunity-list variants would mean
+  redesigning each use case's own public API, a larger, separate change
+  this phase didn't take on. What Phase 3 did do: those four calls now run
+  concurrently via `asyncio.gather` rather than serially, and two of them
+  (buying committee, account objections) are internally far cheaper than
+  before per the fix above — so a 60-open-deal digest is faster and does
+  meaningfully fewer round trips than before, but is not O(1).
+
+**Still open, untouched by this phase**: Q&A intents' fix above closes the
+`evidence_excerpt` N+1 specifically, not every N+1 in that layer; ingestion
+batching and NLQ's per-mention re-fetch are unrelated N+1s, not addressed
+here.
+
 **Candidate generation is a confirmed full-table scan.**
 `candidates.py:52-62`: workspace-scoped `MATCH`, no `WHERE`, no `LIMIT` —
 every `Account`/`Contact` row materialised into Python, then capped at 50

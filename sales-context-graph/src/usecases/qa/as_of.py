@@ -16,7 +16,7 @@ from datetime import datetime
 
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
-from src.usecases.qa.common import evidence_excerpt
+from src.usecases.qa.common import evidence_excerpts
 
 
 @dataclass(frozen=True)
@@ -45,12 +45,13 @@ class AsOfUseCase:
         claims = await self._claim_repo.list_claims_as_of(workspace_id, subject_id, as_of)
         claims.sort(key=lambda c: c.source_timestamp, reverse=True)
 
-        result_claims = []
-        for claim in claims:
-            excerpt = await evidence_excerpt(self._conversation_repo, workspace_id, claim)
-            result_claims.append(AsOfClaim(
+        excerpts = await evidence_excerpts(self._conversation_repo, workspace_id, claims)
+        result_claims = [
+            AsOfClaim(
                 claim_id=claim.claim_id, predicate=claim.predicate, object_value=claim.object_value,
-                evidence_text=excerpt, source_timestamp=claim.source_timestamp,
+                evidence_text=excerpts[claim.claim_id], source_timestamp=claim.source_timestamp,
                 is_superseded=claim.is_superseded,
-            ))
+            )
+            for claim in claims
+        ]
         return AsOfResult(subject_id=subject_id, as_of=as_of, claims=result_claims)

@@ -15,7 +15,7 @@ from datetime import datetime
 from src.domain.enums import AdjudicationStatus, Polarity, SpeakerRole
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
-from src.usecases.qa.common import evidence_excerpt
+from src.usecases.qa.common import evidence_excerpts
 
 
 @dataclass(frozen=True)
@@ -48,12 +48,13 @@ class OpenCommitmentsUseCase:
         ]
         affirmed.sort(key=lambda c: c.source_timestamp, reverse=True)
 
-        summaries = []
-        for claim in affirmed:
-            excerpt = await evidence_excerpt(self._conversation_repo, workspace_id, claim)
-            summaries.append(CommitmentSummary(
+        excerpts = await evidence_excerpts(self._conversation_repo, workspace_id, affirmed)
+        summaries = [
+            CommitmentSummary(
                 claim_id=claim.claim_id, object_value=claim.object_value,
-                evidence_text=excerpt, speaker_role=claim.speaker_role,
+                evidence_text=excerpts[claim.claim_id], speaker_role=claim.speaker_role,
                 source_timestamp=claim.source_timestamp,
-            ))
+            )
+            for claim in affirmed
+        ]
         return OpenCommitmentsResult(opportunity_id=opportunity_id, commitments=summaries)

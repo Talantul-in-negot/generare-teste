@@ -180,3 +180,27 @@ class ContentRepository:
             limit=limit,
         )
         return [Share(**row) for row in rows]
+
+    async def list_shares_for_opportunities(
+        self, workspace_id: str, opportunity_ids: list[str]
+    ) -> dict[str, list[Share]]:
+        """Batched sibling of list_shares_for_opportunity (Phase 3,
+        docs/evaluation.md's digest N+1: DigestUseCase previously fetched
+        shares once per open opportunity in its outer loop). One round trip
+        for every opportunity_id in the given (already-bounded) list,
+        grouped by opportunity_id in Python."""
+        if not opportunity_ids:
+            return {}
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH (s:Share {{workspace_id: $workspace_id}})
+            WHERE s.opportunity_id IN $opportunity_ids
+            RETURN {_SHARE_RETURN}
+            """,
+            workspace_id=workspace_id,
+            opportunity_ids=opportunity_ids,
+        )
+        grouped: dict[str, list[Share]] = {oid: [] for oid in opportunity_ids}
+        for row in rows:
+            grouped[row["opportunity_id"]].append(Share(**row))
+        return grouped

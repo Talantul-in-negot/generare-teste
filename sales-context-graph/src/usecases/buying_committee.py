@@ -25,7 +25,7 @@ from src.graph.repositories.stakeholder_repository import StakeholderRepository
 from src.llm.chat import ChatFn
 from src.resolution.stakeholder_classification import classify_role
 from src.resolution.stakeholder_inference import BuyingCommitteeInference, infer_buying_committee
-from src.usecases.qa.common import evidence_excerpt
+from src.usecases.qa.common import evidence_excerpts
 
 
 class BuyingCommitteeUseCase:
@@ -46,11 +46,14 @@ class BuyingCommitteeUseCase:
     ) -> BuyingCommitteeInference:
         conversations = await self._conversation_repo.list_conversations_by_opportunity(workspace_id, opportunity_id)
 
-        participants = []
-        for conversation in conversations:
-            participants += await self._conversation_repo.list_participants(
-                workspace_id, conversation.conversation_id
-            )
+        # Phase 3 (docs/evaluation.md's "buying committee — three levels
+        # deep" N+1): one batched call across every conversation instead of
+        # one list_participants call per conversation.
+        conversation_ids = [c.conversation_id for c in conversations]
+        participants_by_conversation = await self._conversation_repo.list_participants_for_conversations(
+            workspace_id, conversation_ids
+        )
+        participants = [p for ps in participants_by_conversation.values() for p in ps]
 
         inference = infer_buying_committee(
             participants, workspace_id=workspace_id, opportunity_id=opportunity_id,
@@ -81,17 +84,28 @@ class BuyingCommitteeUseCase:
         the raw speaker_label, which is only unique WITHIN one conversation
         (a different call can reuse "spk_1" for a different person) — matching
         by conversation_id + speaker_label together is what makes this correct.
+
+        Phase 3 (docs/evaluation.md's "buying committee — three levels deep"
+        N+1): the per-participant claim fetch and per-claim evidence
+        excerpt are both now single batched calls instead of one query per
+        participant and one more per claim.
         """
-        evidence: list[dict] = []
-        for participant in participants:
-            if participant.contact_id != contact_id:
-                continue
-            claims = await self._claim_repo.list_claims_for_conversation(
-                workspace_id, participant.conversation_id
-            )
-            for claim in claims:
-                if claim.subject_id != participant.speaker_label:
-                    continue
-                text = await evidence_excerpt(self._conversation_repo, workspace_id, claim)
-                evidence.append({"claim_id": claim.claim_id, "predicate": claim.predicate, "text": text or claim.object_value or claim.claim_id})
-        return evidence
+        matching = [p for p in participants if p.contact_id == contact_id]
+        claims_by_conversation = await self._claim_repo.list_claims_for_conversations(
+            workspace_id, [p.conversation_id for p in matching]
+        )
+        relevant_claims = [
+            claim
+            for participant in matching
+            for claim in claims_by_conversation.get(participant.conversation_id, [])
+            if claim.subject_id == participant.speaker_label
+        ]
+        excerpts = await evidence_excerpts(self._conversation_repo, workspace_id, relevant_claims)
+        return [
+            {
+                "claim_id": claim.claim_id,
+                "predicate": claim.predicate,
+                "text": excerpts[claim.claim_id] or claim.object_value or claim.claim_id,
+            }
+            for claim in relevant_claims
+        ]

@@ -249,6 +249,32 @@ class CrmRepository:
         )
         return [OpportunityStageChange(**row) for row in rows]
 
+    async def list_stage_changes_for_opportunities(
+        self, workspace_id: str, opportunity_ids: list[str]
+    ) -> dict[str, list[OpportunityStageChange]]:
+        """Batched sibling of list_stage_changes (Phase 3, docs/evaluation.md's
+        digest N+1: DigestUseCase previously fetched stage changes once per
+        open opportunity in its outer loop). One round trip for every
+        opportunity_id in the given (already-bounded) list, grouped by
+        opportunity_id in Python."""
+        if not opportunity_ids:
+            return {}
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH (o:Opportunity {{workspace_id: $workspace_id}})
+            WHERE o.opportunity_id IN $opportunity_ids
+            MATCH (o)-[:HAS_STAGE_CHANGE]->(chg:OpportunityStageChange)
+            RETURN {_STAGE_CHANGE_RETURN}
+            ORDER BY chg.changed_at
+            """,
+            workspace_id=workspace_id,
+            opportunity_ids=opportunity_ids,
+        )
+        grouped: dict[str, list[OpportunityStageChange]] = {oid: [] for oid in opportunity_ids}
+        for row in rows:
+            grouped[row["opportunity_id"]].append(OpportunityStageChange(**row))
+        return grouped
+
     async def list_open_opportunities(
         self, workspace_id: str, *, account_id: str | None = None, seller_id: str | None = None,
         limit: int = 100, offset: int = 0,
