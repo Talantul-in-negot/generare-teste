@@ -594,3 +594,271 @@ ambiguous-name safety, CRM/transcript disagreement handling, timely
 workflow-native recommendations and measurable revenue-team outcomes. Defer
 fully autonomous selling actions, bespoke fine-tuning and broad feature
 parity until Gates 0-3 have evidence of reliability.
+
+---
+
+## Showpad-compatibility analysis (2026-08-07)
+
+Scope: how close this repo is to shipping *as*, or *inside*, a
+Showpad-adjacent product — from surface branding down to whether the query
+layer survives enterprise volume. Every claim is either verified in this
+codebase (file:line cited) or sourced from Showpad's public material
+(linked). Showpad-side links are public marketing/developer docs, **not**
+independent validation of anything here.
+
+Three findings below are **silently wrong rather than merely missing** — they
+look correct in a demo and fail in production. They are marked ⚠ and
+collected in the verdict.
+
+### 1. Brand and visual layer — incompatible today, cheap to fix
+
+Showpad's brand centre defines three primary colours with secondary tones,
+warm neutrals, and a specific type system
+([brandcenter.showpad.com](https://brandcenter.showpad.com/)):
+
+| Role | Showpad brand | This repo (`api/routes/viz.py`) |
+|---|---|---|
+| Primary | Navy `#0d5189` (`#15254e` / `#0b4472` / `#539dc4`) | `#2563eb` — Tailwind-default blue, unrelated |
+| Accents | Brick `#dd7159`, Plum `#8c3fcc` | none; only semantic red/green (`#dc2626`, `#16a34a`) |
+| Neutrals | Sand `#e8ded4`, Cream `#F0ECE8`, White `#eeeeee` | `#ddd`, `#f3f4f6`, `#e5e7eb` — cool greys, not warm sand/cream |
+| Headline | Nib Pro SemiBold (fallback Lora) | `system-ui, sans-serif` (`viz.py:120`) |
+| Body | Söhne (fallback Mona Sans) | `system-ui, sans-serif` |
+| Mono | Söhne Mono (fallback Noto Sans Mono) | none declared |
+
+**The blocker is the absence of theming indirection, not the hex values.**
+`api/routes/viz.py` has **zero** CSS custom properties. Colours are inline
+literals in ~25 places across two languages: CSS strings
+(`viz.py:122-165`), inline `style=` attributes (`viz.py:218`, `:243`,
+`:263-267`), string-concatenated `innerHTML` (`viz.py:517`), and — the part
+a designer cannot reach — **JavaScript constants** driving the SVG graph
+(`viz.py:299-301`: `polarityColor`, `entityColor`, `literalColor`). The same
+semantic colour is duplicated as both a CSS literal and a JS literal with no
+shared token.
+
+`docs/architecture.html` (written later, in this session) *does* use a
+proper `:root` token system — 92 `var(--…)` references, light/dark via
+`prefers-color-scheme` plus a `data-theme` override. So the pattern exists
+in-repo; it was simply never applied to the product surface. Porting `/viz`
+to it is contained and mechanical, and is the prerequisite for any brand
+alignment. (One caveat if that file is used as the template: it names
+`Fraunces` and `JetBrains Mono` in its font stacks but never loads them —
+they resolve only if locally installed, `architecture.html:23-25`.)
+
+No image assets exist anywhere in the repo and no `StaticFiles` mount
+exists, so all branding is text — `api/main.py:7`, `viz.py:135`, `viz.py:795`,
+`fly.toml:5`. A rebrand touches strings, not an asset pipeline.
+
+### 2. Showpad integration surface — a data *shape*, not a connection
+
+`src/ingestion/adapters/showpad.py` is a 76-line **pure dict parser**: no
+`httpx`/`requests` import, no OAuth, no Showpad API client. It maps an
+already-exported JSON shape onto domain objects. Repo-wide, the only
+production outbound HTTP is Slack (`src/delivery/slack.py:11,67`). This is
+honest and correctly scoped — `docs/plan.md` §4 says "Showpad-*style*" — but
+"Showpad integration" today describes a payload format, not connectivity.
+
+A real integration needs, per
+[Showpad's developer docs](https://developer.showpad.com/docs/integrations/platform-independent/content-pick-share):
+OAuth2 Authorization Code Flow with a user-supplied subdomain; the
+`@showpad/content-picker` npm SDK (popup or ≥320px sidebar); and the Shares
+API for tracked links. None of the three exist here — there is no JS package
+dependency at all, and `Share` is modelled as an ingested historical record
+that this system never creates. `viz.py:20-23` states the position plainly:
+"an embeddable panel, not a packaged Salesforce/Showpad app (no OAuth, no
+AppExchange packaging)."
+
+**Asset model is thinner than the original design, not just thinner than
+Showpad.** `ContentAsset` (`src/domain/knowledge.py:71-78`) carries
+`title`, `url`, `content_type`, `tags`, `division_id` — no version, expiry,
+approval status, folder, or channel. Showpad's own product messaging stresses
+assets arriving "with permissions intact and versions under control"
+([Integrations](https://www.showpad.com/platform-overview/integrations)).
+Notably `docs/plan_old.md:333` had specified `languages`, `countries`,
+`is_sensitive`, `is_archived`, plus `Tag` and `Division` node types and
+`AssetView.duration_s` — all dropped from the shipped model. Recommendation
+ranks on case-insensitive `tags` equality alone
+(`objection_content_recommendation.py:115`), so it can currently surface a
+superseded, archived, or sensitive asset with no field to detect that.
+
+⚠ **`division_id` is stored but never enforced.** It is written
+(`content_repository.py:39`), returned in projections
+(`content_repository.py:11`), and threaded through ingestion — but **no query
+anywhere filters on it**, there is no index on it, and no `Division` node
+type exists. Divisions are Showpad's permission dimension; here they are
+decoration. `docs/security-and-tenancy.md:52-55` already admits it: "nothing
+in this repo authorizes access based on `division_id` alone." Any claim of
+Showpad-compatible access control is false until a division-scoped read path
+exists next to the (genuinely enforced) `workspace_id` scoping.
+
+⚠ **The embeddable panel takes credentials in the URL.** `/viz/panel`
+(`viz.py:807-810`) reads `workspace_id` and **`api_key` from
+`URLSearchParams`** — the API key travels as a query parameter, landing in
+browser history, referrer headers, and any intermediary log. Both `/viz` and
+`/viz/panel` have **no server-side auth** at all (no `Depends` on either
+route, `viz.py:36-42`). `README.md:277,281-283` documents both as
+intentional for a debug surface — which is defensible for a debug surface,
+and disqualifying for the iframe-embedded panel it is simultaneously
+described as. `EMBED_ALLOWED_ORIGINS` sets `frame-ancestors` on that one
+route (`viz.py:44-51`) and is a **single global space-separated string, not
+per-workspace** — every tenant shares one embedding allowlist.
+
+### 3. Scalability and performance — the honest ceiling
+
+Measured, not assumed (`tests/eval/test_context_graph_latency.py`): Context
+Graph build at 300 Claims runs 56–294 ms at the repository layer, 57–82 ms
+through the full HTTP stack. Fine. The structural concerns bite well before
+enterprise volume:
+
+⚠ **Reads are almost entirely unbounded.** Only five queries in the whole
+repo carry a bound: `list_accounts` (`crm_repository.py:92`, default 100),
+the fulltext and vector candidate queries (`candidates.py:70`, `:85-88`),
+`source_repository.py:98` (`LIMIT 1`), and the legacy `review_queue.py`.
+Every other listing method — 22 of them, enumerated across
+`claim_repository`, `content_repository`, `conversation_repository`,
+`crm_repository`, `conflict_repository`, `review_repository`,
+`stakeholder_repository` — returns the full matching set with no `LIMIT`, no
+`SKIP`, no cursor. Critically, `list_open_opportunities`
+(`crm_repository.py:243-268`) is unbounded and is what drives the digest
+fan-out below. The Context Graph budget is applied **in Python after the
+full fetch** (`builder.py:107-137`), so `max_nodes` caps what is *served*,
+never what is *retrieved*.
+
+**Confirmed N+1s, worst first:**
+- **Digest** — `digest.py:72` fetches *all* open opportunities unbounded,
+  then loops (`digest.py:75`) issuing **six sequential repository calls per
+  opportunity** (`digest.py:84-89`), several of which are themselves loops.
+  A rep with 60 open deals triggers several hundred serial round-trips in
+  one `GET /api/v1/digest`.
+- **Buying committee — three levels deep.** `buying_committee.py:50` one
+  query per conversation; `:63` one evidence-gather + one LLM call per
+  assignment; `:73` one write per assignment; and `_gather_evidence`
+  (`:86-96`) runs one claim query **per participant** then one
+  `evidence_excerpt` — itself a DB round-trip (`qa/common.py:16`) — **per
+  claim**.
+- **Q&A intents** — one `get_segment` query per claim
+  (`account_objections.py:52`, `open_commitments.py:53`, `as_of.py:50`).
+- **Ingestion** — one reconcile + one upsert per raw record, no `UNWIND`
+  batching (`pipeline.py:57-72,151-202`; `transcript_pipeline.py:114-206`).
+- **NLQ** — `entity_linking.py:55` re-fetches the entire workspace name pool
+  **per entity mention per question**.
+
+  (The repo does batch correctly in one place — embeddings for
+  mention + all candidates go in a single call, `resolution/pipeline.py:98-105`.)
+
+**Candidate generation is a confirmed full-table scan.**
+`candidates.py:52-62`: workspace-scoped `MATCH`, no `WHERE`, no `LIMIT` —
+every `Account`/`Contact` row materialised into Python, then capped at 50
+(`candidates.py:23`) and 99%+ discarded at scale. The module docstring
+concedes this (`candidates.py:4-9`). This design **already broke once**:
+`candidates.py:161-176` records the measured `blocking_recall@50 = 0.00` on
+a 600-entity pool that forced this session's `mention_surface` re-sort fix.
+
+**Indexes: 14 composite + 1 fulltext + 1 vector, all `workspace_id`-leading**
+(`schema.py:20-59`) — well designed for id lookups. But there are **no
+uniqueness constraints anywhere** (every statement is `CREATE INDEX`, none
+`CREATE CONSTRAINT`), and several hot paths have no supporting index:
+`Claim.subject_id`, `Opportunity.seller_id`/`is_open` (the digest driver),
+`Conversation.opportunity_id` (anchor for four claim queries),
+`Share.opportunity_id`, `AssetView.viewer_contact_id`, `Claim.predicate`.
+The vector index is a **1536-dim placeholder that stays unpopulated**
+(`schema.py:52-59`, `README.md:330-333`) — `vector_candidates()` queries an
+empty index.
+
+**Other ceilings:** connection pool is a hardcoded `max_connection_pool_size=50`
+(`neo4j_client.py:35`) — not a settings field, with no acquisition timeout or
+connection lifetime configured; every query is autocommit on a fresh session
+(`neo4j_client.py:43-46`). No query-result caching exists anywhere — all
+`lru_cache` use is config/ontology memoisation. The ingestion queue is a
+**single global FIFO Redis list** (`queue.py:19`) consumed by a **single
+serial worker** (`worker.py:101-107`, one Fly process, `fly.toml:12`) — one
+tenant's backlog head-of-line-blocks every other tenant, as
+`docs/adr-0001` deliberately deferred. ⚠ It also uses `blpop`, which removes
+the message immediately with **no visibility timeout or in-flight tracking**
+(`queue.py:86`) — a worker crash mid-`_run` loses that job entirely: it is
+neither on the queue nor in the DLQ. That is a real qualifier on the
+"durable ingestion" claim made earlier in this document.
+
+### 4. Multi-tenancy at scale
+
+Isolation is the strongest part of this codebase and is **structurally**
+enforced, not conventional: `tenant_query()` regex-validates that every
+matched node is workspace-scoped before execution
+(`execution.py:40-41,67-76`), with adversarial two-workspace tests. Two
+escape hatches (`schema_query`, `operational_query`, `execution.py:78-84`)
+are allowlisted by call-site convention only, which the code states openly.
+
+Labels and indexes are **static** — no per-workspace label or index creation
+anywhere — so there is no index explosion as tenant count grows. What does
+degrade:
+
+⚠ **The vector-index path takes a global top-k, then filters by workspace —
+the fulltext path does not.** These two look symmetrical and are not:
+
+```cypher
+-- fulltext (candidates.py:66-70) — CORRECT
+CALL db.index.fulltext.queryNodes('account_contact_names', $query_text) YIELD node, score
+WHERE node.workspace_id = $workspace_id
+ORDER BY score DESC LIMIT $limit          -- limit applied AFTER the tenant filter
+
+-- vector (candidates.py:85-88) — GLOBAL TOP-K
+CALL db.index.vector.queryNodes('contact_embeddings_v1', $limit, $embedding) YIELD node, score
+WHERE node.workspace_id = $workspace_id   -- filter runs AFTER the procedure already truncated
+```
+
+In the vector call, `$limit` is the procedure's own
+`numberOfNearestNeighbours` argument — the shared index returns the global
+top-k **across all tenants**, and only then is the workspace filter applied.
+A tenant's own true match can therefore be starved out by higher-scoring rows
+belonging to *other tenants*, and the caller silently receives fewer (or
+zero) candidates rather than an error. This contradicts `docs/plan.md` §10's
+explicit rule — "do not obtain a global top-k and merely discard other
+workspaces afterward" — which every property-map path honours and this one
+call does not. It is not hypothetical: the forked legacy module documents
+observing exactly this (`alias_registry.py:53-58`, "a small k… can starve out
+a tenant's own true duplicate if other tenants score higher").
+
+**Currently latent, not active**: the vector index is an unpopulated 1536-dim
+placeholder (`schema.py:52-59`), so nothing reaches this path in practice
+yet. It becomes a live cross-tenant retrieval defect the moment an embedding
+provider is pinned and the index is backfilled — i.e. it will surface exactly
+when the system starts being useful, which is the worst time to discover it.
+
+**Key management, not isolation, is the scaling wall.**
+`WORKSPACE_API_KEYS` is a single JSON blob in one env var
+(`config.py:60-63`), loaded once into an `@lru_cache(maxsize=1)`
+(`config.py:129`) for the process lifetime. Adding, rotating, or revoking
+*any* key means rewriting the whole map and restarting every process —
+`docs/deployment.md:75-80` and `docs/security-and-tenancy.md:73-78` both say
+so explicitly. The map is `str -> str`, one key per workspace, so per-user,
+per-seller, or per-integration keys are not representable. Where auth is not
+applied, workspace identity is an **unverified `X-Workspace-Id` header**
+(`dependencies.py:25-28`). Also absent: per-workspace quotas, rate limits, or
+any resource accounting — no limiter middleware is registered.
+
+### Verdict
+
+| Dimension | State | Distance to Showpad-compatible |
+|---|---|---|
+| Brand / visual | Incompatible — Tailwind defaults, zero tokens, colours in JS | **Small** — port `/viz` to the token pattern `architecture.html` already uses |
+| Embedding | Panel exists, but ⚠ key-in-URL + no auth + global allowlist | **Medium** — needs real auth before it can embed anywhere real |
+| Showpad data model | Shape-compatible, capability-incomplete | **Medium** — version/expiry/approval/permissions absent |
+| Live integration | Absent — no OAuth, no API client, no SDK | **Large** — a genuine connector project |
+| Division permissions | ⚠ Stored, never enforced | **Medium** — correctness gap, not missing polish |
+| Query scalability | ⚠ 22 unbounded reads, multi-level N+1s | **Medium** — pagination + batching, before volume forces it |
+| Tenant isolation (property paths) | Strong, structurally enforced, tested | **None** |
+| Tenant isolation (index paths) | ⚠ Global top-k then filter — violates §10 | **Small to fix, high severity** |
+| Key management | One JSON env var, restart to rotate | **Large** — needs a real IdP |
+
+Nothing here contradicts the "vertical slice, not a product" framing earlier
+in this document — it sharpens it, and the slice's core (provenance,
+idempotency, property-level tenant scoping) holds up well. The five ⚠ items
+are the ones worth acting on first, because unlike the honest "not built
+yet" gaps, they **look correct in a demo**: the global-top-k index paths and
+the unenforced `division_id` are silent correctness bugs; the key-in-URL
+panel is a security one; the unbounded reads and queue-without-visibility-
+timeout fail only under load or crash, which demos have neither.
+
+**Showpad-side sources** (public, not independent validation):
+[Brand Center](https://brandcenter.showpad.com/) ·
+[Developer — Content Picking and Sharing](https://developer.showpad.com/docs/integrations/platform-independent/content-pick-share) ·
+[Integrations](https://www.showpad.com/platform-overview/integrations)
