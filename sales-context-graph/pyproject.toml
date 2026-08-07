@@ -46,6 +46,13 @@ dependencies = [
     # there, same pattern as src/llm/chat.py's `anthropic` import, so the
     # test suite never needs this installed or a real key.
     "openai>=1.50",
+    # Kafka transport (Phase 8, feature-flagged, off by default -- see
+    # src/ingestion/kafka_transport.py and docs/adr-0003-kafka-event-bus.md).
+    "aiokafka>=0.11",
+    # Qdrant secondary vector backend (Phase 8, feature-flagged, off by
+    # default -- see src/embedding/qdrant_backend.py and
+    # docs/adr-0004-qdrant-secondary-vector-store.md).
+    "qdrant-client>=1.10",
 ]
 
 [project.optional-dependencies]

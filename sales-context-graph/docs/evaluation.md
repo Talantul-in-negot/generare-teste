@@ -1262,16 +1262,96 @@ plus `blpop`-without-visibility-timeout described above.
   broker). Kafka buys partition-level parallelism and replay this system has
   no volume to need, at real operational cost. Revisit only when
   per-workspace queue fairness — a known gap — actually bites.
+
+  ⤷ **Implemented anyway 2026-08-07 (Phase 8a)**, per the explicit,
+  reaffirmed direction to build literally everything in this document,
+  including items flagged as premature — this rejection stands as the
+  reasoning, not as a description of what shipped. New
+  `src/ingestion/kafka_transport.py`: a second transport selected via
+  `INGESTION_TRANSPORT=kafka` (default stays `redis` — Phase 4's reliable
+  queue, unaffected either way). Both transports call the same extracted
+  `run_pipeline_for_job()` (`src/ingestion/worker.py`) so pipeline behavior
+  can't silently drift between them. Reliability model: Kafka's own
+  consumer-group offset commit is the visibility-timeout equivalent (no
+  separate reaper needed); a `scg.ingestion.dlq` topic plus attempt-counted
+  re-produce is the retry/dead-letter equivalent of Phase 4's Redis
+  processing-list design, matched to what Kafka actually offers rather than
+  a forced port. New `kafka` Compose service, gated behind `profiles:
+  [kafka]` — a plain `docker compose up` never starts it. Full reasoning in
+  `docs/adr-0003-kafka-event-bus.md`. Verified against a real local broker:
+  4 new `tests/integration/test_kafka_transport.py` tests (idempotent
+  enqueue, wire-format round-trip via an independent consumer, full
+  worker-loop pipeline execution, and — after catching and fixing a bug
+  where a permanently-invalid message was incorrectly retried instead of
+  going straight to the DLQ — a dedicated regression test proving that
+  routing), plus the existing 21 `tests/unit/ingestion` +
+  `test_transcript_ingestion.py`/`test_pipeline_insights.py` tests
+  unchanged-passing after the `worker.py` refactor.
 - **Qdrant / Milvus as a separate distributed vector store.** Neo4j's native
   vector index is already declared and unused. Adding a second datastore
   before populating the first, and thereby splitting the graph from its
   embeddings, would trade the multi-hop advantage the brief itself credits
   as this architecture's differentiator.
+
+  ⤷ **Implemented anyway 2026-08-07 (Phase 8b)**, per the explicit,
+  reaffirmed direction to build literally everything in this document,
+  including items flagged as premature — this rejection stands as the
+  reasoning, not as a description of what shipped. New
+  `src/embedding/qdrant_backend.py`: a standalone read/write path for the
+  same Contact embeddings Phase 7's backfill computes, selected via
+  `VECTOR_BACKEND=qdrant` (default stays `neo4j`). Deliberately **not**
+  wired into `src/resolution/candidates.py::CandidateGenerator` — that's
+  the security-critical file Phase 1 fixed a real cross-tenant leak in, and
+  routing an explicitly-optional capability through it would risk
+  already-correct code for no measured benefit. Tenant isolation is
+  structural here too: every point carries `workspace_id` in its payload,
+  filtered *during* HNSW search (Qdrant doesn't share Neo4j's
+  filter-after-top-k limitation Phase 1 had to work around). New `qdrant`
+  Compose service, gated behind `profiles: [qdrant]`. Full reasoning in
+  `docs/adr-0004-qdrant-secondary-vector-store.md`. Verified against a real
+  local instance: 4 new `tests/integration/test_qdrant_backend.py` tests
+  (upsert/search round trip, tenant-filtered search — one workspace's point
+  never crowded out by another workspace's 20 identical-vector points,
+  idempotent re-upsert by deterministic UUID, full
+  `backfill_workspace_qdrant()` populate-then-search cycle).
 - **LLM gateway (LiteLLM/Portkey) with multi-provider fallback.** Sound at
   volume; premature here, where the honest behaviour on an unconfigured or
   failing provider is already a `503` rather than a fabricated answer. A
   fallback chain adds a silent-degradation path — exactly the failure mode
   this codebase has consistently refused.
+
+  ⤷ **Implemented anyway 2026-08-07 (Phase 8c)**, per the explicit,
+  reaffirmed direction to build literally everything in this document,
+  including items flagged as premature — this rejection stands as the
+  reasoning, not as a description of what shipped. New
+  `src/llm/gateway.py::build_gateway_chat_fn()`, selected via
+  `LLM_FALLBACK_ENABLED=true` (off by default — a true no-op, returns the
+  unwrapped primary `ChatFn`). The stated risk is addressed directly, not
+  just noted: fallback triggers only on a transient/availability error from
+  the provider SDK itself (timeout, connection error, rate limit, 5xx —
+  matched against each provider's real exception hierarchy), *never* on a
+  validation/schema failure (those stay entirely inside
+  `complete_json()`'s own repair loop, which never sees the gateway), and
+  every fallback event is logged at `warning` plus counted via the new
+  `scg_llm_fallback_total{from_provider,to_provider,reason}` metric — loud,
+  never silent. `src/llm/chat.py` gained a real (not placeholder) `"openai"`
+  branch and optional provider/api_key/model overrides on `build_chat_fn()`
+  so the gateway can build a second `ChatFn` without a second `Settings`
+  instance. Deliberately **not** wired into `api/routes/qa.py`, `insights.py`,
+  `ask.py`, or `context.py`'s call sites — those already have tested
+  monkeypatch coverage keyed to the `build_chat_fn` name, and swapping it
+  for an off-by-default capability would risk that coverage for no measured
+  benefit; a route that wants fallback swaps in `build_gateway_chat_fn()`
+  directly, same `ChatFn` contract. Full reasoning in
+  `docs/adr-0005-llm-gateway-fallback.md`. Verified: no live second-vendor
+  round-trip exists to test against (unlike Kafka/Qdrant's free local
+  Docker equivalents), so coverage is unit-level —
+  `tests/unit/llm/test_gateway.py`, 11 tests against real
+  `anthropic`-SDK exception instances and stub `ChatFn`s: transient errors
+  fall back and are counted, a 4xx/validation-shaped error never falls
+  back, disabled/unconfigured is a true no-op, a misconfigured fallback
+  fails loud at construction, and a fallback that itself fails propagates
+  its own error rather than being swallowed.
 - **Guardrail layers (NeMo/Llama Guard) for injection.** The existing defence
   is structural: transcripts are delimited data, the extractor is given no
   tools, and outputs are schema-validated. A classifier in front adds a

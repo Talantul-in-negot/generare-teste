@@ -21,7 +21,13 @@ log = structlog.get_logger(__name__)
 
 ChatFn = Callable[[str], Awaitable[str]]  # prompt -> raw completion text
 
-SUPPORTED_PROVIDERS = ("anthropic",)
+# "openai" added Phase 8 (feature-flagged LLM gateway fallback,
+# src/llm/gateway.py) -- not a change to the primary path, which stays
+# anthropic unless LLM_PROVIDER is explicitly set otherwise. Added because
+# it's actually implemented (real openai.AsyncOpenAI call below), matching
+# this module's own docstring rule against a provider name that isn't a
+# real, working branch.
+SUPPORTED_PROVIDERS = ("anthropic", "openai")
 
 
 class LlmNotConfiguredError(RuntimeError):
@@ -34,21 +40,43 @@ def is_llm_configured(settings: Settings | None = None) -> bool:
     return settings.llm_provider in SUPPORTED_PROVIDERS and bool(settings.llm_api_key)
 
 
-def build_chat_fn(settings: Settings | None = None) -> ChatFn:
+def build_chat_fn(
+    settings: Settings | None = None,
+    *,
+    provider: str | None = None,
+    api_key: str | None = None,
+    model: str | None = None,
+) -> ChatFn:
+    """`provider`/`api_key`/`model` override the corresponding Settings
+    fields when given -- added Phase 8 so src/llm/gateway.py can build a
+    *second* chat_fn (the fallback provider) without a second Settings
+    instance. Every existing caller (build_chat_fn() or
+    build_chat_fn(settings)) is unaffected: the overrides default to
+    settings' own fields, identical to before this parameter existed.
+    """
     settings = settings or get_settings()
+    provider = provider or settings.llm_provider
+    api_key = api_key if api_key is not None else settings.llm_api_key
+    model = model or settings.llm_model
 
-    if not settings.llm_provider:
+    if not provider:
         raise LlmNotConfiguredError(
             "LLM_PROVIDER is not set. Set LLM_PROVIDER=anthropic and LLM_API_KEY to enable "
             "natural-language questions, narrative summaries, and role classification."
         )
-    if settings.llm_provider not in SUPPORTED_PROVIDERS:
+    if provider not in SUPPORTED_PROVIDERS:
         raise LlmNotConfiguredError(
-            f"unsupported LLM_PROVIDER={settings.llm_provider!r}; supported: {', '.join(SUPPORTED_PROVIDERS)}"
+            f"unsupported LLM_PROVIDER={provider!r}; supported: {', '.join(SUPPORTED_PROVIDERS)}"
         )
-    if not settings.llm_api_key:
-        raise LlmNotConfiguredError("LLM_API_KEY is empty; an API key is required for LLM_PROVIDER=anthropic")
+    if not api_key:
+        raise LlmNotConfiguredError(f"LLM_API_KEY is empty; an API key is required for LLM_PROVIDER={provider}")
 
+    if provider == "openai":
+        return _build_openai_chat_fn(api_key=api_key, model=model, max_tokens=settings.llm_max_output_tokens)
+    return _build_anthropic_chat_fn(api_key=api_key, model=model, max_tokens=settings.llm_max_output_tokens)
+
+
+def _build_anthropic_chat_fn(*, api_key: str, model: str, max_tokens: int) -> ChatFn:
     # Imported lazily so the `anthropic` package is only required when a real
     # provider is actually built. The whole test suite runs on stub chat_fns and
     # must not depend on the SDK being installed.
@@ -59,9 +87,7 @@ def build_chat_fn(settings: Settings | None = None) -> ChatFn:
             "LLM_PROVIDER=anthropic requires the `anthropic` package (pip install anthropic)"
         ) from exc
 
-    client = anthropic.AsyncAnthropic(api_key=settings.llm_api_key)
-    model = settings.llm_model
-    max_tokens = settings.llm_max_output_tokens
+    client = anthropic.AsyncAnthropic(api_key=api_key)
 
     async def chat_fn(prompt: str) -> str:
         response = await client.messages.create(
@@ -70,6 +96,31 @@ def build_chat_fn(settings: Settings | None = None) -> ChatFn:
             messages=[{"role": "user", "content": prompt}],
         )
         text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+        log.info("llm.completion", model=model, prompt_chars=len(prompt), response_chars=len(text))
+        return text
+
+    return chat_fn
+
+
+def _build_openai_chat_fn(*, api_key: str, model: str, max_tokens: int) -> ChatFn:
+    """Phase 8: the fallback provider src/llm/gateway.py falls back to.
+    Lazy import, same reasoning as the anthropic branch above."""
+    try:
+        import openai
+    except ImportError as exc:  # pragma: no cover - exercised only without the extra installed
+        raise LlmNotConfiguredError(
+            "LLM_PROVIDER=openai requires the `openai` package (pip install openai)"
+        ) from exc
+
+    client = openai.AsyncOpenAI(api_key=api_key)
+
+    async def chat_fn(prompt: str) -> str:
+        response = await client.chat.completions.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.choices[0].message.content or ""
         log.info("llm.completion", model=model, prompt_chars=len(prompt), response_chars=len(text))
         return text
 

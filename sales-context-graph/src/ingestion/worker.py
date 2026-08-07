@@ -12,7 +12,8 @@ import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from api.state import IngestionJob, get_ingestion_store
+from api.state import get_ingestion_store
+from src.core.config import get_settings
 from src.core.logging import configure_logging
 from src.core.telemetry import INGESTION_JOB_DURATION_SECONDS, INGESTION_JOBS_TOTAL
 from src.domain.enums import IngestionState
@@ -40,21 +41,24 @@ from src.ingestion.transcript_pipeline import TranscriptIngestionPipeline
 log = logging.getLogger(__name__)
 
 
-async def _run(message, store, *, worker_id: str) -> None:
-    job = await store.get(message.ingestion_id)
-    if job is None or job.workspace_id != message.workspace_id:
-        log.error("ingestion job missing or cross-workspace", extra={"ingestion_id": message.ingestion_id})
-        # Non-retryable (no job record will ever appear), but still routed
-        # through the normal bounded retry/dead-letter path rather than
-        # discarded outright -- reusing existing machinery, and it
-        # preserves the message in the DLQ for inspection instead of
-        # silently vanishing. Also clears this claim either way: dequeue()
-        # already moved it into this worker's processing list, and nothing
-        # else will if this early-return path doesn't.
-        await retry_or_dead_letter(message, "ingestion job missing or cross-workspace", worker_id=worker_id)
-        return
+async def run_pipeline_for_job(message, store, job) -> tuple[IngestionState, str | None]:
+    """Runs the actual ingestion pipeline for one message against an
+    already-fetched `job` record and updates the job store. Returns
+    (final_state, error) -- error is set whenever the state isn't
+    COMPLETED, for callers that need it to make a retry/dead-letter
+    decision (src/ingestion/queue.py::retry_or_dead_letter's `error` param).
+
+    Deliberately holds no dependency on how the message was delivered or
+    how a transport acknowledges/retries afterward -- Phase 8's
+    src/ingestion/kafka_transport.py reuses this exact function for "what
+    work happens for a given ingestion kind" rather than duplicating it,
+    so the two transports can never silently drift on pipeline behavior.
+    The caller (_run below, or kafka_transport.py's own loop) still owns
+    the job-missing/cross-workspace check, the metrics increment, and the
+    actual complete()/retry_or_dead_letter() call -- those are genuinely
+    transport-specific.
+    """
     now = datetime.now(timezone.utc)
-    started_at = time.monotonic()
     executor = GraphExecutor()
     try:
         job.state = IngestionState.PERSISTING
@@ -101,37 +105,76 @@ async def _run(message, store, *, worker_id: str) -> None:
         job.error = None
         job.updated_at = datetime.now(timezone.utc)
         await store.put(job)
-        await complete(message, worker_id=worker_id)
+        return IngestionState.COMPLETED, None
     except (ValueError, KeyError, TypeError) as exc:
         job.state = IngestionState.FAILED_PERMANENT
         job.error = str(exc)
         job.updated_at = datetime.now(timezone.utc)
         await store.put(job)
-        # Not retryable -- these are malformed-input errors, not transient
-        # ones -- but the claim still needs clearing so the reaper doesn't
-        # later mistake this finished (if failed) job for a crashed one.
-        await complete(message, worker_id=worker_id)
+        return IngestionState.FAILED_PERMANENT, str(exc)
     except Exception as exc:  # transient DB/LLM/network failures are retryable
         job.state = IngestionState.FAILED_RETRYABLE
         job.error = str(exc)
         job.updated_at = datetime.now(timezone.utc)
         await store.put(job)
-        requeued = await retry_or_dead_letter(message, str(exc), worker_id=worker_id)
+        return IngestionState.FAILED_RETRYABLE, str(exc)
+
+
+async def _run(message, store, *, worker_id: str) -> None:
+    job = await store.get(message.ingestion_id)
+    if job is None or job.workspace_id != message.workspace_id:
+        log.error("ingestion job missing or cross-workspace", extra={"ingestion_id": message.ingestion_id})
+        # Non-retryable (no job record will ever appear), but still routed
+        # through the normal bounded retry/dead-letter path rather than
+        # discarded outright -- reusing existing machinery, and it
+        # preserves the message in the DLQ for inspection instead of
+        # silently vanishing. Also clears this claim either way: dequeue()
+        # already moved it into this worker's processing list, and nothing
+        # else will if this early-return path doesn't. Deliberately not
+        # counted in INGESTION_JOBS_TOTAL below (no job record -- there is
+        # no "kind" outcome to attribute this to).
+        await retry_or_dead_letter(message, "ingestion job missing or cross-workspace", worker_id=worker_id)
+        return
+
+    started_at = time.monotonic()
+    state, error = await run_pipeline_for_job(message, store, job)
+
+    if state == IngestionState.COMPLETED:
+        await complete(message, worker_id=worker_id)
+    elif state == IngestionState.FAILED_PERMANENT:
+        # Not retryable -- these are malformed-input errors, not transient
+        # ones -- but the claim still needs clearing so the reaper doesn't
+        # later mistake this finished (if failed) job for a crashed one.
+        await complete(message, worker_id=worker_id)
+    else:  # FAILED_RETRYABLE
+        requeued = await retry_or_dead_letter(message, error or "", worker_id=worker_id)
         if not requeued:
             job.state = IngestionState.FAILED_PERMANENT
             job.updated_at = datetime.now(timezone.utc)
             await store.put(job)
-    finally:
-        # job.state is whatever the branch above landed on -- COMPLETED,
-        # FAILED_PERMANENT, or FAILED_RETRYABLE (still requeued, not yet a
-        # terminal outcome but worth counting so retry volume is visible).
-        INGESTION_JOBS_TOTAL.labels(kind=message.kind, status=job.state.value).inc()
-        INGESTION_JOB_DURATION_SECONDS.labels(kind=message.kind).observe(time.monotonic() - started_at)
+            state = IngestionState.FAILED_PERMANENT
+
+    # state is whatever run_pipeline_for_job returned, possibly promoted to
+    # FAILED_PERMANENT above once retries were exhausted -- worth counting
+    # either way so retry volume is visible.
+    INGESTION_JOBS_TOTAL.labels(kind=message.kind, status=state.value).inc()
+    INGESTION_JOB_DURATION_SECONDS.labels(kind=message.kind).observe(time.monotonic() - started_at)
 
 
 async def run_worker() -> None:
     configure_logging()
     store = get_ingestion_store()
+
+    if get_settings().ingestion_transport == "kafka":
+        # Phase 8, feature-flagged: worker.py stays the one entry point
+        # regardless of transport -- only the loop implementation differs.
+        # Lazy import breaks a circular dependency (kafka_transport.py
+        # lazily imports run_pipeline_for_job from this module in turn).
+        from src.ingestion.kafka_transport import run_kafka_worker_loop
+
+        await run_kafka_worker_loop(store)
+        return
+
     # One id for this process's lifetime -- identifies its own processing
     # list (src/ingestion/queue.py's PROCESSING_KEY_PREFIX) so multiple
     # worker replicas never share, or corrupt, each other's in-flight claim.

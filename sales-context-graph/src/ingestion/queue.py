@@ -91,9 +91,21 @@ def queue_enabled() -> bool:
 
 
 async def maybe_enqueue(message: IngestionQueueMessage) -> bool:
-    """Return True when the API handed execution to the durable worker."""
+    """Return True when the API handed execution to the durable worker.
+
+    Transport-dispatches internally (Phase 8, feature-flagged) so every
+    api/routes/ingestions.py call site stays transport-agnostic -- none of
+    them need to know or care whether INGESTION_TRANSPORT is "redis" or
+    "kafka". Lazy import of kafka_transport avoids paying its import cost
+    (aiokafka) on the default Redis path.
+    """
     if not queue_enabled():
         return False
+    if get_settings().ingestion_transport == "kafka":
+        from src.ingestion.kafka_transport import enqueue as kafka_enqueue
+
+        await kafka_enqueue(message)
+        return True
     await enqueue(message)
     return True
 

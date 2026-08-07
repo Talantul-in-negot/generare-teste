@@ -80,6 +80,39 @@ class Settings(BaseSettings):
     # extraction, the only LLM-backed ingestion kind) -- 5 minutes default.
     ingestion_visibility_timeout_seconds: int = 300
 
+    # ── Kafka transport (Phase 8, feature-flagged, off by default) ─────────────
+    # Added per explicit stakeholder direction -- docs/adr-0003-kafka-event-bus.md
+    # documents why this was originally judged premature and what changed the
+    # decision. "redis" (default) is the recommended path at this system's
+    # current scale; src/ingestion/queue.py's reliable-queue pattern (Phase 4)
+    # is unaffected either way.
+    ingestion_transport: Literal["redis", "kafka"] = "redis"
+    kafka_bootstrap_servers: str = "localhost:9095"
+
+    # ── Qdrant secondary vector store (Phase 8, feature-flagged) ────────────────
+    # Added per explicit stakeholder direction -- docs/adr-0004-qdrant-
+    # secondary-vector-store.md. Neo4j's native vector index
+    # (contact_embeddings_v1) remains primary; this is a standalone, optional
+    # capability (src/embedding/qdrant_backend.py), not wired into the main
+    # entity-resolution candidate pipeline.
+    vector_backend: Literal["neo4j", "qdrant"] = "neo4j"
+    qdrant_url: str = "http://localhost:6335"
+
+    # ── LLM gateway fallback (Phase 8, feature-flagged) ─────────────────────────
+    # Added per explicit stakeholder direction -- docs/adr-0005-llm-gateway-
+    # fallback.md documents why this was originally judged premature (a
+    # fallback chain adds a silent-degradation path, exactly the failure mode
+    # src/llm/chat.py's LlmNotConfiguredError exists to avoid) and how
+    # src/llm/gateway.py mitigates it: fallback only on transient/
+    # availability errors, never on a validation/schema failure, and every
+    # fallback event is logged at warning + counted, never silent. Off by
+    # default -- disabled, the primary provider's existing "fail loud with
+    # 503" behavior is completely unchanged.
+    llm_fallback_enabled: bool = False
+    llm_fallback_provider: str = ""
+    llm_fallback_api_key: str = ""
+    llm_fallback_model: str = ""
+
     # ── Query result cache (Phase 5, docs/evaluation.md's semantic/result-cache ──
     # item) -- exact-match, workspace-scoped, see src/core/cache/query_cache.py.
     # On by default; still a no-op wherever REDIS_URL is unset, same fail-open

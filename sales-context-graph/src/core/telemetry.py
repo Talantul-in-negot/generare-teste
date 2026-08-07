@@ -115,6 +115,20 @@ GUARDRAIL_FLAG_TOTAL = Counter(
     "regardless of enforcement mode (log_only vs block).",
 )
 
+# --- Phase 8 addition: LLM gateway fallback events --------------------------
+# Not one of docs/plan.md §14's original 9 -- added alongside
+# src/llm/gateway.py. A fallback chain is a silent-degradation risk this
+# codebase has otherwise refused (src/llm/chat.py's LlmNotConfiguredError
+# fails loud rather than degrading); this counter is the mitigation --
+# every fallback is loud, never silent. See docs/adr-0005-llm-gateway-
+# fallback.md.
+LLM_FALLBACK_TOTAL = Counter(
+    "scg_llm_fallback_total",
+    "Times the LLM gateway fell back from the primary provider to the "
+    "configured secondary provider, by provider pair and reason.",
+    ["from_provider", "to_provider", "reason"],
+)
+
 
 def record_blocking_recall(value: float) -> None:
     """Called by tests/eval/* after scoring a labeled run's blocking output
