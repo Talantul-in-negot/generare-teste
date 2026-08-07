@@ -227,6 +227,23 @@ have.
 
 ## Known measurement gaps
 
+- ⚠ **Observability (`docs/plan.md` §14) is unimplemented — nothing here is
+  measured from the running system.** §4 pins "OpenTelemetry API/SDK and
+  FastAPI/Neo4j instrumentation" as a dependency and §14 specifies one span
+  per workflow stage plus nine named metrics (ingestion count/duration by
+  status, extraction windows and provider calls, extraction failures and
+  retries, candidate-generation latency, blocking recall, auto-link/review/
+  unresolved counts, Claims created/superseded/conflicted/erased, Context
+  Graph latency and truncation, queue depth and oldest-job age). Verified
+  2026-08-07: `opentelemetry` appears **nowhere** in the codebase and is not
+  in `pyproject.toml`; there is no `/metrics` endpoint and no metric of any
+  kind. `structlog` *is* used across 16 modules, so §14 is roughly one-third
+  done — structured logs yes, traces no, metrics no. Consequence worth
+  stating plainly: **every operational number in this document comes from a
+  test run, never from a running system**, and several other known gaps
+  (queue depth, oldest-job age, ingestion failure rate) are literally
+  unobservable until this exists. Surfaced by the external-architecture
+  cross-check at the end of this document; previously untracked here.
 - No precision/recall study against a labeled corpus (would need a larger,
   human-annotated dataset than this vertical slice's fixtures provide).
 - **Blocking recall at scale — found and fixed the same day.**
@@ -862,3 +879,153 @@ timeout fail only under load or crash, which demos have neither.
 [Brand Center](https://brandcenter.showpad.com/) ·
 [Developer — Content Picking and Sharing](https://developer.showpad.com/docs/integrations/platform-independent/content-pick-share) ·
 [Integrations](https://www.showpad.com/platform-overview/integrations)
+
+---
+
+## External architecture review cross-check (2026-08-07)
+
+Source: *"Building a Scalable Sales AI Companion"* (Google Gemini, 20pp,
+user-supplied) — a generic enterprise-architecture brief for exactly this
+product shape: CRM + transcripts + collateral, multi-tenant, load-tested.
+
+It is **not** an audit of this repo; it never saw the code. Treating its
+recommendations as a to-do list would be wrong — much of it is already built
+here, and some of it would be actively harmful at this scale. What follows
+is each recommendation checked against what this codebase actually does,
+sorted into three buckets. Only the middle bucket is worth acting on.
+
+### A. Already implemented — do not rebuild
+
+The brief's core transcript-handling advice describes, fairly precisely,
+what `docs/plan.md` §7–§9 already specified and this repo already ships:
+
+| Brief recommends | Already here |
+|---|---|
+| Speaker-aware chunking, split on topic drift not fixed size | `src/extraction/windowing.py:36` — `topic_gap_ms=3_000`, `max_duration_ms=90_000`, `max_tokens=200` |
+| 1–2 turn rolling overlap across chunk boundaries | same call — `overlap_segments=1`; duplicate assertions collapse by content-derived `claim_id` |
+| Map raw speaker labels (`Speaker 1`) to CRM contacts via meeting metadata | `src/resolution/speaker.py::resolve_speaker`, driven by `email_to_contact_id` from the call's `parties` |
+| Prepend speaker role to chunks | `Claim.speaker_role` (BUYER/SELLER/UNKNOWN), set at `transcript_pipeline.py:186` |
+| Treat transcript as untrusted; rigid framing; never execute embedded instructions | `src/extraction/prompt.py`, plus 3 dedicated tests in `tests/security/` |
+| Structured outputs via Pydantic to prevent malformed JSON | Pydantic v2 throughout; bounded retry/repair in `src/llm/json_completion.py` |
+| Refuse rather than answer when a claim can't be mapped to a retrieved span | `src/narrative/grounding.py` — mechanically verifies every `[claim_id]`; **one bad citation rejects the whole summary** |
+| Async ingestion, 202 Accepted, out-of-band processing | `POST /api/v1/ingestions/*` returns 202 + `ingestion_id`; durable worker in `src/ingestion/{queue,worker}.py` |
+| Multi-hop graph retrieval via Neo4j | the entire `src/graph/` layer |
+| Deal memory state that updates when a later call resolves an earlier objection | bitemporal Claims + `close_claim_interval()` + `POST /api/v1/qa/as-of` |
+
+On one point this repo is **stricter than the brief**. The brief says to
+"require strict inline timestamp citations… trigger a self-correction step
+or refuse." This repo does not self-correct — it verifies mechanically and
+rejects. Self-correction invites the model to rationalise a citation it
+cannot support; rejection cannot.
+
+### B. Real gaps this brief surfaces — worth implementing, in this order
+
+**B1. ⚠ Observability is specified but absent — and this is a gap against
+this repo's *own* plan, not the brief's opinion.**
+`docs/plan.md` §4 lists "OpenTelemetry API/SDK and FastAPI/Neo4j
+instrumentation" as a pinned dependency, and §14 specifies one span per
+workflow stage plus **nine named metrics** (ingestion count/duration by
+status, extraction windows and provider calls, extraction failures/retries,
+candidate-generation latency, blocking recall, auto-link/review/unresolved
+counts, Claims created/superseded/conflicted/erased, Context Graph latency
+and truncation, queue depth and oldest-job age).
+
+Verified state: **`opentelemetry` appears nowhere in the codebase and is not
+in `pyproject.toml`** (which lists `structlog` only). There is no `/metrics`
+endpoint and no metric of any kind. `structlog` *is* used across 16 modules,
+so §14 is roughly one-third done — structured logs yes, traces no, metrics
+no. Every operational number quoted anywhere in this document came from a
+test run, not from the running system.
+
+This was not previously tracked in "Known measurement gaps" above. It should
+have been. Of everything in the brief, this is the highest-value item,
+because several other gaps (queue depth, oldest-job age, ingestion failure
+rate) are *unobservable* until it exists.
+
+**B2. No semantic/result caching.** The brief's "LLM Semantic Cache"
+(Redis vector search / GPTCache) targets repeated rep questions. Verified:
+no query-result cache exists anywhere — all `lru_cache` use is config and
+ontology memoisation; Redis holds only job status. Given `/ask` costs an LLM
+call per question and reps ask overlapping questions, a plain
+normalised-question → response cache with workspace-scoped keys would cut
+cost measurably before any vector-similarity cache is justified. Start with
+exact-match; the brief jumps to semantic similarity, which risks serving a
+near-miss answer as if exact.
+
+**B3. No PII redaction before persistence or LLM submission.** Verified:
+no redaction, NER, or scrubbing module exists (`grep` for
+`redact|anonymi|presidio|NER` → nothing). `docs/plan.md` §13 requires
+"PII-safe logs and traces… no transcript text, email, or access token in
+INFO logs." Logs are believed compliant, but raw transcript text is stored
+verbatim in `TranscriptSegment` and sent to the LLM adapter unfiltered. For
+a fixture-driven slice that is fine; for real customer calls it is a
+compliance blocker, and it interacts with the erasure-propagation
+requirement §13 also states.
+
+**B4. Retrieval is single-layer; the brief's dual-layer split is a genuine
+fit.** This repo retrieves micro-level Claims only. There is no call-level
+summary document — verified, no summarisation/map-reduce module exists. A
+"what happened on this call" question therefore fans out across every Claim
+rather than hitting one rollup, which is both the macro-query cost problem
+the brief describes *and* a contributor to the digest N+1 documented above.
+The `Conversation` node is the natural home for a rollup.
+
+**B5. Hybrid retrieval is half-built, and the built half is inert.** The
+brief's dense + BM25 + cross-encoder rerank pipeline maps onto what exists:
+fulltext (BM25-ish) is wired and correct; the vector index is an
+**unpopulated 1536-dim placeholder** (`schema.py:52-59`); no reranker exists.
+Note the ordering constraint — populating the vector index without first
+fixing the global-top-k tenant-filter bug documented in the Showpad section
+above would turn a latent cross-tenant leak into a live one. **Fix the
+filter, then populate, then consider reranking.**
+
+**B6. Concurrency load testing.** The brief asks for K6/Locust against
+ingestion, retrieval, and LLM concurrency, with explicit SLOs. This repo has
+one single-threaded latency measurement (300 Claims, one run, one machine)
+and states plainly it is not a load test. The brief's specific targets
+(p95 < 100 ms retrieval at 5,000 RPS, TTFT < 1.2 s) are vendor-scale numbers
+with no basis here and should **not** be adopted as SLOs — but the
+*structure* (test the three layers separately) is right, and the ingestion
+layer in particular has an untested failure mode: the single serial worker
+plus `blpop`-without-visibility-timeout described above.
+
+### C. Recommended by the brief, wrong for this system now
+
+- **Kafka / Kinesis event bus.** The brief says "never process heavy payloads
+  in synchronous API requests" — correct, and already solved with a Redis
+  list + worker (`docs/adr-0001` chose this deliberately over adding a second
+  broker). Kafka buys partition-level parallelism and replay this system has
+  no volume to need, at real operational cost. Revisit only when
+  per-workspace queue fairness — a known gap — actually bites.
+- **Qdrant / Milvus as a separate distributed vector store.** Neo4j's native
+  vector index is already declared and unused. Adding a second datastore
+  before populating the first, and thereby splitting the graph from its
+  embeddings, would trade the multi-hop advantage the brief itself credits
+  as this architecture's differentiator.
+- **LLM gateway (LiteLLM/Portkey) with multi-provider fallback.** Sound at
+  volume; premature here, where the honest behaviour on an unconfigured or
+  failing provider is already a `503` rather than a fabricated answer. A
+  fallback chain adds a silent-degradation path — exactly the failure mode
+  this codebase has consistently refused.
+- **Guardrail layers (NeMo/Llama Guard) for injection.** The existing defence
+  is structural: transcripts are delimited data, the extractor is given no
+  tools, and outputs are schema-validated. A classifier in front adds a
+  probabilistic filter to a problem currently handled deterministically.
+- **Vendor SLO targets as stated.** See B6 — adopting 5,000 RPS or
+  TTFT < 1.2 s as goals would be copying numbers with no measured basis in
+  this system.
+
+### Net effect on this document
+
+One item is added to "Known measurement gaps" as a result of this
+cross-check: **observability (§14) is unimplemented**, which was previously
+untracked. The remaining items (caching, PII, dual-layer retrieval, hybrid
+completion, load testing) are recorded here rather than as new gaps, because
+each is a *product* decision with a prerequisite ordering — most importantly
+that the vector index must not be populated before the global-top-k tenant
+filter is fixed.
+
+The brief's comparative section positions a custom architecture against Gong,
+Showpad Genie, and Einstein Copilot. That framing is directionally consistent
+with the market analysis already in this document and adds no verified fact
+about this repo, so it is not restated here.
