@@ -10,7 +10,7 @@ and participants themselves, which are the routing path for everything else.
 
 from __future__ import annotations
 
-from src.domain.conversation import Conversation, Participant, SpeakerResolution, TranscriptSegment
+from src.domain.conversation import Conversation, ConversationSummary, Participant, SpeakerResolution, TranscriptSegment
 from src.graph.execution import GraphExecutor, scoped_match
 
 _CONVERSATION_RETURN = (
@@ -31,6 +31,12 @@ _PARTICIPANT_RETURN = (
     "p.participant_id AS participant_id, p.workspace_id AS workspace_id, "
     "p.conversation_id AS conversation_id, p.speaker_label AS speaker_label, "
     "p.contact_id AS contact_id, p.seller_id AS seller_id, p.role AS role"
+)
+
+_SUMMARY_RETURN = (
+    "sm.conversation_id AS conversation_id, sm.workspace_id AS workspace_id, "
+    "sm.text AS text, sm.cited_claim_ids AS cited_claim_ids, "
+    "sm.uncited_sentence_count AS uncited_sentence_count, sm.generated_at AS generated_at"
 )
 
 
@@ -276,3 +282,40 @@ class ConversationRepository:
             role=resolution.role.value,
             evidence=resolution.evidence,
         )
+
+    async def upsert_conversation_summary(self, summary: ConversationSummary) -> None:
+        """One ConversationSummary per Conversation (Phase 3, docs/evaluation.md's
+        dual-layer retrieval item) -- MERGE key is conversation_id alone, so
+        regenerating replaces the prior summary rather than accumulating a
+        history; see ConversationSummary's own docstring for why that's the
+        right call here (a derived view, not evidence)."""
+        conv_match = scoped_match("Conversation", "c", conversation_id="conversation_id")
+        sm_match = scoped_match("ConversationSummary", "sm", conversation_id="conversation_id")
+        await self._executor.tenant_query(
+            f"""
+            MATCH {conv_match}
+            MERGE {sm_match}
+            SET sm.text = $text,
+                sm.cited_claim_ids = $cited_claim_ids,
+                sm.uncited_sentence_count = $uncited_sentence_count,
+                sm.generated_at = $generated_at
+            MERGE (c)-[:HAS_SUMMARY]->(sm)
+            """,
+            workspace_id=summary.workspace_id,
+            conversation_id=summary.conversation_id,
+            text=summary.text,
+            cited_claim_ids=summary.cited_claim_ids,
+            uncited_sentence_count=summary.uncited_sentence_count,
+            generated_at=summary.generated_at.isoformat(),
+        )
+
+    async def get_conversation_summary(
+        self, workspace_id: str, conversation_id: str
+    ) -> ConversationSummary | None:
+        match = scoped_match("ConversationSummary", "sm", conversation_id="conversation_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN {_SUMMARY_RETURN}",
+            workspace_id=workspace_id,
+            conversation_id=conversation_id,
+        )
+        return ConversationSummary(**rows[0]) if rows else None

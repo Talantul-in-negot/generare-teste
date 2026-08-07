@@ -48,6 +48,7 @@ from src.domain.enums import AdjudicationStatus
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conflict_repository import ConflictRepository
 from src.resolution.conflict_detection import detect_conflicting_claims
+from src.summarization.call_summary import CallSummaryUseCase
 
 DEFAULT_MAX_NODES = 50
 DEFAULT_MAX_TOKENS = 4000
@@ -94,9 +95,19 @@ def _explain(claim: Claim, score: float) -> str:
 
 
 class ContextGraphBuilder:
-    def __init__(self, claim_repo: ClaimRepository, conflict_repo: ConflictRepository | None = None):
+    def __init__(
+        self,
+        claim_repo: ClaimRepository,
+        conflict_repo: ConflictRepository | None = None,
+        call_summary_usecase: CallSummaryUseCase | None = None,
+    ):
         self._claim_repo = claim_repo
         self._conflict_repo = conflict_repo or ConflictRepository()
+        # Phase 3 dual-layer retrieval, optional: None (the default) means
+        # every existing single-arg ContextGraphBuilder(claim_repo) call
+        # site keeps working unchanged -- attaching a summary needs an LLM
+        # chat_fn this builder otherwise has no reason to require.
+        self._call_summary_usecase = call_summary_usecase
 
     async def build(
         self,
@@ -106,6 +117,7 @@ class ContextGraphBuilder:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         predicate_diversity_cap: int = DEFAULT_PREDICATE_DIVERSITY_CAP,
         now: datetime | None = None,
+        include_summary: bool = False,
     ) -> ContextGraphResult:
         now = now or datetime.now(timezone.utc)
         started_at = time.monotonic()
@@ -165,6 +177,17 @@ class ContextGraphBuilder:
         if truncated_reason is not None:
             CONTEXT_GRAPH_TRUNCATED_TOTAL.labels(reason=truncated_reason).inc()
 
+        # Phase 3 dual-layer retrieval: additive to the Claims above, never
+        # a replacement for them -- a failed/unavailable summary (no
+        # call_summary_usecase wired in, no conversation_id in scope, no
+        # citable Claims, a rejected hallucinated citation) degrades to
+        # summary=None, not a failed build.
+        summary = None
+        if include_summary and self._call_summary_usecase is not None and scope.conversation_id:
+            summary = await self._call_summary_usecase.get_or_generate(
+                scope.workspace_id, scope.conversation_id
+            )
+
         return ContextGraphResult(
             workspace_id=scope.workspace_id,
             claims=[c for c, _ in selected],
@@ -177,4 +200,5 @@ class ContextGraphBuilder:
             nodes_used=len(selected),
             tokens_used=tokens_used,
             truncated=truncated,
+            summary=summary,
         )

@@ -28,6 +28,7 @@ from src.domain.assertion import (
 )
 from src.domain.conversation import (
     Conversation,
+    ConversationSummary,
     ExtractionWindow,
     Mention,
     Participant,
@@ -102,6 +103,7 @@ MODEL_STRATEGIES: list[tuple[type, object]] = [
         ),
     ),
     (SpeakerResolution, st.builds(SpeakerResolution)),
+    (ConversationSummary, st.builds(ConversationSummary)),
     # ── knowledge.py — no cross-field validators ───────────────────────────
     (Product, st.builds(Product)),
     (Feature, st.builds(Feature)),

@@ -10,6 +10,8 @@ from src.context_graph.builder import ContextGraphBuilder, ContextGraphScope
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
+from src.llm.chat import LlmNotConfiguredError, build_chat_fn
+from src.summarization.call_summary import CallSummaryUseCase
 
 router = APIRouter(tags=["context"])
 
@@ -22,6 +24,12 @@ class ContextBuildRequest(BaseModel):
     subject_id: str | None = None
     max_nodes: int | None = None
     max_tokens: int | None = None
+    # Phase 3 dual-layer retrieval (docs/evaluation.md): only meaningful
+    # with conversation_id set -- ContextGraphBuilder.build() silently
+    # leaves summary=None otherwise, same as when unset. Off by default,
+    # like classify_roles elsewhere in this codebase: the plain Claims-only
+    # path stays free of an LLM dependency unless explicitly asked for.
+    include_summary: bool = False
 
 
 @router.post("/api/v1/context/build")
@@ -30,7 +38,17 @@ async def build_context(body: ContextBuildRequest, workspace_id: str = Depends(v
     # never the request body — ContextBuildRequest deliberately has no
     # workspace_id field at all.
     executor = GraphExecutor()
-    builder = ContextGraphBuilder(ClaimRepository(executor))
+    call_summary_usecase = None
+    if body.include_summary:
+        # Explicitly requested -- fail loud (503) rather than silently
+        # returning summary=None, matching /ask's honest-refusal shape for
+        # an unconfigured LLM dependency.
+        try:
+            chat_fn = build_chat_fn()
+        except LlmNotConfiguredError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        call_summary_usecase = CallSummaryUseCase(ClaimRepository(executor), ConversationRepository(executor), chat_fn)
+    builder = ContextGraphBuilder(ClaimRepository(executor), call_summary_usecase=call_summary_usecase)
     scope = ContextGraphScope(
         workspace_id=workspace_id, conversation_id=body.conversation_id, subject_id=body.subject_id,
     )
@@ -39,7 +57,7 @@ async def build_context(body: ContextBuildRequest, workspace_id: str = Depends(v
         kwargs["max_nodes"] = body.max_nodes
     if body.max_tokens is not None:
         kwargs["max_tokens"] = body.max_tokens
-    result = await builder.build(scope, **kwargs)
+    result = await builder.build(scope, include_summary=body.include_summary, **kwargs)
     return result.model_dump(mode="json")
 
 

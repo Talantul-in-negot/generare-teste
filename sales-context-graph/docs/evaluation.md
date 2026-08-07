@@ -1098,6 +1098,36 @@ rather than hitting one rollup, which is both the macro-query cost problem
 the brief describes *and* a contributor to the digest N+1 documented above.
 The `Conversation` node is the natural home for a rollup.
 
+✅ **Fixed 2026-08-07 (Phase 3)**: new `ConversationSummary` domain model
+(`src/domain/conversation.py`) — one per Conversation, MERGE-replaced not
+accumulated (`ConversationRepository.upsert_conversation_summary`/
+`get_conversation_summary`). Generation
+(`src/summarization/call_summary.py::CallSummaryUseCase`) deliberately
+**reuses `NarrativeSummaryUseCase`'s already-tested grounded-citation
+pipeline** (`src/narrative/grounding.py`) rather than a second, parallel
+LLM/prompt/grounding implementation — a call summary is just another intent
+result shaped as `{"claims": [...]}`. A genuine, honestly-scoped map-reduce
+handles conversations with more Claims than `build_narrative_prompt`'s
+40-claim cap: chunks are summarized independently (each grounded on its own
+citations), then merged **deterministically in Python** (text
+concatenation, citation-id union) rather than a second LLM pass — avoids
+either inventing synthetic per-chunk ids (breaking "every cited id is a
+real `claim_id`") or risking the merged citation set itself exceeding 40.
+Wired into `ContextGraphBuilder.build(..., include_summary=True)` as
+**additive**, never a replacement for the existing Claims — `summary=None`
+whenever it's not requested, no `call_summary_usecase` is configured, there's
+no `conversation_id` in scope, there are no citable Claims, or a citation
+would be hallucinated (same "refuse rather than serve a bad answer" rule
+`ground_narrative` already enforces elsewhere). `POST /api/v1/context/build`
+gains `include_summary: bool = false`, failing loud with `503` when
+requested but no LLM is configured — same shape as `/ask`, not a silent
+`summary=None` for an explicit ask. Lazy: generated on first request, not
+at ingestion time, cached at the repository level. Verified: 7 new
+`tests/integration/test_call_summary.py` tests (grounding, caching,
+force-regenerate-replaces, no-claims, hallucinated-citation-rejected,
+map-reduce chunking, builder wiring) plus 3 new route-level tests in
+`test_context_api.py`.
+
 **B5. Hybrid retrieval is half-built, and the built half is inert.** The
 brief's dense + BM25 + cross-encoder rerank pipeline maps onto what exists:
 fulltext (BM25-ish) is wired and correct; the vector index is an

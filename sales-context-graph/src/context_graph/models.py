@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from src.domain.assertion import Claim, Conflict
+from src.domain.conversation import ConversationSummary
 
 
 class EvidenceReference(BaseModel):
@@ -33,3 +34,9 @@ class ContextGraphResult(BaseModel):
     nodes_used: int
     tokens_used: int
     truncated: bool
+    # Phase 3 dual-layer retrieval: set only when build() was called with
+    # include_summary=True, a call_summary_usecase was wired in, and
+    # scope.conversation_id was set -- None in every other case, including
+    # when a summary couldn't be produced (e.g. no citable Claims). Additive
+    # to claims above, never a replacement for them.
+    summary: ConversationSummary | None = None

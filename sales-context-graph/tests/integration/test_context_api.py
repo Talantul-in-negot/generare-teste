@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import httpx
 import pytest
 
+import api.routes.context as context_route
 from api.main import app
 from src.domain.assertion import Claim
+from src.domain.conversation import Conversation, TranscriptSegment
 from src.domain.enums import AdjudicationStatus, Polarity, SpeakerRole
 from src.graph.repositories.claim_repository import ClaimRepository
+from src.graph.repositories.conversation_repository import ConversationRepository
+from src.llm.chat import LlmNotConfiguredError
 from tests.conftest import auth_headers
 
 pytestmark = pytest.mark.asyncio
@@ -89,6 +94,74 @@ async def test_context_build_requires_valid_api_key(monkeypatch):
 
         right_key_resp = await client.post("/api/v1/context/build", headers=headers, json={})
         assert right_key_resp.status_code == 200
+
+
+async def test_context_build_include_summary_requires_llm_configured(monkeypatch):
+    """Phase 3 dual-layer retrieval: explicitly requesting include_summary
+    fails loud (503), same shape as /ask, rather than silently returning
+    summary=None for an unconfigured LLM."""
+    headers = auth_headers(monkeypatch, "ws-summary-unconfigured")
+
+    def _raise():
+        raise LlmNotConfiguredError("LLM_PROVIDER is not set")
+
+    monkeypatch.setattr(context_route, "build_chat_fn", _raise)
+    async with _client() as client:
+        resp = await client.post(
+            "/api/v1/context/build", headers=headers,
+            json={"conversation_id": "conv-x", "include_summary": True},
+        )
+    assert resp.status_code == 503
+
+
+async def test_context_build_include_summary_end_to_end(executor, monkeypatch):
+    workspace_id = f"ws-summary-api-{uuid4().hex[:8]}"
+    headers = auth_headers(monkeypatch, workspace_id)
+    conversation_id = "conv-summary-api"
+    conv_repo = ConversationRepository(executor)
+    await conv_repo.upsert_conversation(Conversation(
+        conversation_id=conversation_id, workspace_id=workspace_id, source_record_id="sr-1",
+        source_system="gong", external_call_id="call-1", occurred_at=_T0,
+    ))
+    segment_id = "seg-summary-api"
+    await conv_repo.upsert_segment(TranscriptSegment(
+        segment_id=segment_id, workspace_id=workspace_id, conversation_id=conversation_id,
+        source_segment_index=0, speaker_label="spk_1", text="pricing concern raised",
+        start_ms=0, end_ms=1000,
+    ))
+    await ClaimRepository(executor).create_claim(Claim(
+        claim_id="claim-summary-api-1", workspace_id=workspace_id, subject_id="spk_1",
+        predicate="RAISED_OBJECTION", object_value="pricing", polarity=Polarity.AFFIRMED,
+        source_type="transcript", source_segment_id=segment_id, evidence_char_start=0, evidence_char_end=7,
+        source_timestamp=_T0, speaker_role=SpeakerRole.BUYER, confidence=0.9,
+        valid_from=_T0, transaction_from=_T0, adjudication_status=AdjudicationStatus.UNREVIEWED,
+        retention_class="standard", created_at=_T0,
+    ))
+
+    async def chat_fn(prompt: str) -> str:
+        return json.dumps({"text": "Pricing was raised as a concern. [claim-summary-api-1]"})
+
+    monkeypatch.setattr(context_route, "build_chat_fn", lambda: chat_fn)
+    async with _client() as client:
+        resp = await client.post(
+            "/api/v1/context/build", headers=headers,
+            json={"conversation_id": conversation_id, "include_summary": True},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["summary"] is not None
+    assert body["summary"]["cited_claim_ids"] == ["claim-summary-api-1"]
+    assert body["claims"]  # additive -- Claims still present too
+
+
+async def test_context_build_without_include_summary_omits_it(monkeypatch):
+    headers = auth_headers(monkeypatch, "ws-summary-off")
+    async with _client() as client:
+        resp = await client.post(
+            "/api/v1/context/build", headers=headers, json={"subject_id": "contact-x"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["summary"] is None
 
 
 async def test_health_and_ready_stay_unauthenticated():
