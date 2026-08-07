@@ -1453,3 +1453,243 @@ The brief's comparative section positions a custom architecture against Gong,
 Showpad Genie, and Einstein Copilot. That framing is directionally consistent
 with the market analysis already in this document and adds no verified fact
 about this repo, so it is not restated here.
+
+---
+
+## Showpad engineering-rigor assessment (2026-08-08)
+
+A fresh audit of the repo *as it now stands* — after the 11-phase
+implementation pass above — against the engineering bar an enterprise
+multi-tenant SaaS vendor of Showpad's profile has to clear. Every claim
+below was verified by direct inspection at the cited path; absences were
+confirmed by search, not assumed.
+
+### What "Showpad rigor" means here — and what it doesn't
+
+This section infers the bar from Showpad's **public** posture, not from any
+insider knowledge of their engineering practice: an enterprise sales-
+enablement vendor, EU-headquartered (so GDPR is a first-order legal
+constraint, not a nice-to-have), selling into large enterprises whose
+procurement runs security review — which in practice means SSO/SCIM,
+SOC 2-shaped access auditing, and a documented availability story. Where
+this section says "would fail procurement," that is a judgment about that
+*class* of buyer, not a claim about a specific Showpad process.
+
+The comparison is also deliberately unfair in one direction, and that is
+the point: this repo describes itself as a vertical slice (`README.md`,
+`docs/plan.md` §13), not a product. The useful question is not "does a
+slice equal a platform" — it doesn't — but **which gaps are scope
+decisions correctly deferred, and which are defects relative to the repo's
+own stated goals.** Those are separated explicitly below.
+
+### Where this repo already meets the bar
+
+These are not participation trophies — each is something production systems
+routinely get wrong, verified present here:
+
+- **Tenant isolation is structural, not conventional.**
+  `src/graph/execution.py`'s `tenant_query` regex-validates that every
+  `MATCH`/`MERGE` is workspace-scoped before execution. The documented
+  bypass (`operational_query`, `execution.py:82`) has exactly **one**
+  caller in the entire repo — `api/routes/health.py:27`, running
+  `SHOW INDEXES` — so the escape hatch is real but tightly contained.
+  That containment is verifiable in one grep, which is the property that
+  matters at audit time.
+- **Provenance is enforced mechanically, not by convention.**
+  `src/narrative/grounding.py` rejects a whole summary if any `[claim_id]`
+  citation doesn't resolve against the claims actually supplied. A
+  hallucinated citation fails closed.
+- **Unconfigured dependencies fail loudly.** `src/llm/chat.py` raises
+  `LlmNotConfiguredError` → `503` rather than degrading to a canned answer,
+  and Phase 8's fallback gateway was built to preserve that (transient
+  errors only, never masking a validation failure).
+- **Code-debt markers are near-zero.** Across all of `src/` and `api/`:
+  **1** TODO/FIXME/HACK, **2** `type: ignore`/`noqa` — across **117**
+  non-`__init__` modules. That ratio is unusually clean, and indicates debt
+  was paid rather than annotated.
+- **Container hygiene.** `Dockerfile` runs as a non-root `appuser`
+  (uid 1000), slim base, real `HEALTHCHECK`. `fly.toml` sets `force_https`,
+  HTTP health checks, and a separate `worker` process — with the memory
+  floor justified in a comment rather than guessed.
+- **Decisions are written down, including rejected ones.** Five ADRs
+  (`docs/adr-0001`…`0005`), three of which document things built *against*
+  the analysis's own recommendation, preserving the original reasoning
+  rather than retconning it.
+- **Honest self-documentation.** `src/core/cache/query_cache.py:77-85`
+  states in-code that no erasure execution pathway exists yet and that the
+  function is "one call site away from closed, not … already wired." A
+  codebase that documents its own unwired seams is doing something most
+  don't.
+
+### Band 1 — Delivery process: the largest gap, and partly a defect
+
+| Item | State | Evidence |
+|---|---|---|
+| CI pipeline | **Absent entirely** | no `.github/workflows/`, no `.gitlab-ci.yml`, no Jenkinsfile |
+| Pre-commit hooks | Absent | no `.pre-commit-config.yaml` |
+| Dependency locking | Floating | `pyproject.toml` uses `>=` constraints; `requirements.txt` carries no hashes; no `poetry.lock`/`uv.lock` |
+| Vulnerability scanning | Absent | no `dependabot.yml`, no `renovate.json`, no `pip-audit`/`safety` |
+| Type checking | **Declared, never configured** | `mypy>=1.13` is a dev dep (`pyproject.toml:64`) but there is no `[tool.mypy]` section anywhere |
+| Lint ruleset | Minimal | `[tool.ruff]` (`pyproject.toml:73-75`) sets only `line-length` and `target-version` — i.e. ruff's default `E4/E7/E9/F`. No `B` (bugbear), no `S` (security), no `I` (import order) |
+| Coverage | **Never measured** | no `[tool.coverage]`, no `.coveragerc`, no `pytest-cov` dependency |
+
+**This is where the defect/scope distinction bites hardest.** Deferring SSO
+is a defensible scope call for a slice. Having **468 test functions
+(489 passing including parametrized cases) and no automation that runs
+them** is not a scope call — it is the single highest-leverage gap in the
+repo. Every phase above was verified by a human-initiated local run; on a
+team, or on this repo six months from now, that guarantee evaporates. A
+~20-line workflow running `ruff check` + `pytest tests/unit` on push would
+convert the existing test investment into an actual regression barrier. It
+is the cheapest large win available.
+
+Two further items are outright inconsistencies rather than gaps:
+
+- **Python version drift.** `pyproject.toml:5` declares
+  `requires-python = ">=3.12"`, ruff targets `py312`, and the `Dockerfile`
+  builds on `python:3.12-slim` — but the entire development and test cycle
+  for this work ran on **Python 3.11.6**. The declared floor is not the
+  tested floor. Either the floor is wrong or the local toolchain is; as it
+  stands, a 3.12-only syntax feature would satisfy the declared contract
+  and pass local tests while being untested on the version that ships.
+- **`mypy` installed but never invoked.** The codebase is thoroughly
+  annotated (`from __future__ import annotations` throughout, typed
+  signatures, `Literal` settings), so the annotations are *carrying design
+  intent* — but nothing verifies them. That is the expensive half of typing
+  paid without the payoff collected.
+
+### Band 2 — Enterprise identity and access: procurement blocker
+
+`api/dependencies.py` is honest about this in its own module docstring
+("This vertical slice has no real identity provider yet"), and it is well
+built for what it is — `secrets.compare_digest` for constant-time
+comparison, a single `verify_api_key` seam so swapping in JWT/session auth
+changes one function. But measured against the enterprise bar:
+
+- **There is no concept of a user.** Authentication resolves to a
+  `workspace_id` and nothing else. No user identity, no roles, no
+  permissions, no RBAC, no SSO/SAML/OIDC/SCIM. For a buyer whose security
+  review opens with "show us SAML and deprovisioning," this is not a
+  partial answer, it is a missing one.
+- **Key rotation requires a redeploy.** `workspace_api_keys` is a single
+  JSON blob in one env var, read once into an `@lru_cache(maxsize=1)`.
+  Adding, rotating, or revoking any one tenant's key rewrites the whole map
+  and restarts every process. (Already noted in §4 above; restated here
+  because it is an access-control property, not only an ops annoyance.)
+- **No rate limiting, quotas, or request-size limits — anywhere.**
+  `api/main.py` registers routers and `/metrics` and **no middleware at
+  all**. One tenant can saturate the process, and there is no per-tenant
+  resource accounting to even detect it.
+- **No CORS policy.** The only security header in the codebase is the
+  `frame-ancestors` CSP on the single `/viz/panel` route
+  (`api/routes/viz.py:75`). No HSTS, no `X-Frame-Options`, no
+  `X-Content-Type-Options` on the API surface.
+
+Panel tokens (Phase 1) are a genuine improvement over a raw key in a URL,
+and `verify_api_key_or_panel_token`'s docstring is candid that a panel
+token grants **workspace-level**, not per-opportunity, access. That candor
+is right; the ceiling it describes is still a workspace-wide credential
+handed to a browser.
+
+### Band 3 — Compliance: modeled, not executed
+
+For an EU-headquartered vendor this band carries legal weight, not just
+best-practice weight.
+
+- **Right-to-erasure is a data model with no execution path.**
+  `ErasureEvent` (`src/domain/assertion.py:151`) is defined and — verified
+  by search — **never constructed anywhere in `src/` or `api/`**. There is
+  no erasure endpoint (the full route list contains no delete/erase path)
+  and no `erase`/`forget` method on any repository.
+  `invalidate_workspace_cache` exists and is correct, but has no producer
+  to call it. GDPR Art. 17 is modeled, not implemented.
+  *Credit where due:* the code says so itself rather than implying
+  otherwise (`query_cache.py:77-85`). This is a documented gap, not a
+  silent one — which is the difference between an honest slice and a
+  misleading one.
+- **No access audit log.** `ChangeLog`/bitemporal history
+  (`src/graph/bitemporal.py`) records what *changed* in the data. Nothing
+  records who *read* what. SOC 2-shaped review asks for the latter.
+- **No retention enforcement, and no data-residency story.**
+  `primary_region = "iad"` (US-East) is the only region in `fly.toml` — in
+  an EU-buyer conversation, EU residency is typically contractual.
+
+### Band 4 — Operational maturity
+
+- **Single region, effectively single instance.**
+  `min_machines_running = 1`, `shared-cpu-1x`/1 GB,
+  `auto_stop_machines = false`. No autoscaling policy, no multi-region, no
+  documented capacity model. Phase 10's baseline is now measured (ingestion
+  p95 ≈ 1.06 s, retrieval p95 ≈ 47 ms on a small graph, LLM path
+  p95 ≈ 4.55 s) — which is exactly the input a capacity model needs, and
+  that model is the next step, not yet taken.
+- **Metrics without alerts.** Phase 0 exposes 9 named metrics on
+  `/metrics`; nothing consumes them. No alert rules, no thresholds, no
+  on-call rotation, no error budget. Observability currently supports
+  *investigation* but not *notification*.
+- **Backups acknowledged, not owned.** `docs/deployment.md:89` states
+  plainly there is "no automated Neo4j/Redis backup verification beyond
+  what Aura/Upstash" provide. Honest — and still an untested restore path.
+- **15 broad `except Exception` / bare `except` blocks** across `src/` and
+  `api/`. Several are deliberate and correct (the retryable-vs-permanent
+  split in `src/ingestion/worker.py` depends on one), but the pattern is
+  dense enough to warrant a lint rule rather than case-by-case review —
+  which circles back to Band 1's minimal ruff ruleset.
+
+### Verdict
+
+| Dimension | Against a Showpad-class bar | Nature of the gap |
+|---|---|---|
+| Tenant isolation (correctness) | **Meets it** — structurally enforced, one contained bypass | — |
+| Evidence/provenance discipline | **Exceeds typical** — mechanical citation rejection | — |
+| Code cleanliness | **Meets it** — 1 TODO, 2 ignores repo-wide | — |
+| Decision documentation | **Meets it** — 5 ADRs incl. rejected paths | — |
+| Test *suite* | **Meets it** in volume and realism (live-infra integration tests) | — |
+| Test *automation* | **Fails** — no CI at all | **Defect** — cheap to fix, highest leverage |
+| Type/lint enforcement | **Fails** — mypy unconfigured, ruff at defaults | **Defect** — tooling declared, not wired |
+| Version contract | **Fails** — declares 3.12, tested on 3.11 | **Defect** — inconsistency, not scope |
+| Enterprise identity (SSO/RBAC) | **Fails** | **Scope** — documented, correctly deferred for a slice |
+| Rate limiting / quotas | **Fails** | **Scope-ish** — cheap, and its absence was undocumented |
+| GDPR erasure execution | **Fails** | **Scope** — honestly documented in-code |
+| Access audit logging | **Fails** | **Scope** — undocumented as a gap until now |
+| Availability / DR | **Fails** | **Scope** — single-region by design |
+| Alerting | **Fails** | **Gap** — metrics exist, consumption doesn't |
+
+**The shape of the result:** the gaps do not cluster in engineering craft —
+they cluster in *institutional apparatus*. The reasoning quality, isolation
+discipline, provenance handling, and honesty about limits in this repo sit
+at or above the bar. What is missing is the machinery an organization wraps
+around code: automated gates, identity infrastructure, compliance
+execution, operational ownership. That is the expected shape for a
+well-built vertical slice, and it means the distance to "Showpad-ready" is
+mostly *additive* work rather than rework — with one important exception:
+**nothing enforces the quality that has already been achieved.** Every
+guarantee in this document currently rests on someone choosing to run the
+tests.
+
+### What this changes about the roadmap
+
+Ordered by leverage-to-effort, not by size:
+
+1. **Add CI** (~20 lines): `ruff check` + `pytest tests/unit` on push, full
+   suite on PR to `main`. Converts 468 existing tests from a snapshot into
+   a barrier. Nothing else on this list comes close on ratio.
+2. **Resolve the Python version contract** — pick 3.11 or 3.12 and make
+   `pyproject.toml`, ruff, `Dockerfile`, and the actual toolchain agree.
+3. **Configure the tooling already installed** — a `[tool.mypy]` section
+   and a broader ruff `select` (at minimum `B`, `I`, `S`). Both are
+   config-only changes against an already-clean codebase, so the initial
+   violation count should be small.
+4. **Measure coverage once** — not to chase a number, but to find out which
+   of the 117 modules the 468 tests never touch. `pytest-cov` is not
+   currently a dependency, so this is a one-line add plus one run.
+5. **Rate limiting + security headers** — small, and closes the most
+   conspicuous item in Band 2.
+6. Everything else (SSO, erasure execution, audit logging, multi-region,
+   alerting) is genuine product/platform scope and should be sequenced
+   against an actual buyer conversation rather than built speculatively.
+
+Items 1–5 are collectively a day or two of work and would move three of the
+four **Defect** rows in the verdict table to "Meets it." That is the honest
+highest-value next increment for this repo — more than any additional
+feature.
