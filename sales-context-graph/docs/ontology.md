@@ -101,8 +101,13 @@ predicate typo in `src/extraction/fixture_provider.py`'s `_RULES` therefore
 fails at ingestion instead of silently creating an off-ontology Claim.
 Adding an extraction rule requires adding its predicate here too.
 
-**Still open:** `relation_rules` (the *graph edge* vocabulary, as opposed to
-claim predicates) has no equivalent runtime enforcement —
-`OntologyRegistry.load()` still has no live call site for schema-drift
-detection against materialized relationships. See `docs/evaluation.md`'s
-"Known measurement gaps".
+**Still open, deliberately:** `relation_rules` (the *graph edge* vocabulary,
+as opposed to claim predicates) has no runtime enforcement. Of its five
+documented entries, only `HAS_ASSIGNMENT`/`ASSIGNS`
+(`src/graph/repositories/stakeholder_repository.py`) are actually written
+as Cypher relationships anywhere in this codebase — `ADDRESSES_OBJECTION`
+documents intent that the real implementation satisfies via
+`content_asset.tags` instead of a materialized edge, and `CONVERTED_TO`/
+`MERGED_INTO` (§5) aren't implemented at all yet. See `docs/evaluation.md`'s
+"Known measurement gaps" for why building enforcement now would cover 2 of
+5 entries and isn't worth it until the missing write paths exist.

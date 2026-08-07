@@ -265,8 +265,8 @@ have.
   single workspace, no concurrent requests, one run (no p95 across repeated
   sessions) — a real load test needs dedicated infrastructure this vertical
   slice doesn't have.
-- **True point-in-time ("as of") reconstruction — closed for one supersession
-  path, still open for another.** Increment 19 wired the trigger this gap
+- **True point-in-time ("as of") reconstruction — both supersession paths
+  now close intervals correctly.** Increment 19 wired the trigger this gap
   previously said was missing: `ConflictsUseCase.resolve()`
   (`src/usecases/conflicts.py`) picks a winner between two contradicting
   Claims — via `src/resolution/conflict_arbitration.py`'s pure tie-break
@@ -280,29 +280,41 @@ have.
   `tests/integration/test_as_of_queries.py`'s boundary test (closed at T2 ->
   visible at T1, invisible at T3).
 
-  **Historical gap, closed in this increment**: `src/review/service.py`'s `ReviewService.resolve()`
-  reconciles a Claim by rewriting its `subject_id` and re-persisting — it does
-  not call `close_claim_interval`, so a Claim reconciled that way never closes
-  its interval and always appears at every `as_of` query, including dates
-  before it was superseded by review. This is the one remaining gap from the
-  original entry, narrowed rather than silently declared fully solved — a
-  future increment would need to route `ReviewService`'s reconciliation
-  through the same interval-closing call. It now calls
-  `ClaimRepository.reconcile_claim_subject()`, which snapshots the old Claim
-  into `ClaimRevision` with a closed transaction interval and starts the
-  current Claim at the review timestamp. The new integration test proves the
-  old opaque subject is returned before review and the resolved entity after.
+  **Historical gap, closed in this increment**: `src/review/service.py`'s
+  `ReviewService.resolve()` used to reconcile a Claim by rewriting its
+  `subject_id` and re-persisting, without ever calling
+  `close_claim_interval` — so a Claim reconciled that way never closed its
+  interval and appeared at every `as_of` query, including dates before it
+  was superseded by review. It now calls
+  `ClaimRepository.reconcile_claim_subject()` instead, which snapshots the
+  old Claim into `ClaimRevision` with a closed transaction interval and
+  starts the current Claim at the review timestamp. The integration test
+  added alongside this fix proves the old opaque subject is returned before
+  review and the resolved entity after — both point-in-time supersession
+  paths (conflict-arbitration and human-review) now close intervals
+  consistently.
 
-- **Predicate literals are now runtime-validated against `config/ontologies/sales.yml`.**
-  `src/extraction/fixture_provider.py`'s `_RULES` hardcode `RAISED_OBJECTION`,
-  `HAS_BLOCKER`, `HAS_ACTION_ITEM`, `MENTIONS_ORG` as free strings. The
-  ontology YAML defines `RAISED_OBJECTION` but not the other three, and
-  `OntologyRegistry.load()` (`src/graph/ontology_registry.py`) has no live
-  call site anywhere in `src/` or `api/` — the YAML currently constrains
-  nothing at runtime, so a predicate typo in `fixture_provider.py` would go
-  undetected. See the `TODO` in `fixture_provider.py` and
-  `docs/ontology.md`'s matching note. Predicate creation is now blocked by
-  `src/graph/sales_ontology.py`; broader relationship migration remains open.
+- **Claim predicates are runtime-validated against `config/ontologies/sales.yml`.**
+  `src/extraction/fixture_provider.py`'s `_RULES` (`RAISED_OBJECTION`,
+  `HAS_BLOCKER`, `HAS_ACTION_ITEM`, `MENTIONS_ORG`) are checked by
+  `src/graph/sales_ontology.py::validate_claim_predicate()`, called from
+  `TranscriptIngestionPipeline` on every extracted assertion before a Claim
+  is built — a typo raises `UnknownClaimPredicate` at ingestion. See
+  `docs/ontology.md`'s matching section.
+
+  **`relation_rules` (the separate, graph-*edge* vocabulary) is not
+  enforced, and deliberately not being built out further right now**: of
+  its five entries, only `HAS_ASSIGNMENT`/`ASSIGNS`
+  (`src/graph/repositories/stakeholder_repository.py`) are actual
+  materialized Cypher relationships anywhere in this codebase.
+  `ADDRESSES_OBJECTION` documents the Objection-ContentAsset mapping's
+  *intent* but the real implementation
+  (`src/usecases/objection_content_recommendation.py`) matches on
+  `content_asset.tags`, never writes that edge; `CONVERTED_TO` and
+  `MERGED_INTO` (Lead conversion, Account merge, §5) aren't implemented at
+  all in this vertical slice. Building a `relation_rules` validator today
+  would exercise 2 real edges out of 5 documented ones — not worth the
+  surface area until the missing write paths exist to validate.
 
 - **Ingestion is durable when `INGESTION_QUEUE_ENABLED=true`; synchronous only in local fallback.**
   `api/routes/ingestions.py` runs each pipeline call directly inside the HTTP
