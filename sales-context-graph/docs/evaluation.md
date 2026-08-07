@@ -13,7 +13,7 @@ test` (or `pytest tests/` directly, after `docker compose up -d neo4j redis`).
 ## Test suite results
 
 ```
-355 passed in 126.55s (2026-08-05, this session's final full run)
+356 passed in 157.80s (2026-08-05, this session's final full run)
 ```
 
 | Suite | Count | What it proves |
@@ -33,7 +33,7 @@ test` (or `pytest tests/` directly, after `docker compose up -d neo4j redis`).
 | `tests/unit/usecases/` | 5 | Content-effectiveness stage-as-of reconstruction. |
 | `tests/unit/ingestion/` | 6 | Showpad adapter parsing (asset views, shares); `src/ingestion/queue.py`'s enqueue-once idempotency, retry-then-dead-letter, and `queue_enabled()` flag gating. |
 | `tests/integration/` | 115 | Everything above, end to end, against live Neo4j: tenant isolation, CRM reconciliation, transcript ingestion, the full VW fixture suite, async review (now closing the reviewed Claim's bitemporal interval), Context Graph budget/diversity enforcement, content effectiveness, conflict detection + resolution, buying-committee + LLM role classification, cross-deal aggregation, temporal + point-in-time queries (including the review-path interval-closing case), natural-language ask (including tenant-isolated entity linking and every refusal path), narrative summaries, and the proactive digest. |
-| `tests/eval/` | 2 | Blocking recall; Context Graph build latency at 300 Claims (see below). |
+| `tests/eval/` | 3 | Blocking recall at small (10) and realistic (600) scale; Context Graph build latency at 300 Claims (see below). |
 | `tests/security/` | 3 | Prompt delimiting, size limits, injected-instruction containment. |
 
 No test is skipped, xfailed, or marked slow-and-ignored. Every LLM-backed test
@@ -84,18 +84,40 @@ STATUS: AUTO_LINKED -> Volkswagen Group
 blocking_recall@10=1.00 @25=1.00 @50=1.00 (pool_size=10)
 ```
 
-**Honest limitation** (stated in `tests/eval/test_blocking_recall.py`'s own
-docstring): candidate generation currently fetches the full tenant-scoped name
-pool (`CandidateGenerator.all_names_in_workspace`) rather than querying a
-DB-native trigram/ANN index. At this fixture's scale (10 accounts per
-workspace), every candidate trivially fits under the `cap=50` budget, so 100%
-recall is close to guaranteed by construction — a real measurement, not a
-rigged one, but not a stress test of blocking quality at scale. A meaningful
-recall-degradation measurement would need hundreds-to-thousands of entities
-per workspace, which this vertical slice's fixtures don't provide.
-`candidate_generation_miss` (the case where the expected entity isn't in the
-pool at all) is reported separately from an ordinary unresolved result, per
-§8 — `misses == []` is asserted explicitly, not just recall > 0.
+At this fixture's scale (10 accounts per workspace), every candidate
+trivially fits under the `cap=50` budget, so 100% recall is close to
+guaranteed by construction — a real measurement, not a rigged one, but not a
+stress test of blocking quality at scale. `candidate_generation_miss` (the
+case where the expected entity isn't in the pool at all) is reported
+separately from an ordinary unresolved result, per §8 — `misses == []` is
+asserted explicitly, not just recall > 0.
+
+**At scale — gap closed, and the finding is real, not reassuring.**
+`tests/eval/test_blocking_recall_at_scale.py` (added 2026-08-05) seeds 600
+synthetic Account names into one workspace — no labeled corpus needed, since
+"is this specific name present in the returned pool" is a mechanical check,
+not a judgment call — and measures recall for 5 target names at controlled
+creation positions (2 created first, 1 in the middle, 2 created last).
+Measured result:
+```
+blocking_recall@50 on a 600-entity pool: 2/5 = 0.40
+  early-created (idx<300) recall: 1.00
+  mid/late-created (idx>=300) recall: 0.00
+```
+`CandidateGenerator.all_names_in_workspace` has no `ORDER BY`, and
+`union_candidates()` truncates by Python dict insertion order
+(`src/resolution/candidates.py:168`) — which tracks Neo4j's unordered MATCH
+return order, which for `MERGE`-created nodes correlates with creation
+order. The practical consequence, now measured rather than theorized: **an
+entity created after roughly the first `cap` accounts in a workspace can be
+invisible to candidate generation entirely**, before scoring ever runs —
+not a near-miss, a hard zero for every target index at or past the
+mid-point. This is worse than "not stress-tested," which is what the prior
+version of this entry said; it is a **confirmed correctness gap** at
+realistic workspace sizes, and the fix (order the query by relevance —
+e.g. a trigram/full-text score — or query indexed by name-prefix around the
+mention text rather than fetching the unordered full pool) is not yet
+implemented. Not filed as a separate ADR; tracked here until it is.
 
 ### Auto-link precision / review rate / unresolved recall
 
@@ -188,9 +210,15 @@ have.
 
 - No precision/recall study against a labeled corpus (would need a larger,
   human-annotated dataset than this vertical slice's fixtures provide).
-- Blocking recall is measured honestly but at a scale where it's close to
-  vacuous (see above) — meaningful only once candidate generation moves beyond
-  full-pool fetching.
+- **Blocking recall at scale — now measured, and it's a real gap, not a
+  reassurance.** `tests/eval/test_blocking_recall_at_scale.py` (2026-08-05)
+  found `blocking_recall@50 = 0.40` on a 600-entity pool, dropping to `0.00`
+  for entities created after roughly the first `cap` accounts in a
+  workspace — `union_candidates()`'s insertion-order truncation
+  (`src/resolution/candidates.py:168`) with no relevance ordering upstream.
+  See "Blocking recall" above for the full measurement. Fix (order
+  candidate generation by relevance instead of fetching the unordered full
+  pool) not yet implemented.
 - **Load/latency — now measured once, honestly, not a load test.**
   `tests/eval/test_context_graph_latency.py` (added 2026-08-05) seeds 300
   Claims on one Conversation (an order of magnitude past every other fixture
