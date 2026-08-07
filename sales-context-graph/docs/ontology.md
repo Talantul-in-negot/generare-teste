@@ -85,13 +85,24 @@ Defines `type_hierarchy`, and `relation_rules` including
 level. Replaces a leftover ad-tech-industry (advertiser/campaign/publisher)
 template that was in this file from the initial project scaffold.
 
-**Open TODO — predicate literals are disconnected from this file.**
-`relation_rules` defines `RAISED_OBJECTION` but not `HAS_BLOCKER`,
-`HAS_ACTION_ITEM`, or `MENTIONS_ORG` — the other three predicates
-`src/extraction/fixture_provider.py`'s `_RULES` actually emit (see the
-`TODO` comment there). Because `OntologyRegistry.load()` has no live call
-site, none of this constrains extraction at runtime today — a predicate
-typo in `fixture_provider.py` would not be caught by this ontology. Wiring
-it in (load the ontology once, validate/source predicate names against it,
-fill in the three missing `relation_rules` entries) is a real refactor, not
-started.
+### Claim predicates (`claim_predicates`) — runtime-enforced
+
+`claim_predicates` lists the evidence vocabulary a `Claim.predicate` may use:
+`RAISED_OBJECTION`, `HAS_BLOCKER`, `HAS_ACTION_ITEM`, `MENTIONS_ORG`. It is
+kept **separate from `relation_rules`** deliberately: a Claim is an evidence
+assertion whose subject/object can be opaque text or an id, not necessarily a
+materialized graph edge.
+
+This list is enforced at runtime, not documentation-only:
+`src/graph/sales_ontology.py::validate_claim_predicate()` is called by
+`TranscriptIngestionPipeline` on every extracted assertion before a Claim is
+constructed, raising `UnknownClaimPredicate` on anything ungoverned. A
+predicate typo in `src/extraction/fixture_provider.py`'s `_RULES` therefore
+fails at ingestion instead of silently creating an off-ontology Claim.
+Adding an extraction rule requires adding its predicate here too.
+
+**Still open:** `relation_rules` (the *graph edge* vocabulary, as opposed to
+claim predicates) has no equivalent runtime enforcement —
+`OntologyRegistry.load()` still has no live call site for schema-drift
+detection against materialized relationships. See `docs/evaluation.md`'s
+"Known measurement gaps".

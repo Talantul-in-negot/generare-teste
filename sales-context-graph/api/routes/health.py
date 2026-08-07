@@ -7,8 +7,10 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from src.core.neo4j_client import get_neo4j
+from src.core.config import get_settings
 from src.graph.execution import GraphExecutor
 from src.graph.schema import ALL_INDEX_NAMES
+from src.ingestion.queue import queue_health
 
 router = APIRouter()
 
@@ -38,4 +40,11 @@ async def ready() -> JSONResponse:
             status_code=503,
             content={"status": "not_ready", "missing_indexes": missing, "indexes_not_online": not_online},
         )
+    if get_settings().ingestion_queue_enabled:
+        try:
+            health = await queue_health()
+        except Exception as exc:
+            return JSONResponse(status_code=503, content={"status": "not_ready", "reason": f"redis unavailable: {exc}"})
+        if not health["redis_available"] or not health["worker_alive"]:
+            return JSONResponse(status_code=503, content={"status": "not_ready", "ingestion_queue": health})
     return JSONResponse(status_code=200, content={"status": "ready"})

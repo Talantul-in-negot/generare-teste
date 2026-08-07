@@ -209,16 +209,20 @@ have.
   `tests/integration/test_as_of_queries.py`'s boundary test (closed at T2 ->
   visible at T1, invisible at T3).
 
-  **What's still not covered**: `src/review/service.py`'s `ReviewService.resolve()`
+  **Historical gap, closed in this increment**: `src/review/service.py`'s `ReviewService.resolve()`
   reconciles a Claim by rewriting its `subject_id` and re-persisting — it does
   not call `close_claim_interval`, so a Claim reconciled that way never closes
   its interval and always appears at every `as_of` query, including dates
   before it was superseded by review. This is the one remaining gap from the
   original entry, narrowed rather than silently declared fully solved — a
   future increment would need to route `ReviewService`'s reconciliation
-  through the same interval-closing call.
+  through the same interval-closing call. It now calls
+  `ClaimRepository.reconcile_claim_subject()`, which snapshots the old Claim
+  into `ClaimRevision` with a closed transaction interval and starts the
+  current Claim at the review timestamp. The new integration test proves the
+  old opaque subject is returned before review and the resolved entity after.
 
-- **Predicate literals are disconnected from `config/ontologies/sales.yml`.**
+- **Predicate literals are now runtime-validated against `config/ontologies/sales.yml`.**
   `src/extraction/fixture_provider.py`'s `_RULES` hardcode `RAISED_OBJECTION`,
   `HAS_BLOCKER`, `HAS_ACTION_ITEM`, `MENTIONS_ORG` as free strings. The
   ontology YAML defines `RAISED_OBJECTION` but not the other three, and
@@ -226,12 +230,279 @@ have.
   call site anywhere in `src/` or `api/` — the YAML currently constrains
   nothing at runtime, so a predicate typo in `fixture_provider.py` would go
   undetected. See the `TODO` in `fixture_provider.py` and
-  `docs/ontology.md`'s matching note. Not started.
+  `docs/ontology.md`'s matching note. Predicate creation is now blocked by
+  `src/graph/sales_ontology.py`; broader relationship migration remains open.
 
-- **Ingestion is synchronous in-process, not a durable queue.**
+- **Ingestion is durable when `INGESTION_QUEUE_ENABLED=true`; synchronous only in local fallback.**
   `api/routes/ingestions.py` runs each pipeline call directly inside the HTTP
-  request handler — permitted for the MVP by §11 of `docs/plan.md`, but a
-  process crash mid-ingestion loses the in-flight work (only the job
-  *status*, via `RedisIngestionStore`, is durable today). Full design in
-  [`docs/adr-0001-durable-ingestion-queue.md`](adr-0001-durable-ingestion-queue.md)
-  (RQ over the existing Redis instance). Design only — no code changed.
+  request handler when the queue is disabled — permitted for the MVP by §11 of
+  `docs/plan.md`. With the queue enabled, a process crash mid-ingestion no
+  longer loses the in-flight work: `src/ingestion/queue.py` + `worker.py`
+  persist it in a Redis list with idempotent enqueue, bounded retry, and a
+  dead-letter path. Full design in
+  [`docs/adr-0001-durable-ingestion-queue.md`](adr-0001-durable-ingestion-queue.md).
+
+  **Two bugs found and fixed while verifying this (2026-08-05, this session)
+  — both were silent until the full suite ran together, not caught by any
+  single test in isolation:**
+  1. `src/core/redis_client.py`'s loop-affinity check compared `id(loop)`,
+     which CPython can reuse across a closed loop and a freshly created one
+     in the same process (pytest creates one loop per test) — the cached
+     client's dead transport was reused, failing with `'NoneType' object has
+     no attribute 'send'`. Fixed to compare the loop object itself via
+     `weakref`, not its `id()`.
+  2. `api/routes/ingestions.py` resolved `_store = get_ingestion_store()`
+     once at **module import time**, capturing whichever Redis client existed
+     then — every request after the import-time loop closed reused that same
+     dead client regardless of bug 1's fix. Replaced with `_StoreProxy`,
+     which calls `get_ingestion_store()` fresh per request.
+
+  Symptom before the fix: `tests/integration/test_ingestion_api.py`'s two
+  tests failed only when run as part of the full suite (`pytest tests/`),
+  passing individually — a strong signal the bug was event-loop lifecycle,
+  not pipeline logic. `python -m pytest tests/ -q` — **354 passed**, verified
+  after the fix, full suite, not per-file.
+
+  Also fixed in the same pass: `tests/unit/graph_legacy/test_config.py` had
+  begun failing once a real `.env` existed locally (its docstring assumed one
+  never would) — two of its tests read ambient `NEO4J_URI`/
+  `WORKSPACE_API_KEYS` from `.env` instead of the defaults/absence they meant
+  to assert. Fixed by passing `_env_file=None` explicitly in those two tests
+  rather than relying on the file's absence.
+
+## Product-readiness and market gap analysis (2026-08-05)
+
+### Bottom line
+
+This repository is a strong, unusually careful **vertical slice**, not yet a
+production sales-intelligence product. Its best foundations are evidence-level
+provenance, deterministic/idempotent graph writes, tenant-scoped query guards,
+explicit ambiguity states, and an honest test suite. Those are the right
+building blocks for a system that salespeople can trust when a customer name is
+misspelled or a transcript contradicts the CRM.
+
+It must not yet be described as *reliable, deployable, robust, load-tested or
+fully functional* for a real Showpad customer. The central gap is operational:
+the repo accepts fixture-shaped exports and answers useful questions, but it
+does not yet securely connect to production systems, process a backlog
+durably, enforce user-level access rights, prove quality on representative
+customer data, or meet a measured service-level objective (SLO).
+
+### Market reference point and product implication
+
+The category is now judged on proactive, in-workflow help rather than a
+standalone graph search screen. Showpad positions its AI around content search,
+contextual recommendations and coaching; its current buyer guide also calls
+out role-play, account-aware content recommendations, revenue-linked
+analytics, mobile/offline support and field selling. [Showpad AI](https://www.showpad.com/product/showpad-ai)
+and [Showpad's 2026 market guide](https://www.showpad.com/blog/ai-sales-enablement-platforms-2026-buyers-guide)
+are useful product references, not independent validation.
+
+Conversation-intelligence competitors set a similarly high trust and workflow
+bar: Gong's assistant uses call, account, deal and participant context,
+supports follow-up questions, and returns transcript citations; it is also
+available from deal/account surfaces and mobile. [Gong Assistant](https://help.gong.io/docs/ai-ask-anything-is-evolving-into-gong-assistant)
+and [Ask anything for deals/accounts](https://help.gong.io/docs/pipeline-review-ask-anything-about-a-deal-or-account)
+describe that baseline. Salesforce now pairs conversation-derived CRM updates,
+deal warnings, coaching, Slack delivery and agent actions in the seller's flow
+of work. [Salesforce Conversation Intelligence](https://www.salesforce.com/sales/conversation-intelligence/)
+and [Agentforce Sales](https://www.salesforce.com/sales/ai-sales-agent/) are
+the relevant enterprise benchmark.
+
+| Buyer-visible capability | Present evidence in this repo | Gap to close |
+|---|---|---|
+| Grounded Q&A, deal/account context, point-in-time answers | Implemented for a bounded intent catalog, citation/grounding tests, partial bitemporal reconstruction | Return deep links to the exact transcript time/span and CRM record in every answer; preserve full history when human review changes identity; evaluate arbitrary multi-hop questions. |
+| Fuzzy names and ambiguous people/accounts | Deterministic + fuzzy/semantic/relational resolution, review states and 6 targeted VW cases | Production alias lifecycle, multilingual/transliteration handling, tenant-specific calibration, active-learning review UI and a large labeled benchmark. |
+| Deal risk / next-best action / proactive updates | Five rule-based signals, digest and a content recommendation use case | Make signals configurable, explainable and feedback-trained; rank actions by expected impact; support owner acknowledgement, due dates and CRM/Slack write-back approval. |
+| Content intelligence | Showpad-shaped asset/view/share adapters and objection-to-unviewed-content recommendation | Real Showpad connector, permission-aware content retrieval, content version/expiry/compliance status, buyer-room and outcome attribution. |
+| Coaching and readiness | Narrative summaries and optional stakeholder role classification | Call scorecards, coachable moments with clips, role-play/practice loop, competency model, certifications and manager workflow. |
+| In-flow seller experience | API, simple `/viz` panel and Slack webhook digest | OAuth-installed Salesforce/Showpad/Slack/Teams app, record-page widgets, mobile/offline experience, notifications/preferences and accessible UX. |
+| Enterprise governance | Workspace API key, query structural guard, basic prompt-delimiting tests | SSO, SCIM, RBAC/ABAC and source permissions, audit/export controls, retention/erasure execution, data residency and security operations. |
+
+### Target architecture: evidence graph, retrieval, and guarded actions
+
+Keep the current `Claim` model. Do **not** replace it with a vector-only RAG
+store or materialize every LLM extraction as an unquestioned CRM fact. The
+recommended product architecture is:
+
+```mermaid
+flowchart LR
+    A["Salesforce / Gong / Showpad / email / calendar"] --> B["OAuth + webhook/CDC connectors"]
+    B --> C["Durable queue, replay, DLQ"]
+    C --> D["Normalize, deduplicate, resolve entities"]
+    D --> E["Evidence graph: claims, time, source and permissions"]
+    D --> F["Hybrid retrieval: graph + lexical + vector"]
+    E --> F
+    F --> G["Cited answer / brief / risk / recommendation"]
+    G --> H["Human approval policy"]
+    H --> I["CRM, Showpad, Slack/Teams actions"]
+    G --> J["Feedback, evaluation and observability"]
+```
+
+Every retrieved item needs the caller's effective permissions, source ID,
+freshness, confidence and evidence span. Generated text is a view over that
+evidence, never the authority. Read-only assistance can be automatic; any
+external effect (update stage, create task, send email/share) needs an
+explicit policy, preview, idempotency key and audit event. This distinction is
+especially important because prompt injection remains a recognised LLM risk;
+the existing transcript delimiter is valuable but is only one control. See
+[OWASP's 2025 injection guidance](https://owasp.org/Top10/2025/A05_2025-Injection/)
+and [NIST AI 600-1](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence)
+for risk-management framing.
+
+### Delivery roadmap, ordered by release gate
+
+#### Gate 0 — production safety before a pilot
+
+1. **Identity and authorization.** Replace caller-supplied workspace headers
+   and static key maps with OIDC/SAML SSO, short-lived JWT validation, SCIM
+   provisioning, RBAC plus ABAC. Enforce the source object's ACL/division/team
+   at ingestion *and* retrieval; a workspace scope alone is not enough for a
+   sales transcript or restricted Showpad asset. Add API rate limiting,
+   request-size limits, CORS policy, WAF, secret manager/key rotation and a
+   complete immutable audit log.
+2. **Data lifecycle and privacy.** Implement the existing retention and
+   erasure design end-to-end: deletion request -> source text/embeddings
+   removal -> derived-claim invalidation -> cache/vector-index purge ->
+   retained minimal deletion audit. Define consent/recording policy, DPA,
+   retention schedule, regional storage, export and legal hold with Security
+   and Legal before onboarding customer data.
+3. **Trust contract for answers.** Require each factual sentence to cite an
+   accessible source span/record; show "unknown", conflicting evidence and
+   stale-data state instead of filling gaps. Add a safe refusal policy for
+   out-of-scope questions and a user feedback/control to report bad answers.
+4. **Finish correctness gaps already identified.** Make ontology YAML runtime
+   authoritative and versioned; route review reconciliation through interval
+   closure; add migration/version compatibility tests. These are prerequisites
+   for coherent "as of" answers.
+
+**Gate 0 acceptance:** a permissions regression suite proves that a user cannot
+discover either the existence or text of a forbidden item through graph,
+vector, cache, citation, autocomplete or generated answer; deletion is proven
+in a restore/replay environment; all factual answer fixtures have valid
+citations; threat model and security review are signed off.
+
+#### Gate 1 — reliable data plane and integrations
+
+1. Build real, separately configurable Salesforce, Gong and Showpad
+   connectors: OAuth installation/refresh, least scopes, webhook signature
+   validation, incremental cursor/CDC polling, backfill, source rate-limit
+   handling, source schema versioning and replay. Fixture parsers remain useful
+   contract-test adapters, but do not constitute an integration.
+2. Implement the queued-worker ADR, plus retries with exponential backoff and
+   jitter, bounded concurrency per tenant/source, poison-message dead-letter
+   queue, replay tooling, idempotency under at-least-once delivery, queue-age
+   alarms and an ingestion reconciliation dashboard.
+3. Store raw immutable source envelopes in encrypted object storage (or the
+   source of truth when contractual policy requires it), with hashes and
+   provenance links. Neo4j holds the graph/indexed representation; it should
+   not be the only recovery copy.
+4. Add entity-resolution operations: aliases with provenance/effective dates,
+   bulk merge/split, reviewer assignment/SLA, adjudication audit trail,
+   organization-specific rules and a human-in-the-loop feedback set.
+
+**Gate 1 acceptance:** an interrupted 10,000-record replay produces the same
+graph as a clean run; a deliberately poisoned record reaches the DLQ without
+blocking later work; a connector contract test runs against a sandbox or
+recorded API fixture; recovery-point and recovery-time objectives are tested,
+not merely declared.
+
+#### Gate 2 — seller value that competes in the workflow
+
+Prioritize these workflows over a generic autonomous agent:
+
+- **Meeting prep**: brief, buying committee, recent changes, open commitments,
+  risks, recommended approved assets and links to evidence.
+- **After-call closeout**: cited recap, decisions, actions/owners/dates,
+  objections, competitive mentions and a proposed CRM update for approval.
+- **Deal cockpit**: stage evidence versus CRM, missing stakeholders/MEDDICC
+  evidence, risk trend, last-touch/freshness, next-best action and escalation.
+- **Content coach**: permission-valid asset recommendation, why it fits this
+  persona/stage/objection, expiry/compliance check, share tracking and measured
+  content-to-outcome attribution.
+- **Manager/enablement loop**: coaching clips and scorecards, gap-to-practice
+  recommendation, certification/readiness and content gaps surfaced from deal
+  evidence.
+
+Deliver these as an installed app/panel in Salesforce and Showpad plus Slack or
+Teams notifications. Each recommendation needs reason codes, evidence, a
+feedback action (useful/not useful) and an opt-out/preference model. Begin with
+approval-gated actions; autonomy is earned only after audited precision.
+
+#### Gate 3 — quality, reliability and scale proof
+
+Create a representative, de-identified evaluation corpus before tuning models.
+It should span languages, regions, noisy ASR, abbreviated/misspelled company
+names, subsidiaries, duplicate contacts, mergers, restricted assets, deleted
+calls, conflicting CRM/transcript statements and each target workflow. Split
+by account and time, not random chunks, so the evaluation cannot leak the same
+customer into train and test.
+
+| Measure | Pilot release target | How to measure |
+|---|---:|---|
+| Entity auto-link precision | >= 99% | Human-labelled mentions; report by entity type/language and confidence band. |
+| Entity auto-link recall | >= 95% | Same held-out corpus; separately report candidate-generation recall@k. |
+| Human-review rate | <= 10%, with no forced link | Monitor by source/tenant; unresolved is safer than a false link. |
+| Citation correctness/completeness | >= 98% / 100% factual sentences cited | Blinded human review plus automated span/access checks. |
+| Extraction F1 for critical facts | >= 0.90 | Action, owner, due date, objection, competitor, budget and stage-evidence labels; score negation separately. |
+| Risk/next-best-action usefulness | baseline + statistically credible uplift | A/B or phased rollout on seller acceptance, task completion, cycle time and win-rate proxy; do not infer causality from views alone. |
+| Answer latency | p95 <= 3 s for cached/standard scoped answer; p99 <= 8 s | Production-like load test, excluding user think time; publish scope and corpus size. |
+| Ingestion freshness | p95 source-event-to-available <= 5 min after webhook; backfill SLO agreed | Trace event timestamps through each stage. |
+| Availability/error budget | >= 99.9% monthly API availability; < 0.5% server errors | Synthetic probes plus RED metrics; define planned-maintenance policy. |
+
+Use Locust or k6 with a production-like anonymised graph (at least the expected
+12-month entity/claim volume) and realistic mixes: 60% reads/Q&A, 20% meeting
+prep/deal cockpit, 15% webhooks, 5% bulk backfill. Test normal peak, 2x peak,
+source outage, Neo4j failover/unavailable, Redis/worker restart, LLM timeout,
+hot account, permission-heavy retrieval and concurrent replays. Capture p50/
+p95/p99 latency, throughput, queue age, DB connection saturation, memory/CPU,
+LLM tokens/cost and correctness after retries. No scale claim is valid until
+this test and a restore drill pass.
+
+### Deployment and operating model
+
+Replace the current single, stateless Fly MVP topology and AuraDB Free usage
+with an environment-separated production platform: managed production Neo4j
+with capacity/backup SLA, managed Redis/queue, horizontally scalable API and
+worker pools, encrypted object storage, private networking, central secrets,
+and a managed identity provider. Use infrastructure as code, isolated
+dev/staging/prod data, signed/container-scanned builds, dependency/SAST/DAST
+checks, schema migration gates, canary/rollback deployment and feature flags.
+
+Instrument every request and job with OpenTelemetry traces and structured
+events keyed by tenant, source, connector cursor, job, model/prompt version,
+retrieval set and policy decision. Export dashboards and alerts for the SLOs
+above, resolution drift, citation failures, queue lag/DLQ depth, connector
+error/rate-limit state, model latency/cost and permission denials. Create
+runbooks and on-call ownership for restore, connector outage, bad model/prompt
+rollout, suspected data leak and customer erasure.
+
+### Recommended first 90 days
+
+1. **Weeks 1-2: establish the pilot contract.** Select one Showpad workspace,
+   two seller workflows (meeting prep and post-call closeout), data owners,
+   user roles, source permissions, languages, data-retention policy, target
+   volumes and success metrics. Build the labelled evaluation seed set before
+   changing ranking/model prompts.
+2. **Weeks 3-6: make the data plane safe and replayable.** Ship OIDC/RBAC/ACL
+   enforcement, a real connector for the chosen CRM + transcript source, the
+   durable worker/DLQ/replay path, observability and the outstanding temporal/
+   ontology corrections. Exercise backup restore and permission tests.
+3. **Weeks 7-9: ship cited seller workflows.** Add source deep links, answer
+   trust states, approval-gated CRM write-back, embedded workflow UX and
+   feedback capture. Keep actions read/propose-only until the evaluation
+   thresholds are sustained.
+4. **Weeks 10-12: prove and expand.** Run capacity, failure and security tests;
+   compare the pilot to a defined baseline; review false links/citations with
+   users weekly; only then add Showpad content attribution, coaching, or a
+   second workspace.
+
+### Decision record
+
+The differentiator should be **trustworthy cross-system sales context**, not
+"an LLM that knows everything." Preserve the Claim/evidence/time model and
+use hybrid retrieval. Compete on exact citations, permission correctness,
+ambiguous-name safety, CRM/transcript disagreement handling, timely
+workflow-native recommendations and measurable revenue-team outcomes. Defer
+fully autonomous selling actions, bespoke fine-tuning and broad feature
+parity until Gates 0-3 have evidence of reliability.

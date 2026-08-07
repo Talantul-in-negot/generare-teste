@@ -34,7 +34,7 @@ _SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 _RELATION_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,49}$")
 _ONTOLOGY_SECTIONS = {
     "type_hierarchy", "relation_rules", "inference_rules",
-    "exclusive_state_pairs", "functional_relations",
+    "exclusive_state_pairs", "functional_relations", "claim_predicates",
 }
 
 

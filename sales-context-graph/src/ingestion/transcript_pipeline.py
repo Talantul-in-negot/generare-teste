@@ -28,6 +28,7 @@ from src.extraction.windowing import build_windows
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
 from src.graph.repositories.source_repository import SourceRepository
+from src.graph.sales_ontology import validate_claim_predicate
 from src.ingestion.reconciliation import ReconciliationOutcome, reconcile_deletion, reconcile_source_record
 from src.resolution.speaker import resolve_speaker
 
@@ -167,6 +168,7 @@ class TranscriptIngestionPipeline:
         claims_created = 0
         for result in results:
             for assertion in result.assertions:
+                predicate = validate_claim_predicate(assertion.predicate)
                 segment = segments_by_id[assertion.segment_id]
                 speaker_role = speaker_role_by_label.get(segment.speaker_label, SpeakerRole.UNKNOWN)
                 claim_id = _assertion_id(
@@ -175,7 +177,7 @@ class TranscriptIngestionPipeline:
                     assertion.evidence_char_start,
                     assertion.evidence_char_end,
                     segment.speaker_label,  # canonical_subject — see module docstring
-                    assertion.predicate,
+                    predicate,
                     assertion.object_text,
                     assertion.polarity.value,
                 )
@@ -183,7 +185,7 @@ class TranscriptIngestionPipeline:
                     claim_id=claim_id,
                     workspace_id=workspace_id,
                     subject_id=segment.speaker_label,
-                    predicate=assertion.predicate,
+                    predicate=predicate,
                     object_value=assertion.object_text,
                     polarity=assertion.polarity,
                     source_type="transcript",

@@ -17,14 +17,13 @@ from src.extraction.provider import ExtractedAssertion, ExtractionInput, Extract
 _NEGATION_CUES = ("not ", "n't ", "no longer ", "never ", "don't ", "doesn't ")
 _HYPOTHETICAL_CUES = ("if ", "would ", "could ", "hypothetically", "suppose")
 
-# TODO: these predicate literals are disconnected from config/ontologies/
-# sales.yml's relation_rules — that file defines RAISED_OBJECTION (and
-# nothing else used here: HAS_BLOCKER/HAS_ACTION_ITEM/MENTIONS_ORG are
-# missing from it) but OntologyRegistry.load() has no live call site
-# anywhere in src/ or api/, so the YAML currently constrains nothing at
-# runtime. Wiring predicate names to be sourced from/validated against that
-# ontology (and filling in the three missing relation_rules entries) is a
-# real refactor — deferred, not started, see conversation 2026-08-05.
+# These predicate literals are governed by config/ontologies/sales.yml's
+# `claim_predicates` list, enforced at runtime: TranscriptIngestionPipeline
+# calls src/graph/sales_ontology.py::validate_claim_predicate() on every
+# assertion before a Claim is built, so a typo here raises
+# UnknownClaimPredicate at ingestion rather than silently creating an
+# ungoverned predicate. Adding a rule below therefore also requires adding
+# the predicate to that YAML list.
 
 # (pattern, predicate, object_text) — order matters: first match per segment wins.
 _RULES: list[tuple[re.Pattern, str, str]] = [

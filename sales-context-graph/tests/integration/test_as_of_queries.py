@@ -101,6 +101,41 @@ async def test_never_superseded_claims_appear_at_every_as_of(executor):
     assert {c.claim_id for c in found} == {"claim-forever"}
 
 
+async def test_review_subject_reconciliation_preserves_bitemporal_history(executor):
+    """A reviewer correction is not allowed to rewrite what the system showed
+    before the decision. The current Claim keeps its stable id while the old
+    subject is represented by a closed ClaimRevision interval."""
+    workspace_id = f"ws-asof-review-{uuid4().hex[:8]}"
+    claim_repo = ClaimRepository(executor)
+    t0 = _T0
+    t1 = _T0 + timedelta(days=3)
+    claim = _claim(workspace_id, "claim-reviewed", source_timestamp=t0).model_copy(
+        update={"subject_id": "volks wagen"}
+    )
+    await claim_repo.create_claim(claim)
+
+    changed = await claim_repo.reconcile_claim_subject(
+        workspace_id,
+        claim.claim_id,
+        subject_id="account-vw-group",
+        decided_at=t1,
+        review_decision_id="review-vw-1",
+    )
+
+    assert changed is True
+    current = await claim_repo.get_claim(workspace_id, claim.claim_id)
+    assert current.subject_id == "account-vw-group"
+    assert current.transaction_from == t1
+
+    before = await claim_repo.list_claims_as_of(workspace_id, "volks wagen", t0)
+    after_old_subject = await claim_repo.list_claims_as_of(workspace_id, "volks wagen", t1)
+    after_new_subject = await claim_repo.list_claims_as_of(workspace_id, "account-vw-group", t1)
+
+    assert [item.claim_id for item in before] == [claim.claim_id]
+    assert after_old_subject == []
+    assert [item.claim_id for item in after_new_subject] == [claim.claim_id]
+
+
 # ── ConflictsUseCase.resolve ─────────────────────────────────────────────────
 
 async def _seed_conflict(executor, workspace_id: str, claim_a: Claim, claim_b: Claim) -> str:

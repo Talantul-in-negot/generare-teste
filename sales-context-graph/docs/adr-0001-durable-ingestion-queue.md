@@ -1,6 +1,6 @@
 # ADR-0001 — Durable ingestion queue (design, not yet implemented)
 
-**Status:** Proposed
+**Status:** Implemented (feature-flagged)
 **Date:** 2026-08-05
 
 ## Context
@@ -119,9 +119,11 @@ parts, by design. The queue only needs:
 
 ## Not done in this ADR
 
-No code was changed to write this document — per explicit scope agreed
-before starting. Implementing this is estimated at low-single-digit days for
-the "minimal illustrative" version (one RQ worker, no sophisticated
-backoff/backpressure tuning) described above, more for a fully
-production-hardened version (dead-letter handling, per-workspace queue
-isolation, horizontal worker scaling).
+The implemented seam is `src/ingestion/queue.py` plus
+`src/ingestion/worker.py`: Redis list delivery, idempotent enqueue markers,
+bounded retry, and a dead-letter list. `INGESTION_QUEUE_ENABLED=false` keeps
+local development synchronous; Compose and Fly enable it and run a separate
+worker. Exactly-once delivery, per-workspace fairness and horizontal worker
+tuning remain operational follow-ups, while graph writes remain safe under
+at-least-once delivery because the existing reconciliation/MERGE paths are
+idempotent.

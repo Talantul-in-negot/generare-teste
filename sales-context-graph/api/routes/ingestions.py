@@ -33,10 +33,32 @@ from src.ingestion.adapters.gong import GongAdapter
 from src.ingestion.adapters.salesforce import SalesforceAdapter
 from src.ingestion.adapters.showpad import ShowpadAdapter
 from src.ingestion.pipeline import ContentIngestionPipeline, CrmIngestionPipeline
+from src.ingestion.queue import IngestionQueueMessage, maybe_enqueue
 from src.ingestion.transcript_pipeline import TranscriptIngestionPipeline
 
 router = APIRouter(prefix="/api/v1/ingestions", tags=["ingestions"])
-_store = get_ingestion_store()
+
+
+class _StoreProxy:
+    """Resolve the ingestion store per call, never once at import.
+
+    Binding it at module scope captured whichever Redis client existed at
+    import time, and `redis.asyncio` connections are event-loop-bound: once
+    that loop closed, every later request reused a dead transport and failed
+    with "'NoneType' object has no attribute 'send'". Only visible when
+    REDIS_URL is actually set (the in-memory fallback has no loop affinity),
+    which is why it surfaced once .env configured Redis. get_ingestion_store()
+    is a cheap constructor call, and get_redis() caches per loop underneath.
+    """
+
+    async def get(self, ingestion_id: str):
+        return await get_ingestion_store().get(ingestion_id)
+
+    async def put(self, job) -> None:
+        await get_ingestion_store().put(job)
+
+
+_store = _StoreProxy()
 
 
 class CrmIngestionRequest(BaseModel):
@@ -79,6 +101,9 @@ async def ingest_crm(body: CrmIngestionRequest, workspace_id: str = Depends(veri
     )
     await _store.put(job)
 
+    if await maybe_enqueue(IngestionQueueMessage(ingestion_id, workspace_id, "crm", body.model_dump())):
+        return {"ingestion_id": ingestion_id, "state": job.state.value}
+
     executor = GraphExecutor()
     pipeline = CrmIngestionPipeline(CrmRepository(executor), SourceRepository(executor), SalesforceAdapter())
 
@@ -120,6 +145,9 @@ async def ingest_content_assets(
     )
     await _store.put(job)
 
+    if await maybe_enqueue(IngestionQueueMessage(ingestion_id, workspace_id, "content-assets", body.model_dump())):
+        return {"ingestion_id": ingestion_id, "state": job.state.value}
+
     executor = GraphExecutor()
     pipeline = ContentIngestionPipeline(ContentRepository(executor), SourceRepository(executor), ShowpadAdapter())
 
@@ -149,6 +177,9 @@ async def ingest_engagement(body: EngagementIngestionRequest, workspace_id: str 
         state=IngestionState.ACCEPTED, created_at=now, updated_at=now,
     )
     await _store.put(job)
+
+    if await maybe_enqueue(IngestionQueueMessage(ingestion_id, workspace_id, "engagement", body.model_dump())):
+        return {"ingestion_id": ingestion_id, "state": job.state.value}
 
     executor = GraphExecutor()
     pipeline = ContentIngestionPipeline(ContentRepository(executor), SourceRepository(executor), ShowpadAdapter())
@@ -184,6 +215,9 @@ async def ingest_transcripts(
         state=IngestionState.ACCEPTED, created_at=now, updated_at=now,
     )
     await _store.put(job)
+
+    if await maybe_enqueue(IngestionQueueMessage(ingestion_id, workspace_id, "transcripts", body.model_dump())):
+        return {"ingestion_id": ingestion_id, "state": job.state.value}
 
     executor = GraphExecutor()
     # Fixture extractor by default — pyproject.toml's own open item notes no

@@ -38,6 +38,9 @@ INDEX_STATEMENTS: list[str] = [
     "CREATE INDEX conversation_workspace_occurred_at IF NOT EXISTS FOR (n:Conversation) ON (n.workspace_id, n.occurred_at)",
     # (workspace_id, adjudication_status, is_superseded)
     "CREATE INDEX claim_workspace_adjudication IF NOT EXISTS FOR (n:Claim) ON (n.workspace_id, n.adjudication_status, n.is_superseded)",
+    # Historical identity corrections are queried by subject and transaction
+    # interval for point-in-time reconstruction.
+    "CREATE INDEX claim_revision_workspace_subject_time IF NOT EXISTS FOR (n:ClaimRevision) ON (n.workspace_id, n.subject_id, n.transaction_from, n.transaction_to)",
 ]
 
 FULLTEXT_STATEMENTS: list[str] = [
@@ -72,6 +75,7 @@ ALL_INDEX_NAMES: list[str] = [
     "mention_workspace_resolution_status",
     "conversation_workspace_occurred_at",
     "claim_workspace_adjudication",
+    "claim_revision_workspace_subject_time",
     "account_contact_names",
     "contact_embeddings_v1",
 ]

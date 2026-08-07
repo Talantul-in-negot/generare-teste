@@ -8,6 +8,7 @@ Claim is actually about) and workspace_id.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 
 from src.domain.assertion import Claim
@@ -27,6 +28,11 @@ _CLAIM_RETURN = (
     "cl.retention_class AS retention_class, cl.erasure_status AS erasure_status, "
     "cl.created_at AS created_at"
 )
+
+
+def _claim_return(alias: str) -> str:
+    """Return the Claim projection for either a current Claim or a revision."""
+    return _CLAIM_RETURN.replace("cl.", f"{alias}.")
 
 
 def _claim_params(claim: Claim) -> dict:
@@ -299,6 +305,47 @@ class ClaimRepository:
             transaction_to=transaction_to.isoformat(),
         )
 
+    async def reconcile_claim_subject(
+        self,
+        workspace_id: str,
+        claim_id: str,
+        *,
+        subject_id: str,
+        decided_at: datetime,
+        review_decision_id: str,
+    ) -> bool:
+        """Apply a human identity correction without erasing Claim history."""
+        revision_id = hashlib.sha256(
+            f"{workspace_id}\x1f{claim_id}\x1f{review_decision_id}\x1f{subject_id}".encode("utf-8")
+        ).hexdigest()
+        match = scoped_match("Claim", "cl", claim_id="claim_id")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {match}
+            MERGE (revision:ClaimRevision {{workspace_id: $workspace_id, revision_id: $revision_id}})
+            ON CREATE SET revision = properties(cl),
+                          revision.revision_id = $revision_id,
+                          revision.revised_claim_id = cl.claim_id,
+                          revision.review_decision_id = $review_decision_id,
+                          revision.transaction_to = $decided_at,
+                          revision.is_superseded = true
+            MERGE (cl)-[:HAS_REVISION]->(revision)
+            SET cl.subject_id = $subject_id,
+                cl.transaction_from = $decided_at,
+                cl.transaction_to = NULL,
+                cl.is_superseded = false,
+                cl.review_reconciled = true
+            RETURN cl.claim_id AS claim_id
+            """,
+            workspace_id=workspace_id,
+            claim_id=claim_id,
+            subject_id=subject_id,
+            decided_at=decided_at.isoformat(),
+            review_decision_id=review_decision_id,
+            revision_id=revision_id,
+        )
+        return bool(rows)
+
     async def list_claims_as_of(self, workspace_id: str, subject_id: str, as_of: datetime) -> list[Claim]:
         """True point-in-time reconstruction: every Claim whose transaction
         interval was open at `as_of` — recorded by then
@@ -315,13 +362,19 @@ class ClaimRepository:
         interval — documented explicitly in docs/evaluation.md, not silently
         assumed away.
         """
-        match = scoped_match("Claim", "cl", subject_id="subject_id")
+        current_match = scoped_match("Claim", "cl", subject_id="subject_id")
+        revision_match = scoped_match("ClaimRevision", "revision", subject_id="subject_id")
         rows = await self._executor.tenant_query(
             f"""
-            MATCH {match}
+            MATCH {current_match}
             WHERE cl.transaction_from <= $as_of
               AND (cl.transaction_to IS NULL OR cl.transaction_to > $as_of)
             RETURN {_CLAIM_RETURN}
+            UNION ALL
+            MATCH {revision_match}
+            WHERE revision.transaction_from <= $as_of
+              AND (revision.transaction_to IS NULL OR revision.transaction_to > $as_of)
+            RETURN {_claim_return("revision")}
             """,
             workspace_id=workspace_id,
             subject_id=subject_id,

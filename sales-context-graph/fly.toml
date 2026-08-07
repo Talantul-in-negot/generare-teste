@@ -8,11 +8,17 @@ primary_region = "iad"
 [build]
   dockerfile = "Dockerfile"
 
+[processes]
+  app = "uvicorn api.main:app --host 0.0.0.0 --port 8000"
+  worker = "python -m src.ingestion.worker"
+
 [env]
   ENV = "production"
   LOG_LEVEL = "INFO"
+  INGESTION_QUEUE_ENABLED = "true"
 
 [http_service]
+  processes = ["app"]
   internal_port = 8000
   force_https = true
   auto_stop_machines = false

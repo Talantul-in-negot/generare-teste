@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     # Empty means "no Redis configured" -> falls back to InMemoryIngestionStore.
     redis_url: str = ""
 
+    # Durable ingestion execution is opt-in for local development and must be
+    # enabled in production together with the worker service.
+    ingestion_queue_enabled: bool = False
+    ingestion_queue_max_attempts: int = 3
+    ingestion_worker_heartbeat_seconds: int = 60
+
     # ── Proactive digest (Increment 17, see src/usecases/digest.py) ──────────────
     # Empty slack_webhook_url means POST /api/v1/digest/deliver returns 503 rather
     # than posting nowhere; GET /api/v1/digest (JSON, no delivery) works regardless.

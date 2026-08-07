@@ -1,8 +1,15 @@
-"""src/core/config.py must work with no .env and no config/settings.yml present —
-neither file exists in this repo yet (settings.yml is deferred to a later phase,
-see src/core/config.py's own comment), and the original graphrag/core/config.py
-this was forked from crashed on a missing settings.yml. That crash must not
-survive the fork.
+"""src/core/config.py must work with no .env and no config/settings.yml present
+(settings.yml is deferred to a later phase, see src/core/config.py's own
+comment), and the original graphrag/core/config.py this was forked from crashed
+on a missing settings.yml. That crash must not survive the fork.
+
+These tests pass `_env_file=None` rather than relying on `.env` being absent
+from the developer's checkout. `.env` is gitignored, so it does not exist in CI
+— but the README tells developers to create one (`cp .env.example .env`), and
+before this was made explicit, doing so broke two of these tests: `.env`'s
+NEO4J_URI overrode the expected default, and its WORKSPACE_API_KEYS satisfied
+the production check that the test asserts should fail. A config test must
+assert against declared defaults, not against whatever the local machine holds.
 """
 
 import pytest
@@ -27,7 +34,7 @@ def _clean_env(monkeypatch):
 
 
 def test_get_settings_works_with_no_env_file_and_no_settings_yaml():
-    settings = get_settings()
+    settings = Settings(_env_file=None)
     assert settings.neo4j_uri == "bolt://localhost:7687"
     assert settings.neo4j_user == "neo4j"
     assert settings.neo4j_password == "scg_dev_local"
@@ -51,7 +58,7 @@ def test_production_with_default_password_raises():
 
 def test_production_without_workspace_api_keys_raises():
     with pytest.raises(ValueError, match="workspace_api_keys"):
-        Settings(env="production", neo4j_password="a-real-secret")
+        Settings(_env_file=None, env="production", neo4j_password="a-real-secret")
 
 
 def test_production_with_changed_password_and_api_keys_does_not_raise():

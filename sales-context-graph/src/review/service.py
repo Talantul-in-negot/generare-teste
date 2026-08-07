@@ -65,10 +65,17 @@ class ReviewService:
         affected_claim_ids: list[str] = []
         if self._claim_repo is not None and not rejected and selected_entity_id:
             affected_claims = await self._claim_repo.list_claims_by_subject(workspace_id, mention.normalized_surface)
+            decision_id = _review_decision_id(mention_id, reviewer_id, decided_at)
             for claim in affected_claims:
-                updated_claim = claim.model_copy(update={"subject_id": selected_entity_id})
-                await self._claim_repo.create_claim(updated_claim)
-                affected_claim_ids.append(claim.claim_id)
+                reconciled = await self._claim_repo.reconcile_claim_subject(
+                    workspace_id,
+                    claim.claim_id,
+                    subject_id=selected_entity_id,
+                    decided_at=decided_at,
+                    review_decision_id=decision_id,
+                )
+                if reconciled:
+                    affected_claim_ids.append(claim.claim_id)
 
         updated_mention = mention.model_copy(update={
             "resolved_entity_id": selected_entity_id if not rejected else None,

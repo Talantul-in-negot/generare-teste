@@ -1,7 +1,8 @@
 # Deployment (Fly.io)
 
-MVP topology: the Fly app runs only the FastAPI container and is fully
-stateless. Neo4j runs on managed **AuraDB Free** (not a self-hosted Neo4j on a
+The Fly app runs separate `app` and `worker` process groups. The API is
+stateless; ingestion execution is Redis-backed and restart-safe when
+`INGESTION_QUEUE_ENABLED=true`. Neo4j runs on managed **AuraDB Free** (not a self-hosted Neo4j on a
 Fly volume — Neo4j is a stateful JVM process needing backup/upgrade
 management this MVP doesn't want to operate itself). The ingestion job store
 runs on Fly-managed **Redis** (`fly redis create`, Upstash-backed).
@@ -63,6 +64,11 @@ curl -X POST https://<your-app>.fly.dev/api/v1/context/build \
   -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: <generated key>" \
   -H "Content-Type: application/json" -d '{}'
 ```
+
+When `INGESTION_QUEUE_ENABLED=true`, `/ready` also verifies Redis and a
+short-lived worker heartbeat. A green API without a running worker is therefore
+reported as `503`, rather than silently accepting ingest requests that will not
+be processed.
 
 ## Rotating or adding a workspace key
 
