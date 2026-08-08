@@ -288,6 +288,8 @@ _PAGE = """<!doctype html>
   #panel input, #panel select, #panel textarea { width: 100%; padding: 6px; box-sizing: border-box; margin-top: 2px; font-family: inherit; }
   #panel button { margin-top: 14px; width: 100%; padding: 8px; background: var(--color-accent); color: var(--color-on-accent); border: none; border-radius: 4px; cursor: pointer; font-family: var(--font-body); }
   #panel button:hover { background: var(--color-accent-hover); }
+  .quick-questions { display: flex; align-items: center; gap: 6px; margin: 8px 0 12px; }
+  .quick-question { width: 32px !important; height: 30px; margin: 0 !important; padding: 0 !important; border-radius: 5px !important; }
   #panel input[type=checkbox] { width: auto; }
   #status, #qaStatus, #askStatus, #alertsStatus { margin-top: 10px; font-size: 12px; color: var(--color-danger-text); white-space: pre-wrap; }
   #meta { margin-top: 14px; font-size: 12px; color: var(--color-text-muted); }
@@ -372,15 +374,13 @@ _PAGE = """<!doctype html>
     <label>Question
       <textarea id="askQuestion" rows="3" placeholder="e.g. what objections has Volkswagen raised?"></textarea>
     </label>
-    <label>Quick question
-      <select id="askQuickQuestion">
-        <option value="">Choose a numbered question</option>
-        <option value="What objections are currently open?">1 — What objections are currently open?</option>
-        <option value="Who have we not engaged in this opportunity?">2 — Who have we not engaged?</option>
-        <option value="What content should I send next?">3 — What content should I send?</option>
-        <option value="What changed since the last call?">4 — What changed since last call?</option>
-      </select>
-    </label>
+    <div class="quick-questions" aria-label="Quick questions">
+      <span style="font-size:12px;color:var(--color-text-muted)">Quick:</span>
+      <button type="button" class="quick-question" data-question="What objections are currently open?">1</button>
+      <button type="button" class="quick-question" data-question="Who have we not engaged in this opportunity?">2</button>
+      <button type="button" class="quick-question" data-question="What content should I send next?">3</button>
+      <button type="button" class="quick-question" data-question="What changed since the last call?">4</button>
+    </div>
     <label><input id="askNarrative" type="checkbox"> Include narrative summary</label>
     <label><input id="askVoice" type="checkbox"> Read answer aloud (optional TTS)</label>
     <details style="margin-top:10px">
@@ -801,14 +801,16 @@ async function runQa() {
 
 /* ── Ask (natural language, Increment 15/16) ─────────────────────────────── */
 document.getElementById("askRunBtn").addEventListener("click", runAsk);
-document.getElementById("askQuickQuestion").addEventListener("change", (event) => {
-  if (event.target.value) document.getElementById("askQuestion").value = event.target.value;
+document.querySelectorAll(".quick-question").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.getElementById("askQuestion").value = button.dataset.question;
+    document.getElementById("askQuestion").focus();
+  });
 });
 window.addEventListener("keydown", (event) => {
   if (!event.altKey || !["1", "2", "3", "4"].includes(event.key)) return;
-  const quick = document.getElementById("askQuickQuestion");
-  quick.selectedIndex = Number(event.key);
-  quick.dispatchEvent(new Event("change"));
+  const button = document.querySelector(`.quick-question:nth-of-type(${Number(event.key)})`);
+  if (button) button.click();
 });
 
 async function runAsk() {
