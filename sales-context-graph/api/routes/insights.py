@@ -9,7 +9,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import verify_api_key, verify_api_key_or_panel_token
+from api.dependencies import (
+    get_access_context,
+    get_access_context_or_panel_token,
+    verify_api_key,
+    verify_api_key_or_panel_token,
+)
+from src.auth.policy import AccessContext, AccessDenied, require_opportunity
+from src.core.config import get_settings
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conflict_repository import ConflictRepository
@@ -33,7 +40,16 @@ router = APIRouter(prefix="/api/v1", tags=["insights"])
 
 
 @router.get("/opportunities/{opportunity_id}/content-effectiveness")
-async def content_effectiveness(opportunity_id: str, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def content_effectiveness(
+    opportunity_id: str,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     usecase = ContentEffectivenessUseCase(ContentRepository(executor), CrmRepository(executor))
     report = await usecase.analyze(workspace_id, opportunity_id)
@@ -41,7 +57,16 @@ async def content_effectiveness(opportunity_id: str, workspace_id: str = Depends
 
 
 @router.get("/opportunities/{opportunity_id}/conflicts")
-async def opportunity_conflicts(opportunity_id: str, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def opportunity_conflicts(
+    opportunity_id: str,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     usecase = ConflictsUseCase(ClaimRepository(executor), ConflictRepository(executor))
     conflicts = await usecase.detect_for_opportunity(workspace_id, opportunity_id)
@@ -56,6 +81,7 @@ class ResolveConflictRequest(BaseModel):
 async def resolve_conflict(
     opportunity_id: str, conflict_id: str, body: ResolveConflictRequest,
     workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
 ) -> dict:
     """Increment 19. `opportunity_id` is not used to scope the query (the
     Conflict is looked up directly by conflict_id, already workspace-scoped) —
@@ -66,6 +92,11 @@ async def resolve_conflict(
     automatic via src/resolution/conflict_arbitration.py; when arbitration is
     undecided (no signal to pick a winner), the conflict stays open and
     `resolved: false` is returned — never a forced, arbitrary pick."""
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     usecase = ConflictsUseCase(ClaimRepository(executor), ConflictRepository(executor))
     try:
@@ -81,12 +112,20 @@ async def resolve_conflict(
 
 @router.get("/opportunities/{opportunity_id}/buying-committee")
 async def buying_committee(
-    opportunity_id: str, classify_roles: bool = False, workspace_id: str = Depends(verify_api_key_or_panel_token)
+    opportunity_id: str,
+    classify_roles: bool = False,
+    workspace_id: str = Depends(verify_api_key_or_panel_token),
+    access: AccessContext = Depends(get_access_context_or_panel_token),
 ) -> dict:
     # verify_api_key_or_panel_token, not verify_api_key -- this is one of
     # the 3 endpoints /viz/panel's own JS calls (api/routes/viz.py). See
     # that dependency's docstring for what a panel token does and doesn't
     # scope.
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     chat_fn = None
     if classify_roles:

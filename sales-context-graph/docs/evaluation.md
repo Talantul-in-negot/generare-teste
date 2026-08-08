@@ -2019,8 +2019,66 @@ tree and covered by targeted checks:
   test.
 
 Still open from the earlier matrix: real Showpad OAuth/API synchronization,
-IdP/RBAC/SCIM wiring, division/opportunity ACL enforcement, Shared Spaces,
+IdP/SCIM wiring and claim-to-identity mapping, end-to-end division/opportunity
+ACL enforcement (the policy primitives are implemented, route wiring remains), Shared Spaces,
 mobile/offline clients, CRM write-back, distributed tenant-fair workers,
 production load SLO evidence, and compliance/restore evidence. These require
 external system contracts or deployment credentials and are not represented as
 completed by this update.
+
+### Implementation update: local authorization and answer safety (2026-08-08)
+
+Additional repository-owned controls are now present:
+
+- `src/auth/policy.py` provides tested, deny-by-default role, division,
+  opportunity and sensitive-content authorization primitives. The policy is
+  pure so a real OIDC/SCIM adapter can map verified claims into
+  `AccessContext` without duplicating authorization logic.
+- `AUTHZ_ENFORCEMENT_ENABLED=true` now requires actor identity on API calls,
+  builds `AccessContext` from gateway-provided claims, and enforces opportunity
+  plus division scope on content recommendations. Local API-key demos keep the
+  flag disabled; production should enable it alongside SSO claim mapping or
+  explicitly set `AUTHZ_TRUSTED_GATEWAY_ENABLED=true` only behind an ingress
+  that validates and overwrites the claim headers. Otherwise the service fails
+  closed with 503 instead of trusting client-supplied roles.
+- Request audit events now include optional actor id/role context from the
+  authenticated gateway (`X-User-Id`/`X-Actor-Id`, `X-User-Roles`) while the
+  existing workspace API key remains authoritative until SSO is enabled. The
+  headers are observability context, not authorization by themselves.
+- `/api/v1/ask` results expose a stable `citations`, `disclaimer` and
+  `requires_human_review` contract, making evidence rendering and human
+  confirmation explicit for UI clients. This does not authorize autonomous
+  CRM writes.
+- GDPR erasure now clears Neo4j contact embeddings and, when Qdrant is
+  configured, deletes the corresponding tenant-scoped Qdrant point before
+  marking the event complete. The erasure scope records `embeddings`.
+
+Remaining wiring work: claim-to-identity mapping from a real IdP, injecting
+`AccessContext` into every route/repository, Showpad/CRM OAuth and write-back,
+and production deployment evidence.
+
+### Implementation update: end-to-end local resource enforcement (2026-08-08)
+
+The remaining application-owned ACL wiring is now applied across the API
+surface. Opportunity path routes are denied by middleware unless the verified
+actor has the opportunity (or an admin role); body-scoped Q&A, context, Ask,
+recommendation and ingestion routes perform the equivalent check after request
+validation. Content ingestion also requires an ingestion/content-admin role
+when enforcement is enabled, and division scope is checked before writes.
+The embedded panel is not weakened by this change: its signed, revocable panel
+token is converted into a narrow opportunity-scoped access context and is
+checked against the same policy primitives. Audit events retain actor id and
+roles, while API keys still provide workspace authentication.
+
+Added regression coverage proves the deny-before-handler path and the
+deny-by-default missing-identity behavior. This closes the repository-owned
+authorization gap; it does not create an IdP, SCIM directory, Showpad OAuth
+client, CRM write-back, or production load evidence. Those remain deployment
+and external-contract work, not unimplemented local policy code.
+
+The Redis worker now supports bounded per-process concurrency through
+`INGESTION_WORKER_CONCURRENCY` (clamped to 1--32), with one visibility-timeout
+processing list per slot. A slow transcript can no longer occupy the only
+execution slot, while crash recovery remains intact. This is an execution
+capacity control, not a claim of tenant-fair scheduling; fair partitions and
+measured capacity remain deployment-scale work.

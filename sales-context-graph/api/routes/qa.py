@@ -25,8 +25,15 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import verify_api_key, verify_api_key_or_panel_token
+from api.dependencies import (
+    get_access_context,
+    get_access_context_or_panel_token,
+    verify_api_key,
+    verify_api_key_or_panel_token,
+)
+from src.auth.policy import AccessContext, AccessDenied, require_division, require_opportunity
 from src.context_graph.builder import ContextGraphBuilder
+from src.core.config import get_settings
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conflict_repository import ConflictRepository
@@ -70,6 +77,7 @@ class CallBriefingRequest(BaseModel):
 class RecommendContentRequest(BaseModel):
     opportunity_id: str
     buyer_contact_id: str
+    division_id: str | None = None
 
 
 class WhatsNewRequest(BaseModel):
@@ -104,18 +112,34 @@ async def list_intents(workspace_id: str = Depends(verify_api_key)) -> dict:
 
 @router.post("/account-objections")
 async def account_objections(
-    body: OpportunityScopedRequest, workspace_id: str = Depends(verify_api_key_or_panel_token)
+    body: OpportunityScopedRequest,
+    workspace_id: str = Depends(verify_api_key_or_panel_token),
+    access: AccessContext = Depends(get_access_context_or_panel_token),
 ) -> dict:
     # verify_api_key_or_panel_token, not verify_api_key -- /viz/panel's own
     # JS calls this endpoint (api/routes/viz.py). See that dependency's
     # docstring for what a panel token does and doesn't scope.
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, body.opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     usecase = AccountObjectionsUseCase(ClaimRepository(executor), ConversationRepository(executor))
     return ser.serialize_account_objections(await usecase.list_objections(workspace_id, body.opportunity_id))
 
 
 @router.post("/open-commitments")
-async def open_commitments(body: OpportunityScopedRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def open_commitments(
+    body: OpportunityScopedRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, body.opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     usecase = OpenCommitmentsUseCase(ClaimRepository(executor), ConversationRepository(executor))
     return ser.serialize_open_commitments(await usecase.list_commitments(workspace_id, body.opportunity_id))
@@ -139,10 +163,19 @@ async def call_briefing(body: CallBriefingRequest, workspace_id: str = Depends(v
 
 
 @router.post("/open-conflicts")
-async def open_conflicts(body: OpportunityScopedRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def open_conflicts(
+    body: OpportunityScopedRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
     """Increment 11 — thin re-exposure of ConflictsUseCase under /qa/ for
     consistency with the other intents; same logic as GET
     /api/v1/opportunities/{id}/conflicts."""
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, body.opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     usecase = ConflictsUseCase(ClaimRepository(executor), ConflictRepository(executor))
     conflicts = await usecase.detect_for_opportunity(workspace_id, body.opportunity_id)
@@ -151,12 +184,19 @@ async def open_conflicts(body: OpportunityScopedRequest, workspace_id: str = Dep
 
 @router.post("/missing-stakeholders")
 async def missing_stakeholders(
-    body: MissingStakeholdersRequest, workspace_id: str = Depends(verify_api_key)
+    body: MissingStakeholdersRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
 ) -> dict:
     """Increment 12 — thin re-exposure of BuyingCommitteeUseCase under /qa/
     for consistency with the other intents; same logic as GET
     /api/v1/opportunities/{id}/buying-committee. Increment 18 adds the same
     opt-in classify_roles path as that GET route."""
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, body.opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     chat_fn = None
     if body.classify_roles:
@@ -195,17 +235,29 @@ async def as_of(body: AsOfRequest, workspace_id: str = Depends(verify_api_key)) 
 
 
 @router.post("/recommend-content")
-async def recommend_content(body: RecommendContentRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def recommend_content(
+    body: RecommendContentRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
     """Thin re-exposure of ObjectionContentRecommendationUseCase (§12, already
     wired at /api/v1/context/... indirectly via demo_volkswagen.py) under the
     /qa/ namespace for discoverability alongside the other intents — no new
     logic here."""
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, body.opportunity_id)
+            require_division(access, body.division_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     usecase = ObjectionContentRecommendationUseCase(
         ConversationRepository(executor), ClaimRepository(executor), ContentRepository(executor)
     )
     try:
-        rec = await usecase.recommend(workspace_id, body.opportunity_id, body.buyer_contact_id)
+        rec = await usecase.recommend(
+            workspace_id, body.opportunity_id, body.buyer_contact_id, division_id=body.division_id
+        )
     except NoRelevantCallError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except NoObjectionFoundError as exc:

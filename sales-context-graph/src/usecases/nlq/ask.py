@@ -29,6 +29,7 @@ from src.core.cache.query_cache import cache_result, get_cached_result
 from src.graph.repositories.crm_repository import CrmRepository
 from src.llm.chat import ChatFn
 from src.llm.json_completion import complete_json
+from src.narrative.extraction import extract_citable_claims
 from src.nlq.catalog import IntentSpec, ParamKind, get_intent
 from src.nlq.entity_linking import EntityLinker
 from src.nlq.models import (
@@ -51,6 +52,7 @@ class AskContext:
     conversation_id: str | None = None
     subject_id: str | None = None
     buyer_contact_id: str | None = None
+    division_id: str | None = None
 
 
 class AskUseCase:
@@ -100,6 +102,11 @@ class AskUseCase:
         params, entities, ambiguities = await self._resolve_params(
             workspace_id, spec, classification, context
         )
+        if context.division_id is not None:
+            # Division is a caller-supplied retrieval scope.  It is only
+            # authoritative when the caller is behind the verified gateway;
+            # the policy layer remains responsible for authorization.
+            params["division_id"] = context.division_id
 
         result = AskResult(
             question=question,
@@ -115,7 +122,13 @@ class AskUseCase:
             return result
 
         payload = await self._dispatcher.dispatch(spec.intent_id, workspace_id, params)
-        final = result.model_copy(update={"answered": True, "result": payload})
+        citations = extract_citable_claims(payload)
+        final = result.model_copy(update={
+            "answered": True,
+            "result": payload,
+            "citations": citations,
+            "requires_human_review": True,
+        })
         await cache_result(workspace_id, cache_key, final.model_dump_json())
         return final
 

@@ -66,3 +66,9 @@ class AskResult(BaseModel):
     ambiguities: list[Ambiguity] = Field(default_factory=list)
     answered: bool = False
     result: dict | None = None
+    citations: list[dict] = Field(default_factory=list)
+    # Stable UI contract: an answer is decision support, not an autonomous
+    # CRM write.  Clients can render this without reverse-engineering intent
+    # payloads and can require human confirmation before taking action.
+    disclaimer: str = "Decision support only; verify the cited evidence before acting."
+    requires_human_review: bool = True

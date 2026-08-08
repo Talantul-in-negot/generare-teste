@@ -7,8 +7,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import verify_api_key
+from api.dependencies import get_access_context, verify_api_key
+from src.auth.policy import AccessContext, AccessDenied, require_opportunity
 from src.context_graph.builder import ContextGraphBuilder, ContextGraphScope
+from src.core.config import get_settings
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
@@ -35,10 +37,19 @@ class ContextBuildRequest(BaseModel):
 
 
 @router.post("/api/v1/context/build")
-async def build_context(body: ContextBuildRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def build_context(
+    body: ContextBuildRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
     # §12: workspace_id always from authenticated context (verify_api_key),
     # never the request body — ContextBuildRequest deliberately has no
     # workspace_id field at all.
+    if get_settings().authz_enforcement_enabled and body.opportunity_id:
+        try:
+            require_opportunity(access, body.opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()
     call_summary_usecase = None
     if body.include_summary:

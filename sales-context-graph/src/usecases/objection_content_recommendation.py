@@ -85,7 +85,8 @@ class ObjectionContentRecommendationUseCase:
         self._content_repo = content_repo
 
     async def recommend(
-        self, workspace_id: str, opportunity_id: str, buyer_contact_id: str
+        self, workspace_id: str, opportunity_id: str, buyer_contact_id: str,
+        *, division_id: str | None = None,
     ) -> ObjectionContentRecommendation:
         conversations = await self._conversation_repo.list_conversations_by_opportunity(
             workspace_id, opportunity_id
@@ -114,7 +115,9 @@ class ObjectionContentRecommendationUseCase:
         # currently approved, shareable, non-sensitive and within its
         # effective/expiry window may be returned.  Historical callers can
         # still list the full catalogue explicitly through the repository.
-        all_assets = await self._content_repo.list_content_assets(workspace_id, only_servable=True)
+        all_assets = await self._content_repo.list_content_assets(
+            workspace_id, division_id=division_id, only_servable=True
+        )
         matching = [
             (asset, [t for t in asset.tags if t.lower() == objection_category])
             for asset in all_assets

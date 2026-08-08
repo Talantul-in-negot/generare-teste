@@ -160,6 +160,28 @@ class CrmRepository:
             embedding=embedding,
         )
 
+    async def clear_contact_embedding(self, workspace_id: str, contact_id: str) -> bool:
+        """Remove a contact's derived vector as part of erasure.
+
+        Returns whether a matching Contact existed.  Clearing the property
+        removes it from Neo4j's vector index automatically; callers can then
+        clear the optional Qdrant mirror using the same identity.
+        """
+        match = scoped_match("Contact", "c", contact_id="contact_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN c.embedding IS NOT NULL AS had_embedding",
+            workspace_id=workspace_id,
+            contact_id=contact_id,
+        )
+        if not rows:
+            return False
+        await self._executor.tenant_query(
+            f"MATCH {match} REMOVE c.embedding",
+            workspace_id=workspace_id,
+            contact_id=contact_id,
+        )
+        return bool(rows[0]["had_embedding"])
+
     async def upsert_lead(self, lead: Lead) -> None:
         match = scoped_match("Lead", "l", lead_id="lead_id")
         await self._executor.tenant_query(

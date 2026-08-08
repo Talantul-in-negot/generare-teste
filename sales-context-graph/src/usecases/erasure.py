@@ -38,17 +38,25 @@ from uuid import uuid4
 import structlog
 
 from src.core.cache.query_cache import invalidate_workspace_cache
+from src.core.config import get_settings
 from src.domain.assertion import ErasureEvent
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
+from src.graph.repositories.crm_repository import CrmRepository
 
 log = structlog.get_logger(__name__)
 
 
 class ErasureUseCase:
-    def __init__(self, claim_repo: ClaimRepository, conversation_repo: ConversationRepository):
+    def __init__(
+        self,
+        claim_repo: ClaimRepository,
+        conversation_repo: ConversationRepository,
+        crm_repo: CrmRepository | None = None,
+    ):
         self._claims = claim_repo
         self._conversations = conversation_repo
+        self._crm = crm_repo
 
     async def erase_subject(
         self, workspace_id: str, subject_type: str, subject_id: str, *, now: datetime | None = None
@@ -77,6 +85,18 @@ class ErasureUseCase:
         if segment_ids:
             segments_redacted = await self._conversations.redact_segments(workspace_id, segment_ids)
 
+        embeddings_erased = False
+        if subject_type.lower() == "contact" and self._crm is not None:
+            embeddings_erased = await self._crm.clear_contact_embedding(workspace_id, subject_id)
+            if get_settings().vector_backend == "qdrant":
+                from src.embedding.qdrant_backend import delete_contact_embedding, get_client
+
+                client = get_client()
+                try:
+                    await delete_contact_embedding(client, workspace_id, subject_id)
+                finally:
+                    await client.close()
+
         cache_keys_cleared = await invalidate_workspace_cache(workspace_id)
 
         scope = []
@@ -84,6 +104,10 @@ class ErasureUseCase:
             scope.append("claims")
         if segments_redacted:
             scope.append("transcript_text")
+        if embeddings_erased or (
+            subject_type.lower() == "contact" and get_settings().vector_backend == "qdrant"
+        ):
+            scope.append("embeddings")
         if cache_keys_cleared:
             scope.append("cache")
 

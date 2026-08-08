@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 
 import structlog
@@ -29,6 +30,31 @@ from src.core.telemetry import RATE_LIMIT_REJECTED_TOTAL
 configure_logging()
 
 log = structlog.get_logger(__name__)
+
+_OPPORTUNITY_PATH = re.compile(r"^/api/v1/opportunities/([^/]+)(?:/|$)")
+
+
+def _csv_header(value: str | None) -> frozenset[str]:
+    return frozenset(item.strip() for item in (value or "").split(",") if item.strip())
+
+
+def _path_scope_denied(request: Request) -> bool:
+    """Apply the cheap deny-by-default check for opportunity path routes.
+
+    Body-scoped routes perform the equivalent check after Pydantic has parsed
+    the body.  Panel-token requests are verified and scoped by their route
+    dependency, so they intentionally bypass this header-based check.
+    """
+    settings = get_settings()
+    if not settings.authz_enforcement_enabled or request.headers.get("x-panel-token"):
+        return False
+    match = _OPPORTUNITY_PATH.match(request.url.path)
+    if not match:
+        return False
+    roles = _csv_header(request.headers.get("x-user-roles"))
+    if roles.intersection({"admin", "workspace_admin"}):
+        return False
+    return match.group(1) not in _csv_header(request.headers.get("x-authorized-opportunities"))
 
 app = FastAPI(title="Sales Context Graph API", version="0.1.0")
 
@@ -85,6 +111,40 @@ async def rate_limit_security_and_audit(request: Request, call_next):
     """
     settings = get_settings()
     workspace_id = request.headers.get("x-workspace-id")
+    # User/role headers are populated by a verified gateway once SSO is
+    # enabled.  Until then they are recorded as optional actor context only;
+    # workspace API-key authentication remains the authoritative boundary.
+    actor_id = request.headers.get("x-user-id") or request.headers.get("x-actor-id")
+    actor_roles = request.headers.get("x-user-roles")
+    panel_request = bool(request.headers.get("x-panel-token"))
+    if (
+        settings.authz_enforcement_enabled
+        and request.url.path.startswith("/api/")
+        and not panel_request
+        and not (settings.sso_enabled or settings.authz_trusted_gateway_enabled)
+    ):
+        return Response(
+            content='{"detail":"authorization enforcement requires SSO or a trusted claims gateway"}',
+            status_code=503,
+            media_type="application/json",
+        )
+    if (
+        settings.authz_enforcement_enabled
+        and request.url.path.startswith("/api/")
+        and not panel_request
+        and not actor_id
+    ):
+        return Response(
+            content='{"detail":"authenticated user identity is required"}',
+            status_code=401,
+            media_type="application/json",
+        )
+    if _path_scope_denied(request):
+        return Response(
+            content='{"detail":"principal is not authorized for this opportunity"}',
+            status_code=403,
+            media_type="application/json",
+        )
     if settings.rate_limit_enabled and workspace_id:
         allowed, retry_after = await check_and_increment(
             workspace_id, limit_per_minute=settings.rate_limit_requests_per_minute
@@ -94,6 +154,7 @@ async def rate_limit_security_and_audit(request: Request, call_next):
             log.info(
                 "audit.access", workspace_id=workspace_id, method=request.method,
                 path=request.url.path, status_code=429, rate_limited=True,
+                actor_id=actor_id, actor_roles=actor_roles,
             )
             return Response(
                 content='{"detail":"rate limit exceeded"}',
@@ -109,6 +170,7 @@ async def rate_limit_security_and_audit(request: Request, call_next):
     log.info(
         "audit.access", workspace_id=workspace_id, method=request.method,
         path=request.url.path, status_code=response.status_code, duration_ms=duration_ms,
+        actor_id=actor_id, actor_roles=actor_roles,
     )
 
     # setdefault, not direct assignment: a route that already set one of

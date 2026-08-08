@@ -99,7 +99,12 @@ class IntentDispatcher:
             ClaimRepository(self._executor),
             ContentRepository(self._executor),
         )
-        rec = await usecase.recommend(workspace_id, params["opportunity_id"], params["buyer_contact_id"])
+        rec = await usecase.recommend(
+            workspace_id,
+            params["opportunity_id"],
+            params["buyer_contact_id"],
+            division_id=params.get("division_id"),
+        )
         return ser.serialize_recommendation(rec)
 
     # ── /insights intents ────────────────────────────────────────────────────

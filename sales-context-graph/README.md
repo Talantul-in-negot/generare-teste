@@ -374,6 +374,11 @@ breakdown per module.
 - **Auth**: MVP API-key-per-workspace (`X-Api-Key`, checked against
   `WORKSPACE_API_KEYS` — `api/dependencies.py::verify_api_key`) is the
   active auth path on every route; no self-serve key rotation/revocation.
+  Optional deny-by-default authorization (`AUTHZ_ENFORCEMENT_ENABLED`) now
+  covers opportunity/division scope, ingestion roles and signed panel tokens;
+  it fails closed unless SSO or an explicitly trusted claims gateway is
+  configured. The pure policy is in `src/auth/policy.py` and route-level deny
+  behavior is covered by tests.
   Real OIDC/JWT validation exists (`src/auth/sso.py`, RS256 signature +
   issuer + audience + expiry checks, tested against a locally-signed JWT —
   see `docs/adr-0006-sso-scaffolding.md`) but isn't connected to a live

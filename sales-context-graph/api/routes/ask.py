@@ -10,7 +10,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from api.dependencies import verify_api_key
+from api.dependencies import get_access_context, verify_api_key
+from src.auth.policy import AccessContext, AccessDenied, require_division, require_opportunity
+from src.core.config import get_settings
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.crm_repository import CrmRepository
 from src.llm.chat import LlmNotConfiguredError, build_chat_fn
@@ -36,6 +38,7 @@ class AskRequest(BaseModel):
     conversation_id: str | None = None
     subject_id: str | None = None
     buyer_contact_id: str | None = None
+    division_id: str | None = None
     include_narrative: bool = False
 
 
@@ -45,7 +48,19 @@ class NarrativeRequest(BaseModel):
 
 
 @router.post("/ask")
-async def ask(body: AskRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def ask(
+    body: AskRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
+    if get_settings().authz_enforcement_enabled:
+        try:
+            if body.opportunity_id:
+                require_opportunity(access, body.opportunity_id)
+            if body.division_id:
+                require_division(access, body.division_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     try:
         chat_fn = build_chat_fn()
     except LlmNotConfiguredError as exc:
@@ -61,7 +76,7 @@ async def ask(body: AskRequest, workspace_id: str = Depends(verify_api_key)) -> 
     context = AskContext(
         seller_id=body.seller_id, opportunity_id=body.opportunity_id,
         conversation_id=body.conversation_id, subject_id=body.subject_id,
-        buyer_contact_id=body.buyer_contact_id,
+        buyer_contact_id=body.buyer_contact_id, division_id=body.division_id,
     )
 
     try:

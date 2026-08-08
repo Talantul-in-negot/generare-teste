@@ -58,7 +58,10 @@ class EntityLinker:
         if not pool:
             return LinkOutcome(ambiguity=Ambiguity(
                 mention=mention,
-                reason=f"no {entity_type} records exist in this workspace",
+                reason=(
+                    f"no {entity_type} name matched {mention!r} confidently enough; "
+                    "no candidate records were returned by the bounded search"
+                ),
             ))
 
         scored = [

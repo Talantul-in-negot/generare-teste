@@ -182,20 +182,30 @@ async def run_worker() -> None:
         await run_kafka_worker_loop(store)
         return
 
-    # One id for this process's lifetime -- identifies its own processing
-    # list (src/ingestion/queue.py's PROCESSING_KEY_PREFIX) so multiple
-    # worker replicas never share, or corrupt, each other's in-flight claim.
-    worker_id = uuid4().hex
-    log.info("ingestion_worker.started", extra={"worker_id": worker_id})
-    while True:
-        await record_worker_heartbeat()
-        await sample_queue_metrics()
-        reaped = await reap_stale_processing_lists()
-        if reaped:
-            log.warning("ingestion_worker.reaped_stale_claims", extra={"count": reaped})
-        message = await dequeue(worker_id=worker_id, timeout=5)
-        if message is not None:
-            await _run(message, store, worker_id=worker_id)
+    concurrency = max(1, min(32, get_settings().ingestion_worker_concurrency))
+    process_id = uuid4().hex
+    log.info(
+        "ingestion_worker.started",
+        extra={"process_id": process_id, "concurrency": concurrency},
+    )
+
+    async def run_slot(slot: int) -> None:
+        # Every slot owns a distinct processing list. A worker crash therefore
+        # remains recoverable by the existing visibility-timeout reaper, even
+        # when one process has multiple in-flight jobs.
+        worker_id = f"{process_id}:{slot}"
+        while True:
+            await record_worker_heartbeat()
+            if slot == 0:
+                await sample_queue_metrics()
+                reaped = await reap_stale_processing_lists()
+                if reaped:
+                    log.warning("ingestion_worker.reaped_stale_claims", extra={"count": reaped})
+            message = await dequeue(worker_id=worker_id, timeout=5)
+            if message is not None:
+                await _run(message, store, worker_id=worker_id)
+
+    await asyncio.gather(*(run_slot(slot) for slot in range(concurrency)))
 
 
 if __name__ == "__main__":

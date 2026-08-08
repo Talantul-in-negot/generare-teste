@@ -106,6 +106,22 @@ async def search_contacts(
     return results
 
 
+async def delete_contact_embedding(
+    client: AsyncQdrantClient, workspace_id: str, contact_id: str
+) -> None:
+    """Delete one tenant-scoped point during GDPR erasure.
+
+    The deterministic point id makes this operation idempotent.  Qdrant's
+    delete call is safe when the point does not exist, which is important for
+    retries of an already-completed erasure event.
+    """
+    await client.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=qmodels.PointIdsList(points=[_point_id(workspace_id, contact_id)]),
+        wait=True,
+    )
+
+
 async def backfill_workspace_qdrant(workspace_id: str, *, executor=None, provider=None) -> int:
     """Qdrant-equivalent of src/embedding/backfill.py::backfill_workspace --
     same one-workspace-at-a-time, explicit-operator-run shape, same

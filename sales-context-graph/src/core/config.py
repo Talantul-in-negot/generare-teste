@@ -86,6 +86,15 @@ class Settings(BaseSettings):
     # namespaced to your app; Azure AD AAD B2C might use "tid"). Configurable
     # rather than hardcoded to one vendor's convention.
     sso_workspace_claim: str = "workspace_id"
+    # When enabled, API routes require actor claims supplied by the verified
+    # gateway and resource policies become deny-by-default. Keep false for
+    # local API-key demos; production deployments should turn it on together
+    # with SSO/IdP claim mapping.
+    authz_enforcement_enabled: bool = False
+    # When claims are forwarded by an ingress/gateway rather than validated in
+    # this process, require an explicit deployment declaration. This prevents
+    # a client from self-asserting X-User-Roles on an accidentally enabled API.
+    authz_trusted_gateway_enabled: bool = False
 
     # ── Redis (durable ingestion job store, see api/state.py::get_ingestion_store) ─
     # Empty means "no Redis configured" -> falls back to InMemoryIngestionStore.
@@ -96,6 +105,11 @@ class Settings(BaseSettings):
     ingestion_queue_enabled: bool = False
     ingestion_queue_max_attempts: int = 3
     ingestion_worker_heartbeat_seconds: int = 60
+    # Number of independent Redis claims executed by one worker process.
+    # Each slot has its own processing list, so a slow transcript cannot hold
+    # the only claim slot hostage. Horizontal replicas remain supported; this
+    # setting is a bounded local concurrency knob, not a fairness guarantee.
+    ingestion_worker_concurrency: int = 1
     # Phase 4 (docs/evaluation.md's ingestion-reliability item, ADR-0001's
     # addendum) -- SQS-style visibility timeout: how long a job may sit
     # claimed-but-unfinished in a worker's own processing list before the

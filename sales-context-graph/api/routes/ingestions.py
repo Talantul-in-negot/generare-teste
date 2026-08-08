@@ -19,8 +19,10 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import verify_api_key
+from api.dependencies import get_access_context, verify_api_key
 from api.state import IngestionJob, get_ingestion_store
+from src.auth.policy import AccessContext, AccessDenied, require_division, require_role
+from src.core.config import get_settings
 from src.domain.enums import IngestionState
 from src.extraction.fixture_provider import FixtureExtractionProvider
 from src.graph.execution import GraphExecutor
@@ -61,6 +63,17 @@ class _StoreProxy:
 _store = _StoreProxy()
 
 
+def _require_ingestion_access(access: AccessContext, *, division_id: str | None = None) -> None:
+    if not get_settings().authz_enforcement_enabled:
+        return
+    try:
+        require_role(access, "admin", "workspace_admin", "ingest", "content_admin")
+        if division_id is not None:
+            require_division(access, division_id)
+    except AccessDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
 class CrmIngestionRequest(BaseModel):
     accounts: list[dict] = []
     contacts: list[dict] = []
@@ -92,7 +105,12 @@ class TranscriptIngestionRequest(BaseModel):
 
 
 @router.post("/crm", status_code=202)
-async def ingest_crm(body: CrmIngestionRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def ingest_crm(
+    body: CrmIngestionRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
+    _require_ingestion_access(access)
     ingestion_id = str(uuid4())
     now = datetime.now(timezone.utc)
     job = IngestionJob(
@@ -135,8 +153,11 @@ async def ingest_crm(body: CrmIngestionRequest, workspace_id: str = Depends(veri
 
 @router.post("/content-assets", status_code=202)
 async def ingest_content_assets(
-    body: ContentAssetIngestionRequest, workspace_id: str = Depends(verify_api_key)
+    body: ContentAssetIngestionRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
 ) -> dict:
+    _require_ingestion_access(access, division_id=body.division_id)
     ingestion_id = str(uuid4())
     now = datetime.now(timezone.utc)
     job = IngestionJob(
@@ -169,7 +190,12 @@ async def ingest_content_assets(
 
 
 @router.post("/engagement", status_code=202)
-async def ingest_engagement(body: EngagementIngestionRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def ingest_engagement(
+    body: EngagementIngestionRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
+    _require_ingestion_access(access)
     ingestion_id = str(uuid4())
     now = datetime.now(timezone.utc)
     job = IngestionJob(
@@ -206,8 +232,11 @@ async def ingest_engagement(body: EngagementIngestionRequest, workspace_id: str 
 
 @router.post("/transcripts", status_code=202)
 async def ingest_transcripts(
-    body: TranscriptIngestionRequest, workspace_id: str = Depends(verify_api_key)
+    body: TranscriptIngestionRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
 ) -> dict:
+    _require_ingestion_access(access)
     ingestion_id = str(uuid4())
     now = datetime.now(timezone.utc)
     job = IngestionJob(
