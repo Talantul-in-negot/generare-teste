@@ -94,11 +94,16 @@ Then animate the edges:
 **SCREEN ACTION:**
 
 1. Start the local stack: `docker compose up -d neo4j redis`.
-2. Start the API: `uvicorn api.main:app --reload`.
-3. Open `http://localhost:8000/viz`.
-4. Use the **Context Graph** tab with workspace `ws-demo`, the local API key,
-   and the seeded Volkswagen conversation or subject id.
-5. Click **Build**.
+2. Run `python demo_volkswagen.py`. This applies the Neo4j schema and prints
+   canonical `conversation_id`, `opportunity_id`, `buyer_contact_id` and
+   `seller_id` values for the rest of the demo.
+3. Start (or restart) the API: `uvicorn api.main:app --host 0.0.0.0 --port 8000`.
+4. Confirm `GET http://localhost:8000/ready` returns `{"status":"ready"}`.
+5. Open `http://localhost:8000/viz`.
+6. Use the **Context Graph** tab with workspace `ws-demo`, the local API key,
+   and the printed Volkswagen `conversation_id` (or `subject_id`).
+7. Click **Build**. The screen must show `nodes_used`, `tokens_used`,
+   `truncated`, claim count, unresolved mentions and conflicts before the graph.
 
 The graph animates Claims into view. Keep the evidence and confidence fields
 visible. Do not present an empty graph: Context Graph needs a conversation or
@@ -116,13 +121,17 @@ subject scope to retrieve a meaningful result.
 
 ## SCENE 5 — Ask the question that moves the deal (2:25–3:20)
 
-**SCREEN ACTION:** Open the **Ask** tab. Enter:
+**SCREEN ACTION:** Open the **Ask** tab. In the expandable **Optional
+context** section, enter the canonical `opportunity_id` and `buyer_contact_id`
+printed by `demo_volkswagen.py`, then enter:
 
 > “What content should I send to Elena Popescu at Volkswagen to address her
 > pricing objection?”
 
-Include the opportunity or conversation context when available. Click **Ask**.
-Reveal the response in this order:
+Leave **Include narrative summary** checked and click **Ask**. A question that
+only contains a fuzzy company/person name is expected to show an ambiguity and
+`requires_human_review`; the successful recommendation path uses the explicit
+IDs above. Reveal the response in this order:
 
 1. `intent_id` and classifier confidence;
 2. resolved opportunity and buyer contact;
@@ -144,7 +153,15 @@ Reveal the response in this order:
 > citable evidence, it refuses to narrate. A refusal is not a failed demo — it
 > is the product protecting the seller from a fabricated fact.”
 
-**ON-SCREEN SPLIT:**
+**ON-SCREEN FRAMING:**
+
+The current `/viz` surface renders one response panel: `Answer`/`Could not
+answer`, intent and confidence, optional narrative citations when a configured
+provider can ground them, then the structured `Result` JSON. If narrative
+generation is unavailable or has no citable claims, the structured Result,
+disclaimer and review flag remain the authoritative screen. Frame that panel
+beside the evidence clip (or open a claim in the Context Graph tab) to create
+the visual split:
 
 Left: **Evidence** — exact transcript span, claim id, speaker, confidence.
 Right: **Action** — the next content asset the seller can review and send.
@@ -153,15 +170,20 @@ Right: **Action** — the next content asset the seller can review and send.
 
 ## SCENE 6 — From one answer to pipeline intelligence (3:20–4:05)
 
-**SCREEN ACTION:** Open **Browse Intents** and run, in sequence:
+**SCREEN ACTION:** Open **Browse Intents**, enter the local API key, and
+re-open the tab so the dropdown loads the live catalog from
+`GET /api/v1/qa/intents`. Run, in sequence:
 
-- **Missing stakeholders:** show `single_threaded` and the buyer contacts
-  actually present on calls.
-- **Top objections:** show pricing objections aggregated across an open
-  seller pipeline, not one hand-picked opportunity.
-- **Open conflicts:** show that contradictory Claims are surfaced instead of
-  silently overwritten.
-- **What’s new / As-of:** show change-aware and point-in-time views.
+- **Who haven't we talked to on this deal?** (**missing-stakeholders**): use the
+  printed `opportunity_id`; show `single_threaded` and buyer contacts.
+- **What are the most common objections across my pipeline?**
+  (**top-objections**): use the printed `seller_id`; show pricing aggregated
+  across open opportunities, not one hand-picked deal.
+- **Is anything we've been told contradictory?** (**open-conflicts**): use the
+  printed `opportunity_id`; show contradictory Claims rather than overwriting.
+- **What’s new since a given date?** / **What did we believe about this as of a
+  given date?** (**whats-new** / **as-of**): use the printed buyer `subject_id`
+  and an ISO-8601 date.
 
 Then open **Alerts** and run the digest. Highlight signals such as:
 
@@ -312,6 +334,20 @@ Then fade to the final mark:
   target environment and label results with date, workload and infrastructure.
 - If an answer has no evidence, let the refusal appear on screen. It is the
   strongest proof that the system is governed.
+
+### Screen reachability audit (verified 2026-08-08)
+
+| Script screen | Reachable path | Required preparation | Verified result |
+|---|---|---|---|
+| Context Graph | `/viz` → **Context Graph** → **Build** | `demo_volkswagen.py`; API key; printed conversation/subject ID | 200 response; graph metadata and evidence are rendered |
+| Ask | `/viz` → **Ask** → **Ask** | API key; printed opportunity + buyer contact IDs | 200 answered recommendation with Result, exclusions, disclaimer and review flag |
+| Browse Intents | `/viz` → **Browse Intents** → load catalog → **Run** | API key; printed IDs per intent | 200 catalog with 12 live intents; each form is generated from the API contract |
+| Alerts | `/viz` → **Alerts** → **Get digest** | API key; optional seller ID | 200 digest with single-threaded and objection-without-follow-up signals |
+| Readiness gate | `GET /ready` | schema migration via `demo_volkswagen.py`; Redis worker available when enabled | 200 `{"status":"ready"}` |
+
+The audit intentionally distinguishes a reachable screen from a successful
+answer: missing credentials or ambiguous names produce an explicit validation,
+refusal or review state, which is part of the product behavior.
 
 ### Source of truth
 

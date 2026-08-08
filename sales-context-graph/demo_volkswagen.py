@@ -141,6 +141,14 @@ async def main() -> None:
         email_to_seller_id={"sam@ourcompany.com": "005SAM"},
     )
     conversation_id = transcript_result.conversation_id
+    # Keep presenter-facing identifiers visible in the terminal output. The
+    # /viz Ask and Browse Intents tabs deliberately accept canonical IDs as
+    # optional context; printing them makes the live path repeatable without
+    # guessing from a fuzzy name.
+    print(f"conversation_id = {conversation_id}")
+    print(f"opportunity_id = {opportunity_id}")
+    print(f"buyer_contact_id = {elena_id}")
+    print(f"seller_id = {seller_id}")
 
     # ── Content: two assets addressing "pricing", one already viewed ──
     viewed_asset = ContentAsset(

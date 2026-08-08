@@ -123,7 +123,14 @@ services:
   # index (contact_embeddings_v1) stays primary; this is an available,
   # optional secondary, not active by default.
   qdrant:
-    image: qdrant/qdrant:latest
+    # Pinned, not :latest -- caught directly during this deployment-readiness
+    # pass (docs/evaluation.md, 2026-08-08): :latest drifted to server 1.19.0
+    # sometime during this repo's own long-running dev session while
+    # qdrant-client stayed pinned at 1.17.0 (requirements.lock.txt), and the
+    # client refused to talk to a server more than one minor version ahead
+    # -- broke tests/integration/test_qdrant_backend.py with no code change
+    # on either side. v1.17.0 matches the client; bump both together.
+    image: qdrant/qdrant:v1.17.0
     container_name: scg_qdrant
     profiles: ["qdrant"]
     ports:

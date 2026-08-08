@@ -76,12 +76,20 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
   iframe-embeddable single-deal view for embedding in Salesforce/Showpad — an
   embeddable panel, not a packaged app (no OAuth, no AppExchange packaging).
 
-The repository has a broad unit/integration/security/evaluation suite; the
-current hardening gate passes 370 unit tests plus the relevant integration
-checks. See the completion report at the end of this document for the
-phase-by-phase breakdown, measured numbers and known limitations. Deferred
-work is centralized in [`docs/evaluation.md`](docs/evaluation.md), rather than
-hidden in code comments.
+The repository has a broad unit/integration/security/evaluation suite: 370
+unit tests plus the full integration/eval/security suites, 538 tests total.
+One integration test
+(`tests/integration/test_resolution_vw_fixtures.py::test_weak_base_candidate_cannot_autolink_through_relational_bonus_alone`)
+fails reproducibly against this Neo4j version — a fulltext-index
+eventual-consistency race in the test itself (confirmed via `SHOW INDEXES`:
+the index reports `ONLINE`/100% while the failure still reproduces, so it's
+a per-write Lucene refresh timing gap, not a build-state issue), predating
+this repo's most recent hardening pass and tracked separately rather than
+silently left out of this count. See the completion report at the end of
+this document for the phase-by-phase breakdown, measured numbers and known
+limitations. Deferred work is centralized in
+[`docs/evaluation.md`](docs/evaluation.md), rather than hidden in code
+comments.
 
 ## Engineering rigor — the short version
 
@@ -179,8 +187,8 @@ structurally rejects Cypher that doesn't scope a matched node by `workspace_id`
 
 ## Setup
 
-Requires Docker and Python 3.12+ (developed/tested against 3.11.6 — see
-"Known limitations" below).
+Requires Docker and Python 3.11+ (matches `pyproject.toml`'s
+`requires-python`; developed/tested against 3.11.6).
 
 ```bash
 docker compose up -d neo4j redis
