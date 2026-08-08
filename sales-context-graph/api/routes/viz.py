@@ -288,8 +288,8 @@ _PAGE = """<!doctype html>
   #panel input, #panel select, #panel textarea { width: 100%; padding: 6px; box-sizing: border-box; margin-top: 2px; font-family: inherit; }
   #panel button { margin-top: 14px; width: 100%; padding: 8px; background: var(--color-accent); color: var(--color-on-accent); border: none; border-radius: 4px; cursor: pointer; font-family: var(--font-body); }
   #panel button:hover { background: var(--color-accent-hover); }
-  .quick-questions { display: flex; align-items: center; gap: 6px; margin: 8px 0 12px; }
-  .quick-question { width: 32px !important; height: 30px; margin: 0 !important; padding: 0 !important; border-radius: 5px !important; }
+  .quick-questions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 12px; }
+  .quick-question { width: auto !important; min-height: 30px; margin: 0 !important; padding: 5px 9px !important; border-radius: 5px !important; text-align: left; }
   #panel input[type=checkbox] { width: auto; }
   #status, #qaStatus, #askStatus, #alertsStatus { margin-top: 10px; font-size: 12px; color: var(--color-danger-text); white-space: pre-wrap; }
   #meta { margin-top: 14px; font-size: 12px; color: var(--color-text-muted); }
@@ -376,10 +376,10 @@ _PAGE = """<!doctype html>
     </label>
     <div class="quick-questions" aria-label="Quick questions">
       <span style="font-size:12px;color:var(--color-text-muted)">Quick:</span>
-      <button type="button" class="quick-question" data-question="What objections are currently open?">1</button>
-      <button type="button" class="quick-question" data-question="Who have we not engaged in this opportunity?">2</button>
-      <button type="button" class="quick-question" data-question="What content should I send next?">3</button>
-      <button type="button" class="quick-question" data-question="What changed since the last call?">4</button>
+      <button type="button" class="quick-question" data-question="What objections are currently open?"><b>1</b> What objections are currently open?</button>
+      <button type="button" class="quick-question" data-question="Who have we not engaged in this opportunity?"><b>2</b> Who have we not engaged?</button>
+      <button type="button" class="quick-question" data-question="What content should I send next?"><b>3</b> What content should I send?</button>
+      <button type="button" class="quick-question" data-question="What changed since the last call?"><b>4</b> What changed since last call?</button>
     </div>
     <label><input id="askNarrative" type="checkbox"> Include narrative summary</label>
     <label><input id="askVoice" type="checkbox"> Read answer aloud (optional TTS)</label>
@@ -808,7 +808,8 @@ document.querySelectorAll(".quick-question").forEach((button) => {
   });
 });
 window.addEventListener("keydown", (event) => {
-  if (!event.altKey || !["1", "2", "3", "4"].includes(event.key)) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || !["1", "2", "3", "4"].includes(event.key)) return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
   const button = document.querySelector(`.quick-question:nth-of-type(${Number(event.key)})`);
   if (button) button.click();
 });
