@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     # under load. See src/llm/chat.py::build_chat_fn().
     llm_base_url: str = ""
 
+    # Optional voice output for the sales-assistant answer. Disabled by
+    # default so text answers never depend on an external audio vendor.
+    # `tts_provider=openai` enables the OpenAI speech endpoint in
+    # src/tts/provider.py; callers still receive the answer text immediately.
+    tts_provider: str = ""
+    tts_api_key: str = ""
+    tts_model: str = "gpt-4o-mini-tts"
+    tts_voice: str = "alloy"
+    tts_base_url: str = "https://api.openai.com/v1"
+    tts_timeout_seconds: float = 2.0
+
     # ── Embedding provider (candidate generation / vector retrieval) ─────────────
     embedding_provider: str = ""
     embedding_api_key: str = ""

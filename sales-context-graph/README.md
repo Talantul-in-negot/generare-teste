@@ -311,6 +311,11 @@ required API surface — with four tabs:
   the grounded narrative summary if requested, and the underlying structured
   result. Requires `LLM_PROVIDER`/`LLM_API_KEY` configured server-side;
   otherwise renders the honest `503`.
+- **Optional voice output**: `POST /api/v1/tts` accepts grounded answer text
+  and returns `audio/mpeg`. Enable it with `TTS_PROVIDER=openai` and
+  `TTS_API_KEY`; the Ask response remains text-first, so TTS latency never
+  blocks the answer. Keep audio behind an explicit user toggle and retain the
+  text fallback if the provider times out.
 - **Alerts**: `GET /api/v1/digest` (Increment 17) — the five proactive signals
   across a workspace's or one seller's open pipeline.
 

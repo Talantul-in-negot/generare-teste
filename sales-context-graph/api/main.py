@@ -17,6 +17,7 @@ from api.routes import (
     ingestions,
     insights,
     qa,
+    tts,
     unresolved_mentions,
     viz,
 )
@@ -202,6 +203,7 @@ app.include_router(digest.router)
 app.include_router(erasure.router)
 app.include_router(alerts.router)
 app.include_router(viz.router)
+app.include_router(tts.router)
 
 
 @app.get("/metrics", include_in_schema=False)

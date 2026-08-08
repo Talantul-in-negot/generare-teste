@@ -372,7 +372,17 @@ _PAGE = """<!doctype html>
     <label>Question
       <textarea id="askQuestion" rows="3" placeholder="e.g. what objections has Volkswagen raised?"></textarea>
     </label>
+    <label>Quick question
+      <select id="askQuickQuestion">
+        <option value="">Choose a numbered question</option>
+        <option value="What objections are currently open?">1 — What objections are currently open?</option>
+        <option value="Who have we not engaged in this opportunity?">2 — Who have we not engaged?</option>
+        <option value="What content should I send next?">3 — What content should I send?</option>
+        <option value="What changed since the last call?">4 — What changed since last call?</option>
+      </select>
+    </label>
     <label><input id="askNarrative" type="checkbox"> Include narrative summary</label>
+    <label><input id="askVoice" type="checkbox"> Read answer aloud (optional TTS)</label>
     <details style="margin-top:10px">
       <summary style="font-size:12px;cursor:pointer">Optional context (ids the UI would already know)</summary>
       <label>Opportunity ID <input id="askOpportunityId"></label>
@@ -791,6 +801,15 @@ async function runQa() {
 
 /* ── Ask (natural language, Increment 15/16) ─────────────────────────────── */
 document.getElementById("askRunBtn").addEventListener("click", runAsk);
+document.getElementById("askQuickQuestion").addEventListener("change", (event) => {
+  if (event.target.value) document.getElementById("askQuestion").value = event.target.value;
+});
+window.addEventListener("keydown", (event) => {
+  if (!event.altKey || !["1", "2", "3", "4"].includes(event.key)) return;
+  const quick = document.getElementById("askQuickQuestion");
+  quick.selectedIndex = Number(event.key);
+  quick.dispatchEvent(new Event("change"));
+});
 
 async function runAsk() {
   const statusEl = document.getElementById("askStatus");
@@ -845,6 +864,26 @@ async function runAsk() {
     (data.confidence != null ? " (confidence " + data.confidence.toFixed(2) + ")" : "") + "</div>" +
     (data.reasoning ? "<div class='result-scalar'>reasoning: " + data.reasoning + "</div>" : "");
   resultEl.appendChild(header);
+
+  if (document.getElementById("askVoice").checked && data.answered) {
+    const audioText = data.narrative?.text || data.reasoning || JSON.stringify(data.result || {});
+    const audioStatus = document.createElement("div");
+    audioStatus.className = "result-scalar";
+    audioStatus.textContent = "Preparing audio…";
+    resultEl.appendChild(audioStatus);
+    fetch("/api/v1/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Workspace-Id": workspaceId, "X-Api-Key": apiKey },
+      body: JSON.stringify({ text: audioText }),
+    }).then(async (audioResp) => {
+      if (!audioResp.ok) throw new Error("TTS HTTP " + audioResp.status);
+      const player = document.createElement("audio");
+      player.controls = true;
+      player.autoplay = false;
+      player.src = URL.createObjectURL(await audioResp.blob());
+      audioStatus.replaceWith(player);
+    }).catch((error) => { audioStatus.textContent = "Audio unavailable; text answer remains available. " + error; });
+  }
 
   for (const a of data.ambiguities || []) {
     const div = document.createElement("div");

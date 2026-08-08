@@ -18,3 +18,4 @@ sentence-transformers>=3.0
 # Only imported when LLM_PROVIDER=anthropic (src/llm/chat.py imports it lazily) —
 # the test suite runs entirely on stub chat_fns and never needs it.
 anthropic>=0.40
+httpx>=0.27

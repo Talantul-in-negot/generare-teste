@@ -18,3 +18,6 @@ loadtest/results/
 # scripts/backup_neo4j.sh's output -- local dev-DB tarballs (tens of MB each,
 # regenerated on demand), not source. See scripts/backup_neo4j.sh's header.
 backups/
+
+# Presentation renderer intermediates (the final MP4 is intentionally tracked).
+artifacts/presentation_video_work/
