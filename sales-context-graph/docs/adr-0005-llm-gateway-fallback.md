@@ -3,6 +3,10 @@
 **Status:** Implemented (feature-flagged, off by default)
 **Date:** 2026-08-07
 
+The fallback gateway remains opt-in. It retries only transient availability
+failures, never validation/schema failures, and emits telemetry for every
+fallback. Routes continue to fail loudly when no provider is configured.
+
 ## Context
 
 `docs/evaluation.md`'s external architecture-review cross-check evaluated

@@ -1,5 +1,13 @@
 # Sales Context Graph — Updated Implementation Plan and Codex Prompt
 
+> **Implementation status (2026-08-08):** The original vertical-slice plan is
+> implemented and extended with bounded Q&A/Ask, grounded narratives,
+> recommendations, digest/insights, ACL policy wiring, erasure propagation to
+> configured vector storage, durable Redis ingestion and seller-facing `/viz`
+> surfaces. This document remains the product/design contract; the current
+> release boundary and external Showpad gaps are maintained in
+> [`evaluation.md`](evaluation.md).
+
 ## 1. Objective
 
 Build a production-oriented vertical slice that combines structured Salesforce CRM data, Gong-shaped sales-call transcripts, and Showpad-style content engagement into a Neo4j knowledge graph.

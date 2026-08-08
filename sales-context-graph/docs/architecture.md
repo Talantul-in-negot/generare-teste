@@ -23,11 +23,12 @@ src/resolution/       Stage A deterministic rules, candidate generation,
 src/review/           Async human-review service (§9) — reviewer resolves a
                        PENDING_REVIEW Mention, targeted Claim reconciliation.
 src/context_graph/    Bounded, scored Claim selection for one scope.
-src/usecases/         The one wired use case: objection -> unviewed content.
+src/usecases/         Q&A, Ask, narrative, digest, conflict, committee,
+                      temporal and objection-to-unviewed-content use cases.
 src/graph/            Neo4j: tenant-safe execution modes, schema/indexes,
-                       migrations, and one repository per aggregate.
-src/core/             Settings + a minimal Neo4j client — forked, trimmed,
-                       from a sibling project (see "Ported modules" below).
+                      migrations, and one repository per aggregate.
+src/auth/              Pure authorization policy and OIDC/JWKS validation.
+src/core/             Settings, rate limiting, telemetry, caching and clients.
 ```
 
 Dependency direction is one-way: `api` depends on everything below it;
@@ -76,8 +77,16 @@ flowchart TB
 
     subgraph Serving["src/context_graph/ + src/usecases/"]
         CTX[ContextGraphBuilder<br/>scope → score → budget → diversity]
+        QA[Ask / Q&A / digest / insights]
         UC[ObjectionContentRecommendationUseCase]
     end
+
+    subgraph Governance["src/auth/ + src/core/"]
+        ACL[AccessContext<br/>workspace / division / opportunity]
+        AUDIT[Audit + rate limit + telemetry]
+    end
+
+    WORKER[Redis worker<br/>retry / visibility / DLQ / concurrency]
 
     API[FastAPI — api/]
 
@@ -91,18 +100,20 @@ flowchart TB
     CAND --> SCORE --> POLICY
     POLICY --> REVIEW
     EXEC --> REPO --> Graph
-    REPO --> CTX --> UC
+    REPO --> CTX --> QA --> UC
     API --> Ingestion
     API --> Resolution
     API --> Serving
+    API --> Governance
+    Ingestion -. durable mode .-> WORKER --> RECON
 ```
 
 Every node carries `workspace_id` (the tenant-isolation boundary); Showpad
 nodes additionally carry `division_id`. `GraphExecutor.tenant_query()`
 structurally rejects Cypher that doesn't scope a matched node by
 `workspace_id` — see [`security-and-tenancy.md`](security-and-tenancy.md).
-(Same diagram as [`README.md`](../README.md#architecture); kept in sync
-manually — update both on architectural change.)
+README keeps a deliberately simplified product overview; this document is the
+canonical technical diagram and includes governance and durable worker paths.
 
 1. **Ingest.** An adapter parses one raw external record into a `(domain
    entity, external_id, object_type, content_hash)` tuple
@@ -176,16 +187,16 @@ Datalog-style KG completion inference).
 
 ## API layer
 
-FastAPI routes are intentionally thin — see `api/routes/*.py`. Tenant
-isolation is enforced once, at the dependency layer (`api/dependencies.py`'s
-`verify_api_key`, which composes `get_workspace_id`'s `X-Workspace-Id` header
-read with an `X-Api-Key` check — see security doc for why a header and not a
-body field, and for the auth model), not re-implemented per route.
+FastAPI routes are intentionally thin — see `api/routes/*.py`. Workspace
+isolation is structural in repository queries. Optional production
+authorization is enforced by `src/auth/policy.py`: middleware covers
+opportunity path routes, while body-scoped Ask, Context, Q&A and ingestion
+routes validate `AccessContext` after Pydantic parsing. The signed panel token
+path becomes a narrow opportunity-scoped context.
 
-Ingestion runs synchronously in-process within the request
-(`api/routes/ingestions.py`), which §11 explicitly permits for the MVP; job
-status is still tracked through the same state machine
-(`src/domain/enums.py::IngestionState`) a real async worker would use, via
-`api/state.py`'s in-memory store — swapping the synchronous call for a queued
-background task later doesn't change any route's contract, only what's inside
-the `try` block.
+Ingestion supports two explicit modes. With `INGESTION_QUEUE_ENABLED=false`,
+the API executes the pipeline synchronously for local development. With it
+enabled, the API writes an accepted job and enqueues it to Redis; the separate
+`src.ingestion.worker` process claims jobs into per-slot processing lists,
+retries transient failures, reaps stale claims and writes poison jobs to the
+DLQ. Both modes preserve the same `IngestionState` and HTTP contract.

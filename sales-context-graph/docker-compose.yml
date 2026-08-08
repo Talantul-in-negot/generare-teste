@@ -65,15 +65,10 @@ services:
     volumes:
       - .:/app
 
-# No RabbitMQ/worker/queue services yet — ingestion starts as a synchronous
-# API call. Add a queue when transcript backlog exceeds the freshness SLA
-# (see docs/roadmap.md "When to add an ingestion worker" once written) — not
-# before there's a measured reason. Redis (above) was added for a concrete,
-# already-measured need (api/state.py's durable ingestion job store), not
-# speculatively — this comment used to defer Redis entirely; that's the
-# thing that changed.
-# The worker service below is now the durable execution path; the historical
-# comment above is retained only to explain why the queue was feature-flagged.
+# The API and worker run as separate processes. With
+# INGESTION_QUEUE_ENABLED=true, routes enqueue accepted jobs and the worker
+# owns retries, visibility-timeout recovery, DLQ handling and bounded
+# concurrency. Set the flag to false for a synchronous local-only run.
 
   worker:
     build:

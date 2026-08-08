@@ -3,6 +3,12 @@
 **Status:** Implemented (feature-flagged, off by default)
 **Date:** 2026-08-07
 
+Redis remains the recommended default because the repository now has a
+durable worker with retries, visibility timeout, DLQ handling and bounded
+concurrency. Kafka is available for an explicitly configured transport when
+partitioned replay or independent consumer scaling becomes worth its
+operational cost.
+
 ## Context
 
 `docs/evaluation.md`'s external architecture-review cross-check evaluated

@@ -3,6 +3,11 @@
 **Status:** Implemented (feature-flagged, off by default)
 **Date:** 2026-08-07
 
+The Qdrant backend is now also part of contact erasure propagation when
+`VECTOR_BACKEND=qdrant`. Neo4j remains the default graph-native retrieval
+path; Qdrant population is an explicit operator-run backfill, not an
+automatic write-time side effect.
+
 ## Context
 
 `docs/evaluation.md`'s external architecture-review cross-check evaluated

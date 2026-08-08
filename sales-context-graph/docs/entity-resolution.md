@@ -23,10 +23,11 @@ test_duplicate_exact_names_do_not_deterministic_link_and_tied_margin_forces_revi
 ## Candidate generation (`src/resolution/candidates.py`)
 
 - `exact_name_candidates` — feeds Stage A3.
-- `all_names_in_workspace` — the full tenant-scoped name pool, scored in Python
-  via RapidFuzz rather than a DB-native trigram index (documented limitation:
-  fine at this vertical slice's data scale, would need a real trigram/APOC
-  index at larger scale).
+- `all_names_in_workspace` — an explicit evaluation/diagnostic helper that
+  returns the full tenant-scoped name pool. The production resolver uses
+  bounded full-text plus first-token prefix candidates, then scores them in
+  Python; it no longer materializes the entire workspace name pool on the
+  normal path.
 - `fulltext_candidates` / `vector_candidates` — tenant-safe via
   `GraphExecutor.tenant_query()`'s WHERE-equality scoping form (`CALL
   db.index.*.queryNodes(...) YIELD node WHERE node.workspace_id =
@@ -39,8 +40,9 @@ test_duplicate_exact_names_do_not_deterministic_link_and_tied_margin_forces_revi
   `participant_belongs_to_account`, `seller_owns_open_opportunity`,
   `participant_email_domain_matches_account`. (§8 names two more — "mentioned
   Product appears on that Opportunity" and "temporally nearby Meeting or
-  Activity references the candidate" — not implemented; no Product-Opportunity
-  linkage or Meeting/Activity temporal-proximity query exists in this repo.)
+  Activity references the candidate" — remain intentionally out of scope
+  because this vertical slice has no Product-Opportunity or Meeting/Activity
+  temporal-proximity model.)
 - `union_candidates` — merges by entity id (unioning each candidate's
   `sources`), capped at `DEFAULT_CAP = 50`.
 

@@ -153,9 +153,10 @@ quarter."`:
   object_text="pricing", polarity=AFFIRMED, evidence_char_start=56,
   evidence_char_end=63)`
 
-(Only the **first** matching rule per segment fires, in `_RULES` order — see
-the open TODO in `docs/evaluation.md` about these predicate literals not
-being validated against `config/ontologies/sales.yml`.)
+(Only the **first** matching rule per segment fires, in `_RULES` order. The
+fixture provider is intentionally deterministic; production extraction uses
+the typed provider contract and validation path. Predicate ontology expansion
+remains a documented scope item rather than an implicit assumption.)
 
 **3d. Each assertion becomes a Claim.**
 `transcript_pipeline.py:172-201` computes:

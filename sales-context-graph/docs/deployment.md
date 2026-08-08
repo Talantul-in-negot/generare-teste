@@ -7,10 +7,14 @@ Fly volume — Neo4j is a stateful JVM process needing backup/upgrade
 management this MVP doesn't want to operate itself). The ingestion job store
 runs on Fly-managed **Redis** (`fly redis create`, Upstash-backed).
 
-Auth is API-key-per-workspace (`X-Api-Key` header, checked against
-`WORKSPACE_API_KEYS` — see `api/dependencies.py::verify_api_key` and
-`docs/security-and-tenancy.md`). `/health` and `/ready` stay unauthenticated
-so Fly's health-check prober can reach them.
+Authentication is API-key-per-workspace (`X-Api-Key` header, checked against
+`WORKSPACE_API_KEYS` — see `api/dependencies.py::verify_api_key`).
+`/health` and `/ready` stay unauthenticated so Fly's health-check prober can
+reach them. For a real pilot, enable `AUTHZ_ENFORCEMENT_ENABLED=true` only
+with a configured OIDC/SSO path or an ingress that validates and overwrites
+the actor claims; set `AUTHZ_TRUSTED_GATEWAY_ENABLED=true` only for that
+trusted ingress. The API fails closed with 503 if enforcement is enabled
+without either boundary.
 
 ## One-time setup
 
@@ -38,7 +42,11 @@ so Fly's health-check prober can reach them.
      NEO4J_USER="neo4j" \
      NEO4J_PASSWORD="<from Aura console>" \
      REDIS_URL="<from fly redis create>" \
-     WORKSPACE_API_KEYS='{"ws-demo":"<generated key from step 3>"}'
+     WORKSPACE_API_KEYS='{"ws-demo":"<generated key from step 3>"}' \
+     INGESTION_QUEUE_ENABLED="true" \
+     INGESTION_WORKER_CONCURRENCY="2" \
+     AUTHZ_ENFORCEMENT_ENABLED="true" \
+     AUTHZ_TRUSTED_GATEWAY_ENABLED="true"
    ```
 
 ## Deploy
@@ -63,12 +71,30 @@ curl -X POST https://<your-app>.fly.dev/api/v1/context/build \
 curl -X POST https://<your-app>.fly.dev/api/v1/context/build \
   -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: <generated key>" \
   -H "Content-Type: application/json" -d '{}'
+
+# with AUTHZ_ENFORCEMENT_ENABLED=true behind a trusted claims gateway,
+# resource claims are forwarded as verified request context
+curl -X GET "https://<your-app>.fly.dev/api/v1/opportunities/<opp-id>/conflicts" \
+  -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: <generated key>" \
+  -H "X-User-Id: <verified-subject>" -H "X-User-Roles: seller" \
+  -H "X-Authorized-Opportunities: <opp-id>"
 ```
 
 When `INGESTION_QUEUE_ENABLED=true`, `/ready` also verifies Redis and a
 short-lived worker heartbeat. A green API without a running worker is therefore
 reported as `503`, rather than silently accepting ingest requests that will not
 be processed.
+
+The worker is a separate Fly process group. Verify it explicitly after deploy:
+
+```bash
+fly status
+fly logs --process-group worker
+```
+
+`INGESTION_WORKER_CONCURRENCY` controls independent Redis claim slots per
+worker process (1–32). It improves local throughput but is not a tenant-fair
+capacity guarantee; publish measured load results before increasing it.
 
 ## Rotating or adding a workspace key
 
@@ -86,5 +112,9 @@ does and doesn't cover.
 - No CDN/WAF in front of the app.
 - No structured logging shipped anywhere beyond Fly's own log capture
   (`fly logs`).
-- No automated Neo4j/Redis backup verification beyond what Aura/Upstash
-  provide by default.
+- The repository includes `make backup-verify` for a destructive local
+  Neo4j round-trip check. Run it only against an explicitly disposable local
+  volume; production restore evidence must be performed under the customer's
+  approved backup/RPO/RTO procedure.
+- No live Showpad OAuth/API connector or CRM write-back is created by this
+  deployment recipe; those require external credentials and contract tests.

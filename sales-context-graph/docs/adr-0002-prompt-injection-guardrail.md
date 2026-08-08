@@ -3,6 +3,11 @@
 **Status:** Implemented (feature-flagged, log-only by default)
 **Date:** 2026-08-07
 
+The guardrail remains active in observability mode by default and can be
+switched to blocking mode with `GUARDRAIL_ENFORCEMENT_MODE=block` after a
+review of flagged production-like data. Transcript delimiting, no-tool model
+access and typed output validation remain the deterministic baseline.
+
 ## Context
 
 `docs/evaluation.md`'s external architecture-review cross-check evaluated

@@ -87,6 +87,20 @@ custom namespaced claim; this isn't hardcoded to one vendor's convention).
   system has to work with, only how a workspace_id could eventually be
   established through a real login instead of a shared static API key.
 
+## Current integration boundary
+
+The application-owned authorization layer is now implemented separately in
+`src/auth/policy.py` and wired into API middleware and resource routes. It
+supports deny-by-default role, division, opportunity and sensitive-content
+checks, plus signed panel-token scope. `AUTHZ_ENFORCEMENT_ENABLED=true` fails
+closed unless `SSO_ENABLED=true` or an explicitly trusted claims gateway is
+configured; this prevents clients from self-asserting `X-User-Roles`.
+
+The remaining external work is identity provisioning and claim production:
+connect a real IdP, map groups/divisions/opportunities, add SCIM
+deprovisioning, rotate keys/tokens and validate the deployment against the
+customer's tenant. The policy code does not pretend those contracts exist.
+
 ## Not done in this ADR
 
 Wiring `verify_sso_token` into any actual route, RBAC/scoped permissions

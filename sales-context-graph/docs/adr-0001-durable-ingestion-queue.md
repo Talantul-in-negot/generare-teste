@@ -1,4 +1,4 @@
-# ADR-0001 — Durable ingestion queue (design, not yet implemented)
+# ADR-0001 — Durable ingestion queue
 
 **Status:** Implemented (feature-flagged)
 **Date:** 2026-08-05
@@ -29,9 +29,9 @@ model needs the request to return fast and the actual work to survive a
 process restart, which is exactly what a real queue provides and synchronous
 in-process execution does not.
 
-## Decision (proposed)
+## Decision (implemented, feature-flagged)
 
-Introduce a real broker-backed queue between the API and the pipelines,
+Introduce a Redis-backed queue between the API and the pipelines,
 reusing the Redis instance already in `docker-compose.yml` — no new
 infrastructure dependency.
 
@@ -57,13 +57,13 @@ GET /api/v1/ingestions/{id}
   → unchanged: reads RedisIngestionStore, same as today
 ```
 
-### Library choice: RQ (Redis Queue), not Celery
+### Library choice: Redis primitives, not RQ or Celery
 
-- Already depending on Redis; RQ needs nothing else.
-- Celery's broker/backend/beat machinery is more than this needs — one
-  queue, no scheduled tasks, no complex routing.
-- `rq-scheduler` or a simple retry-with-backoff wrapper covers
-  `FAILED_RETRYABLE` without Celery's full feature surface.
+The implementation uses `redis.asyncio` directly: `RPUSH`/`BLMOVE` for
+delivery, per-worker processing lists, timestamps for visibility and a DLQ
+list. This keeps the worker async with the existing FastAPI/Neo4j stack and
+avoids adding a second job abstraction. Celery/RQ scheduling is intentionally
+not part of this service; external schedulers own periodic digest delivery.
 
 ### Idempotency and retry
 
@@ -92,15 +92,16 @@ parts, by design. The queue only needs:
 - The HTTP contract — `POST` still returns `{ingestion_id}` immediately,
   `GET .../{id}` still polls the same store.
 
-### What DOES change
+### What changed
 
-- `api/routes/ingestions.py`'s route handlers: replace the direct
-  `await pipeline.ingest_*(...)` call with an enqueue call.
-- New `worker.py` (or `src/worker/`) entry point, run as a separate process
-  (`rq worker` or a thin wrapper).
-- `docker-compose.yml`: new `worker` service, same image as `api`, running
-  `worker.py` instead of `uvicorn`.
-- `requirements`/`pyproject`: add `rq`.
+- `api/routes/ingestions.py` now enqueues when `INGESTION_QUEUE_ENABLED=true`
+  and retains synchronous execution when the flag is false.
+- `src/ingestion/worker.py` is a separate process entry point using Redis
+  primitives already in the stack.
+- Delivery is at-least-once with idempotent reconciliation, bounded retries,
+  a dead-letter list and visibility-timeout recovery.
+- `INGESTION_WORKER_CONCURRENCY` creates independent claim slots per worker
+  process (clamped to 1–32).
 
 ## Consequences
 
@@ -121,12 +122,11 @@ parts, by design. The queue only needs:
 
 The implemented seam is `src/ingestion/queue.py` plus
 `src/ingestion/worker.py`: Redis list delivery, idempotent enqueue markers,
-bounded retry, and a dead-letter list. `INGESTION_QUEUE_ENABLED=false` keeps
-local development synchronous; Compose and Fly enable it and run a separate
-worker. Exactly-once delivery, per-workspace fairness and horizontal worker
-tuning remain operational follow-ups, while graph writes remain safe under
-at-least-once delivery because the existing reconciliation/MERGE paths are
-idempotent.
+bounded retry, dead-letter handling, visibility-timeout recovery and bounded
+worker concurrency. `INGESTION_QUEUE_ENABLED=false` keeps local development
+synchronous. Exactly-once delivery and strict per-workspace fairness remain
+operational follow-ups; graph writes remain safe under at-least-once delivery
+because reconciliation/MERGE paths are idempotent.
 
 ## Addendum, 2026-08-07 — visibility timeout (docs/evaluation.md)
 
@@ -160,5 +160,6 @@ stack, no new broker), extended:
   this repo's own `docker-compose.yml`/`fly.toml` still run exactly one
   `worker` process today.
 
-Still deferred, unchanged from this ADR's original scope: exactly-once
-delivery, per-workspace fairness, horizontal worker tuning.
+Still deferred: exactly-once delivery, strict tenant-fair scheduling and
+measured horizontal capacity. The code supports multiple replicas and local
+concurrency, but production fairness/SLO claims require a target workload.

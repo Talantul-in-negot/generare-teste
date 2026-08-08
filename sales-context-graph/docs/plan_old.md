@@ -510,3 +510,9 @@ Run formatting, static analysis, and the full test suite. Fix failures before re
 - tests passing (with real counts)
 - **what is not implemented** — be specific and honest; an accurate gap list is more useful than an inflated completion claim
 - the next recommended milestone
+# Archived planning notes
+
+This file is retained as historical design context. It is not the current
+implementation status; use [`plan.md`](plan.md),
+[`evaluation.md`](evaluation.md) and [`deployment.md`](deployment.md) for the
+current release.

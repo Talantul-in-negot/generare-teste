@@ -5,14 +5,17 @@
 `POST /api/v1/digest/deliver` (Increment 17) computes the five signal rules in
 `src/signals/rules.py` across a workspace's open pipeline and posts a Slack
 digest. It is triggered by an HTTP call, not by a timer this process runs
-itself. This is a deliberate choice, not an oversight:
+itself. Ingestion is a separate concern: when `INGESTION_QUEUE_ENABLED=true`,
+the API enqueues durable Redis jobs and `python -m src.ingestion.worker` owns
+execution with retries, visibility timeout, dead-letter handling and bounded
+concurrency.
 
-- `docker-compose.yml`'s `api` service comment already states the repo's
-  standing position: *"No RabbitMQ/worker/queue services yet — ingestion
-  starts as a synchronous API call... add a queue when transcript backlog
-  exceeds the freshness SLA, not before there's a measured reason."* The same
-  reasoning applies here — a periodic digest has no measured latency/backlog
-  requirement that a synchronous, cron-triggered HTTP call can't satisfy.
+The external-trigger choice for digest delivery is deliberate, not an
+oversight:
+
+- A periodic digest has no measured latency/backlog requirement that a
+  synchronous, cron-triggered HTTP call cannot satisfy. Keeping scheduling
+  outside the API avoids duplicate runs when the web process scales.
 - `fly.toml` runs a single `http_service` with no `[processes]` map. Adding an
   in-process scheduler (APScheduler, a bare `while True: sleep` loop) would be
   new infrastructure with its own failure modes (missed runs on restart,
@@ -20,7 +23,27 @@ itself. This is a deliberate choice, not an oversight:
   job an external, already-durable scheduler already does correctly.
 
 If a measured need for sub-cron-interval freshness appears, revisit this —
-but do not add a second execution model preemptively.
+do not add an in-process scheduler preemptively.
+
+## Queue operations
+
+Enable the durable path with `REDIS_URL` and
+`INGESTION_QUEUE_ENABLED=true`, then run a worker separately:
+
+```bash
+python -m src.ingestion.worker
+```
+
+The worker uses one Redis processing list per concurrency slot. A crash is
+recovered after `INGESTION_VISIBILITY_TIMEOUT_SECONDS`; retryable failures are
+bounded by `INGESTION_QUEUE_MAX_ATTEMPTS` and then sent to the DLQ. Monitor
+`/ready`, `/metrics`, queue depth, oldest-job age and DLQ depth. A healthy API
+without a heartbeat from the worker is not considered ready when the durable
+queue is enabled.
+
+For a repeatable local performance baseline, run `make loadtest`. For a
+destructive local backup/restore round-trip, run `make backup-verify` only
+against disposable infrastructure.
 
 ## Triggering the digest
 

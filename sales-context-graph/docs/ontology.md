@@ -115,3 +115,10 @@ satisfies via `content_asset.tags` instead of a materialized edge, and
 `CONVERTED_TO`/`MERGED_INTO` (§5) aren't implemented at all yet. Wiring
 those 3 in is a one-line `validate_relation(...)` call whenever their write
 paths land — see `docs/evaluation.md`'s "Known measurement gaps".
+# Current release note
+
+The ontology below remains the contract for typed Claims and relationships.
+Unknown or unsupported predicates are rejected by validation; the application
+does not silently expand the graph vocabulary during extraction. Current API
+serving, authorization and operational status is tracked in
+[`evaluation.md`](evaluation.md).

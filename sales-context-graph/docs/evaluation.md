@@ -1,5 +1,31 @@
 # Evaluation
 
+## Current release status — 2026-08-08
+
+The repository-owned hardening work is complete for the controlled-pilot
+scope. The current release includes:
+
+- evidence-backed bounded Q&A/Ask with citations, disclaimer and human-review
+  metadata;
+- lifecycle-aware, division-aware content recommendation;
+- deny-by-default opportunity/division policy wiring, signed panel-token scope
+  and actor-aware audit events;
+- Neo4j/Qdrant contact-embedding erasure;
+- Redis queue retries, visibility-timeout recovery, DLQ handling and bounded
+  per-process worker concurrency;
+- workspace+identity constraints, bounded entity candidate retrieval, rate
+  limiting, readiness/metrics and reproducible load/backup exercises.
+
+The latest local hardening gate passes **370 unit tests**; relevant integration
+checks pass against the live Neo4j/Redis stack. The older numeric snapshots in
+this document are historical audit captures and remain useful for explaining
+how the system evolved, but must not be read as the current release count.
+
+The remaining release boundary is external: Showpad OAuth/API synchronization,
+CRM write-back, real IdP/SCIM provisioning, Shared Spaces/mobile workflows,
+tenant-fair production capacity evidence, and customer-approved compliance and
+restore evidence.
+
 Real results from this repo's own test suite, run against a live Neo4j
 container (`docker-compose.yml`'s `neo4j` service) and a live Redis container
 (`docker-compose.yml`'s `redis` service). Original P0-P4.5 run on 2026-08-04;
@@ -1458,6 +1484,13 @@ about this repo, so it is not restated here.
 
 ## Showpad engineering-rigor assessment (2026-08-08)
 
+> **Historical assessment note:** The findings below were captured before the
+> final local hardening pass. The current state superseding those findings is
+> summarized in **Current release status** above and in the implementation
+> update sections near the end of this document. In particular, route ACL
+> wiring, erasure propagation and worker concurrency are now implemented;
+> external Showpad/IdP/compliance evidence remains open.
+
 A fresh audit of the repo *as it now stands* — after the 11-phase
 implementation pass above — against the engineering bar an enterprise
 multi-tenant SaaS vendor of Showpad's profile has to clear. Every claim
@@ -1879,6 +1912,12 @@ dropped.
 
 ## Showpad standards re-verification (2026-08-08)
 
+> **Baseline matrix:** This comparison records the distance to Showpad parity
+> before the final repository-owned implementation pass. Read its matrix
+> together with the implementation updates that follow it; do not interpret
+> an older “gap” row as proof that the corresponding local control is still
+> absent.
+
 This is a fresh comparison with Showpad's current public product and trust
 posture, not a claim that Showpad has reviewed this repository. The sources are
 Showpad's public product/help/security pages, which describe four product
@@ -1919,7 +1958,7 @@ There are two honest launch positions:
 |---|---|---|---|
 | Four-pillar product surface | Graph ingestion, context building, Q&A, recommendations and engagement-shaped records; no readiness, buyer room or revenue product surface | **Partial** | Add a product-scope decision and separate the evidence service from any parity claim; implement the missing pillar surfaces or document them as non-goals |
 | Content Management | `ContentAsset` has title, URL, type, tags and optional `division_id`; no lifecycle, version, locale, sensitivity or approval policy | **Gap** | Add immutable source/version records, `is_archived`, approval state, effective/expiry dates, language/country/channel, sensitivity and shareability; enforce filters at ingest and retrieval |
-| Permissions intact | `workspace_id` is structurally enforced; `division_id` is stored and optionally filtered but not derived from identity or enforced as authorization | **High-risk gap** | Model Division/ACL edges, resolve user roles from the IdP, apply division/team/opportunity policy to every graph/vector/content query, and test deny cases |
+| Permissions intact | `workspace_id` is structurally enforced; optional deny-by-default `AccessContext` policy now covers opportunity/division route paths, body-scoped Q&A/Ask/context/ingestion and signed panel tokens | **Partial / external IdP gap** | Connect real IdP/SCIM claims and extend policy to any future connector/export surface; retain deny-case tests |
 | Sales Readiness | Claim summaries and seller-facing context exist; no courses, certifications, knowledge checks, coaching scorecards or readiness dashboards | **Gap** | Add curriculum/certification entities, assignment and completion events, assessment/roleplay workflows, manager review and readiness reporting |
 | Buyer Engagement | Historical `Share`/`AssetView` records and content recommendation exist; no real share creation, Shared Spaces, buyer uploads/comments, mutual action plan or Next Steps | **Gap** | Implement a buyer-facing room with participant ACLs, uploads/comments, MAP/Next Steps, expiry/revocation, seller notifications and engagement-to-opportunity attribution |
 | Revenue Intelligence | Signals/digests and content-effectiveness analysis exist; no closed-loop CRM outcome attribution or dashboard/report builder | **Partial** | Link assets, conversations, activities and outcomes to opportunity stage/win/loss; add configurable dashboards, cohort metrics, seller feedback and causal/attribution caveats |
@@ -1927,10 +1966,10 @@ There are two honest launch positions:
 | External sources and extensibility | LLM, Slack and parser adapters exist; no production Showpad OAuth/API client, content-picker SDK, Shares API, Salesforce/Dynamics installed app, MCP or Teams integration | **Gap** | Build connector contracts with OAuth2, token rotation, webhook/CDC cursors, retries and reconciliation; ship a Showpad sandbox connector first, then CRM auto-log and MCP/Teams adapters |
 | Field Meeting AI / CRM loop | Transcript ingestion and post-hoc graph analysis exist; no pre-meeting brief action in CRM and no automatic Salesforce/Dynamics note/task update | **Gap** | Implement pre-meeting brief, live/post-meeting extraction review, seller confirmation, idempotent CRM write-back, conflict handling and per-field audit trail |
 | Mobile and offline | `/viz` is a web/iframe panel; no native mobile client, offline cache, reconnect sync or conflict resolution | **Gap** | Add mobile capability (or explicitly exclude it from the companion scope), encrypted offline cache, content freshness/expiry, background sync, conflict policy and telemetry; do not imply Genie parity because Genie is not available offline |
-| Identity and administration | API-key-per-workspace auth; SSO/JWKS verification is feature-flagged scaffolding and not wired to routes; no RBAC, SCIM or self-service provisioning | **High-risk gap** | Connect a real OIDC/SAML IdP, map groups to roles/divisions, implement SCIM deprovisioning, session/token rotation, admin policy UI/API and user-level audit identity |
-| Privacy and compliance | PII egress redaction, prompt-injection tests, access audit events and bounded erasure execution exist; erasure does not remove embeddings/external indexes, and no certification evidence is present | **High-risk gap** | Define retention/legal-hold policies, complete erasure across Neo4j/vector/search/object storage, exportable audit evidence, DPA/subprocessor/data-residency controls and restore-tested backup procedures; maintain a SOC 2/ISO/GDPR evidence pack |
-| Reliability and operations | CI, type/lint checks, alerts, queue reaper and single-machine k6 baseline scripts exist | **Partial** | Publish dated load results, p95/p99/error/queue-lag SLOs, CI regression thresholds, distributed/tenant-fair workers, backpressure, capacity model, on-call runbooks and failure-injection tests |
-| Data integrity and search | Workspace scoping, pagination/batching and 22 indexes are present; no uniqueness constraints, no populated production vector index, and candidate generation still scans a workspace | **Partial / risk** | Add uniqueness constraints and migration checks, source cursors/CDC, production embedding/index backfill with tenant-prefiltered retrieval, native full-text/trigram blocking and benchmarked recall/latency gates |
+| Identity and administration | API-key-per-workspace auth; tested OIDC/JWKS validation plus application RBAC policy are present, but no live IdP/SCIM provisioning or self-service admin surface | **Partial / external IdP gap** | Connect a real OIDC/SAML IdP, map groups to roles/divisions, implement SCIM deprovisioning, session/token rotation and user-level identity evidence |
+| Privacy and compliance | PII egress redaction, prompt-injection tests, access audit events and bounded erasure execution exist; contact embeddings are cleared in Neo4j and optional Qdrant, but no certification evidence is present | **Partial / compliance gap** | Define retention/legal-hold policies, complete third-party/object-store propagation, exportable audit evidence, DPA/subprocessor/data-residency controls and restore-tested backup procedures |
+| Reliability and operations | CI, type/lint checks, alerts, queue visibility/reaper, bounded worker concurrency and single-machine k6 baseline scripts exist | **Partial** | Publish dated load results, p95/p99/error/queue-lag SLOs, CI regression thresholds, strict tenant-fair scheduling, capacity model, on-call runbooks and failure-injection tests |
+| Data integrity and search | Workspace scoping, pagination/batching, uniqueness constraints, bounded full-text/prefix candidates and operator-run vector backfill are present | **Partial / production-data gap** | Run production embedding/index backfill with rollback/rebuild evidence, native blocking benchmarks and recall/latency gates |
 | UX and accessibility | Showpad palette/token indirection and browser checks were added; the product remains a small custom panel with no complete navigation, keyboard/mobile/RTL/i18n/accessibility acceptance suite | **Partial** | Run WCAG 2.2 AA checks, keyboard/screen-reader/mobile tests, localization and timezone/currency/date policy, design-system review and product analytics for search/answer/task completion |
 
 ### Release gates to add to the implementation backlog
@@ -1966,13 +2005,16 @@ There are two honest launch positions:
 
 **P2 - required for production scale**
 
-- Replace the single global FIFO/single serial worker with tenant-fair,
-  horizontally scalable partitions and explicit backpressure.
+- Add strict tenant-fair scheduling/horizontally scalable partitions and
+  explicit backpressure; the current Redis worker already supports retries,
+  visibility timeout, DLQ recovery and bounded per-process concurrency.
 - Turn loadtest baselines into reproducible CI or scheduled performance
   reports with service-specific SLOs; include database, Redis, LLM and
   connector failure scenarios.
-- Remove full-table candidate scans, add uniqueness constraints and verify
-  vector index population/rebuild/rollback before enabling semantic retrieval.
+- Keep full-table candidate retrieval out of the production resolution path;
+  uniqueness constraints and bounded full-text/prefix candidates are now
+  present. Verify production vector population/rebuild/rollback before
+  enabling semantic retrieval at scale.
 - Add multi-region or a documented single-region business continuity plan,
   restore automation and game days before claiming enterprise availability.
 
@@ -1980,8 +2022,9 @@ There are two honest launch positions:
 
 - Replace "Showpad integration" with **Showpad-shaped ingestion** until the
   OAuth/API connector and reconciliation tests exist.
-- Replace "Showpad-compatible permissions" with **workspace isolation;
-  division filtering is not authorization** until the ACL path is live.
+- Replace "Showpad-compatible permissions" with **workspace isolation plus
+  optional deny-by-default resource policy** until a real IdP/SCIM claim path
+  is connected and verified in the target deployment.
 - Do not imply Showpad Genie, Shared Spaces, Field Meeting AI, mobile/offline,
   certifications or MCP capability from the current `/ask` and `/viz` routes.
 - Keep the performance wording as **repeatable baseline generator** until a
@@ -2019,12 +2062,12 @@ tree and covered by targeted checks:
   test.
 
 Still open from the earlier matrix: real Showpad OAuth/API synchronization,
-IdP/SCIM wiring and claim-to-identity mapping, end-to-end division/opportunity
-ACL enforcement (the policy primitives are implemented, route wiring remains), Shared Spaces,
-mobile/offline clients, CRM write-back, distributed tenant-fair workers,
-production load SLO evidence, and compliance/restore evidence. These require
-external system contracts or deployment credentials and are not represented as
-completed by this update.
+IdP/SCIM wiring and claim-to-identity mapping, Shared Spaces, mobile/offline
+clients, CRM write-back, strict distributed tenant-fair scheduling, production
+load SLO evidence, and compliance/restore evidence. Application-owned ACL
+wiring, erasure propagation and bounded worker concurrency are now implemented;
+the remaining items require external system contracts, production data or
+deployment credentials and are not represented as completed by this update.
 
 ### Implementation update: local authorization and answer safety (2026-08-08)
 
@@ -2053,9 +2096,9 @@ Additional repository-owned controls are now present:
   configured, deletes the corresponding tenant-scoped Qdrant point before
   marking the event complete. The erasure scope records `embeddings`.
 
-Remaining wiring work: claim-to-identity mapping from a real IdP, injecting
-`AccessContext` into every route/repository, Showpad/CRM OAuth and write-back,
-and production deployment evidence.
+Remaining integration work: claim-to-identity mapping from a real IdP,
+Showpad/CRM OAuth and write-back, strict repository-level policy propagation
+for any future connector/export surface, and production deployment evidence.
 
 ### Implementation update: end-to-end local resource enforcement (2026-08-08)
 

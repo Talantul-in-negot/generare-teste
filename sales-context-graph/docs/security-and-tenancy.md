@@ -28,9 +28,9 @@ parameter that's passed but never matched against is rejected.
 
 `schema_query()` and `operational_query()` bypass this guard — allowlisted by
 call-site convention (`src/graph/schema.py`/`src/graph/migrations/*` for the
-former, `/health`+`/ready`+`SHOW INDEXES` for the latter). This vertical slice
-has no separate caller-identity/ACL layer to enforce that mechanically; see
-"Not production-authorized" below.
+former, `/health`+`/ready`+`SHOW INDEXES` for the latter). These are privileged
+infrastructure paths, not user-facing tenant reads. User-facing routes add an
+optional deny-by-default resource policy described below.
 
 ### Adversarial proof, not just unit-level
 
@@ -51,8 +51,9 @@ live database and proves:
 `workspace_id` is the tenant/security boundary. Showpad-derived nodes
 (`ContentAsset`) additionally carry `division_id` — Showpad's own
 organizational/permission dimension *inside* a workspace, not itself a tenant
-boundary. They are not interchangeable; nothing in this repo authorizes access
-based on `division_id` alone.
+boundary. They are not interchangeable. When authorization enforcement is
+enabled, division and opportunity claims are applied on top of workspace
+isolation; a division field alone is never treated as proof of access.
 
 ## Authentication — MVP API-key-per-workspace, not a real identity provider
 
@@ -71,14 +72,28 @@ compared with `secrets.compare_digest` for timing-safety). `/health` and
 can't attach secrets, and both return only process/schema status, no tenant
 data) — see `docs/deployment.md`.
 
-**This is still not a real identity provider** — no self-serve key rotation,
-no per-key revocation without a redeploy, no OAuth/JWT/session model, no
-authorization-policy interface beyond the workspace boundary, and no
-division/team/opportunity-level authorization hooks. Keys live in `fly
-secrets`/`.env` as plaintext env vars. This mirrors the plan's own stated
-scope boundary (§13): a real IdP and policy implementation is still future
-work — `verify_api_key` closes the "anyone can claim any workspace" gap, not
-the full §13 scope.
+This is still not a complete identity-provider deployment: API keys have no
+self-serve rotation UI, and SSO/SCIM require an external IdP contract. The
+repository does contain the application policy layer and route wiring. Enable
+`AUTHZ_ENFORCEMENT_ENABLED=true` only with real SSO or
+`AUTHZ_TRUSTED_GATEWAY_ENABLED=true` behind an ingress that validates and
+overwrites actor claims. Otherwise the service returns 503 rather than trust
+client-supplied roles.
+
+## Current authorization enforcement
+
+`src/auth/policy.py` defines pure, tested `AccessContext` rules for roles,
+divisions, opportunities and sensitive content. API middleware denies
+out-of-scope opportunity path requests before a handler runs. Body-scoped Ask,
+Context, Q&A and ingestion routes apply the same policy after validation.
+Ingestion additionally requires an ingestion/content-admin role when
+enforcement is active.
+
+The embedded panel is handled separately but consistently: a signed,
+revocable panel token becomes a synthetic access context containing only its
+workspace and opportunity. It cannot be used as a general user identity.
+Audit events include optional actor id and roles, while workspace API keys
+remain the authentication boundary until SSO is connected.
 
 ## PII and secrets
 
@@ -98,10 +113,10 @@ the full §13 scope.
   handling" below.
 - `Claim.retention_class` and `Claim.erasure_status`
   (`src/domain/enums.py::ErasureStatus`) exist on the model; `ErasureEvent`
-  exists as an audit-record type. **No erasure-propagation implementation
-  exists yet** (no code walks embeddings/search-indexes/caches/derived
-  summaries on an erasure request) — the fields are the contract a future
-  phase implements against, not a working feature today.
+  exists as an audit-record type. Contact erasure now removes the Neo4j
+  embedding and, when Qdrant is configured, the tenant-scoped Qdrant point
+  before the event is marked complete. Retention/legal-hold policy and
+  third-party/object-store propagation remain deployment-level work.
 - No legal-hold state is modeled.
 
 ## PII handling — raw at rest, redacted at egress (added Phase 6, 2026-08-07)
@@ -146,6 +161,8 @@ reasoning; this is a documented deferral, not a silent gap.
    deliberately has no `workspace_id` field (proven for one route in
    `tests/integration/test_context_api.py::
    test_context_build_workspace_id_comes_from_header_not_body`).
-3. Real auth: replace `verify_api_key`'s static-env-var key map with a
-   revocable, rotatable, ideally hashed key store (or a real JWT/session-
-   claim-based IdP) before onboarding beyond a handful of pilot workspaces.
+3. Production identity: replace or compose `verify_api_key`'s static-env-var
+   key map with a revocable, rotatable, ideally hashed key store and connect a
+   real JWT/session-claim IdP plus SCIM before onboarding beyond a controlled
+   pilot. Keep `AUTHZ_ENFORCEMENT_ENABLED` fail-closed while that contract is
+   being deployed.

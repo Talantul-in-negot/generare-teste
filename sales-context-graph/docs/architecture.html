@@ -550,18 +550,20 @@ footer {
 
   <div class="stack">
     <div class="stack-row"><div class="lbl">api/</div><div class="body">FastAPI routes — parse request, call a use case, shape response. No business logic.</div></div>
-    <div class="stack-row"><div class="lbl">src/usecases/</div><div class="body">objection → unviewed content, and the seller-experience layer (Q&A, digest, narrative summaries).</div></div>
+    <div class="stack-row"><div class="lbl">src/usecases/</div><div class="body">objection → unviewed content, plus Q&A, Ask, digest, narratives, insights, temporal views and committee analysis.</div></div>
     <div class="stack-row"><div class="lbl">src/context_graph/</div><div class="body">bounded, scored Claim selection for one scope — node/token budget, diversity cap.</div></div>
     <div class="stack-row"><div class="lbl">src/resolution/ · src/review/</div><div class="body">deterministic rules, candidate generation, scoring, decision policy, async human review.</div></div>
     <div class="stack-row"><div class="lbl">src/extraction/</div><div class="body">windowing + extraction provider Protocol — fixture and LLM implementations, same interface.</div></div>
     <div class="stack-row"><div class="lbl">src/ingestion/</div><div class="body">source adapters + reconciliation — identical / changed / deleted handled explicitly.</div></div>
+    <div class="stack-row"><div class="lbl">src/auth/ · src/core/</div><div class="body">AccessContext policy, OIDC/JWKS validation, rate limiting, audit, telemetry, caching and readiness.</div></div>
+    <div class="stack-row"><div class="lbl">worker</div><div class="body">Redis delivery with retries, visibility timeout, DLQ recovery and bounded concurrency per claim slot.</div></div>
     <div class="stack-row"><div class="lbl">src/graph/</div><div class="body">tenant-safe execution modes, schema/indexes, migrations, one repository per aggregate.</div></div>
     <div class="stack-row"><div class="lbl">src/domain/</div><div class="body">pure Pydantic v2 contracts + deterministic ID hashing. Nothing depends on it; it depends on nothing.</div></div>
   </div>
 
   <footer>
     <span>sales-context-graph · docs/architecture.md</span>
-    <span>P0–P4.5 vertical slice + Increments 15–20</span>
+    <span>Controlled-pilot release · external Showpad/IdP contracts remain</span>
   </footer>
 
 </div>

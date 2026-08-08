@@ -1,5 +1,12 @@
 # Sales Context Graph
 
+> **Current release snapshot — 2026-08-08**
+>
+> A production-oriented, evidence-backed companion layer for Showpad-style
+> sales context. The repository is ready for a controlled pilot; a live
+> Showpad OAuth/API connector, CRM write-back and enterprise IdP provisioning
+> still require external integration contracts.
+
 CRM data (Salesforce-shaped) + sales-call transcripts (Gong-shaped) + content
 engagement (Showpad-shaped) → a tenant-isolated Neo4j knowledge graph →
 evidence-backed, query-specific context for one sales workflow:
@@ -28,9 +35,8 @@ durable Redis-backed job store, Fly.io deploy artifacts — see
   detected and surfaced (`GET /api/v1/opportunities/{id}/conflicts`), not
   silently dropped.
 - **Buying-committee mapping** — flags single-threaded deals
-  (`GET /api/v1/opportunities/{id}/buying-committee`), honestly scoped: real
-  MEDDIC role classification isn't built (would need an LLM), only who's
-  actually on the calls.
+  (`GET /api/v1/opportunities/{id}/buying-committee`) and supports opt-in LLM
+  role classification; contacts below the confidence floor remain `UNKNOWN`.
 - **Cross-deal aggregation** — top objections across one seller's open
   pipeline (`GET /api/v1/sellers/{id}/top-objections`).
 
@@ -70,12 +76,12 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
   iframe-embeddable single-deal view for embedding in Salesforce/Showpad — an
   embeddable panel, not a packaged app (no OAuth, no AppExchange packaging).
 
-529 tests pass (unit, integration against a live Neo4j, security, and eval) —
-see the completion report at the end of this document for the phase-by-phase
-breakdown, real measured numbers, and known limitations. Open TODOs and
-deferred work are centralized in
-[`docs/evaluation.md`'s "Known measurement gaps"](docs/evaluation.md#known-measurement-gaps)
-— not scattered across code comments alone.
+The repository has a broad unit/integration/security/evaluation suite; the
+current hardening gate passes 370 unit tests plus the relevant integration
+checks. See the completion report at the end of this document for the
+phase-by-phase breakdown, measured numbers and known limitations. Deferred
+work is centralized in [`docs/evaluation.md`](docs/evaluation.md), rather than
+hidden in code comments.
 
 ## Engineering rigor — the short version
 
@@ -178,7 +184,7 @@ Requires Docker and Python 3.12+ (developed/tested against 3.11.6 — see
 
 ```bash
 docker compose up -d neo4j redis
-pip install -r requirements.txt
+pip install -r requirements.lock.txt
 cp .env.example .env
 ```
 
@@ -187,10 +193,11 @@ not Neo4j's defaults (7474/7687) — see the comment in that file for why.
 `redis` (added for the durable ingestion job store) is shifted to **6380**
 for the same reason.
 
-Every route below `/health`/`/ready` now requires an `X-Api-Key` header
-(`docs/security-and-tenancy.md`'s auth section) matching the claimed
-workspace's key in `WORKSPACE_API_KEYS` — `.env.example` ships a placeholder
-key for `ws-demo`; the curl examples below use it as-is.
+Every tenant-data route requires an `X-Api-Key` header matching the claimed
+workspace's key in `WORKSPACE_API_KEYS`. `/health` and `/ready` remain public
+for platform probes. Optional production authorization is enabled with
+`AUTHZ_ENFORCEMENT_ENABLED=true` and either real SSO or an explicitly trusted
+claims gateway; otherwise the service fails closed.
 
 ## Running the tests
 
@@ -359,18 +366,25 @@ breakdown per module.
   this as a package.
 - **Embedding provider**: local `sentence-transformers` (`all-MiniLM-L6-v2`,
   384-dim, no API key — `src/embedding/`), wired into `resolve_mention()`'s
-  semantic scoring. The versioned vector index (`contact_embeddings_v1`) still
-  exists structurally but runs unpopulated — `vector_candidates()` (candidate
-  *generation* via the index) is a separate, larger milestone (embedding-on-
-  write for every Contact, backfill) from semantic *scoring* of already-
+  semantic scoring. The versioned vector index (`contact_embeddings_v1`) is
+  executable and tenant-safe, but is not auto-populated by default —
+  `vector_candidates()` (candidate *generation* via the index) is a separate
+  operator-run backfill from semantic *scoring* of already-
   generated candidates, which is what's wired today. See
   `docs/entity-resolution.md` for the real measured calibration
-  (`DEFAULT_LEXICAL_WEIGHT=0.97`) this choice drove.
-- **Ingestion job store**: durable when `REDIS_URL` is configured
-  (`api/state.py::RedisIngestionStore`, backed by Redis — `docker-compose`
-  locally, `fly redis create` on Fly). Falls back to an in-process dict
-  (`InMemoryIngestionStore`) when it isn't — that fallback does not survive a
-  process restart, proven by `tests/unit/api/test_ingestion_store.py`.
+  (`DEFAULT_LEXICAL_WEIGHT=0.97`) this choice drove. Optional Qdrant cleanup
+  is wired into contact erasure, but enabling semantic candidate retrieval at
+  production scale still requires a measured embedding backfill and index
+  population.
+- **Ingestion execution**: durable when `REDIS_URL` and
+  `INGESTION_QUEUE_ENABLED=true` are configured. Redis-backed jobs use retries,
+  visibility timeout, DLQ handling and bounded worker concurrency. The local
+  synchronous path remains available when the flag is false. The job store is
+  backed by `api/state.py::RedisIngestionStore` when Redis is configured
+  (`docker-compose` locally, `fly redis create` on Fly), and falls back to an
+  in-process dict (`InMemoryIngestionStore`) when it is not; that fallback does
+  not survive a process restart, proven by
+  `tests/unit/api/test_ingestion_store.py`.
 - **Auth**: MVP API-key-per-workspace (`X-Api-Key`, checked against
   `WORKSPACE_API_KEYS` — `api/dependencies.py::verify_api_key`) is the
   active auth path on every route; no self-serve key rotation/revocation.
@@ -422,6 +436,6 @@ breakdown per module.
   (`LLM_FALLBACK_ENABLED=false`), see `docs/adr-0005-llm-gateway-fallback.md`.
 - **No in-process scheduler**: proactive digest delivery
   (`POST /api/v1/digest/deliver`) is triggered by an external cron, not a
-  timer this process runs itself — a deliberate choice consistent with
-  `docker-compose.yml`'s existing "no worker until measured need" stance. See
-  `docs/operations.md`.
+  timer this process runs itself. Ingestion has a separate durable worker
+  process when enabled; digest scheduling remains external to avoid duplicate
+  runs during web-process scaling. See `docs/operations.md`.
