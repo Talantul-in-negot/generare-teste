@@ -1,355 +1,329 @@
-# Sales Context Graph — Presentation Script
-### Scenes + Voiceover, with step-by-step screen actions (video demo / pitch, ~4 min)
+# Sales Context Graph — The Evidence Layer for Every Sales Conversation
 
-> Every on-screen action below maps to a real element in `api/routes/viz.py`'s
-> `/viz` page (tabs: **Context Graph**, **Browse Intents**, **Ask**, **Alerts**)
-> or a documented `curl` call. Nothing here is staged UI that doesn't exist —
-> if a future UI change renames an id, update this script alongside it.
+### Cinematic presentation script + live-demo runbook
+
+**Recommended runtime:** 6–7 minutes
+**Audience:** Showpad product, sales, security and engineering stakeholders
+**Positioning:** a governed knowledge and evidence layer that enriches a
+Showpad deployment; not a claim of an already-installed Showpad integration.
+
+> The visual story is simple: scattered signals become one trusted answer,
+> and one trusted answer becomes the next best sales action.
 
 ---
 
-## SCENE 1 — Cold open (0:00–0:20)
+## SCENE 1 — The moment every seller knows (0:00–0:35)
 
-**SCREEN ACTION:** Pure black title card — no app, no browser, no terminal
-open yet. This is a text overlay, not a live product interaction: nothing to
-click, nothing running. It's produced separately (Keynote/After
-Effects/a plain HTML slide) as an animated typewriter effect, then cut in
-before the demo starts. The sentence types itself out, one letter at a time,
-white monospace text centered on black:
-*"Given an opportunity, identify the objection raised by a stakeholder in the
-latest relevant call and recommend an appropriate content asset the buyer
-hasn't already viewed — with exact evidence."*
+**SCREEN:** Black screen. A single line types in:
+
+> “What is stopping this deal — and what should I send next?”
+
+The line fractures into three floating fragments: a CRM opportunity, a call
+transcript, and a content-engagement event. They drift apart, then snap into a
+single luminous graph node.
 
 **VOICEOVER:**
-> "Any sales AI can summarize a call. Very few can answer the question that
-> actually matters: *why* didn't this deal close — and what to do about it,
-> right now. This is Sales Context Graph."
+
+> “The answer already exists inside the business. It is simply scattered. The
+> CRM knows the stage. The conversation knows the reason. The content platform
+> knows what the buyer saw. Sales Context Graph connects those facts — and only
+> says what the evidence can prove.”
+
+**TITLE CARD:**
+
+> **Sales Context Graph**
+> *Evidence, not guesswork.*
 
 ---
 
-## SCENE 2 — The real problem (0:20–0:50)
+## SCENE 2 — The cost of disconnected context (0:35–1:10)
 
-**SCREEN ACTION:** Split screen. Left half: a static, sparse CRM opportunity
-card (stage: "Negotiation", no other signal). Right half: a raw Gong-style
-transcript scrolling fast, dense and unstructured, no highlighting yet.
+**SCREEN:** Three panels appear:
+
+1. **CRM:** “Volkswagen Group — Negotiation”
+2. **Transcript:** “The price is higher than expected for this tier.”
+3. **Content activity:** “Pricing guide — viewed last week”
+
+The seller asks a generic chatbot. The chatbot produces a confident but
+uncited answer. The screen turns amber: **confident is not the same as correct**.
 
 **VOICEOVER:**
-> "Sales data lives split across three silos. The CRM knows *what stage* a
-> deal is in. Calls know *why* — objections, buying signals, blockers — but
-> buried in unstructured text. And the content platform has no idea whether
-> the asset you sent was ever actually opened. A chatbot bolted onto raw
-> transcripts guesses. We built a graph instead."
+
+> “A summary is not sales intelligence. A keyword search cannot distinguish an
+> affirmed buyer objection from a hypothetical remark. A recommendation that
+> ignores what the buyer already opened is not helpful — it is noise. And a
+> plausible answer without provenance is a new risk inside the workflow.”
 
 ---
 
-## SCENE 3 — Architectural reveal (0:50–1:30)
+## SCENE 3 — One graph, many truths (1:10–1:55)
 
-**SCREEN ACTION:** Cut to the architecture diagram (the published artifact,
-or `docs/architecture.md`'s Mermaid render). The three source boxes —
-Salesforce, Gong, Showpad — pull toward the center and resolve into an
-animated Neo4j graph, with `Account`, `Opportunity`, `Claim`, `ContentAsset`
-nodes lighting up in sequence as the voiceover names them.
+**SCREEN:** Show the architecture diagram. Salesforce, Gong-shaped transcript
+data and Showpad-shaped content flow through adapters into a Neo4j graph.
+Animate these nodes in order:
+
+`Account → Opportunity → Conversation → TranscriptSegment → Claim → ContentAsset`
+
+Then animate the edges:
+
+`HAS_CALL`, `RAISED_OBJECTION`, `HAS_BLOCKER`, `MENTIONS_ORG`, `VIEWED`, `SHARED`.
 
 **VOICEOVER:**
-> "CRM gives us canonical commercial identity. Transcripts become *Claims* —
-> evidence-backed assertions, not unquestionable graph facts: every
-> objection, every buying signal carries an exact text span, a speaker, a
-> polarity — affirmed, negated, hypothetical — and a confidence score.
-> Nothing is treated as ground truth until it's corroborated. And entity
-> identity is never left to text similarity alone — resolved deterministically
-> where identifiers are truly unique, probabilistically with a margin
-> threshold where they're not, and sent to human review when it's ambiguous.
-> A misspelled 'Volks Wagen' in a call transcript never blindly links to
-> 'Volkswagen Financial Services' — independent relational signals decide,
-> not a single similarity score."
+
+> “The graph is not a bag of extracted text. CRM entities provide commercial
+> identity. Transcripts become typed Claims: a predicate, an object, a speaker,
+> a polarity, a confidence score and an exact evidence span. Content carries
+> lifecycle and serving policy: version, approval, sensitivity, shareability,
+> locale, channel and expiry.”
+
+> “When a transcript says ‘Volks Wagen’ and the CRM says ‘Volkswagen Financial
+> Services’, we do not let one fuzzy match decide. Candidate generation is
+> bounded and tenant-scoped. Deterministic identifiers win when they are truly
+> unique. Ambiguous names are surfaced for review rather than silently linked
+> to the wrong deal.”
+
+**ON-SCREEN CALLOUT:**
+
+> **The graph remembers what was said, who said it, when it was said, and why
+> the system believes it.**
 
 ---
 
-## SCENE 4 — Live demo: launching the app (1:30–1:45)
+## SCENE 4 — Live launch: from zero to context (1:55–2:25)
 
-**SCREEN ACTION, step by step:**
-1. In the terminal, run `docker compose up -d neo4j redis`, then
-   `uvicorn api.main:app --reload` (or `make run` if wired) — logs settle on
-   `Application startup complete.`
-2. Open a browser tab and navigate to `http://localhost:8000/viz`.
-3. The page loads with four tabs across the top: **Context Graph** ·
-   **Browse Intents** · **Ask** · **Alerts** — "Context Graph" is active by
-   default, showing an empty SVG canvas and a left-side control panel
-   (`Workspace`, `X-Api-Key`, `Subject ID`, `Conversation ID`, `Max nodes`,
-   a **Build** button).
-4. Paste the `ws-demo` API key, and fill **Conversation ID** with
-   `eb91dade3fd7c13bd32a60989af6d0ea1b2a1d61cd601c8b6a0b640619282dbe` (the VW
-   call). **This field is required for a result** — `ContextGraphBuilder`
-   only fetches candidates if `conversation_id` or `subject_id` is set
-   (`src/context_graph/builder.py`); Build with both left on their
-   `optional`/`default` placeholders returns `nodes_used: 0`, an empty
-   graph, honestly — not a bug, but easy to demo by accident if this field
-   is skipped. Click **Build**. Verified live: 4 Claims come back
-   (`HAS_BLOCKER`×2, `MENTIONS_ORG`, `RAISED_OBJECTION`), each scored
-   `0.6275` with the visible reason string (`confidence=0.75,
-   adjudication=UNREVIEWED, score=0.63`), `nodes_used: 4/50`,
-   `tokens_used: 12/4000`, `truncated: false`.
+**SCREEN ACTION:**
+
+1. Start the local stack: `docker compose up -d neo4j redis`.
+2. Start the API: `uvicorn api.main:app --reload`.
+3. Open `http://localhost:8000/viz`.
+4. Use the **Context Graph** tab with workspace `ws-demo`, the local API key,
+   and the seeded Volkswagen conversation or subject id.
+5. Click **Build**.
+
+The graph animates Claims into view. Keep the evidence and confidence fields
+visible. Do not present an empty graph: Context Graph needs a conversation or
+subject scope to retrieve a meaningful result.
 
 **VOICEOVER:**
-> "This is the actual running app — no slides pretending to be software."
+
+> “This is a real running surface, not a slide pretending to be software. In
+> one request the seller gets a bounded context graph: the relevant claims,
+> the evidence budget, the token budget, and an explicit truncation state. The
+> answer is useful because retrieval is controlled, not because the UI is
+> confident.”
 
 ---
 
-## SCENE 5 — Live demo: asking the real question (1:45–2:35)
+## SCENE 5 — Ask the question that moves the deal (2:25–3:20)
 
-**SCREEN ACTION, step by step:**
-1. Click the **Ask** tab (`data-tab="ask"`) — the control panel swaps to the
-   Ask form: `Workspace` (pre-filled `ws-demo`), `X-Api-Key` field, a
-   free-text `textarea` with the placeholder *"e.g. what objections has
-   Volkswagen raised?"*, a checkbox **Include narrative summary**, and
-   optional scoping fields (Opportunity ID, Seller ID, Conversation ID,
-   Subject ID, Buyer Contact ID).
-2. Click into the API key field and paste the workspace's key — it's the
-   value for `"ws-demo"` inside `WORKSPACE_API_KEYS` in your local `.env`
-   (a JSON map, `{"ws-demo": "<the key>"}`). If that entry still shows the
-   placeholder `"replace-with-a-generated-secret"`, generate a real one
-   first (`.env.example` documents the one-liner:
-   `python -c "import secrets; print(secrets.token_urlsafe(32))"`), paste it
-   into `.env`, and **fully restart uvicorn** — config loads once at boot,
-   so an `.env` edit alone won't take effect on a running server. If a
-   restart doesn't seem to pick up the new key, confirm the *old* process is
-   actually dead first (`netstat -ano | grep :8000`, kill that PID) — on
-   Windows, `pkill -f "uvicorn api.main:app"` from Git Bash silently fails to
-   match the process, leaving a stale server holding the old key in memory.
-   Never commit the real value or paste it into this script file; `.env` is
-   gitignored for exactly this reason.
-3. Click into the question textarea, type: *"what content should I send to
-   Elena Popescu at Volkswagen to address her pricing objection?"* — use the
-   buyer contact's **full name**, not just "Elena": tested live against the
-   seeded fixture, and a first-name-only phrasing left `buyer_contact_id`
-   unresolved (the linker matched "Volkswagen" against Contact candidates
-   instead, with low scores, and the request came back `"answered": false`
-   with an ambiguity list instead of a recommendation). With the full name,
-   `POST /api/v1/ask` returns `intent_id: "recommend-content"` at
-   `confidence: 0.9`, both `opportunity_id` and `buyer_contact_id` resolved
-   (`Volkswagen Group`, `Elena Popescu`), and `"answered": true` with the
-   full recommendation payload — verified live, not assumed. Avoid vaguer
-   phrasings like "what's blocking this deal?": it classifies as
-   `open-commitments` (predicate `HAS_ACTION_ITEM`), which this fixture
-   carries none of — the deal only has `HAS_BLOCKER` and `RAISED_OBJECTION`
-   claims, so that phrasing returns an empty result even though the
-   underlying data is fine.
-4. Check **Include narrative summary**.
-5. Click the **Ask** button (`#askRunBtn`).
-6. The result panel (`#askResult`) renders — this is the actual `/viz`
-   markup, not a mockup: an **"Answer"** heading (it reads "Could not
-   answer" when `answered` is false), a line with the classified
-   `intent_id` and `confidence`, and the `reasoning` string the classifier
-   returned. Below that, a raw-but-readable JSON tree of `data.result` —
-   `opportunity_id`, `objection_claim_id`, `evidence_text`, the full
-   `recommended_asset` object, `ranked_candidates` (each with
-   `matched_tags` and `rank_score`), and `excluded_viewed_asset_ids`. There
-   is no syntax highlighting on the evidence span and no "crossed out" asset
-   styling — it's a plain nested key/value tree (`renderJson()` in
-   `api/routes/viz.py`); the exclusion is legible as a listed id, not a
-   visual strike-through.
-7. Below that, if narrative was requested: a **"Narrative"** heading, the
-   summary text as one paragraph, then each `[claim_id] excerpt` citation on
-   its own line underneath — plain text lines, not inline hover-linked
-   highlights back to a claim table (there isn't one rendered above it to
-   link to).
+**SCREEN ACTION:** Open the **Ask** tab. Enter:
+
+> “What content should I send to Elena Popescu at Volkswagen to address her
+> pricing objection?”
+
+Include the opportunity or conversation context when available. Click **Ask**.
+Reveal the response in this order:
+
+1. `intent_id` and classifier confidence;
+2. resolved opportunity and buyer contact;
+3. the affirmed objection and exact evidence excerpt;
+4. recommended content asset;
+5. ranked alternatives and matched objection tags;
+6. assets excluded because the buyer already viewed them;
+7. citations, disclaimer and `requires_human_review`.
 
 **VOICEOVER:**
-> "It finds the most recent relevant call, identifies an objection actually
-> affirmed by a buyer stakeholder — not hypothetical, not negated — looks up
-> content that addresses that exact objection through a curated mapping, not
-> something invented on the spot, excludes anything the buyer already saw,
-> and ranks what's left. Every word in the answer cites a Claim that was
-> actually served in context. If a citation can't be mechanically verified
-> against the source text, the whole summary is rejected — never shipped
-> half-hallucinated."
+
+> “The assistant does not invent a sales play. It finds the latest relevant
+> call, selects a buyer-affirmed objection, maps that objection to curated
+> content, filters out content the buyer has already seen, and ranks what is
+> left. Every answer has a citation contract. Every answer carries a clear
+> disclaimer. Human review is explicit.”
+
+> “If the name is ambiguous, the system refuses to guess. If there is no
+> citable evidence, it refuses to narrate. A refusal is not a failed demo — it
+> is the product protecting the seller from a fabricated fact.”
+
+**ON-SCREEN SPLIT:**
+
+Left: **Evidence** — exact transcript span, claim id, speaker, confidence.
+Right: **Action** — the next content asset the seller can review and send.
 
 ---
 
-## SCENE 6 — Live demo: what makes this seller-ready (2:35–3:25)
+## SCENE 6 — From one answer to pipeline intelligence (3:20–4:05)
 
-**SCREEN ACTION, step by step:**
-1. Click the **Browse Intents** tab (`data-tab="qa"`) — **known gotcha,
-   verified live:** this tab has its own `Workspace`/`API Key` fields
-   (`#qaWorkspaceId`, pre-filled `ws-demo`; `#qaApiKey`, always empty), and
-   the `#qaSelect` dropdown only loads (`loadIntents()`,
-   `api/routes/viz.py`) at the moment you *switch onto* this tab — it does
-   not retry when you fill the key afterward. If the key is empty on first
-   click, the dropdown stays empty and `#qaStatus` shows "Enter Workspace ID
-   and API Key, then reopen this tab." **Fix for the recording:** paste the
-   API key into `#qaApiKey` *before* clicking this tab, or if you're already
-   on it with an empty dropdown, click **Ask**, then click **Browse
-   Intents** again — that second tab-switch is what triggers the reload.
-   Once loaded, the dropdown lists the seven fixed intents (account
-   objections, call briefing, open commitments, content recommendation,
-   open conflicts, missing stakeholders, what's new since a date). Select
-   **missing stakeholders**, fill the opportunity ID field that appears
-   with the VW Group Renewal deal's id —
-   `14acbc36edf9af9616f29e2662a0fe9cd2ca16c843485c022780e4c75627ac32`
-   (the same id that returns the pricing objection under **account
-   objections**) — click **Run** (`#qaRunBtn`). Verified live: the result
-   returns `"single_threaded": true` with exactly one resolved buyer
-   contact (Elena Popescu) — a real, honest signal that this deal has only
-   one thread into the buying committee, not a fabricated example. (Note:
-   **open conflicts** on this same opportunity currently returns an empty
-   list — this fixture doesn't carry a contradicting-claim pair yet, so
-   don't demo that intent against this specific deal.)
-2. Still in Browse Intents, select **"What are the most common objections
-   across my pipeline?"** (`top-objections`) and fill **Seller ID** with
-   Nina Novak's id —
-   `ba07068819c1ae7302e92cb0ff50248dd43e6c7ac384540e494189f71430f8f0` —
-   click **Run**. Verified live: returns one group,
-   `{"object_value": "pricing", "count": 2, "example_claim_ids": [...]}` —
-   two independently-extracted pricing objections from two different deals
-   in Nina's open pipeline (Acme Corp Expansion and Northwind New Logo),
-   aggregated correctly. This is the moment that actually demonstrates
-   cross-deal aggregation, not a single-opportunity result relabeled — the
-   thing Scene 2's voiceover promises ("top objections across your open
-   pipeline") but nothing earlier in the script shows on screen.
-3. Click the **Alerts** tab (`data-tab="alerts"`) — same per-tab
-   `Workspace`/`API Key` fields as Browse Intents (paste the key), leave
-   Seller ID blank to scope the whole workspace, click **Get digest**
-   (`#alertsRunBtn`). Verified live against `ws-demo`: 4 real signals came
-   back, not a mock — including, on the VW Group Renewal deal itself, both
-   `single_threaded_deal` ("Only one buyer-side contact has appeared on
-   every call for this deal") and `objection_without_follow_up` ("An
-   objection (pricing) has no content shared in response"), each with a
-   `severity` and the exact `evidence_claim_ids` behind it — the same
-   payload `POST /api/v1/digest/deliver` would push to Slack. Two more
-   `objection_without_follow_up` signals fire on other deals in the
-   workspace, showing this runs across the whole pipeline, not one
-   hand-picked opportunity.
-3. Cut briefly to a terminal `curl` call showing
-   `GET /api/v1/sellers/{id}/top-objections` — the JSON response ranks the
-   top objections across that seller's entire open pipeline, not just one
-   deal.
+**SCREEN ACTION:** Open **Browse Intents** and run, in sequence:
+
+- **Missing stakeholders:** show `single_threaded` and the buyer contacts
+  actually present on calls.
+- **Top objections:** show pricing objections aggregated across an open
+  seller pipeline, not one hand-picked opportunity.
+- **Open conflicts:** show that contradictory Claims are surfaced instead of
+  silently overwritten.
+- **What’s new / As-of:** show change-aware and point-in-time views.
+
+Then open **Alerts** and run the digest. Highlight signals such as:
+
+- a deal with only one buyer-side thread;
+- an objection with no follow-up content;
+- an unresolved conflict.
 
 **VOICEOVER:**
-> "This isn't just a question-answering engine. Conflicting claims that
-> coexist get surfaced, not silently dropped. Proactive signals — single-
-> threaded deals, content sent but never opened, unresolved conflicts — go
-> straight to Slack without anyone having to ask. And it aggregates across a
-> seller's entire pipeline: which objections are actually blocking the
-> quarter, not just one isolated deal."
+
+> “This is where the graph becomes a sales operating system. The seller can
+> investigate one deal, compare the whole pipeline, reconstruct what was true
+> at a past point in time, and see what deserves attention before asking a
+> question. Insights are not generated from a single prompt. They are derived
+> from the same evidence model.”
+
+> “A digest can be reviewed in the app or delivered through the existing Slack
+> path. The system turns hidden context into a repeatable management rhythm.”
 
 ---
 
-## SCENE 7 — Rigor under the hood (3:25–3:50)
+## SCENE 7 — Trust is a product feature (4:05–4:55)
 
-**SCREEN ACTION:** Cut to an editor window. Scroll briefly through
-`src/graph/execution.py`'s `tenant_query()`, then to
-`tests/integration/test_tenant_isolation.py` running live in a terminal
-split — two workspaces seeded with intentionally identical Account and
-Contact names, test output settling on green:
-`PASSED — cross-tenant isolation (12 assertions)`.
+**SCREEN:** A security-and-governance montage. Use concise code or API clips,
+not a wall of text:
+
+1. `workspace_id` on every graph query;
+2. deny-before-handler opportunity ACL response;
+3. division/content policy check;
+4. structured audit event with actor, workspace, route and status;
+5. PII redaction at model/log egress;
+6. prompt-injection guardrail around transcript data;
+7. erasure clearing graph and vector embeddings;
+8. citation rejection when narrative claims cannot be grounded.
 
 **VOICEOVER:**
-> "Every query is isolated per tenant at a structural level — not by
-> convention, but through a wrapper that rejects any Cypher that doesn't
-> explicitly scope every matched node. Ingestion is idempotent. Corrected or
-> deleted source records reconcile explicitly, they don't just pile up as
-> garbage. And no LLM ever writes to the graph directly, resolves identity,
-> or scores a candidate — it only extracts typed data, under strict
-> validation."
+
+> “The assistant is governed at the boundary, not only in the prompt. Tenant
+> isolation is structural. Opportunity and division access can be enforced
+> deny-by-default. The embedded panel uses a signed, revocable token scoped to
+> an opportunity. Requests are auditable. Sensitive content is filtered. PII
+> is redacted at egress. Transcript text is treated as untrusted data, never as
+> instructions.”
+
+> “When a contact is erased, derived embeddings are removed too. When a
+> narrative cannot be tied back to evidence, it does not ship. Reliability is
+> not a footnote to the AI — it is part of the answer.”
 
 ---
 
-## SCENE 8 — Close (3:50–4:10)
+## SCENE 8 — Built to survive the demo (4:55–5:35)
 
-**SCREEN ACTION:** Cut back to the animated graph from Scene 3, which slowly
-contracts into a single glowing central node, then fades to black with
-centered text:
-**"Sales Context Graph — evidence, not guesswork."**
-Final frame holds on the repo URL / demo link.
+**SCREEN:** Show a clean engineering montage:
+
+- idempotent ingestion and source reconciliation;
+- Redis queue with retries, visibility timeout and dead-letter path;
+- configurable worker concurrency;
+- Neo4j workspace+identity uniqueness constraints;
+- bounded full-text/prefix candidate retrieval;
+- readiness and Prometheus metrics;
+- Docker/lockfile/CI checks;
+- backup-restore command and k6 baseline command.
 
 **VOICEOVER:**
-> "We're not building a general sales assistant yet. We're building, first,
-> the foundation any trustworthy assistant needs: clean identity, complete
-> provenance, real tenant isolation, and context that never claims more than
-> it can prove. Everything else gets built on top of that — safely."
 
-**[FADE OUT — logo / demo link]**
+> “The demo path is also an operational path. Duplicate ingestion collapses
+> safely. A crashed worker does not silently lose a job. Poison work reaches a
+> dead-letter queue. Slow transcripts cannot monopolize every worker slot.
+> Identity constraints protect the graph. Readiness, metrics, linting,
+> compilation, unit tests and integration tests make failures visible.”
+
+> “The repository includes repeatable load and restore exercises. We do not
+> invent vendor-scale SLO numbers; we measure them in the target environment,
+> then publish the result.”
 
 ---
 
-## Production notes
+## SCENE 9 — Why this matters to Showpad (5:35–6:15)
 
-- **Voice tone:** calm, confident, no artificial hype — pacing and pauses
-  matter as much as the lines themselves.
-- **Music:** minimal ambient bed, no dramatic crescendo — let the animated
-  graph carry the visual weight.
-- **Target runtime:** 3:50–4:15.
-- **Screen-recording checklist before shooting** (verified live, this exact
-  sequence, on a freshly wiped `ws-demo`):
-  1. `docker compose down -v && docker compose up -d neo4j redis` — start
-     from a clean volume; this workspace accumulates test-suite leftovers
-     otherwise (verified: a `ws-demo` left running across many `pytest`
-     sessions had 912 Accounts / 495 Conversations of unrelated fixture
-     noise — `Acme Corp`, `Redis Check Corp`, `Viz Test Corp`, etc.).
-  2. `python demo_volkswagen.py` — seeds the Volkswagen fixture set
-     (`Volkswagen Group` + `Volkswagen Financial Services` distractor,
-     `Elena Popescu`, the pricing-objection transcript, two ContentAssets,
-     one prior AssetView) directly via the repository layer, into `ws-demo`
-     by default (see `demo_volkswagen.py`'s `DEMO_WORKSPACE_ID` override).
-  3. Optionally, layer on the rest of `data/sample/` through the *actual*
-     ingestion API — the path a real integration would use, not a direct
-     repository call:
-     ```bash
-     curl -X POST localhost:8000/api/v1/ingestions/crm \
-       -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: $KEY" \
-       -H "Content-Type: application/json" \
-       -d @data/sample/salesforce_accounts.json
-     curl -X POST localhost:8000/api/v1/ingestions/content-assets \
-       -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: $KEY" \
-       -H "Content-Type: application/json" \
-       -d @data/sample/showpad_content.json
-     ```
-     Verified live: adds 8 Accounts, 9 Contacts, 6 Opportunities, 12
-     ContentAssets on top of the Volkswagen fixture (same VW records
-     MERGE-collapse, since both sources use the same external ids).
-     CRM/content records alone don't create Claims — `top-objections` stays
-     at a single group per seller until a transcript is actually ingested
-     for one of the new deals (step 4 below).
-  4. `data/sample/gong_call.json` **cannot** be posted as one file — the
-     raw file has no `opportunity_id`/`account_id`/`email_to_contact_id`
-     fields, and `TranscriptIngestionRequest` only accepts one such mapping
-     per POST, not per call inside the file (a real integration resolves
-     and supplies these per call before posting). Verified live: posted
-     each of its remaining three calls individually, with the matching
-     Opportunity/Account/Contact ids resolved from
-     `salesforce_accounts.json` —
-     ```bash
-     # one POST per call, e.g. call-acme-discovery:
-     curl -X POST localhost:8000/api/v1/ingestions/transcripts \
-       -H "X-Workspace-Id: ws-demo" -H "X-Api-Key: $KEY" \
-       -H "Content-Type: application/json" \
-       -d '{"calls": [<the one call object>],
-            "opportunity_id": "<crm_entity_id(...,\"Opportunity\",\"006ACMEEXP\")>",
-            "account_id": "<crm_entity_id(...,\"Account\",\"001ACME\")>",
-            "email_to_contact_id": {"alice.johnson@acme.com": "<contact id>"},
-            "email_to_seller_id": {"nina@ourcompany.com": "005NINA"}}'
-     ```
-     First result, honestly reported — `top-objections` for Nina (owner of
-     Acme, Northwind, Fabrikam) returned **one** `pricing` group, not
-     several: Fabrikam's opportunity is `is_open: false` (excluded by the
-     query's own `WHERE o.is_open = true`), and Northwind's transcript only
-     raised an ERP-integration question and a security blocker
-     (`HAS_BLOCKER`) — a genuinely different claim type, correctly not
-     folded into `top-objections`.
-  5. **Fixed by adding one real line, not by inventing an aggregation the
-     data didn't support:** `data/sample/gong_call.json`'s
-     `call-northwind-followup` now has one more sentence from Carla —
-     *"One more thing — the renewal pricing came in higher than we expected
-     for this tier."* — a genuine second, affirmed pricing objection on an
-     **open** deal under the same seller. Re-posting that one call (MERGE is
-     idempotent — the earlier segments collapse, only the new sentence adds
-     a segment+Claim) makes `top-objections` for Nina return `pricing`
-     `count: 2`, `example_claim_ids` pointing at both the Acme and Northwind
-     Claims — verified live. Now on screen as Scene 6 step 2: two
-     independent deals, two independently-extracted Claims, aggregated
-     correctly.
-- **Source of truth for claims made on screen:** [`docs/architecture.md`](architecture.md),
-  [`docs/entity-resolution.md`](entity-resolution.md), [`README.md`](../README.md),
-  `api/routes/viz.py` (UI element ids). Any number added later (test counts,
-  latencies) must be verified live against `docs/evaluation.md` before it
-  goes in the script — never invented for effect.
+**SCREEN:** Return to the glowing graph. The graph expands into a Showpad-like
+seller workflow: content, conversation, buyer, opportunity, next action.
+
+**VOICEOVER:**
+
+> “For Showpad, this is the missing connective tissue between readiness,
+> content intelligence, buyer engagement and revenue context. It can sit beside
+> an existing Showpad deployment and make the seller’s question answerable with
+> evidence — not with another disconnected search box.”
+
+> “The honest product boundary matters. Today this repository is a hardened
+> companion-service foundation with Showpad-shaped ingestion and an embeddable
+> panel. A production customer rollout still needs the real Showpad OAuth/API
+> connector, CRM write-back, IdP/SCIM mapping and deployment-level SLO and
+> compliance evidence. Those are integration contracts, not hidden claims.”
+
+---
+
+## SCENE 10 — The close (6:15–6:45)
+
+**SCREEN:** The evidence span, the recommended asset and the next action merge
+into one clean card:
+
+> **Know the deal. Prove the reason. Choose the next move.**
+
+Then fade to the final mark:
+
+> **Sales Context Graph**
+> *The evidence layer for confident selling.*
+
+**VOICEOVER:**
+
+> “The future of sales AI is not the loudest answer. It is the answer a seller
+> can trust in front of a buyer, a manager, a security team and a customer
+> record. Sales Context Graph turns fragmented commercial memory into grounded
+> action — one opportunity, one piece of evidence, one better next step.”
+
+**FADE OUT.**
+
+---
+
+## Live-demo runbook
+
+### Before recording
+
+1. Start clean infrastructure: `docker compose down -v`, then
+   `docker compose up -d neo4j redis`.
+2. Set a non-committed workspace API key in `.env` and restart the API after
+   changing it.
+3. Seed the deterministic Volkswagen fixture with `python demo_volkswagen.py`.
+4. Confirm `GET /ready` is ready before opening `/viz`.
+5. Keep the API key out of the recording and out of this repository.
+
+### The safest narrative order
+
+1. Context Graph: prove the graph and provenance.
+2. Ask: prove the grounded recommendation.
+3. Browse Intents: prove cross-deal and temporal intelligence.
+4. Alerts: prove proactive value.
+5. Security/operations montage: prove this is engineered, not staged.
+
+### Presenter guardrails
+
+- Use a full buyer name and explicit opportunity context for the recommendation
+  demo; ambiguous input should refuse, and that behavior is intentional.
+- Do not claim that the current adapter is a live Showpad OAuth connector.
+- Do not claim Showpad Genie, Shared Spaces, mobile/offline or CRM write-back
+  parity from the current `/ask` and `/viz` surfaces.
+- Do not invent latency or availability numbers. Run the load baseline in the
+  target environment and label results with date, workload and infrastructure.
+- If an answer has no evidence, let the refusal appear on screen. It is the
+  strongest proof that the system is governed.
+
+### Source of truth
+
+Keep this script aligned with:
+
+- [`docs/architecture.md`](architecture.md)
+- [`docs/e2e-walkthrough.md`](e2e-walkthrough.md)
+- [`docs/evaluation.md`](evaluation.md)
+- [`README.md`](../README.md)
+- `api/routes/viz.py` for live UI element names and route behavior
+
+Any claim about test counts, latency, feature status or external integration
+must be verified against the repository and target environment before the
+recording. The presentation should feel breathtaking because the evidence is
+real — not because the script hides the boundary.
