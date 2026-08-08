@@ -24,9 +24,8 @@ from src.domain.conversation import Conversation, Mention
 from src.domain.crm import Account, Opportunity
 from src.domain.enums import ResolutionStatus
 from src.domain.identity import crm_entity_id, mention_id, segment_id
-from src.graph.execution import GraphExecutor
-from src.graph.repositories.crm_repository import CrmRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
+from src.graph.repositories.crm_repository import CrmRepository
 from src.resolution.candidates import CandidateGenerator
 from src.resolution.pipeline import gather_relational_signals, resolve_mention
 

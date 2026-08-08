@@ -53,7 +53,7 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     (itself in [0, 1]) — a negative cosine (near-opposite meanings) is floored
     to 0 rather than allowed to pull the blended base score negative.
     """
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
     return max(0.0, min(1.0, dot))
 
 

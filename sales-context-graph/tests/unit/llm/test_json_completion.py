@@ -19,6 +19,7 @@ from src.llm.json_completion import (
     strip_code_fence,
 )
 
+
 class _Answer(BaseModel):
     label: str
     score: float = Field(ge=0.0, le=1.0)

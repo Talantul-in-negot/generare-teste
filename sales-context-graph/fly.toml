@@ -5,6 +5,24 @@
 app = "sales-context-graph"
 primary_region = "iad"
 
+# ── Single-region today, deliberately not changed here ──────────────────────
+# docs/evaluation.md's Showpad engineering-rigor assessment (2026-08-08,
+# Band 4) named this: "Single region, effectively single instance... no
+# multi-region." The genuinely honest scope for a code-level pass: the *app*
+# tier is close to multi-region-ready as declarative config --
+# `min_machines_running` per region and `fly regions add <region>` would run
+# more `app`/`worker` machines elsewhere. What this repo does NOT solve, and
+# what a fly.toml edit alone cannot: Neo4j (this system's primary datastore,
+# docker-compose.yml/docs/deployment.md) has no multi-region replication
+# story here at all -- that needs either Neo4j Aura Enterprise's causal
+# clustering (a paid product decision, not a config change) or a real
+# manual read-replica setup this repo doesn't build. Declaring extra
+# `regions` here without solving that would mean every region's app
+# instance still makes a long-haul round trip to one primary-region
+# database for every request -- worse latency than staying single-region,
+# not better. Left as `iad`-only rather than adding config that implies a
+# capability the data tier doesn't actually have.
+
 [build]
   dockerfile = "Dockerfile"
 

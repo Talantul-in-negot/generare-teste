@@ -17,6 +17,7 @@ Import pattern::
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -88,6 +89,16 @@ def _ontology_lists(tenant: str | None) -> tuple[list[tuple[str, str]], list[str
 
 class _ConflictStrategies:
     """Mixin — five detection strategies, each surfacing a different conflict class."""
+
+    # Declared, not assigned -- provided by the host class this is mixed
+    # into (ContradictionDetector.__init__, contradiction_detector.py),
+    # exactly as this module's own docstring describes. Added only so
+    # mypy checking this mixin in isolation knows the attribute exists;
+    # ContradictionDetector.__init__'s neo4j_client param is itself
+    # untyped (ported as-is from the source project, per this file's own
+    # top-line note), so Any here matches what the host class already is,
+    # not a widening of it.
+    _neo4j: Any
 
     # ── Corroboration (formerly "Strategy 1: multi-source conflicts") ─────────
 

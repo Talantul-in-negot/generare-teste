@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -52,7 +54,7 @@ async def build_context(body: ContextBuildRequest, workspace_id: str = Depends(v
     scope = ContextGraphScope(
         workspace_id=workspace_id, conversation_id=body.conversation_id, subject_id=body.subject_id,
     )
-    kwargs = {}
+    kwargs: dict[str, Any] = {}  # build()'s own params are heterogeneously typed (int, bool, datetime | None)
     if body.max_nodes is not None:
         kwargs["max_nodes"] = body.max_nodes
     if body.max_tokens is not None:

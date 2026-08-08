@@ -81,6 +81,10 @@ async def ask(body: AskRequest, workspace_id: str = Depends(verify_api_key)) -> 
     # replaced with nothing, since that would look like "no narrative
     # requested" rather than "narrative generation failed."
     if body.include_narrative and result.answered:
+        # answered=True is only ever set together with a real dispatched
+        # result (src/usecases/nlq/ask.py) -- the two fields aren't
+        # type-linked, but the invariant holds by construction.
+        assert result.result is not None  # noqa: S101 -- type-narrowing an invariant, not a stripped-under-`-O` validation check
         narrative_usecase = NarrativeSummaryUseCase(chat_fn)
         try:
             narrative = await narrative_usecase.summarize(result.result, focus=body.question, workspace_id=workspace_id)

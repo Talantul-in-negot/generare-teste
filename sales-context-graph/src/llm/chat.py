@@ -108,7 +108,13 @@ def _build_anthropic_chat_fn(*, api_key: str, model: str, max_tokens: int, base_
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+        # isinstance, not getattr(block, "type", None) == "text": response.content
+        # is a union of every possible content-block type the SDK can return
+        # (tool-use, thinking, code-execution, ...), and isinstance is what lets
+        # mypy actually narrow it to TextBlock (whose .text attribute is what's
+        # accessed below) instead of flagging every other union member as
+        # missing that attribute -- same runtime behavior, now type-checked.
+        text = "".join(block.text for block in response.content if isinstance(block, anthropic.types.TextBlock))
         log.info("llm.completion", model=model, prompt_chars=len(prompt), response_chars=len(text))
         return text
 

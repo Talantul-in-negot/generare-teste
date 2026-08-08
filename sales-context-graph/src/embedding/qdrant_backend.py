@@ -93,10 +93,17 @@ async def search_contacts(
         ),
         limit=limit,
     )
-    return [
-        {"contact_id": point.payload["contact_id"], "name": point.payload["name"], "score": point.score}
-        for point in response.points
-    ]
+    results = []
+    for point in response.points:
+        # payload is genuinely Optional in Qdrant's own client typing, but
+        # every point this module ever writes gets one
+        # (upsert_contact_embedding always sets contact_id/name) -- a point
+        # with none would mean something outside this module wrote into
+        # the collection, worth failing loud on rather than silently
+        # dropping.
+        assert point.payload is not None, f"Qdrant point {point.id} has no payload"  # noqa: S101 -- data-integrity check on our own writes, not a stripped-under-`-O` security gate
+        results.append({"contact_id": point.payload["contact_id"], "name": point.payload["name"], "score": point.score})
+    return results
 
 
 async def backfill_workspace_qdrant(workspace_id: str, *, executor=None, provider=None) -> int:
@@ -120,7 +127,7 @@ async def backfill_workspace_qdrant(workspace_id: str, *, executor=None, provide
         if not contacts:
             break
         vectors = await provider.embed([c.name for c in contacts])
-        for contact, vector in zip(contacts, vectors):
+        for contact, vector in zip(contacts, vectors, strict=True):
             await upsert_contact_embedding(client, workspace_id, contact.contact_id, contact.name, vector)
         embedded += len(contacts)
         if len(contacts) < _PAGE_SIZE:

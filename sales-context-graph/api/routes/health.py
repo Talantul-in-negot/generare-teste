@@ -6,8 +6,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from src.core.neo4j_client import get_neo4j
 from src.core.config import get_settings
+from src.core.neo4j_client import get_neo4j
 from src.graph.execution import GraphExecutor
 from src.graph.schema import ALL_INDEX_NAMES
 from src.ingestion.queue import queue_health

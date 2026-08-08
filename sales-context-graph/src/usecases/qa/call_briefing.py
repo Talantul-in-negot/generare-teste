@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Any
 
 from src.context_graph.builder import ContextGraphBuilder, ContextGraphScope
 from src.domain.assertion import Claim, Conflict
@@ -47,7 +48,7 @@ class CallBriefingUseCase:
         max_nodes: int | None = None, max_tokens: int | None = None,
     ) -> CallBriefing:
         scope = ContextGraphScope(workspace_id=workspace_id, conversation_id=conversation_id, subject_id=subject_id)
-        kwargs = {}
+        kwargs: dict[str, Any] = {}  # build()'s own params are heterogeneously typed (int, bool, datetime | None)
         if max_nodes is not None:
             kwargs["max_nodes"] = max_nodes
         if max_tokens is not None:

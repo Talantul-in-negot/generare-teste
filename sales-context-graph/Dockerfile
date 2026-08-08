@@ -1,4 +1,7 @@
-FROM python:3.12-slim
+# 3.11, not 3.12 -- matches pyproject.toml's requires-python (see its
+# comment): the version actually developed and tested against all session,
+# not the previously-declared, never-tested 3.12.
+FROM python:3.11-slim
 
 WORKDIR /app
 

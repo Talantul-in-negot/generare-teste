@@ -9,7 +9,6 @@ violate.
 
 from src.domain.identity import assertion_id, extraction_run_id
 
-
 _COMMON_KWARGS = dict(
     workspace="ws-1",
     source_segment_id="seg-abc",

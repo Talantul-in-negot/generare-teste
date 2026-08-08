@@ -154,7 +154,7 @@ async def test_recommend_content_wraps_existing_use_case(executor, monkeypatch):
 
 
 async def test_qa_routes_reject_missing_api_key(monkeypatch):
-    headers = auth_headers(monkeypatch, "ws-qa-authcheck")
+    auth_headers(monkeypatch, "ws-qa-authcheck")  # side effect only -- this test sends no X-Api-Key
     async with _client() as client:
         no_key_resp = await client.post(
             "/api/v1/qa/account-objections",

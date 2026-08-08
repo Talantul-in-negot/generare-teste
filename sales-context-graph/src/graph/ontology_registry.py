@@ -131,6 +131,7 @@ class OntologyRegistry:
             # A configured path overrides tenant convention. Otherwise, each
             # tenant automatically owns config/ontologies/{tenant}_*.yml.
             domain_path = onto_cfg.get("domain_ontology_path", "") or ""
+            from src.core.config import ROOT
             from src.graph.domain_ontology import (
                 assert_valid_ontology,
                 get_ontology_path_for_tenant,
@@ -138,7 +139,6 @@ class OntologyRegistry:
                 get_type_hierarchy_pairs,
                 load_domain_ontology,
             )
-            from src.core.config import ROOT
 
             full_path = ROOT / domain_path if domain_path else get_ontology_path_for_tenant(
                 self._tenant, ROOT / "config" / "ontologies"

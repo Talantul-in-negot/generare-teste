@@ -12,8 +12,8 @@ from uuid import uuid4
 
 import pytest
 
-from src.extraction.fixture_provider import FixtureExtractionProvider
 from src.domain.enums import SpeakerRole
+from src.extraction.fixture_provider import FixtureExtractionProvider
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
 from src.graph.repositories.source_repository import SourceRepository
@@ -104,7 +104,7 @@ async def test_evidence_span_maps_to_the_exact_source_segment(executor):
     workspace_id = f"ws-transcript-{uuid4().hex[:8]}"
     pipeline, conv_repo, claim_repo = _pipeline(executor)
 
-    result = await pipeline.ingest_call(
+    await pipeline.ingest_call(
         workspace_id, _raw_call("call-3"), ingestion_run_id="run-1", observed_at=_T0,
     )
 
@@ -132,7 +132,7 @@ async def test_overlapping_windows_do_not_duplicate_claims(executor):
     # extractor matches independently per window, so it fires on that segment
     # twice, producing the *same* assertion (same segment_id/char offsets/
     # predicate/object/polarity) both times.
-    result = await pipeline.ingest_call(
+    await pipeline.ingest_call(
         workspace_id, _raw_call("call-4"), ingestion_run_id="run-1", observed_at=_T0,
         window_max_tokens=6, window_overlap_segments=1,
     )

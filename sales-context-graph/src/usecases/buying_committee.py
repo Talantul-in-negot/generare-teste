@@ -90,6 +90,11 @@ class BuyingCommitteeUseCase:
         excerpt are both now single batched calls instead of one query per
         participant and one more per claim.
         """
+        # Private method, single call site (analyze(), right after the
+        # `self._claim_repo is None` check for classify_roles=True) --
+        # mypy can't carry that narrowing across the method boundary, but
+        # the caller already guarantees it.
+        assert self._claim_repo is not None  # noqa: S101 -- type-narrowing an invariant, not a stripped-under-`-O` validation check
         matching = [p for p in participants if p.contact_id == contact_id]
         claims_by_conversation = await self._claim_repo.list_claims_for_conversations(
             workspace_id, [p.conversation_id for p in matching]

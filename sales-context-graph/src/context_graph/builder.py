@@ -167,7 +167,7 @@ class ContextGraphBuilder:
                 scope.query_text, [_claim_rerank_text(c) for c in claims_in_order]
             )
             scored = sorted(
-                zip(claims_in_order, relevance_scores), key=lambda pair: pair[1], reverse=True
+                zip(claims_in_order, relevance_scores, strict=True), key=lambda pair: pair[1], reverse=True
             )
 
         selected: list[tuple[Claim, float]] = []

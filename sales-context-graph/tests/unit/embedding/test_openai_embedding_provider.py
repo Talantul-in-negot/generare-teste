@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.embedding.openai_embedding_provider import EmbeddingNotConfiguredError, OpenAIEmbeddingProvider
+from src.embedding.openai_embedding_provider import (
+    EmbeddingNotConfiguredError,
+    OpenAIEmbeddingProvider,
+)
 
 
 def test_construction_without_an_api_key_fails_closed():

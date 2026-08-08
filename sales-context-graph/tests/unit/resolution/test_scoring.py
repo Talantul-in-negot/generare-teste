@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from src.resolution.scoring import blend, cosine_similarity, lexical_score, rank_candidates, score_candidate
+from src.resolution.scoring import (
+    blend,
+    cosine_similarity,
+    lexical_score,
+    rank_candidates,
+    score_candidate,
+)
 
 
 def test_cosine_similarity_of_identical_normalized_vectors_is_one():

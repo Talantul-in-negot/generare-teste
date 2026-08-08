@@ -129,6 +129,17 @@ LLM_FALLBACK_TOTAL = Counter(
     ["from_provider", "to_provider", "reason"],
 )
 
+# --- Rate limiting (docs/evaluation.md's Showpad engineering-rigor
+# assessment, 2026-08-08, Band 2) -- deliberately unlabeled: a per-
+# workspace_id label here would violate this file's own cardinality rule
+# (see the module docstring above); a workspace hitting its limit
+# repeatedly is visible in structured logs (src/core/rate_limit.py),
+# which is the right place for that unbounded-cardinality detail.
+RATE_LIMIT_REJECTED_TOTAL = Counter(
+    "scg_rate_limit_rejected_total",
+    "Requests rejected for exceeding the per-workspace rate limit.",
+)
+
 
 def record_blocking_recall(value: float) -> None:
     """Called by tests/eval/* after scoring a labeled run's blocking output

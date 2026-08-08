@@ -8,9 +8,9 @@ from uuid import uuid4
 
 import pytest
 
+from src.context_graph.builder import ContextGraphBuilder, ContextGraphScope
 from src.domain.assertion import Claim
 from src.domain.enums import AdjudicationStatus, Polarity, SpeakerRole
-from src.context_graph.builder import ContextGraphBuilder, ContextGraphScope
 from src.graph.repositories.claim_repository import ClaimRepository
 
 pytestmark = pytest.mark.asyncio

@@ -56,7 +56,7 @@ def decide(
     top1: ScoredCandidate | None,
     margin: float,
     *,
-    thresholds: PolicyThresholds = PolicyThresholds(),
+    thresholds: PolicyThresholds = PolicyThresholds(),  # noqa: B008 -- PolicyThresholds is @dataclass(frozen=True), immutable, no shared-mutable-default risk
 ) -> ResolutionStatus:
     if top1 is None:
         return ResolutionStatus.UNRESOLVED

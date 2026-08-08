@@ -2,7 +2,13 @@
 name = "sales-context-graph"
 version = "0.1.0"
 description = "CRM + sales-call transcripts -> Neo4j knowledge graph -> query-specific context graphs for sales teams."
-requires-python = ">=3.12"
+requires-python = ">=3.11"
+# Was ">=3.12" -- verified drift (docs/evaluation.md's Showpad engineering-
+# rigor assessment, 2026-08-08, Band 1): ruff and the Dockerfile also
+# declared 3.12 while the entire development/test cycle for this repo,
+# including the full test suite and Phase 10's load-test baseline, ran on
+# 3.11.6. Lowered to match the version actually proven to work rather than
+# bumping to the untested one -- the safer direction for a drift fix.
 dependencies = [
     "fastapi>=0.115",
     "pydantic>=2.9",
@@ -53,6 +59,10 @@ dependencies = [
     # default -- see src/embedding/qdrant_backend.py and
     # docs/adr-0004-qdrant-secondary-vector-store.md).
     "qdrant-client>=1.10",
+    # OIDC/JWT SSO scaffolding (docs/evaluation.md's Showpad engineering-
+    # rigor assessment, Band 2), feature-flagged off by default -- see
+    # src/auth/sso.py.
+    "PyJWT[crypto]>=2.9",
 ]
 
 [project.optional-dependencies]
@@ -62,7 +72,9 @@ dev = [
     "hypothesis>=6.112",
     "ruff>=0.7",
     "mypy>=1.13",
+    "types-PyYAML>=6.0",
     "fakeredis>=2.20",
+    "pytest-cov>=6.0",
 ]
 
 [tool.pytest.ini_options]
@@ -72,4 +84,76 @@ pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py311"  # matches requires-python above -- see its comment
+
+[tool.ruff.lint]
+# Was implicitly ruff's own default (E4/E7/E9/F only) with no [tool.ruff.lint]
+# section at all -- verified drift (docs/evaluation.md's Showpad engineering-
+# rigor assessment, 2026-08-08, Band 1). Broadened to add real signal this
+# codebase didn't have: B (bugbear -- common correctness footguns, e.g.
+# mutable default arguments, loop-variable closures), I (import sorting --
+# consistency only, no correctness claim), S (bandit-derived security checks
+# -- hardcoded-password/SQL-string-building/etc patterns).
+select = ["E4", "E7", "E9", "F", "B", "I", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 (assert) fires on every pytest `assert` -- that's the whole idiom of
+# the test suite, not a security-relevant assert-stripped-under-`-O` risk
+# bandit's rule exists for. Standard practice (bandit's own docs recommend
+# this exact exclusion for test suites). src/ and api/'s small number of
+# real asserts (type-narrowing an invariant mypy can't see across a method
+# or dataclass boundary) are each individually noqa'd with a reason instead
+# -- an assert used for actual validation there should still be flagged.
+# S105/S106: test fixtures assign literal strings to args/vars named
+# password/secret (e.g. neo4j_password="test-value",
+# panel_token_secret="unit-test-secret") -- bandit's heuristic matches the
+# *name*, not an actual leaked credential; these are fake values that exist
+# only to exercise config validation.
+"tests/**/*.py" = ["S101", "S105", "S106"]
+# S608: api/routes/viz.py's _PAGE/_PANEL_PAGE are large multi-line HTML/JS
+# template string constants (the /viz debug UI and the embeddable panel),
+# not SQL/Cypher query construction -- the rule's string-heuristic false-
+# positives on some substring inside one of them. A trailing `# noqa` isn't
+# usable here: the flagged line is the opening `"""` of a string that
+# doesn't close until many lines later, so any comment placed after it
+# becomes literal string content instead of an actual Python comment.
+"api/routes/viz.py" = ["S608"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection system requires calling Depends(...)/
+# Query(...)/etc. as a parameter default -- that IS the framework's API,
+# not the "mutable default argument" footgun B008 exists to catch (e.g.
+# `def f(x=[])`). Every route in api/routes/*.py does this; without this,
+# B008 would need a per-site noqa at dozens of call sites for a pattern
+# that's correct by construction.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header"]
+
+[tool.mypy]
+# mypy was a declared dev dependency (line 70) with no config anywhere --
+# verified drift (docs/evaluation.md's Showpad engineering-rigor
+# assessment, 2026-08-08, Band 1): the codebase is thoroughly annotated
+# (typed signatures, `from __future__ import annotations` throughout) but
+# nothing was checking those annotations. This section is that check,
+# scoped to src/ and api/ (the annotated application code) -- tests/ is
+# intentionally excluded: test bodies lean on pytest fixtures and loose
+# dict literals for readability, and gaining little from strict checking
+# there wasn't worth the noise of a first pass.
+python_version = "3.11"
+files = ["src", "api"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Third-party libs without complete/any type stubs -- silences import-time
+# noise, not a blanket escape hatch (nothing in src/ or api/ itself is
+# exempted below).
+[[tool.mypy.overrides]]
+module = [
+    "neo4j.*",
+    "structlog.*",
+    "rapidfuzz.*",
+    "aiokafka.*",
+    "qdrant_client.*",
+    "sentence_transformers.*",
+    "langgraph.*",
+]
+ignore_missing_imports = true

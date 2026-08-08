@@ -51,8 +51,8 @@ from src.domain.crm import (
 from src.domain.knowledge import (
     ActionItem,
     AssetView,
-    BuyingSignal,
     Blocker,
+    BuyingSignal,
     Commitment,
     ContentAsset,
     Feature,
@@ -159,12 +159,13 @@ MODEL_STRATEGIES: list[tuple[type, object]] = [
 
 def test_all_domain_models_are_covered():
     """Guard against silently forgetting to add a new model to this suite."""
+    from pydantic import BaseModel
+
     import src.domain.assertion as assertion_mod
     import src.domain.conversation as conversation_mod
     import src.domain.crm as crm_mod
     import src.domain.knowledge as knowledge_mod
     import src.domain.stakeholder as stakeholder_mod
-    from pydantic import BaseModel
 
     covered = {cls for cls, _ in MODEL_STRATEGIES}
     for module in (assertion_mod, conversation_mod, crm_mod, knowledge_mod, stakeholder_mod):

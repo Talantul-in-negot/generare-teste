@@ -16,6 +16,13 @@ atomically moves a job into the claiming worker's own processing list
 -- called from every worker's own poll loop -- puts back anything whose
 claim has sat unfinished past ingestion_visibility_timeout_seconds, on the
 assumption its worker crashed.
+
+Every `await client.<command>(...)` below carries a `# type: ignore[misc]`
+-- redis-py's async client shares its command-method stubs with the sync
+one, so mypy sees each call's return type as `Awaitable[X] | X` rather
+than plainly `Awaitable[X]`, and flags the await as a type mismatch. This
+is a known upstream stub limitation (get_redis(), src/core/redis_client.py,
+always returns the asyncio client), not a real issue in this file.
 """
 
 from __future__ import annotations
@@ -125,7 +132,7 @@ async def enqueue(message: IngestionQueueMessage) -> bool:
     # value, unless one was already set (retry_or_dead_letter() re-enqueues
     # through this same path in spirit, but pushes directly -- see there).
     stamped = message if message.enqueued_at else replace(message, enqueued_at=time.time())
-    await client.rpush(QUEUE_KEY, stamped.encode())
+    await client.rpush(QUEUE_KEY, stamped.encode())  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
     return True
 
 
@@ -156,7 +163,7 @@ async def complete(message: IngestionQueueMessage, *, worker_id: str) -> None:
     client = get_redis()
     if client is None:
         raise RuntimeError("worker requires REDIS_URL")
-    await client.lrem(processing_key(worker_id), 1, message.encode())
+    await client.lrem(processing_key(worker_id), 1, message.encode())  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
     await client.delete(CLAIMED_AT_PREFIX + worker_id)
 
 
@@ -174,12 +181,12 @@ async def queue_health() -> dict[str, int | bool]:
     client = get_redis()
     if client is None:
         return {"redis_available": False, "worker_alive": False, "queued": 0, "dead_lettered": 0}
-    await client.ping()
+    await client.ping()  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
     return {
         "redis_available": True,
         "worker_alive": bool(await client.exists(WORKER_HEARTBEAT_KEY)),
-        "queued": int(await client.llen(QUEUE_KEY)),
-        "dead_lettered": int(await client.llen(DLQ_KEY)),
+        "queued": int(await client.llen(QUEUE_KEY)),  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
+        "dead_lettered": int(await client.llen(DLQ_KEY)),  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
     }
 
 
@@ -196,14 +203,14 @@ async def sample_queue_metrics() -> None:
     client = get_redis()
     if client is None:
         return
-    depth = await client.llen(QUEUE_KEY)
+    depth = await client.llen(QUEUE_KEY)  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
     INGESTION_QUEUE_DEPTH.set(depth)
     if depth == 0:
         INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS.set(0)
         return
     # blpop pops from the head (left); the oldest waiting job is therefore
     # at index 0, not the tail rpush() just wrote to.
-    head = await client.lindex(QUEUE_KEY, 0)
+    head = await client.lindex(QUEUE_KEY, 0)  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
     if head is None:
         INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS.set(0)
         return
@@ -219,7 +226,7 @@ async def retry_or_dead_letter(message: IngestionQueueMessage, error: str, *, wo
     # Clears this job's claim first -- same reasoning as complete(): once
     # the retry/dead-letter decision below has been written, the original
     # claim must not still look "in flight" to the reaper.
-    await client.lrem(processing_key(worker_id), 1, message.encode())
+    await client.lrem(processing_key(worker_id), 1, message.encode())  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
     await client.delete(CLAIMED_AT_PREFIX + worker_id)
     return await _requeue_or_dead_letter(client, message, error)
 
@@ -266,7 +273,7 @@ async def reap_stale_processing_lists() -> int:
     reaped = 0
     async for key in client.scan_iter(match=f"{PROCESSING_KEY_PREFIX}*"):
         worker_id = key[len(PROCESSING_KEY_PREFIX):]
-        items = await client.lrange(key, 0, -1)
+        items = await client.lrange(key, 0, -1)  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
         if not items:
             continue
         claimed_at_raw = await client.get(CLAIMED_AT_PREFIX + worker_id)
@@ -276,7 +283,7 @@ async def reap_stale_processing_lists() -> int:
         for raw in items:
             message = IngestionQueueMessage.decode(raw)
             await _requeue_or_dead_letter(client, message, f"reaped: claim exceeded {timeout}s visibility timeout")
-            await client.lrem(key, 1, raw)
+            await client.lrem(key, 1, raw)  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
             reaped += 1
         await client.delete(CLAIMED_AT_PREFIX + worker_id)
     return reaped

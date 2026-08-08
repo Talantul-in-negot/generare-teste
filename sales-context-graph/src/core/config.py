@@ -62,12 +62,30 @@ class Settings(BaseSettings):
     # ── Neo4j ─────────────────────────────────────────────────────────────────────
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "scg_dev_local"
+    neo4j_password: str = "scg_dev_local"  # noqa: S105 -- a dev default, not a real secret; _validate_production_secrets below refuses to boot in production with it unchanged
 
     # ── Auth (MVP: API key per workspace, see api/dependencies.py::verify_api_key) ─
     # JSON map workspace_id -> secret key, e.g. WORKSPACE_API_KEYS='{"ws-demo":"..."}'.
     # pydantic-settings JSON-decodes dict-typed fields from a single env var.
     workspace_api_keys: dict[str, str] = {}
+
+    # ── OIDC/JWT SSO (docs/evaluation.md's Showpad engineering-rigor ────────────
+    # assessment, Band 2: "no SSO/SAML/OIDC/SCIM") -- see src/auth/sso.py.
+    # Off by default and not wired into any route's Depends() -- verify_api_key
+    # above stays the default auth path unchanged. A real external IdP account
+    # (Okta/Auth0/Azure AD/...) is outside what this repo can stand up itself;
+    # what's real here is the validation logic (real JWT/JWKS signature,
+    # issuer, audience, and expiry checks), tested against a locally-generated
+    # keypair -- connecting a real IdP later is 3 env vars, not new code.
+    sso_enabled: bool = False
+    sso_issuer: str = ""
+    sso_audience: str = ""
+    sso_jwks_url: str = ""
+    # Which JWT claim carries the tenant identity this app maps to
+    # workspace_id -- IdPs vary (Okta/Auth0 commonly use a custom claim
+    # namespaced to your app; Azure AD AAD B2C might use "tid"). Configurable
+    # rather than hardcoded to one vendor's convention.
+    sso_workspace_claim: str = "workspace_id"
 
     # ── Redis (durable ingestion job store, see api/state.py::get_ingestion_store) ─
     # Empty means "no Redis configured" -> falls back to InMemoryIngestionStore.
@@ -126,6 +144,18 @@ class Settings(BaseSettings):
     query_cache_enabled: bool = True
     query_cache_ttl_seconds: int = 300
 
+    # ── Per-tenant rate limiting (docs/evaluation.md's Showpad engineering-
+    # rigor assessment, 2026-08-08, Band 2) -- see src/core/rate_limit.py.
+    # Closes a real, previously-undocumented gap ("no rate limiting, quotas,
+    # or request-size limits -- anywhere"), so on by default, unlike the
+    # Phase 8 items that stayed off pending a measured need. 120/minute is a
+    # generous placeholder for a single small-team workspace, not a
+    # measured capacity figure -- same honesty standard applied to every
+    # other unmeasured default in this codebase (see docs/evaluation.md's
+    # "Vendor SLO targets" note).
+    rate_limit_enabled: bool = True
+    rate_limit_requests_per_minute: int = 120
+
     # ── PII redaction at egress (Phase 6, docs/evaluation.md's PII item) ────────
     # See src/redaction/pii.py's module docstring for the locked-in design:
     # raw text stays verbatim at rest (evidence-model requirement), redacted
@@ -154,6 +184,16 @@ class Settings(BaseSettings):
     slack_webhook_url: str = ""
     digest_stale_share_days: int = 7
     digest_stalled_deal_days: int = 21
+
+    # ── Threshold alerting (docs/evaluation.md's Showpad engineering-rigor ──────
+    # assessment, Band 4: "metrics without alerts") -- see
+    # src/core/alerting.py. Reuses slack_webhook_url above, same "JSON
+    # always available, Slack delivery only if configured" split as the
+    # digest feature. Thresholds are unmeasured placeholders, same honesty
+    # standard as rate_limit_requests_per_minute above -- not a claim of a
+    # measured capacity figure.
+    alert_max_queue_depth: int = 100
+    alert_max_oldest_job_age_seconds: int = 900
 
     # ── Embeddable panel (Increment 20, see api/routes/viz.py's /viz/panel) ──────
     # Space-separated list of origins allowed to iframe /viz/panel (sets
@@ -189,7 +229,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _validate_production_secrets(self) -> "Settings":
         """Fail fast if production is running with insecure defaults."""
-        if self.env == "production" and self.neo4j_password == "scg_dev_local":
+        if self.env == "production" and self.neo4j_password == "scg_dev_local":  # noqa: S105 -- comparing against the known dev default, not a hardcoded credential
             raise ValueError(
                 "neo4j_password must be changed from the default 'scg_dev_local' in production."
             )

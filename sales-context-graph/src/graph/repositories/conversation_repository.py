@@ -10,7 +10,13 @@ and participants themselves, which are the routing path for everything else.
 
 from __future__ import annotations
 
-from src.domain.conversation import Conversation, ConversationSummary, Participant, SpeakerResolution, TranscriptSegment
+from src.domain.conversation import (
+    Conversation,
+    ConversationSummary,
+    Participant,
+    SpeakerResolution,
+    TranscriptSegment,
+)
 from src.graph.execution import GraphExecutor, scoped_match
 
 _CONVERSATION_RETURN = (
@@ -164,6 +170,45 @@ class ConversationRepository:
             segment_ids=segment_ids,
         )
         return {row["segment_id"]: TranscriptSegment(**row) for row in rows}
+
+    async def redact_segments(self, workspace_id: str, segment_ids: list[str]) -> int:
+        """GDPR Art. 17 execution (docs/evaluation.md's Showpad engineering-
+        rigor assessment, 2026-08-08, Band 3). Called only from
+        src/usecases/erasure.py after
+        ClaimRepository.erase_claims_for_subject() has already identified
+        which segments those Claims' evidence spans point into -- this
+        repository has no way to know "erased" on its own, TranscriptSegment
+        carries no subject_id or erasure_status of its own.
+
+        Overwrites seg.text in place. TranscriptSegment is declared
+        `frozen=True` in the domain model (src/domain/conversation.py) --
+        that only prevents mutating an already-loaded Python object, not a
+        Cypher SET against the node; frozen is about accidental in-process
+        mutation, not about this repository's ability to execute an
+        explicit, audited erasure write. Deliberately a full overwrite, not
+        a substring/PII-pattern redaction (src/redaction/pii.py's regex
+        redaction is for LLM-prompt/log *egress*, a different problem from
+        "permanently remove this specific person's data from storage") --
+        an erasure request means the whole segment's text no longer needs
+        to be readable, not that it needs to look plausible with pieces
+        blanked out.
+        """
+        if not segment_ids:
+            return 0
+        conv_match = scoped_match("Conversation", "c")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {conv_match}
+            MATCH (c)-[:HAS_SEGMENT]->(seg:TranscriptSegment)
+            WHERE seg.segment_id IN $segment_ids
+            SET seg.text = $redacted
+            RETURN seg.segment_id AS segment_id
+            """,
+            workspace_id=workspace_id,
+            segment_ids=segment_ids,
+            redacted="[erased]",
+        )
+        return len(rows)
 
     async def list_segments(
         self, workspace_id: str, conversation_id: str, *, limit: int = 2000, offset: int = 0

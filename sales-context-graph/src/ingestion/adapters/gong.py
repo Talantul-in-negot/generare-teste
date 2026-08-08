@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from src.domain.conversation import Conversation, Participant, TranscriptSegment
 from src.domain.enums import SpeakerRole
-from src.domain.identity import conversation_id as _conversation_id, participant_id, segment_id
+from src.domain.identity import conversation_id as _conversation_id
+from src.domain.identity import participant_id, segment_id
 from src.ingestion.adapters.base import ParsedRecord, compute_content_hash
 
 

@@ -13,13 +13,13 @@ from uuid import uuid4
 
 import pytest
 
+import src.summarization.call_summary as call_summary_module
 from src.context_graph.builder import ContextGraphBuilder, ContextGraphScope
 from src.domain.assertion import Claim
 from src.domain.conversation import Conversation, TranscriptSegment
 from src.domain.enums import AdjudicationStatus, ErasureStatus, Polarity, SpeakerRole
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
-import src.summarization.call_summary as call_summary_module
 from src.summarization.call_summary import CallSummaryUseCase
 
 pytestmark = pytest.mark.asyncio

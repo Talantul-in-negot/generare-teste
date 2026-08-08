@@ -217,7 +217,9 @@ def union_candidates(
                 merged[c.entity_id] = c
     ordered = list(merged.values())
     if mention_surface is not None:
-        from src.resolution.scoring import lexical_score  # local: avoid import at module load for callers that never sort
+        from src.resolution.scoring import (
+            lexical_score,  # local: avoid import at module load for callers that never sort
+        )
 
         ordered.sort(key=lambda c: lexical_score(mention_surface, c.name), reverse=True)
     return ordered[:cap]

@@ -13,6 +13,7 @@ from datetime import datetime
 
 from src.core.telemetry import CLAIMS_TOTAL
 from src.domain.assertion import Claim
+from src.domain.enums import ErasureStatus
 from src.graph.execution import GraphExecutor, scoped_match
 
 _CLAIM_RETURN = (
@@ -450,3 +451,60 @@ class ClaimRepository:
             limit=limit,
         )
         return [Claim(**row) for row in rows]
+
+    async def erase_claims_for_subject(self, workspace_id: str, subject_id: str) -> list[tuple[str, str | None]]:
+        """GDPR Art. 17 execution (docs/evaluation.md's Showpad engineering-
+        rigor assessment, 2026-08-08, Band 3: "ErasureEvent is defined and
+        never constructed anywhere... GDPR Art. 17 is modeled, not
+        implemented"). Called only by src/usecases/erasure.py, itself only
+        reachable via an explicit, authenticated erasure request -- never
+        part of any routine read/write path.
+
+        Sets erasure_status=ERASED (Claim already had this field, unused
+        until now) and redacts object_value -- the one piece of free text a
+        Claim owns directly (a literal like "wants a 20% discount", as
+        opposed to object_id, which references another entity and carries
+        no personal text of its own). Returns (claim_id,
+        source_segment_id) pairs so the caller can also redact the
+        TranscriptSegment text those Claims' evidence spans point into --
+        a Claim doesn't duplicate that text itself
+        (src/redaction/pii.py's locked-in design keeps raw transcript text
+        on TranscriptSegment only).
+
+        This is a deliberate, audited EXCEPTION to that same locked-in
+        design ("raw text stays verbatim at rest... required by the
+        evidence model"), not a reversal of it: the default path still
+        preserves evidence; this path only ever runs for one specific,
+        already-erasure-requested subject, and exists precisely because a
+        valid erasure request overrides "keep everything for evidence" for
+        that subject going forward.
+
+        Does NOT touch the Neo4j vector-embedding property
+        (src/embedding/backfill.py) or the optional Qdrant backend
+        (src/embedding/qdrant_backend.py). ErasureEvent.erasure_scope's own
+        docstring names "embeddings" as an example of what a real erasure
+        scope might include; this MVP's completed event lists only what it
+        actually erased so it never overclaims coverage it doesn't have --
+        see docs/evaluation.md.
+        """
+        match = scoped_match("Claim", "cl", subject_id="subject_id")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {match}
+            WHERE cl.erasure_status <> $erased
+            SET cl.erasure_status = $erased,
+                cl.object_value = CASE WHEN cl.object_value IS NOT NULL THEN $redacted ELSE NULL END
+            RETURN cl.claim_id AS claim_id, cl.source_segment_id AS source_segment_id
+            """,
+            workspace_id=workspace_id,
+            subject_id=subject_id,
+            erased=ErasureStatus.ERASED.value,
+            redacted="[erased]",
+        )
+        if rows:
+            # "erased" was already an anticipated CLAIMS_TOTAL label value
+            # (see this module's import of CLAIMS_TOTAL and the metric's
+            # own docstring in src/core/telemetry.py) -- this is the first
+            # code path that actually produces it.
+            CLAIMS_TOTAL.labels(event="erased").inc(len(rows))
+        return [(row["claim_id"], row["source_segment_id"]) for row in rows]

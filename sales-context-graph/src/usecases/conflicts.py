@@ -87,6 +87,11 @@ class ConflictsUseCase:
             arbitration = select_winner(claim_a, claim_b)
             if arbitration.undecided:
                 return ConflictResolution(conflict_id=conflict_id, resolved=False, reason=arbitration.reason)
+            # undecided is defined as `winner is None` (conflict_arbitration.py)
+            # and select_winner() always sets winner+loser together -- not
+            # undecided guarantees both are set, just not visible to mypy
+            # across the dataclass boundary.
+            assert arbitration.winner is not None and arbitration.loser is not None  # noqa: S101 -- type-narrowing an invariant, not a stripped-under-`-O` validation check
             winner, loser = arbitration.winner, arbitration.loser
             reason = arbitration.reason
 

@@ -65,6 +65,13 @@ async def run_pipeline_for_job(message, store, job) -> tuple[IngestionState, str
         await store.put(job)
         payload = message.payload
         results: list[dict] = []
+        # One of 4 concrete pipeline classes depending on message.kind --
+        # annotated as their union up front (mypy would otherwise infer
+        # CrmIngestionPipeline from the first branch alone and flag every
+        # later branch's assignment as incompatible; each branch below
+        # only ever uses the one it assigns, this is a real Union of
+        # mutually-exclusive local types, not a bug).
+        pipeline: CrmIngestionPipeline | ContentIngestionPipeline | TranscriptIngestionPipeline
         if message.kind == "crm":
             pipeline = CrmIngestionPipeline(CrmRepository(executor), SourceRepository(executor), SalesforceAdapter())
             for method, items in (("ingest_accounts", payload.get("accounts", [])),

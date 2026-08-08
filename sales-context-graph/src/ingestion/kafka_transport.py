@@ -83,7 +83,9 @@ async def run_kafka_worker_loop(store) -> None:
     while-True loop -- called from there when INGESTION_TRANSPORT=kafka,
     never directly from __main__ (worker.py stays the one entry point
     regardless of transport)."""
-    from src.ingestion.worker import run_pipeline_for_job  # lazy: breaks the import cycle, see module docstring
+    from src.ingestion.worker import (
+        run_pipeline_for_job,  # lazy: breaks the import cycle, see module docstring
+    )
 
     settings = get_settings()
     consumer = AIOKafkaConsumer(

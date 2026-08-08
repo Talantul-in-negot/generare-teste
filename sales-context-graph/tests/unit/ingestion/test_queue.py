@@ -122,8 +122,8 @@ async def test_reaper_requeues_a_claim_past_the_visibility_timeout(monkeypatch):
     backdated (standing in for real time passing) and the reaper is run
     directly, as it would be from another worker's poll loop."""
     fakeredis = pytest.importorskip("fakeredis.aioredis")
-    from src.ingestion import queue
     from src.core.config import get_settings
+    from src.ingestion import queue
 
     monkeypatch.setenv("INGESTION_VISIBILITY_TIMEOUT_SECONDS", "60")
     get_settings.cache_clear()
@@ -150,8 +150,8 @@ async def test_reaper_requeues_a_claim_past_the_visibility_timeout(monkeypatch):
 @pytest.mark.asyncio
 async def test_reaper_leaves_a_fresh_claim_alone(monkeypatch):
     fakeredis = pytest.importorskip("fakeredis.aioredis")
-    from src.ingestion import queue
     from src.core.config import get_settings
+    from src.ingestion import queue
 
     monkeypatch.setenv("INGESTION_VISIBILITY_TIMEOUT_SECONDS", "300")
     get_settings.cache_clear()
@@ -176,8 +176,8 @@ async def test_reaper_eventually_dead_letters_a_job_that_keeps_crashing_its_work
     still reach the DLQ, not loop between claimed/reaped forever -- reaping
     counts against the same attempt budget as an ordinary retry."""
     fakeredis = pytest.importorskip("fakeredis.aioredis")
-    from src.ingestion import queue
     from src.core.config import get_settings
+    from src.ingestion import queue
 
     monkeypatch.setenv("INGESTION_VISIBILITY_TIMEOUT_SECONDS", "1")
     monkeypatch.setenv("INGESTION_QUEUE_MAX_ATTEMPTS", "2")

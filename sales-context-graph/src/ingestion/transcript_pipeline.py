@@ -29,7 +29,11 @@ from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
 from src.graph.repositories.source_repository import SourceRepository
 from src.graph.sales_ontology import validate_claim_predicate
-from src.ingestion.reconciliation import ReconciliationOutcome, reconcile_deletion, reconcile_source_record
+from src.ingestion.reconciliation import (
+    ReconciliationOutcome,
+    reconcile_deletion,
+    reconcile_source_record,
+)
 from src.resolution.speaker import resolve_speaker
 
 

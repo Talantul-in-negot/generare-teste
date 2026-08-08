@@ -16,7 +16,8 @@ from enum import StrEnum
 
 from src.domain.crm import SourceRecord, SourceSnapshot
 from src.domain.enums import SourceStatus
-from src.domain.identity import crm_entity_id, snapshot_id as _snapshot_id
+from src.domain.identity import crm_entity_id
+from src.domain.identity import snapshot_id as _snapshot_id
 from src.domain.versioning import is_identical, supersede, tombstone
 from src.graph.repositories.source_repository import SourceRepository
 

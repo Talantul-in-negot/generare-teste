@@ -38,7 +38,10 @@ import sys
 import structlog
 
 from src.core.config import get_settings
-from src.embedding.openai_embedding_provider import EmbeddingNotConfiguredError, OpenAIEmbeddingProvider
+from src.embedding.openai_embedding_provider import (
+    EmbeddingNotConfiguredError,
+    OpenAIEmbeddingProvider,
+)
 from src.embedding.provider import EmbeddingProvider
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.crm_repository import CrmRepository
@@ -71,7 +74,7 @@ async def backfill_workspace(
         # One batched embed() call per page, never one call per contact --
         # same N+1-avoidance principle as everywhere else in this repo.
         vectors = await provider.embed([c.name for c in contacts])
-        for contact, vector in zip(contacts, vectors):
+        for contact, vector in zip(contacts, vectors, strict=True):
             await repo.set_contact_embedding(workspace_id, contact.contact_id, vector)
         embedded += len(contacts)
         log.info("embedding_backfill.page_complete", workspace_id=workspace_id, embedded=embedded)

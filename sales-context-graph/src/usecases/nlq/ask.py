@@ -31,7 +31,13 @@ from src.llm.chat import ChatFn
 from src.llm.json_completion import complete_json
 from src.nlq.catalog import IntentSpec, ParamKind, get_intent
 from src.nlq.entity_linking import EntityLinker
-from src.nlq.models import Ambiguity, AskResult, CandidateOption, IntentClassification, ResolvedEntity
+from src.nlq.models import (
+    Ambiguity,
+    AskResult,
+    CandidateOption,
+    IntentClassification,
+    ResolvedEntity,
+)
 from src.nlq.prompt import build_intent_prompt
 from src.usecases.nlq.dispatch import IntentDispatcher
 

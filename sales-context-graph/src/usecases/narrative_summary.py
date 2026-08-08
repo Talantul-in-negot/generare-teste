@@ -61,5 +61,10 @@ class NarrativeSummaryUseCase:
         narrative = ground_narrative(raw, allowed_claims=allowed)
 
         if workspace_id is not None:
+            # cache_key is always set together with workspace_id above (the
+            # two `if workspace_id is not None:` blocks are the same
+            # invariant, just not visible to mypy across them) -- this
+            # assert only makes that explicit, it can never actually fire.
+            assert cache_key is not None  # noqa: S101 -- type-narrowing an invariant, not a stripped-under-`-O` validation check
             await cache_result(workspace_id, cache_key, narrative.model_dump_json())
         return narrative

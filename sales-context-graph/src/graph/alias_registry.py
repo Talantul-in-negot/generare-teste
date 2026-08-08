@@ -23,12 +23,11 @@ ingestion batch.
 
 from __future__ import annotations
 
-import json
 import os
 import re
-import structlog
 from dataclasses import dataclass
-from functools import lru_cache
+
+import structlog
 
 log = structlog.get_logger(__name__)
 
@@ -129,7 +128,7 @@ async def _get_redis():
         import redis.asyncio as aioredis
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         client = aioredis.from_url(redis_url, decode_responses=True)
-        await client.ping()
+        await client.ping()  # type: ignore[misc]  # redis-py stub ambiguity, see src/ingestion/queue.py's module docstring
         return client
     except Exception:
         return None
@@ -259,7 +258,7 @@ class AliasRegistry:
         # 2. Fuzzy match (optional, requires rapidfuzz)
         try:
             from rapidfuzz import fuzz
-            best_score = 0
+            best_score = 0.0  # fuzz.ratio returns float, not int
             best_match = None
             for stored_key, canonical in self._exact.items():
                 score = fuzz.ratio(key, stored_key)
@@ -441,7 +440,7 @@ async def load_alias_registry(neo4j_client=None, tenant: str = "default") -> Ali
             mapping = await redis.hgetall(rkey)
             if mapping:
                 registry._exact = {
-                    k: tuple(v.split("|", 1))   # type: ignore[assignment]
+                    k: tuple(v.split("|", 1))
                     for k, v in mapping.items()
                 }
                 registry._stemmed = {}
@@ -457,8 +456,14 @@ async def load_alias_registry(neo4j_client=None, tenant: str = "default") -> Ali
         finally:
             try:
                 await redis.aclose()
-            except Exception:
-                pass
+            except Exception as close_exc:
+                # Cleanup-of-a-cleanup: the connection this is closing is
+                # already known-bad (its own load failure was logged just
+                # above), so a second failure here is expected noise, not a
+                # new fact -- still logged at debug rather than silently
+                # dropped, so it's not invisible if someone's actually
+                # chasing a connection-handling issue.
+                log.debug("alias_registry.redis_close_failed", error=str(close_exc))
 
     # Redis miss or unavailable — load from Neo4j (also pushes to Redis)
     await registry.load()

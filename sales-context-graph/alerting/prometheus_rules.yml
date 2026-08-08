@@ -1,0 +1,80 @@
+# Prometheus/Alertmanager alerting rules (docs/evaluation.md's Showpad
+# engineering-rigor assessment, 2026-08-08, Band 4: "metrics without
+# alerts... no alert rules, no thresholds").
+#
+# Covers the rate-based Counter metrics from src/core/telemetry.py that
+# genuinely need a real Prometheus time-series backend to evaluate
+# correctly -- rate()/increase() over a Counter requires historical
+# samples an in-process, no-history Python check (src/core/alerting.py)
+# cannot faithfully reproduce. The two Gauge metrics (queue depth, oldest
+# job age) are instantaneous state instead, checked by that Python module
+# via POST /api/v1/alerts/check (an external cron, same "no in-process
+# scheduler" shape as the existing digest feature) -- deliberately not
+# duplicated here.
+#
+# This file requires a real Prometheus + Alertmanager deployment scraping
+# this app's /metrics to actually fire -- it is not wired into or executed
+# by anything in this repo. Load it into Prometheus via `rule_files:` in
+# prometheus.yml; route firing alerts to Slack/PagerDuty/etc. via
+# Alertmanager's own receiver config (out of scope here, deployment-
+# specific).
+#
+# Every threshold below is an unmeasured placeholder, the same honesty
+# standard already applied to rate_limit_requests_per_minute
+# (src/core/config.py) and every other unmeasured default in this
+# codebase -- not a claim of a measured capacity figure.
+
+groups:
+  - name: sales-context-graph.rules
+    rules:
+      - alert: IngestionJobFailureRateHigh
+        expr: |
+          sum(rate(scg_ingestion_jobs_total{status=~"FAILED_PERMANENT|FAILED_RETRYABLE"}[15m]))
+            / sum(rate(scg_ingestion_jobs_total[15m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ingestion job failure rate above 10% over the last 15 minutes"
+
+      - alert: ExtractionProviderFailureRateHigh
+        expr: |
+          sum(rate(scg_extraction_provider_calls_total{outcome="permanent_failure"}[15m]))
+            / sum(rate(scg_extraction_provider_calls_total[15m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM extraction permanent-failure rate above 10% over the last 15 minutes"
+
+      - alert: LlmFallbackRateHigh
+        expr: sum(rate(scg_llm_fallback_total[15m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM gateway is falling back to the secondary provider more than 0.5/s -- the primary provider may be degraded"
+
+      - alert: GuardrailFlagRateHigh
+        expr: sum(rate(scg_guardrail_flag_total[15m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prompt-injection guardrail flagging more than 1 extraction window/s -- worth a human look even in log_only mode"
+
+      - alert: RateLimitRejectionsHigh
+        expr: sum(rate(scg_rate_limit_rejected_total[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5 rate-limit rejections/s -- either a runaway client or the default limit needs revisiting"
+
+      - alert: ContextGraphTruncationRateHigh
+        expr: sum(rate(scg_context_graph_truncated_total[30m])) > 0.2
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "Context Graph builds are hitting their node/token budget cap more than 0.2/s -- consider whether the default budget is too small"

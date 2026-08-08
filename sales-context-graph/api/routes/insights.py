@@ -20,7 +20,12 @@ from src.graph.repositories.stakeholder_repository import StakeholderRepository
 from src.llm.chat import LlmNotConfiguredError, build_chat_fn
 from src.usecases import serialization as ser
 from src.usecases.buying_committee import BuyingCommitteeUseCase
-from src.usecases.conflicts import ClaimNotFoundError, ConflictNotFoundError, ConflictsUseCase, InvalidWinnerError
+from src.usecases.conflicts import (
+    ClaimNotFoundError,
+    ConflictNotFoundError,
+    ConflictsUseCase,
+    InvalidWinnerError,
+)
 from src.usecases.content_effectiveness import ContentEffectivenessUseCase
 from src.usecases.pipeline_insights import TopObjectionsForSellerUseCase
 

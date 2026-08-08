@@ -7,7 +7,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.graph.domain_ontology import get_relation_rules, load_domain_ontology, validate_ontology_yaml
+from src.graph.domain_ontology import (
+    get_relation_rules,
+    load_domain_ontology,
+    validate_ontology_yaml,
+)
 
 _SALES_YML = Path(__file__).resolve().parents[3] / "config" / "ontologies" / "sales.yml"
 

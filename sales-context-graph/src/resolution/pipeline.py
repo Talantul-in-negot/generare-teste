@@ -66,7 +66,7 @@ async def resolve_mention(
     candidate_generator: CandidateGenerator,
     decided_at: datetime,
     relational_signals_by_entity: dict[str, frozenset[str]] | None = None,
-    thresholds: PolicyThresholds = PolicyThresholds(),
+    thresholds: PolicyThresholds = PolicyThresholds(),  # noqa: B008 -- PolicyThresholds is @dataclass(frozen=True), immutable, no shared-mutable-default risk
     candidate_cap: int = 50,
     embedding_provider: EmbeddingProvider | None = None,
 ) -> ResolutionOutcome:
@@ -106,7 +106,7 @@ async def resolve_mention(
         mention_vector, candidate_vectors = vectors[0], vectors[1:]
         semantic_by_entity = {
             c.entity_id: cosine_similarity(mention_vector, vec)
-            for c, vec in zip(candidates, candidate_vectors)
+            for c, vec in zip(candidates, candidate_vectors, strict=True)
         }
 
     scored = [

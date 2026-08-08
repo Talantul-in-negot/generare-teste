@@ -95,7 +95,7 @@ def with_retry(
                         break
                     actual_delay = min(delay, max_delay_s)
                     if jitter:
-                        actual_delay *= random.uniform(0.8, 1.2)
+                        actual_delay *= random.uniform(0.8, 1.2)  # noqa: S311 -- retry-backoff jitter, not a cryptographic use
                     log.warning(
                         "retry.transient_failure",
                         fn=fn.__qualname__,
