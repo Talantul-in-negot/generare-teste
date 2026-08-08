@@ -98,7 +98,7 @@ def graph_nodes(draw: ImageDraw.ImageDraw, points: list[tuple[int, int, str, str
 
 
 SCENES = [
-    ("Listen when it helps. Fall back when it does not.", "Quick questions 1-4  |  text-first  |  optional TTS", "The answer appears immediately. Audio is a convenience, never a dependency.", "tts"),
+    ("Click a question. Or press 1-4.", "Quick questions 1-4  |  text-first  |  optional TTS", "The answer appears immediately. Audio is a convenience, never a dependency.", "tts"),
     ("The evidence layer for confident selling.", "A grounded companion for every seller question.", "When the answer matters, confidence is not enough. Evidence is.", "hero"),
     ("Commercial memory is fragmented.", "CRM records  ·  conversations  ·  content engagement", "Sales teams have the data. They do not have the connective tissue.", "sources"),
     ("One graph. One evidence model.", "Ingest → resolve → extract → govern → retrieve", "Every claim carries its source, time, polarity, confidence and tenant boundary.", "architecture"),
@@ -113,7 +113,7 @@ SCENES = [
 
 
 NARRATION = [
-    "Sellers can jump straight to the questions they ask most: open objections, missing stakeholders, next content and deal changes. The text answer arrives first; optional voice starts separately, and a slow provider leaves the text untouched.",
+    "Sellers can click a frequent question or press its number from one to four. The text answer arrives first; optional voice starts separately, and a slow provider leaves the text untouched.",
     "The future of sales AI is not the loudest answer. It is the answer a seller can trust in front of a buyer, a manager and a customer record.",
     "Commercial context lives in structured CRM fields, messy transcripts and content engagement. The graph connects them without pretending they are equally reliable.",
     "The pipeline is deliberately evidence-first. Names are resolved with bounded candidates, claims retain polarity and time, and every tenant boundary is enforced before retrieval.",
@@ -151,7 +151,7 @@ def draw_scene(image: Image.Image, draw: ImageDraw.ImageDraw, kind: str) -> None
         panel(draw, (110, 350, 760, 820), "Ask", ["What content should I send?", "Optional context expanded", "opportunity_id: provided", "buyer_contact_id: provided", "Ask"], BLUE)
         panel(draw, (850, 350, 1810, 820), "Answer · confidence 0.90", ["intent: recommend-content", "objection: pricing", "recommended: Enterprise Pricing ROI Calculator", "excluded: already viewed asset", "disclaimer: verify evidence", "requires_human_review: true"], GREEN)
     elif kind == "tts":
-        panel(draw, (110, 350, 900, 820), "Quick questions", ["1  What objections are open?", "2  Who have we not engaged?", "3  What content should I send?", "4  What changed since last call?"], BLUE)
+        panel(draw, (110, 350, 900, 820), "Click or press a number", ["[1] What objections are open?", "[2] Who have we not engaged?", "[3] What content should I send?", "[4] What changed since last call?"], BLUE)
         panel(draw, (980, 350, 1810, 820), "Voice output", ["Answer text: immediate", "TTS: optional", "Timeout: 2 seconds", "Fallback: text remains", "No fabricated audio"], GREEN)
     elif kind == "insights":
         panel(draw, (110, 350, 880, 820), "Browse Intents", ["Who haven't we talked to?", "Top objections", "Open conflicts", "What's new / As-of", "12 live intents"], BLUE)
