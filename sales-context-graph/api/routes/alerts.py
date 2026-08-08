@@ -1,6 +1,6 @@
 """POST /api/v1/alerts/check — docs/evaluation.md's Showpad engineering-
 rigor assessment (2026-08-08, Band 4): "metrics without alerts." See
-src/core/alerting.py for what's actually checked and why (the two Gauge
+src/core/alerting.py for what's actually checked and why (the three Gauge
 metrics, not the rate-based Counters -- those need a real Prometheus
 deployment, see alerting/prometheus_rules.yml).
 
@@ -35,6 +35,7 @@ async def check_alerts(_workspace_id: str = Depends(verify_api_key)) -> dict:
             settings.slack_webhook_url or None,
             max_queue_depth=settings.alert_max_queue_depth,
             max_oldest_job_age_seconds=settings.alert_max_oldest_job_age_seconds,
+            max_dlq_depth=settings.alert_max_dlq_depth,
         )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Slack delivery failed: {exc}") from exc

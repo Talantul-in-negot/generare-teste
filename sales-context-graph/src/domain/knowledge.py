@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Product(BaseModel):
@@ -75,7 +75,19 @@ class ContentAsset(BaseModel):
     title: str
     url: str
     content_type: str | None = None
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
+    # Content-governance fields.  Defaults preserve compatibility with the
+    # original Showpad-shaped fixtures while making unsafe states explicit.
+    version: int = Field(default=1, ge=1)
+    approval_status: str = "approved"
+    is_archived: bool = False
+    is_sensitive: bool = False
+    is_shareable: bool = True
+    languages: list[str] = Field(default_factory=list)
+    countries: list[str] = Field(default_factory=list)
+    channels: list[str] = Field(default_factory=list)
+    effective_from: datetime | None = None
+    expires_at: datetime | None = None
 
 
 class Share(BaseModel):

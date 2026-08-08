@@ -11,7 +11,11 @@ import pytest
 
 from api.main import app
 from src.core.config import get_settings
-from src.core.telemetry import INGESTION_QUEUE_DEPTH, INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS
+from src.core.telemetry import (
+    INGESTION_DLQ_DEPTH,
+    INGESTION_QUEUE_DEPTH,
+    INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS,
+)
 from tests.conftest import auth_headers
 
 pytestmark = pytest.mark.asyncio
@@ -22,6 +26,7 @@ def reset_gauges():
     yield
     INGESTION_QUEUE_DEPTH.set(0)
     INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS.set(0)
+    INGESTION_DLQ_DEPTH.set(0)
 
 
 def _client() -> httpx.AsyncClient:
@@ -62,4 +67,20 @@ async def test_alerts_check_returns_breach_without_slack_configured(monkeypatch)
     body = resp.json()
     assert body["breach_count"] == 1
     assert body["slack_delivered"] is False  # no SLACK_WEBHOOK_URL set in this test
+    get_settings.cache_clear()
+
+
+async def test_alerts_check_returns_breach_when_dlq_depth_exceeds_threshold(monkeypatch):
+    headers = auth_headers(monkeypatch, "ws-alerts-test")
+    monkeypatch.setenv("ALERT_MAX_DLQ_DEPTH", "2")
+    get_settings.cache_clear()
+    INGESTION_DLQ_DEPTH.set(7)
+
+    async with _client() as client:
+        resp = await client.post("/api/v1/alerts/check", headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["breach_count"] == 1
+    assert body["breaches"][0]["metric"] == "scg_ingestion_dlq_depth"
     get_settings.cache_clear()

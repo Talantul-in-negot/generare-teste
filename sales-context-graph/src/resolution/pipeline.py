@@ -89,7 +89,9 @@ async def resolve_mention(
         )
 
     _candidate_gen_started = time.monotonic()
-    pool = await candidate_generator.all_names_in_workspace(workspace_id, entity_type)
+    pool = await candidate_generator.name_candidates(
+        workspace_id, entity_type, mention.surface_text, limit=max(candidate_cap * 4, 200)
+    )
     candidates: list[Candidate] = union_candidates(
         exact_matches, pool, cap=candidate_cap, mention_surface=mention.normalized_surface
     )

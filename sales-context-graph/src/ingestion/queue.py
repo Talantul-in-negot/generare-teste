@@ -34,7 +34,11 @@ from typing import Any
 
 from src.core.config import get_settings
 from src.core.redis_client import get_redis
-from src.core.telemetry import INGESTION_QUEUE_DEPTH, INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS
+from src.core.telemetry import (
+    INGESTION_DLQ_DEPTH,
+    INGESTION_QUEUE_DEPTH,
+    INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS,
+)
 
 QUEUE_KEY = "scg:ingestion:queue"
 DLQ_KEY = "scg:ingestion:dlq"
@@ -191,7 +195,12 @@ async def queue_health() -> dict[str, int | bool]:
 
 
 async def sample_queue_metrics() -> None:
-    """Refresh the queue-depth and oldest-job-age gauges (docs/plan.md Sec 14).
+    """Refresh the queue-depth, oldest-job-age, and DLQ-depth gauges
+    (docs/plan.md Sec 14; DLQ depth added 2026-08-08 -- queue_health()
+    below computed this same count since Phase 4 but only ever returned it
+    in GET /ready's JSON, never pushed it to a metric, so a permanently
+    failed job sitting in the DLQ was invisible outside someone manually
+    polling /ready).
 
     Prometheus gauges are push-model, not computed on scrape, and the
     /metrics route is synchronous while this needs an async Redis round
@@ -205,6 +214,7 @@ async def sample_queue_metrics() -> None:
         return
     depth = await client.llen(QUEUE_KEY)  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
     INGESTION_QUEUE_DEPTH.set(depth)
+    INGESTION_DLQ_DEPTH.set(await client.llen(DLQ_KEY))  # type: ignore[misc]  # redis-py stub ambiguity, see module docstring
     if depth == 0:
         INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS.set(0)
         return

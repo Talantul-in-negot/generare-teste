@@ -3,13 +3,23 @@ crm_repository.py."""
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from src.domain.knowledge import AssetView, ContentAsset, Share
 from src.graph.execution import GraphExecutor, scoped_match
 
 _ASSET_RETURN = (
     "n.content_asset_id AS content_asset_id, n.workspace_id AS workspace_id, "
     "n.division_id AS division_id, n.title AS title, n.url AS url, "
-    "n.content_type AS content_type, n.tags AS tags"
+    "n.content_type AS content_type, n.tags AS tags, "
+    "coalesce(n.version, 1) AS version, "
+    "coalesce(n.approval_status, 'approved') AS approval_status, "
+    "coalesce(n.is_archived, false) AS is_archived, "
+    "coalesce(n.is_sensitive, false) AS is_sensitive, "
+    "coalesce(n.is_shareable, true) AS is_shareable, "
+    "coalesce(n.languages, []) AS languages, coalesce(n.countries, []) AS countries, "
+    "coalesce(n.channels, []) AS channels, n.effective_from AS effective_from, "
+    "n.expires_at AS expires_at"
 )
 
 _VIEW_RETURN = (
@@ -41,6 +51,16 @@ class ContentRepository:
                 n.url = $url,
                 n.content_type = $content_type,
                 n.tags = $tags,
+                n.version = $version,
+                n.approval_status = $approval_status,
+                n.is_archived = $is_archived,
+                n.is_sensitive = $is_sensitive,
+                n.is_shareable = $is_shareable,
+                n.languages = $languages,
+                n.countries = $countries,
+                n.channels = $channels,
+                n.effective_from = $effective_from,
+                n.expires_at = $expires_at,
                 n.updated_at = datetime()
             """,
             workspace_id=asset.workspace_id,
@@ -50,6 +70,16 @@ class ContentRepository:
             url=asset.url,
             content_type=asset.content_type,
             tags=asset.tags,
+            version=asset.version,
+            approval_status=asset.approval_status,
+            is_archived=asset.is_archived,
+            is_sensitive=asset.is_sensitive,
+            is_shareable=asset.is_shareable,
+            languages=asset.languages,
+            countries=asset.countries,
+            channels=asset.channels,
+            effective_from=asset.effective_from.isoformat() if asset.effective_from else None,
+            expires_at=asset.expires_at.isoformat() if asset.expires_at else None,
         )
 
     async def get_content_asset(
@@ -75,7 +105,8 @@ class ContentRepository:
         return ContentAsset(**rows[0]) if rows else None
 
     async def list_content_assets(
-        self, workspace_id: str, *, division_id: str | None = None, limit: int = 100, offset: int = 0
+        self, workspace_id: str, *, division_id: str | None = None, limit: int = 100, offset: int = 0,
+        only_servable: bool = False, as_of: datetime | None = None,
     ) -> list[ContentAsset]:
         """See get_content_asset's docstring for what division_id does and
         does not scope."""
@@ -83,12 +114,23 @@ class ContentRepository:
         filters = []
         if division_id is not None:
             filters.append("n.division_id = $division_id")
+        if only_servable:
+            filters.extend([
+                "coalesce(n.is_archived, false) = false",
+                "coalesce(n.is_sensitive, false) = false",
+                "coalesce(n.is_shareable, true) = true",
+                "coalesce(n.approval_status, 'approved') = 'approved'",
+                "(n.effective_from IS NULL OR n.effective_from <= datetime($as_of))",
+                "(n.expires_at IS NULL OR n.expires_at > datetime($as_of))",
+            ])
         where = f" WHERE {' AND '.join(filters)}" if filters else ""
+        effective_as_of = as_of or datetime.now(timezone.utc)
         rows = await self._executor.tenant_query(
             f"MATCH {match}{where} RETURN {_ASSET_RETURN} "
             "ORDER BY n.content_asset_id SKIP $offset LIMIT $limit",
             workspace_id=workspace_id,
             division_id=division_id,
+            as_of=effective_as_of.isoformat(),
             offset=offset,
             limit=limit,
         )

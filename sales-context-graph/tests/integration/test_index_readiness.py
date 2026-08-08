@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from src.graph.schema import ALL_INDEX_NAMES
+from src.graph.schema import ALL_CONSTRAINT_NAMES, ALL_INDEX_NAMES
 
 pytestmark = pytest.mark.asyncio
 
@@ -44,3 +44,10 @@ async def test_all_required_indexes_come_online(executor):
         not_online = {name: states_by_name[name] for name in ALL_INDEX_NAMES if states_by_name[name] != "ONLINE"}
 
     assert not not_online, f"indexes not ONLINE after waiting: {not_online}"
+
+
+async def test_all_required_uniqueness_constraints_exist(executor):
+    rows = await executor.operational_query("SHOW CONSTRAINTS YIELD name RETURN name")
+    names = {row["name"] for row in rows}
+    missing = [name for name in ALL_CONSTRAINT_NAMES if name not in names]
+    assert not missing, f"uniqueness constraints never created: {missing}"

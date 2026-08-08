@@ -18,14 +18,9 @@ source_system on hand to recompute the hash.
 from __future__ import annotations
 
 INDEX_STATEMENTS: list[str] = [
-    # (workspace_id, id) per label — id lookups are the hot path for every repository.
-    "CREATE INDEX account_workspace_id IF NOT EXISTS FOR (n:Account) ON (n.workspace_id, n.account_id)",
-    "CREATE INDEX contact_workspace_id IF NOT EXISTS FOR (n:Contact) ON (n.workspace_id, n.contact_id)",
-    "CREATE INDEX opportunity_workspace_id IF NOT EXISTS FOR (n:Opportunity) ON (n.workspace_id, n.opportunity_id)",
-    "CREATE INDEX conversation_workspace_id IF NOT EXISTS FOR (n:Conversation) ON (n.workspace_id, n.conversation_id)",
-    "CREATE INDEX claim_workspace_id IF NOT EXISTS FOR (n:Claim) ON (n.workspace_id, n.claim_id)",
-    "CREATE INDEX mention_workspace_id IF NOT EXISTS FOR (n:Mention) ON (n.workspace_id, n.mention_id)",
-    "CREATE INDEX content_asset_workspace_id IF NOT EXISTS FOR (n:ContentAsset) ON (n.workspace_id, n.content_asset_id)",
+    # Composite identity indexes are supplied by the uniqueness constraints
+    # below. Keeping a second non-unique index on the same key prevents Neo4j
+    # from creating the constraint and adds no query value.
     # (workspace_id, canonical_name) — candidate-generation prefix lookups (P4).
     "CREATE INDEX account_workspace_name IF NOT EXISTS FOR (n:Account) ON (n.workspace_id, n.name)",
     "CREATE INDEX contact_workspace_name IF NOT EXISTS FOR (n:Contact) ON (n.workspace_id, n.name)",
@@ -61,6 +56,19 @@ INDEX_STATEMENTS: list[str] = [
     "CREATE INDEX asset_view_workspace_viewer_contact_id IF NOT EXISTS FOR (n:AssetView) ON (n.workspace_id, n.viewer_contact_id)",
 ]
 
+# Existing deployments created non-unique identity indexes before uniqueness
+# constraints were introduced. Drop only those exact, redundant indexes before
+# creating constraints; Neo4j constraints create their own backing indexes.
+LEGACY_IDENTITY_INDEX_DROPS: list[str] = [
+    "DROP INDEX account_workspace_id IF EXISTS",
+    "DROP INDEX contact_workspace_id IF EXISTS",
+    "DROP INDEX opportunity_workspace_id IF EXISTS",
+    "DROP INDEX conversation_workspace_id IF EXISTS",
+    "DROP INDEX claim_workspace_id IF EXISTS",
+    "DROP INDEX mention_workspace_id IF EXISTS",
+    "DROP INDEX content_asset_workspace_id IF EXISTS",
+]
+
 FULLTEXT_STATEMENTS: list[str] = [
     "CREATE FULLTEXT INDEX account_contact_names IF NOT EXISTS "
     "FOR (n:Account|Contact) ON EACH [n.name]",
@@ -76,17 +84,37 @@ VECTOR_STATEMENTS: list[str] = [
     "OPTIONS {indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}",
 ]
 
-ALL_STATEMENTS: list[str] = [*INDEX_STATEMENTS, *FULLTEXT_STATEMENTS, *VECTOR_STATEMENTS]
+# Composite uniqueness is the database-level backstop for the application
+# identity convention.  Every id is only unique inside a workspace; keeping
+# workspace_id in the constraint prevents one customer's deterministic ids
+# from colliding with another customer's data and makes accidental duplicate
+# MERGE keys fail loudly during ingestion.
+CONSTRAINT_STATEMENTS: list[str] = [
+    "CREATE CONSTRAINT account_workspace_id_unique IF NOT EXISTS FOR (n:Account) REQUIRE (n.workspace_id, n.account_id) IS UNIQUE",
+    "CREATE CONSTRAINT contact_workspace_id_unique IF NOT EXISTS FOR (n:Contact) REQUIRE (n.workspace_id, n.contact_id) IS UNIQUE",
+    "CREATE CONSTRAINT lead_workspace_id_unique IF NOT EXISTS FOR (n:Lead) REQUIRE (n.workspace_id, n.lead_id) IS UNIQUE",
+    "CREATE CONSTRAINT opportunity_workspace_id_unique IF NOT EXISTS FOR (n:Opportunity) REQUIRE (n.workspace_id, n.opportunity_id) IS UNIQUE",
+    "CREATE CONSTRAINT conversation_workspace_id_unique IF NOT EXISTS FOR (n:Conversation) REQUIRE (n.workspace_id, n.conversation_id) IS UNIQUE",
+    "CREATE CONSTRAINT segment_workspace_id_unique IF NOT EXISTS FOR (n:TranscriptSegment) REQUIRE (n.workspace_id, n.segment_id) IS UNIQUE",
+    "CREATE CONSTRAINT claim_workspace_id_unique IF NOT EXISTS FOR (n:Claim) REQUIRE (n.workspace_id, n.claim_id) IS UNIQUE",
+    "CREATE CONSTRAINT mention_workspace_id_unique IF NOT EXISTS FOR (n:Mention) REQUIRE (n.workspace_id, n.mention_id) IS UNIQUE",
+    "CREATE CONSTRAINT content_asset_workspace_id_unique IF NOT EXISTS FOR (n:ContentAsset) REQUIRE (n.workspace_id, n.content_asset_id) IS UNIQUE",
+    "CREATE CONSTRAINT asset_view_workspace_id_unique IF NOT EXISTS FOR (n:AssetView) REQUIRE (n.workspace_id, n.asset_view_id) IS UNIQUE",
+    "CREATE CONSTRAINT share_workspace_id_unique IF NOT EXISTS FOR (n:Share) REQUIRE (n.workspace_id, n.share_id) IS UNIQUE",
+    "CREATE CONSTRAINT source_record_workspace_id_unique IF NOT EXISTS FOR (n:SourceRecord) REQUIRE (n.workspace_id, n.source_record_id) IS UNIQUE",
+    "CREATE CONSTRAINT claim_revision_workspace_id_unique IF NOT EXISTS FOR (n:ClaimRevision) REQUIRE (n.workspace_id, n.revision_id) IS UNIQUE",
+]
+
+ALL_STATEMENTS: list[str] = [
+    *LEGACY_IDENTITY_INDEX_DROPS,
+    *INDEX_STATEMENTS,
+    *FULLTEXT_STATEMENTS,
+    *VECTOR_STATEMENTS,
+    *CONSTRAINT_STATEMENTS,
+]
 
 # Names as reported by `SHOW INDEXES YIELD name` — used by the readiness check.
 ALL_INDEX_NAMES: list[str] = [
-    "account_workspace_id",
-    "contact_workspace_id",
-    "opportunity_workspace_id",
-    "conversation_workspace_id",
-    "claim_workspace_id",
-    "mention_workspace_id",
-    "content_asset_workspace_id",
     "account_workspace_name",
     "contact_workspace_name",
     "contact_workspace_normalized_email",
@@ -102,4 +130,20 @@ ALL_INDEX_NAMES: list[str] = [
     "asset_view_workspace_viewer_contact_id",
     "account_contact_names",
     "contact_embeddings_v1",
+]
+
+ALL_CONSTRAINT_NAMES: list[str] = [
+    "account_workspace_id_unique",
+    "contact_workspace_id_unique",
+    "lead_workspace_id_unique",
+    "opportunity_workspace_id_unique",
+    "conversation_workspace_id_unique",
+    "segment_workspace_id_unique",
+    "claim_workspace_id_unique",
+    "mention_workspace_id_unique",
+    "content_asset_workspace_id_unique",
+    "asset_view_workspace_id_unique",
+    "share_workspace_id_unique",
+    "source_record_workspace_id_unique",
+    "claim_revision_workspace_id_unique",
 ]

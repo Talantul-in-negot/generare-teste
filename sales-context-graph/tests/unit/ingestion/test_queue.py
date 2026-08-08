@@ -200,3 +200,25 @@ async def test_reaper_eventually_dead_letters_a_job_that_keeps_crashing_its_work
     assert dead.attempt == 2
     get_settings.cache_clear()
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_sample_queue_metrics_populates_the_dlq_depth_gauge(monkeypatch):
+    """Added alongside the DLQ-depth gauge itself (2026-08-08) -- proves
+    sample_queue_metrics() actually pushes scg_ingestion_dlq_depth, not
+    just the two gauges that existed before it. queue_health() has
+    computed this same count since Phase 4 but never pushed it anywhere;
+    this is the first thing to actually populate the gauge."""
+    fakeredis = pytest.importorskip("fakeredis.aioredis")
+    from src.core.telemetry import INGESTION_DLQ_DEPTH
+    from src.ingestion import queue
+
+    client = fakeredis.FakeRedis(decode_responses=True)
+    monkeypatch.setattr(queue, "get_redis", lambda: client)
+    await client.rpush(queue.DLQ_KEY, "dead-job-1", "dead-job-2", "dead-job-3")
+
+    await queue.sample_queue_metrics()
+
+    assert INGESTION_DLQ_DEPTH._value.get() == 3
+    INGESTION_DLQ_DEPTH.set(0)
+    await client.aclose()

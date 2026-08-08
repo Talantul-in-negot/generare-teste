@@ -1825,9 +1825,10 @@ remaining gaps, not glossed over.
   in this repo executes it. `src/core/alerting.py` +
   `POST /api/v1/alerts/check` (cron-driven, same "no in-process scheduler"
   shape as the existing digest feature) is the part actually executable
-  without that deployment: the two Gauge metrics (queue depth, oldest job
-  age) are instantaneous state, not a rate needing time-series history, so
-  they're checked directly and posted to the existing Slack webhook
+without that deployment: the three Gauge metrics (queue depth, oldest job
+age, and dead-letter queue depth) are instantaneous state, not a rate needing
+time-series history, so they're checked directly and posted to the existing
+Slack webhook
   (reusing `src/delivery/slack.py::post_digest`, not a new integration)
   when breached.
 - ✅ **SSO scaffolding, honestly bounded.** `src/auth/sso.py::
@@ -1873,3 +1874,153 @@ scanning), full RBAC/SCIM, a live IdP connection, backup *restore*
 verification, and Neo4j multi-region replication — each named here
 explicitly rather than left for a future reader to discover was quietly
 dropped.
+
+---
+
+## Showpad standards re-verification (2026-08-08)
+
+This is a fresh comparison with Showpad's current public product and trust
+posture, not a claim that Showpad has reviewed this repository. The sources are
+Showpad's public product/help/security pages, which describe four product
+pillars (Sales Readiness, Content Management, Buyer Engagement, Revenue
+Intelligence), Genie as a governed AI layer, Field Meeting AI, Shared Spaces,
+mobile/offline use, integrations and enterprise controls:
+
+- [Showpad Genie](https://www.showpad.com/showpad-genie)
+- [Showpad LLM/product information](https://www.showpad.com/llm-info)
+- [Buyer Engagement and Shared Spaces](https://www.showpad.com/buyer-engagement)
+- [2026 product updates](https://help.showpad.com/hc/en-us/articles/211957909-2026)
+- [Showpad pricing and capability tiers](https://www.showpad.com/pricing)
+- [Offline use](https://help.showpad.com/hc/en-us/articles/211958389-Use-Showpad-offline-and-manage-downloaded-content)
+- [Security and privacy](https://www.showpad.com/product/data-security-and-privacy)
+
+### Executive verdict
+
+The repository is a strong, testable **evidence-graph and governed retrieval
+prototype**. It is not yet a Showpad-equivalent product and should not be
+described as a Showpad integration: the current Showpad adapter parses
+Showpad-shaped exports, while the product bar also includes content
+governance, seller readiness, buyer-facing engagement, revenue attribution,
+mobile/offline workflows and enterprise administration.
+
+There are two honest launch positions:
+
+1. **Companion service (recommended):** sell this as the knowledge/evidence
+   layer that enriches an existing Showpad deployment. The pilot scope is
+   bounded Q&A, provenance, entity resolution and recommendations; the
+   missing Showpad capabilities below become integration work and explicit
+   non-goals.
+2. **Showpad-like platform:** implement all P0/P1 gates below before making
+   parity claims. The current demo and API do not meet that bar.
+
+### Capability and control matrix
+
+| Showpad expectation | Current evidence in this repo | Status | Required update |
+|---|---|---|---|
+| Four-pillar product surface | Graph ingestion, context building, Q&A, recommendations and engagement-shaped records; no readiness, buyer room or revenue product surface | **Partial** | Add a product-scope decision and separate the evidence service from any parity claim; implement the missing pillar surfaces or document them as non-goals |
+| Content Management | `ContentAsset` has title, URL, type, tags and optional `division_id`; no lifecycle, version, locale, sensitivity or approval policy | **Gap** | Add immutable source/version records, `is_archived`, approval state, effective/expiry dates, language/country/channel, sensitivity and shareability; enforce filters at ingest and retrieval |
+| Permissions intact | `workspace_id` is structurally enforced; `division_id` is stored and optionally filtered but not derived from identity or enforced as authorization | **High-risk gap** | Model Division/ACL edges, resolve user roles from the IdP, apply division/team/opportunity policy to every graph/vector/content query, and test deny cases |
+| Sales Readiness | Claim summaries and seller-facing context exist; no courses, certifications, knowledge checks, coaching scorecards or readiness dashboards | **Gap** | Add curriculum/certification entities, assignment and completion events, assessment/roleplay workflows, manager review and readiness reporting |
+| Buyer Engagement | Historical `Share`/`AssetView` records and content recommendation exist; no real share creation, Shared Spaces, buyer uploads/comments, mutual action plan or Next Steps | **Gap** | Implement a buyer-facing room with participant ACLs, uploads/comments, MAP/Next Steps, expiry/revocation, seller notifications and engagement-to-opportunity attribution |
+| Revenue Intelligence | Signals/digests and content-effectiveness analysis exist; no closed-loop CRM outcome attribution or dashboard/report builder | **Partial** | Link assets, conversations, activities and outcomes to opportunity stage/win/loss; add configurable dashboards, cohort metrics, seller feedback and causal/attribution caveats |
+| Genie-style governed assistant | `/ask` and narrative use cases are bounded and evidence-backed; no agent registry, delegated action policy, citations/disclaimers contract, voice/vision or custom agent lifecycle | **Partial** | Add a permissioned tool/action layer, agent definitions and versioning, approval/confirmation steps, source citations in every answer, refusal/escalation policy, and audit records for delegated actions |
+| External sources and extensibility | LLM, Slack and parser adapters exist; no production Showpad OAuth/API client, content-picker SDK, Shares API, Salesforce/Dynamics installed app, MCP or Teams integration | **Gap** | Build connector contracts with OAuth2, token rotation, webhook/CDC cursors, retries and reconciliation; ship a Showpad sandbox connector first, then CRM auto-log and MCP/Teams adapters |
+| Field Meeting AI / CRM loop | Transcript ingestion and post-hoc graph analysis exist; no pre-meeting brief action in CRM and no automatic Salesforce/Dynamics note/task update | **Gap** | Implement pre-meeting brief, live/post-meeting extraction review, seller confirmation, idempotent CRM write-back, conflict handling and per-field audit trail |
+| Mobile and offline | `/viz` is a web/iframe panel; no native mobile client, offline cache, reconnect sync or conflict resolution | **Gap** | Add mobile capability (or explicitly exclude it from the companion scope), encrypted offline cache, content freshness/expiry, background sync, conflict policy and telemetry; do not imply Genie parity because Genie is not available offline |
+| Identity and administration | API-key-per-workspace auth; SSO/JWKS verification is feature-flagged scaffolding and not wired to routes; no RBAC, SCIM or self-service provisioning | **High-risk gap** | Connect a real OIDC/SAML IdP, map groups to roles/divisions, implement SCIM deprovisioning, session/token rotation, admin policy UI/API and user-level audit identity |
+| Privacy and compliance | PII egress redaction, prompt-injection tests, access audit events and bounded erasure execution exist; erasure does not remove embeddings/external indexes, and no certification evidence is present | **High-risk gap** | Define retention/legal-hold policies, complete erasure across Neo4j/vector/search/object storage, exportable audit evidence, DPA/subprocessor/data-residency controls and restore-tested backup procedures; maintain a SOC 2/ISO/GDPR evidence pack |
+| Reliability and operations | CI, type/lint checks, alerts, queue reaper and single-machine k6 baseline scripts exist | **Partial** | Publish dated load results, p95/p99/error/queue-lag SLOs, CI regression thresholds, distributed/tenant-fair workers, backpressure, capacity model, on-call runbooks and failure-injection tests |
+| Data integrity and search | Workspace scoping, pagination/batching and 22 indexes are present; no uniqueness constraints, no populated production vector index, and candidate generation still scans a workspace | **Partial / risk** | Add uniqueness constraints and migration checks, source cursors/CDC, production embedding/index backfill with tenant-prefiltered retrieval, native full-text/trigram blocking and benchmarked recall/latency gates |
+| UX and accessibility | Showpad palette/token indirection and browser checks were added; the product remains a small custom panel with no complete navigation, keyboard/mobile/RTL/i18n/accessibility acceptance suite | **Partial** | Run WCAG 2.2 AA checks, keyboard/screen-reader/mobile tests, localization and timezone/currency/date policy, design-system review and product analytics for search/answer/task completion |
+
+### Release gates to add to the implementation backlog
+
+**P0 - required before a Showpad customer pilot**
+
+- Connect a real IdP and make authenticated user identity (not only
+  `workspace_id`) available to every route, worker and audit event.
+- Enforce Division/team/opportunity ACLs end-to-end, including full-text,
+  vector, digest and export paths; add cross-tenant and deny-by-default tests.
+- Build and run a Showpad sandbox connector (OAuth, pagination, webhooks or
+  cursor sync, version/permission/archival reconciliation) plus one CRM
+  write-back path with idempotency.
+- Complete content lifecycle fields and policy enforcement; a recommendation
+  must never return an expired, archived, sensitive or unauthorized asset.
+- Finish erasure/retention across every derived store and perform a backup
+  restore drill with documented RPO/RTO.
+- Produce a security/compliance evidence pack: threat model, DPA/data flow,
+  subprocessors, secret rotation, incident response, audit export and
+  dependency/SBOM scanning.
+
+**P1 - required for a differentiated sales workflow**
+
+- Implement Shared Spaces (or explicitly keep buyer engagement out of scope),
+  including uploads/comments/MAP/Next Steps, branded buyer permissions and
+  engagement attribution.
+- Add the seller-readiness loop (training/certification/roleplay or a clear
+  integration boundary to an existing system).
+- Add Field Meeting AI's pre/post meeting flow with seller confirmation and
+  CRM activity/task updates.
+- Add assistant citations, answer disclaimers, action confirmation and
+  per-user/role tool permissions; expose a stable API/SDK or MCP contract.
+
+**P2 - required for production scale**
+
+- Replace the single global FIFO/single serial worker with tenant-fair,
+  horizontally scalable partitions and explicit backpressure.
+- Turn loadtest baselines into reproducible CI or scheduled performance
+  reports with service-specific SLOs; include database, Redis, LLM and
+  connector failure scenarios.
+- Remove full-table candidate scans, add uniqueness constraints and verify
+  vector index population/rebuild/rollback before enabling semantic retrieval.
+- Add multi-region or a documented single-region business continuity plan,
+  restore automation and game days before claiming enterprise availability.
+
+### Claims that must be corrected in product/README copy
+
+- Replace "Showpad integration" with **Showpad-shaped ingestion** until the
+  OAuth/API connector and reconciliation tests exist.
+- Replace "Showpad-compatible permissions" with **workspace isolation;
+  division filtering is not authorization** until the ACL path is live.
+- Do not imply Showpad Genie, Shared Spaces, Field Meeting AI, mobile/offline,
+  certifications or MCP capability from the current `/ask` and `/viz` routes.
+- Keep the performance wording as **repeatable baseline generator** until a
+  real environment, workload profile and published SLO result exist.
+
+This re-verification does not invalidate the earlier engineering-rigor work:
+the graph's provenance, idempotency, tenant property scoping, CI, erasure
+execution, telemetry and queue recovery are valuable foundations. It changes
+the launch conclusion: those foundations are sufficient for a controlled
+companion-service pilot only after the P0 gates, not evidence of Showpad
+product parity.
+
+### Implementation update: governance, integrity and bounded retrieval (2026-08-08)
+
+The following items from the P0/P2 backlog are now implemented in the working
+tree and covered by targeted checks:
+
+- `ContentAsset` now carries version, approval, archival, sensitivity,
+  shareability, locale/channel and effective/expiry metadata. Showpad-shaped
+  ingestion maps the corresponding export fields, and recommendation queries
+  use an explicit `only_servable` policy so expired, archived, sensitive,
+  unapproved or non-shareable content cannot be returned to a seller.
+- Neo4j now boots composite workspace+identity uniqueness constraints for the
+  core CRM, conversation, claim, mention, content and engagement nodes.
+  Existing redundant identity indexes are dropped idempotently before the
+  constraint creates its backing index; `/ready` reports missing constraints
+  as not-ready.
+- Production entity resolution and NLQ linking now use bounded full-text plus
+  first-token prefix searches. The legacy `all_names_in_workspace()` method
+  remains only as an explicit evaluation/diagnostic helper, so the normal
+  resolution path no longer materializes an entire tenant name pool.
+- Verified with `compileall`, targeted `ruff check`, the Neo4j migration and
+  constraint-readiness tests, the end-to-end recommendation test (including
+  archived-content exclusion), and the Volkswagen approximate-name resolution
+  test.
+
+Still open from the earlier matrix: real Showpad OAuth/API synchronization,
+IdP/RBAC/SCIM wiring, division/opportunity ACL enforcement, Shared Spaces,
+mobile/offline clients, CRM write-back, distributed tenant-fair workers,
+production load SLO evidence, and compliance/restore evidence. These require
+external system contracts or deployment credentials and are not represented as
+completed by this update.

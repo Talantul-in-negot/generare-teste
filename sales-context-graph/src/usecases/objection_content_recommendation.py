@@ -110,7 +110,11 @@ class ObjectionContentRecommendationUseCase:
                 ]
 
         objection_category = (objection_claim.object_value or "").strip().lower()
-        all_assets = await self._content_repo.list_content_assets(workspace_id)
+        # Recommendations are a buyer-facing action: only content that is
+        # currently approved, shareable, non-sensitive and within its
+        # effective/expiry window may be returned.  Historical callers can
+        # still list the full catalogue explicitly through the repository.
+        all_assets = await self._content_repo.list_content_assets(workspace_id, only_servable=True)
         matching = [
             (asset, [t for t in asset.tags if t.lower() == objection_category])
             for asset in all_assets

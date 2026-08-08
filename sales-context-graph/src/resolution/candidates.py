@@ -1,12 +1,11 @@
 """§8 candidate generation — tenant-safe prefix/fulltext/vector/relational
 candidate sources, unioned and deduplicated, capped.
 
-'Trigram or fuzzy-capable name lookup' is implemented as a tenant-scoped fetch
-of the full name pool (all_names_in_workspace) scored in Python via RapidFuzz
-(src/resolution/scoring.py) rather than a DB-native trigram index — acceptable
-at this vertical slice's data scale; swap for a real trigram/APOC index if
-workspace entity counts ever make the full fetch too slow, without changing
-this module's return shape.
+'Trigram or fuzzy-capable name lookup' is implemented as a tenant-scoped
+full-text/prefix query (`name_candidates`) and scored in Python via RapidFuzz
+(src/resolution/scoring.py). `all_names_in_workspace` remains as an explicit
+diagnostic/evaluation helper, but production resolution paths use the bounded
+query so a large workspace cannot force a full table materialisation.
 
 Full-text and vector candidates use GraphExecutor.tenant_query()'s WHERE-
 equality scoping form (node.workspace_id = $workspace_id inside the query,
@@ -71,6 +70,50 @@ class CandidateGenerator:
             Candidate(entity_id=r["entity_id"], entity_type=entity_type, name=r["name"], sources=frozenset({"fuzzy_pool"}))
             for r in rows
         ]
+
+    async def name_candidates(
+        self, workspace_id: str, entity_type: str, query_text: str, *, limit: int = DEFAULT_CAP * 4
+    ) -> list[Candidate]:
+        """Return a bounded, tenant-scoped name search pool.
+
+        Full-text handles tokenisation and approximate word forms; the prefix
+        query covers short/partial names that full-text analyzers can ignore.
+        Both limits execute in Neo4j before rows are materialised in Python.
+        """
+        if not query_text.strip():
+            return []
+        rows = await self._executor.tenant_query(
+            "CALL db.index.fulltext.queryNodes('account_contact_names', $query_text) YIELD node, score "
+            "WHERE node.workspace_id = $workspace_id AND $entity_type IN labels(node) "
+            "RETURN coalesce(node.account_id, node.contact_id) AS entity_id, "
+            "node.name AS name, score ORDER BY score DESC LIMIT $limit",
+            workspace_id=workspace_id, query_text=query_text, entity_type=entity_type, limit=limit,
+        )
+        candidates = [Candidate(
+            entity_id=row["entity_id"], entity_type=entity_type, name=row["name"],
+            sources=frozenset({"fulltext"}),
+        ) for row in rows]
+        if len(candidates) >= limit:
+            return candidates
+
+        match = scoped_match(entity_type, "n")
+        # Use the first meaningful token for a bounded prefix fallback.  This
+        # is what keeps approximate mentions such as "Volks Wagen" connected
+        # to "Volkswagen Group" without loading every entity in the tenant.
+        prefix_query = query_text.strip().split()[0]
+        prefix_rows = await self._executor.tenant_query(
+            f"MATCH {match} WHERE toLower(n.name) CONTAINS toLower($prefix_query) "
+            "RETURN n." + _ID_FIELD[entity_type] + " AS entity_id, n.name AS name "
+            "ORDER BY n.name LIMIT $remaining",
+            workspace_id=workspace_id, prefix_query=prefix_query, remaining=limit - len(candidates),
+        )
+        seen = {candidate.entity_id for candidate in candidates}
+        candidates.extend(
+            Candidate(entity_id=row["entity_id"], entity_type=entity_type, name=row["name"],
+                      sources=frozenset({"prefix"}))
+            for row in prefix_rows if row["entity_id"] not in seen
+        )
+        return candidates[:limit]
 
     async def fulltext_candidates(self, workspace_id: str, query_text: str, *, limit: int = DEFAULT_CAP) -> list[Candidate]:
         rows = await self._executor.tenant_query(

@@ -70,12 +70,41 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
   iframe-embeddable single-deal view for embedding in Salesforce/Showpad — an
   embeddable panel, not a packaged app (no OAuth, no AppExchange packaging).
 
-347 tests pass (unit, integration against a live Neo4j, security, and eval) —
+529 tests pass (unit, integration against a live Neo4j, security, and eval) —
 see the completion report at the end of this document for the phase-by-phase
 breakdown, real measured numbers, and known limitations. Open TODOs and
 deferred work are centralized in
 [`docs/evaluation.md`'s "Known measurement gaps"](docs/evaluation.md#known-measurement-gaps)
 — not scattered across code comments alone.
+
+## Engineering rigor — the short version
+
+[`docs/evaluation.md`](docs/evaluation.md) is long (it's the actual working
+record of every audit pass against this repo, not written for skimming) — if
+you only read three things in it:
+
+1. **A real, exploitable tenant-isolation bug, found and fixed.**
+   `src/resolution/candidates.py`'s vector search computed its top-K
+   *before* the workspace filter ran — one tenant's vectors could crowd out
+   another's. Fixed, and proven with a test that fails against the old code
+   and passes against the new one:
+   [`tests/security/test_vector_candidates_tenant_isolation.py`](tests/security/test_vector_candidates_tenant_isolation.py).
+2. **A full external-brief cross-check, including the parts I recommended
+   against.** The [Showpad-compatibility analysis](docs/evaluation.md) and
+   [external architecture review](docs/evaluation.md) each ran as a real
+   audit, not a self-congratulatory pass — see the ⚠ findings and the
+   `docs/adr-000*.md` series, which document items built *despite* my own
+   recommendation against them, per an explicit stakeholder call to
+   implement everything, including the parts flagged premature.
+3. **A self-audit against enterprise SaaS rigor, run *after* the fact.**
+   [The Showpad engineering-rigor assessment](docs/evaluation.md) turned the
+   same scrutiny on this repo's delivery process, security posture, and
+   operational maturity — found real gaps (no CI existed until this pass;
+   `mypy` was installed and never once run), fixed the cheap high-leverage
+   ones for real (CI, rate limiting, GDPR erasure execution, audit logging,
+   alerting, JWT/SSO validation code — each with its own tests), and named
+   the ones that are genuinely out of reach without your own cloud accounts
+   (a live IdP connection, an actual `fly deploy`) rather than faking them.
 
 ## Architecture
 
@@ -323,10 +352,6 @@ breakdown per module.
 
 ## Known limitations
 
-- **Python version mismatch**: `pyproject.toml` declares `requires-python
-  >=3.12`; this repo was developed and tested against the locally available
-  3.11.6. No 3.12-only syntax is used, but this hasn't been verified on 3.12
-  itself.
 - **No real packaging**: imports resolve via `pythonpath = ["."]`
   (`pyproject.toml`) and `PYTHONPATH=/app` (`Dockerfile`), not an installable
   package — a deliberate Increment 1 decision, documented in `src/core/config.py`'s
@@ -347,9 +372,14 @@ breakdown per module.
   (`InMemoryIngestionStore`) when it isn't — that fallback does not survive a
   process restart, proven by `tests/unit/api/test_ingestion_store.py`.
 - **Auth**: MVP API-key-per-workspace (`X-Api-Key`, checked against
-  `WORKSPACE_API_KEYS` — `api/dependencies.py::verify_api_key`), not a real
-  identity provider. No self-serve key rotation/revocation, no OAuth/JWT. See
-  `docs/security-and-tenancy.md` for exactly what this does and doesn't cover.
+  `WORKSPACE_API_KEYS` — `api/dependencies.py::verify_api_key`) is the
+  active auth path on every route; no self-serve key rotation/revocation.
+  Real OIDC/JWT validation exists (`src/auth/sso.py`, RS256 signature +
+  issuer + audience + expiry checks, tested against a locally-signed JWT —
+  see `docs/adr-0006-sso-scaffolding.md`) but isn't connected to a live
+  identity provider or wired into any route — `SSO_ENABLED` defaults
+  `false`. See `docs/security-and-tenancy.md` for exactly what the active
+  path does and doesn't cover.
 - **Conflict detection**: one detection strategy only (same subject+predicate,
   differing object, both AFFIRMED, neither superseded —
   `src/resolution/conflict_detection.py`). The legacy `contradiction_detector.py`'s
@@ -378,10 +408,13 @@ breakdown per module.
 - **Cross-deal aggregation**: scoped by `seller_id` (real, exists on every
   Opportunity), not region/territory — no such field exists on
   Account/Opportunity/Seller in this vertical slice.
-- **LLM vendor lock-in**: `src/llm/chat.py` only implements an Anthropic-backed
-  `ChatFn`. The `ChatFn` protocol itself is vendor-agnostic (a plain
-  `Callable[[str], Awaitable[str]]`, same shape `LlmExtractionProvider` has
-  used since P3) — adding another vendor means one new file, not a redesign.
+- **LLM vendor**: `src/llm/chat.py` implements both Anthropic (default,
+  `LLM_PROVIDER=anthropic`) and OpenAI-backed `ChatFn`s behind the same
+  `Callable[[str], Awaitable[str]]` protocol `LlmExtractionProvider` has
+  used since P3. `src/llm/gateway.py` adds an optional fallback from the
+  primary to a secondary provider on transient/availability errors only
+  (never masking a validation failure) — off by default
+  (`LLM_FALLBACK_ENABLED=false`), see `docs/adr-0005-llm-gateway-fallback.md`.
 - **No in-process scheduler**: proactive digest delivery
   (`POST /api/v1/digest/deliver`) is triggered by an external cron, not a
   timer this process runs itself — a deliberate choice consistent with

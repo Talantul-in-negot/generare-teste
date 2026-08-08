@@ -14,3 +14,7 @@ htmlcov/
 
 # Phase 10 (loadtest/) -- dated per-run baseline reports/logs, not source.
 loadtest/results/
+
+# scripts/backup_neo4j.sh's output -- local dev-DB tarballs (tens of MB each,
+# regenerated on demand), not source. See scripts/backup_neo4j.sh's header.
+backups/

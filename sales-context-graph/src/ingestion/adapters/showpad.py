@@ -12,6 +12,21 @@ from src.domain.knowledge import AssetView, ContentAsset, Share
 from src.ingestion.adapters.base import ParsedRecord, compute_content_hash
 
 
+def _as_bool(value: object, default: bool) -> bool:
+    """Parse JSON booleans and common CSV/string representations safely."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+    return bool(value)
+
+
 class ShowpadAdapter:
     source_system = "showpad"
     # This fixture models a point-in-time content export with no explicit
@@ -22,6 +37,7 @@ class ShowpadAdapter:
     def parse_content_asset(self, workspace_id: str, raw: dict, *, division_id: str | None = None) -> ParsedRecord:
         external_id = raw["id"]
         content_asset_id = crm_entity_id(workspace_id, self.source_system, "ContentAsset", external_id)
+        permissions = raw.get("permissions") or {}
         asset = ContentAsset(
             content_asset_id=content_asset_id,
             workspace_id=workspace_id,
@@ -30,6 +46,16 @@ class ShowpadAdapter:
             url=raw["url"],
             content_type=raw.get("type"),
             tags=list(raw.get("tags", [])),
+            version=int(raw.get("version", raw.get("versionNumber", 1))),
+            approval_status=str(raw.get("approvalStatus", raw.get("approval_status", "approved"))),
+            is_archived=_as_bool(raw.get("isArchived", raw.get("is_archived")), False),
+            is_sensitive=_as_bool(raw.get("isSensitive", raw.get("is_sensitive")), False),
+            is_shareable=_as_bool(raw.get("isShareable", permissions.get("isShareable")), True),
+            languages=list(raw.get("languages", [])),
+            countries=list(raw.get("countries", [])),
+            channels=list(raw.get("channels", [])),
+            effective_from=raw.get("effectiveFrom", raw.get("effective_from")),
+            expires_at=raw.get("expiresAt", raw.get("expires_at")),
         )
         return ParsedRecord(
             entity=asset,

@@ -1,8 +1,8 @@
 """Resolve a name the seller typed ("Volkswagen") to a real entity id.
 
 Reuses the *scoring math* already calibrated and tested in src/resolution/
-(lexical_score / score_candidate / rank_candidates) and the tenant-safe name
-pool in CandidateGenerator.all_names_in_workspace — no second fuzzy matcher is
+(lexical_score / score_candidate / rank_candidates) and the tenant-safe bounded
+name search in CandidateGenerator.name_candidates — no second fuzzy matcher is
 introduced.
 
 What is deliberately NOT reused is src/resolution/policy.py's decide(): it
@@ -52,7 +52,9 @@ class EntityLinker:
         self._candidates = candidate_generator
 
     async def link(self, workspace_id: str, mention: str, entity_type: str) -> LinkOutcome:
-        pool = await self._candidates.all_names_in_workspace(workspace_id, entity_type)
+        pool = await self._candidates.name_candidates(
+            workspace_id, entity_type, mention, limit=max(MAX_SUGGESTED_CANDIDATES * 10, 50)
+        )
         if not pool:
             return LinkOutcome(ambiguity=Ambiguity(
                 mention=mention,

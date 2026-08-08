@@ -194,6 +194,11 @@ class Settings(BaseSettings):
     # measured capacity figure.
     alert_max_queue_depth: int = 100
     alert_max_oldest_job_age_seconds: int = 900
+    # A DLQ is meant to be near-empty at all times -- unlike the other two
+    # thresholds, any nonzero steady-state count here usually means "go
+    # look," not "getting busy." Still configurable rather than hardcoded
+    # to 0, in case a deployment wants to batch-review a small backlog.
+    alert_max_dlq_depth: int = 5
 
     # ── Embeddable panel (Increment 20, see api/routes/viz.py's /viz/panel) ──────
     # Space-separated list of origins allowed to iframe /viz/panel (sets

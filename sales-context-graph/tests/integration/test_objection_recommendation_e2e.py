@@ -103,8 +103,14 @@ async def test_objection_recommendation_end_to_end_excludes_viewed_asset(executo
         title="Enterprise Pricing ROI Calculator", url="https://showpad.example/roi-calculator",
         tags=["pricing", "roi"],
     )
+    archived_asset = ContentAsset(
+        content_asset_id="asset-archived-pricing", workspace_id=workspace_id,
+        title="Archived Pricing Sheet", url="https://showpad.example/archived-pricing",
+        tags=["pricing"], is_archived=True,
+    )
     await content_repo.upsert_content_asset(viewed_asset)
     await content_repo.upsert_content_asset(unviewed_asset)
+    await content_repo.upsert_content_asset(archived_asset)
     await content_repo.upsert_asset_view(AssetView(
         asset_view_id="view-1", workspace_id=workspace_id,
         content_asset_id=viewed_asset.content_asset_id, viewer_contact_id=elena_contact_id,
@@ -119,6 +125,9 @@ async def test_objection_recommendation_end_to_end_excludes_viewed_asset(executo
     assert recommendation.recommended_asset.content_asset_id == unviewed_asset.content_asset_id
     assert viewed_asset.content_asset_id in recommendation.excluded_viewed_asset_ids
     assert recommendation.recommended_asset.content_asset_id not in recommendation.excluded_viewed_asset_ids
+    assert archived_asset.content_asset_id not in {
+        ranked.asset.content_asset_id for ranked in recommendation.ranked_candidates
+    }
 
     # every factual item cites a served Claim (§15 grounding requirement)
     assert recommendation.objection_claim.predicate == "RAISED_OBJECTION"

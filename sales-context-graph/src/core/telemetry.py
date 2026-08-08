@@ -104,6 +104,19 @@ INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS = Gauge(
     "Age in seconds of the oldest job still waiting in the ingestion "
     "queue. 0 when the queue is empty.",
 )
+# Added after a review of this repo's own reliability posture (2026-08-08):
+# queue.py::queue_health() has computed this count since Phase 4, but only
+# ever returned it in GET /ready's JSON body -- nothing pushed it to a
+# metric, so a job permanently failing and landing in the DLQ was
+# observable only by someone manually polling /ready. Populated by
+# sample_queue_metrics() alongside the two gauges above (same Redis round
+# trip cadence), and checked by src/core/alerting.py.
+INGESTION_DLQ_DEPTH = Gauge(
+    "scg_ingestion_dlq_depth",
+    "Jobs currently sitting in the ingestion dead-letter list "
+    "(src/ingestion/queue.py) -- each one failed permanently or exhausted "
+    "its retry budget and needs a human to look at it.",
+)
 
 # --- Phase 6 addition: prompt-injection guardrail flags ---------------------
 # Not one of docs/plan.md §14's original 9 -- added when the guardrail

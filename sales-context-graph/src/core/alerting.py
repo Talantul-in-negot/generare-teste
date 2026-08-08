@@ -13,11 +13,11 @@ correctly need a real Prometheus time-series backend to evaluate --
 in-process, no-history Python check the way an instantaneous Gauge
 threshold can.
 
-Scoped to the two Gauge metrics that ARE meaningfully checkable this way --
-current queue depth and oldest-job age (src/core/telemetry.py) -- both
-already "current state," not a rate needing history, and arguably the two
-most actionable pages an on-call engineer could get anyway (a growing
-backlog or a stuck queue).
+Scoped to the three Gauge metrics that ARE meaningfully checkable this way
+-- current queue depth, oldest-job age, and DLQ depth (src/core/
+telemetry.py) -- all already "current state," not a rate needing history,
+and arguably the most actionable pages an on-call engineer could get
+anyway (a growing backlog, a stuck queue, or jobs quietly dying forever).
 
 Cron-driven, not an in-process scheduler: this repo has an explicit,
 existing "no in-process scheduler" stance (docker-compose.yml's own
@@ -31,14 +31,20 @@ from __future__ import annotations
 
 import structlog
 
-from src.core.telemetry import INGESTION_QUEUE_DEPTH, INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS
+from src.core.telemetry import (
+    INGESTION_DLQ_DEPTH,
+    INGESTION_QUEUE_DEPTH,
+    INGESTION_QUEUE_OLDEST_JOB_AGE_SECONDS,
+)
 from src.delivery.slack import post_digest
 
 log = structlog.get_logger(__name__)
 
 
-def check_gauge_thresholds(*, max_queue_depth: int, max_oldest_job_age_seconds: int) -> list[dict]:
-    """Pure -- reads the two gauges' current values and returns a breach
+def check_gauge_thresholds(
+    *, max_queue_depth: int, max_oldest_job_age_seconds: int, max_dlq_depth: int
+) -> list[dict]:
+    """Pure -- reads the three gauges' current values and returns a breach
     per threshold exceeded. Separated from the Slack-posting side (below)
     the same way build_slack_blocks/post_digest already split pure
     formatting from network I/O, so this half is trivially unit-testable
@@ -59,6 +65,15 @@ def check_gauge_thresholds(*, max_queue_depth: int, max_oldest_job_age_seconds: 
             "message": f"Oldest queued ingestion job is {oldest_age:.0f}s old, "
                        f"above the {max_oldest_job_age_seconds}s threshold.",
         })
+
+    dlq_depth = INGESTION_DLQ_DEPTH._value.get()
+    if dlq_depth > max_dlq_depth:
+        breaches.append({
+            "metric": "scg_ingestion_dlq_depth", "value": dlq_depth, "threshold": max_dlq_depth,
+            "message": f"{dlq_depth:.0f} job(s) sitting in the ingestion dead-letter queue "
+                       f"(above the {max_dlq_depth} threshold) -- each one failed permanently "
+                       f"or exhausted its retry budget and needs a human to look at it.",
+        })
     return breaches
 
 
@@ -74,7 +89,9 @@ def build_alert_blocks(breaches: list[dict]) -> dict:
     return {"blocks": blocks}
 
 
-async def check_and_alert(webhook_url: str | None, *, max_queue_depth: int, max_oldest_job_age_seconds: int) -> list[dict]:
+async def check_and_alert(
+    webhook_url: str | None, *, max_queue_depth: int, max_oldest_job_age_seconds: int, max_dlq_depth: int
+) -> list[dict]:
     """Returns the breach list regardless of whether a webhook is
     configured -- same "JSON always available" framing as GET
     /api/v1/digest, so this endpoint is useful for a human/monitoring
@@ -83,7 +100,9 @@ async def check_and_alert(webhook_url: str | None, *, max_queue_depth: int, max_
     a Block Kit payload is a Block Kit payload) when there's something to
     report AND a webhook is configured."""
     breaches = check_gauge_thresholds(
-        max_queue_depth=max_queue_depth, max_oldest_job_age_seconds=max_oldest_job_age_seconds
+        max_queue_depth=max_queue_depth,
+        max_oldest_job_age_seconds=max_oldest_job_age_seconds,
+        max_dlq_depth=max_dlq_depth,
     )
     if breaches:
         log.warning("alerting.thresholds_breached", breaches=breaches)
