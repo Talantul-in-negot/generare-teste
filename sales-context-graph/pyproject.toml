@@ -77,6 +77,11 @@ dev = [
     "fakeredis>=2.20",
     "pytest-cov>=6.0",
 ]
+eval = [
+    # Optional LLM-judge evaluation; normal API/test installs stay offline.
+    "ragas>=0.2.14,<0.3",
+    "langchain-openai>=0.2",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

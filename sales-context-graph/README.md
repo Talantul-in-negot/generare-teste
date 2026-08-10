@@ -316,6 +316,16 @@ required API surface — with four tabs:
   `TTS_API_KEY`; the Ask response remains text-first, so TTS latency never
   blocks the answer. Keep audio behind an explicit user toggle and retain the
   text fallback if the provider times out.
+- **RAGAS evaluation**: the optional `eval` extra provides a version-pinned
+  runner for `faithfulness`, `answer_relevancy`, `context_precision`, and
+  `context_recall`. Install with `pip install -e ".[eval]"`, set
+  `OPENAI_API_KEY`, then run `python scripts/run_ragas.py`. The versioned
+  golden set is `data/eval/ragas_golden.jsonl`; results are written to
+  `artifacts/ragas/latest.json`. This is an LLM-judge evaluation and does not
+  replace deterministic grounding, entity-resolution recall, or load tests.
+  Entity-resolution precision/recall can be scored separately from an exported
+  prediction file with `python scripts/score_resolution.py --golden
+  data/eval/entity_resolution_golden.jsonl --predictions <predictions.jsonl>`.
 - **Alerts**: `GET /api/v1/digest` (Increment 17) — the five proactive signals
   across a workspace's or one seller's open pipeline.
 

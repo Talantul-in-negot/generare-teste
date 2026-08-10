@@ -1,0 +1,5 @@
+{"id":"er_vw_01","mention":"Volks Wagen","expected_entity_id":"acct-volkswagen","expected_entity_type":"account"}
+{"id":"er_vw_02","mention":"VW Group","expected_entity_id":"acct-volkswagen","expected_entity_type":"account"}
+{"id":"er_acme_01","mention":"Acme Corp","expected_entity_id":"acct-acme","expected_entity_type":"account"}
+{"id":"er_contoso_01","mention":"Contoso","expected_entity_id":"acct-contoso","expected_entity_type":"account"}
+{"id":"er_unknown_01","mention":"Northstar","expected_entity_id":null,"expected_entity_type":"account"}

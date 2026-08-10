@@ -173,6 +173,31 @@ meaningful. The guard-rail tests above are the correctness evidence; a real
 precision/recall study needs a labeled dataset this vertical slice doesn't
 have.
 
+### RAGAS judge evaluation (optional)
+
+The repository now includes a versioned three-question golden set at
+`data/eval/ragas_golden.jsonl` and an optional runner at
+`scripts/run_ragas.py`. Install the isolated evaluation dependencies with
+`pip install -e ".[eval]"`, set `OPENAI_API_KEY`, and run:
+
+```powershell
+python scripts/run_ragas.py
+```
+
+The runner writes `artifacts/ragas/latest.json` with
+`faithfulness`, `answer_relevancy`, `context_precision`, and `context_recall`.
+These are LLM-judge scores and must be reported with the dataset version,
+judge model, and prompt/provider configuration. They complement rather than
+replace deterministic citation-grounding checks, entity-resolution recall,
+and the k6 load baseline. The optional runner is intentionally not part of the
+normal API/test dependency set and fails closed when `OPENAI_API_KEY` is absent.
+
+The entity-resolution golden set is kept separate at
+`data/eval/entity_resolution_golden.jsonl`. Export predictions with one JSONL
+row per matching `id` and a `predicted_entity_id`, then score them with
+`scripts/score_resolution.py`; this reports precision, recall, F1, false
+positives and false negatives without putting predictions into the labels.
+
 ## Extraction and provenance
 
 - **Deterministic fake extraction is byte-stable**: `model_dump_json()` output
