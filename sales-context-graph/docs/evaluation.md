@@ -1,6 +1,6 @@
 # Evaluation
 
-## Current release status — 2026-08-08
+## Current release status — 2026-08-10
 
 The repository-owned hardening work is complete for the controlled-pilot
 scope. The current release includes:
@@ -16,10 +16,11 @@ scope. The current release includes:
 - workspace+identity constraints, bounded entity candidate retrieval, rate
   limiting, readiness/metrics and reproducible load/backup exercises.
 
-The latest local hardening gate passes **370 unit tests**; relevant integration
-checks pass against the live Neo4j/Redis stack. The older numeric snapshots in
-this document are historical audit captures and remain useful for explaining
-how the system evolved, but must not be read as the current release count.
+The current checkout collects **543 tests**. The historical numeric snapshots
+below are retained as dated audit captures; they explain how the system
+evolved, but must not be read as the current release count. The RAGAS runner is
+optional and is not included in the default collection unless its evaluation
+dependencies are installed.
 
 The remaining release boundary is external: Showpad OAuth/API synchronization,
 CRM write-back, real IdP/SCIM provisioning, Shared Spaces/mobile workflows,
@@ -175,7 +176,7 @@ have.
 
 ### RAGAS judge evaluation (optional)
 
-The repository now includes a versioned three-question golden set at
+The repository now includes a versioned eight-question golden set at
 `data/eval/ragas_golden.jsonl` and an optional runner at
 `scripts/run_ragas.py`. Install the isolated evaluation dependencies with
 `pip install -e ".[eval]"`, set `OPENAI_API_KEY`, and run:

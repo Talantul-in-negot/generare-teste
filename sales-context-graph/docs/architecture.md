@@ -29,6 +29,24 @@ src/graph/            Neo4j: tenant-safe execution modes, schema/indexes,
                       migrations, and one repository per aggregate.
 src/auth/              Pure authorization policy and OIDC/JWKS validation.
 src/core/             Settings, rate limiting, telemetry, caching and clients.
+src/embedding/        Local/hosted embeddings, backfill and optional Qdrant
+                       secondary backend.
+src/llm/              Chat provider, JSON completion guards and gateway
+                       fallback used by Ask, narrative and extraction paths.
+src/narrative/        Claim extraction and mechanically grounded summaries.
+src/nlq/              Intent catalog, entity linking and natural-language
+                       Ask dispatch contracts.
+src/redaction/        PII redaction at model/log egress.
+src/signals/          Deterministic pipeline signal models and rules.
+src/delivery/         Optional Slack digest delivery adapter.
+src/summarization/    Call-summary use case and grounding integration.
+src/tts/              Optional text-to-speech provider; text remains the
+                       primary response and slow audio falls back safely.
+src/evaluation/       Optional RAGAS runner and dataset validation helpers.
+src/viz/              Embeddable panel token and visualization helpers.
+scripts/              Operational scripts, load-test runners, scoring and
+                       presentation artifact rendering.
+data/eval/            Versioned RAGAS and entity-resolution golden datasets.
 ```
 
 Dependency direction is one-way: `api` depends on everything below it;
@@ -107,6 +125,35 @@ flowchart TB
     API --> Governance
     Ingestion -. durable mode .-> WORKER --> RECON
 ```
+
+### Serving extensions
+
+The primary Ask path is text-first and bounded:
+
+```mermaid
+flowchart LR
+    ASK[POST /api/v1/ask] --> INTENT[Intent classification]
+    INTENT --> GRAPH[Context Graph + grounded result]
+    GRAPH --> TEXT[Structured/text answer]
+    TEXT --> OPTIONAL{Audio enabled?}
+    OPTIONAL -->|no| UI[Render answer]
+    OPTIONAL -->|yes| TTS[POST /api/v1/tts]
+    TTS --> AUDIO[MP3 audio]
+    TTS -. timeout/error .-> UI
+    AUDIO --> UI
+```
+
+`POST /api/v1/tts` is an optional OpenAI-compatible provider path. It is
+configured separately, has a bounded two-second default timeout, and never
+blocks the structured Ask response. The browser keeps the text answer when
+audio is unavailable.
+
+RAGAS is deliberately outside the serving path. `scripts/run_ragas.py` reads
+`data/eval/ragas_golden.jsonl`, evaluates faithfulness, answer relevancy,
+context precision and context recall with an external judge, and writes a
+versioned result under `artifacts/ragas/`. Entity-resolution precision/recall
+is scored separately by `scripts/score_resolution.py` against
+`data/eval/entity_resolution_golden.jsonl`.
 
 Every node carries `workspace_id` (the tenant-isolation boundary); Showpad
 nodes additionally carry `division_id`. `GraphExecutor.tenant_query()`
@@ -193,6 +240,12 @@ authorization is enforced by `src/auth/policy.py`: middleware covers
 opportunity path routes, while body-scoped Ask, Context, Q&A and ingestion
 routes validate `AccessContext` after Pydantic parsing. The signed panel token
 path becomes a narrow opportunity-scoped context.
+
+The route surface includes readiness/metrics, ingestion, unresolved mentions,
+Context Graph, Ask, narrative summaries, intent-based Q&A, insights, digest,
+alerts, erasure, visualization/panel and optional TTS. The visualization page
+also exposes numbered quick questions (1–4) that populate the Ask field; this
+is a browser convenience and does not bypass API authentication.
 
 Ingestion supports two explicit modes. With `INGESTION_QUEUE_ENABLED=false`,
 the API executes the pipeline synchronously for local development. With it

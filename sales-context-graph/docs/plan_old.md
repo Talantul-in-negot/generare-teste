@@ -1,4 +1,8 @@
-# Sales Context Graph — plan review + Codex prompt
+# Sales Context Graph — archived plan review + Codex prompt
+
+> Archived planning material. For the current architecture, release status,
+> measurements and remaining gaps, use [`architecture.md`](architecture.md),
+> [`evaluation.md`](evaluation.md) and [`deployment.md`](deployment.md).
 
 ## Part 1 — Verdict on the spec
 

@@ -1,6 +1,6 @@
 # Sales Context Graph
 
-> **Current release snapshot — 2026-08-08**
+> **Current release snapshot — 2026-08-10**
 >
 > A production-oriented, evidence-backed companion layer for Showpad-style
 > sales context. The repository is ready for a controlled pilot; a live
@@ -76,9 +76,10 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
   iframe-embeddable single-deal view for embedding in Salesforce/Showpad — an
   embeddable panel, not a packaged app (no OAuth, no AppExchange packaging).
 
-The repository has a broad unit/integration/security/evaluation suite: 370
-unit tests plus the full integration/eval/security suites, 538 tests total.
-One integration test
+The repository has a broad unit/integration/security/evaluation suite with
+**543 tests collected**. RAGAS remains an optional external-judge evaluation
+and is not included in the default test count. The last recorded full run had
+one known integration test
 (`tests/integration/test_resolution_vw_fixtures.py::test_weak_base_candidate_cannot_autolink_through_relational_bonus_alone`)
 fails reproducibly against this Neo4j version — a fulltext-index
 eventual-consistency race in the test itself (confirmed via `SHOW INDEXES`:
@@ -364,8 +365,17 @@ is the API calls it makes, which do require `X-Api-Key`.
   (why there's no in-process scheduler, and how to trigger it via cron)
 - [`docs/evaluation.md`](docs/evaluation.md) — metric definitions and real
   measured results from this repo's own test runs
-- [`docs/plan.md`](docs/plan.md) — the original authoritative spec this
-  implementation follows
+- [`docs/presentation_script.md`](docs/presentation_script.md) — canonical
+  presentation narrative and screen reachability runbook
+- [`docs/plan.md`](docs/plan.md) — canonical target/specification document;
+  current release status and measured gaps belong in `docs/evaluation.md`
+- [`docs/adr-*.md`](docs/) — individual architecture decisions and their
+  consequences; do not duplicate them in the README
+- [`tasks/lessons.md`](tasks/lessons.md) — project lessons and failure-mode
+  patterns, not product architecture or release status
+
+`docs/plan_old.md` is archived historical planning material and is not a
+second current specification.
 
 ## What's ported from `ai-knowledge-graph-platform`
 

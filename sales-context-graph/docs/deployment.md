@@ -105,6 +105,20 @@ self-serve rotation or per-key revocation UI at this MVP stage — see
 `docs/security-and-tenancy.md` for the honest scope of what this auth model
 does and doesn't cover.
 
+## Optional voice output
+
+TTS is disabled by default. To enable the text-first audio enhancement, set
+the following server-side secrets/configuration and redeploy:
+
+```bash
+fly secrets set TTS_PROVIDER="openai" TTS_API_KEY="<provider-key>"
+fly secrets set TTS_MODEL="gpt-4o-mini-tts" TTS_VOICE="alloy" TTS_TIMEOUT_SECONDS="2"
+```
+
+The `POST /api/v1/tts` route returns MP3 only when explicitly requested by the
+client. The Ask response is not blocked by audio generation; after the
+two-second timeout the UI keeps the text answer and reports the audio fallback.
+
 ## What's explicitly out of scope for this MVP deploy
 
 - No autoscaling beyond `min_machines_running = 1` — revisit once there's

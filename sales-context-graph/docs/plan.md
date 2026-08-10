@@ -1,10 +1,11 @@
 # Sales Context Graph — Updated Implementation Plan and Codex Prompt
 
-> **Implementation status (2026-08-08):** The original vertical-slice plan is
+> **Implementation status (2026-08-10):** The original vertical-slice plan is
 > implemented and extended with bounded Q&A/Ask, grounded narratives,
 > recommendations, digest/insights, ACL policy wiring, erasure propagation to
 > configured vector storage, durable Redis ingestion and seller-facing `/viz`
-> surfaces. This document remains the product/design contract; the current
+> surfaces, optional text-first TTS, and offline-safe RAGAS/evaluation tooling.
+> This document remains the product/design contract; the current
 > release boundary and external Showpad gaps are maintained in
 > [`evaluation.md`](evaluation.md).
 
@@ -656,6 +657,11 @@ grounded factual item = factual item citing at least one served Claim
 hallucinated item = factual item with no served Claim or an invalid citation
 context recall = expected Claims served / expected Claims in golden set
 ```
+
+The implementation also provides an optional RAGAS judge run over
+`data/eval/ragas_golden.jsonl` and a separate deterministic entity-resolution
+scorer. These are evaluation add-ons, not serving requirements; current
+results and environment boundaries belong in `docs/evaluation.md`.
 
 ---
 

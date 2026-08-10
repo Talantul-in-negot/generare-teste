@@ -168,6 +168,20 @@ Right: **Action** — the next content asset the seller can review and send.
 
 ---
 
+For the fast path, show the four numbered quick-question buttons above the
+free-text field. The mapping is deliberately identical in the UI and the
+presentation:
+
+1. **What objections are currently open?**
+2. **Who have we not engaged?**
+3. **What content should I send?**
+4. **What changed since last call?**
+
+Clicking a full question or pressing its number populates the Ask field. If
+**Read answer aloud** is enabled, the text response is rendered first and the
+optional TTS request runs separately. After the two-second timeout, the screen
+keeps the text answer and shows the audio fallback state.
+
 ## SCENE 6 — From one answer to pipeline intelligence (3:20–4:05)
 
 **SCREEN ACTION:** Open **Browse Intents**, enter the local API key, and
@@ -335,12 +349,13 @@ Then fade to the final mark:
 - If an answer has no evidence, let the refusal appear on screen. It is the
   strongest proof that the system is governed.
 
-### Screen reachability audit (verified 2026-08-08)
+### Screen reachability audit (verified 2026-08-10)
 
 | Script screen | Reachable path | Required preparation | Verified result |
 |---|---|---|---|
 | Context Graph | `/viz` → **Context Graph** → **Build** | `demo_volkswagen.py`; API key; printed conversation/subject ID | 200 response; graph metadata and evidence are rendered |
-| Ask | `/viz` → **Ask** → **Ask** | API key; printed opportunity + buyer contact IDs | 200 answered recommendation with Result, exclusions, disclaimer and review flag |
+| Ask | `/viz` → **Ask** → **Ask** | API key; printed opportunity + buyer contact IDs | 200 answered recommendation with Result, exclusions, disclaimer and review flag; quick questions 1–4 populate the field |
+| TTS fallback | `/viz` → **Ask** → enable **Read answer aloud** | `TTS_PROVIDER` + `TTS_API_KEY` for audio; text works without them | text renders first; audio is optional and falls back after the two-second timeout |
 | Browse Intents | `/viz` → **Browse Intents** → load catalog → **Run** | API key; printed IDs per intent | 200 catalog with 12 live intents; each form is generated from the API contract |
 | Alerts | `/viz` → **Alerts** → **Get digest** | API key; optional seller ID | 200 digest with single-threaded and objection-without-follow-up signals |
 | Readiness gate | `GET /ready` | schema migration via `demo_volkswagen.py`; Redis worker available when enabled | 200 `{"status":"ready"}` |
