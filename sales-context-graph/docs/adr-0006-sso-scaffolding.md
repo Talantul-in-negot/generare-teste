@@ -1,109 +1,67 @@
-# ADR-0006 — OIDC/JWT SSO scaffolding (feature-flagged, not connected to a real IdP)
+# ADR-0006 — OIDC/JWT SSO integration boundary
 
-**Status:** Implemented (feature-flagged, off by default; not integrated with any live identity provider)
-**Date:** 2026-08-08
-
-## Context
-
-`docs/evaluation.md`'s Showpad engineering-rigor assessment (2026-08-08)
-found this precisely, in Band 2 ("Enterprise identity and access"):
-
-> There is no concept of a user. Authentication resolves to a
-> `workspace_id` and nothing else. No user identity, no roles,
-> permissions, no RBAC, no SSO/SAML/OIDC/SCIM. For a buyer whose security
-> review begins with "show us SAML and deprovisioning," this is not a
-> partial answer, it's a missing one.
-
-`api/dependencies.py`'s own module docstring already states the honest
-baseline this repo has operated under since before this assessment: "This
-vertical slice has no real identity provider yet."
-
-A real external IdP account (Okta, Auth0, Azure AD, or similar) is
-genuinely out of reach for this session to stand up — creating one is
-outside what can be done autonomously, and even if a free-tier account
-were created, there would be no real enterprise user/org data to test
-against, making the exercise partly theater.
+**Status:** Implemented validation layer; external IdP integration optional  
+**Date:** 2026-08-11
 
 ## Decision
 
-Build the part that IS honestly buildable without a live IdP: real,
-standards-compliant JWT/JWKS validation logic, not a placeholder that
-merely decodes a payload without checking anything.
+The application includes standards-based OIDC/JWT token verification in
+`src/auth/sso.py::verify_sso_token`. When enabled, it validates:
 
-`src/auth/sso.py::verify_sso_token` is a FastAPI dependency with the exact
-same return contract as `api/dependencies.py::verify_api_key` (`str ->
-workspace_id`), so it is a drop-in alternative, not a parallel auth
-system — swapping a route's `Depends(verify_api_key)` for
-`Depends(verify_sso_token)` is a one-line change, not a new integration.
-It performs real signature verification (RS256 via PyJWT, key material
-fetched from the configured IdP's JWKS endpoint), issuer checking,
-audience checking, and expiry checking — the actual security properties
-an OIDC integration exists to provide, not a stub that trusts whatever the
-caller sends.
+- the JWT signature using the IdP's JWKS endpoint (RS256);
+- issuer (`SSO_ISSUER`);
+- audience (`SSO_AUDIENCE`);
+- expiry;
+- the configured workspace claim (`SSO_WORKSPACE_CLAIM`, default
+  `workspace_id`).
 
-### What's real and what's mocked
+The configuration is:
 
-`tests/unit/auth/test_sso.py` generates a real RSA keypair and a real,
-correctly-signed JWT for every test. `jwt.decode()` is the genuine PyJWT
-validation path running against that real signature — including a test
-that signs with one keypair and verifies against a *different* one's
-public key to prove the signature check actually rejects a forgery, not
-just a malformed token. The only thing mocked is the network fetch of the
-IdP's public JWKS document (`PyJWKClient.get_signing_key_from_jwt`) —
-that's the one piece that genuinely requires a live external IdP to
-exercise for real; everything else is tested against real cryptography,
-not assumed correct.
+```env
+SSO_ENABLED=false
+SSO_ISSUER=
+SSO_AUDIENCE=
+SSO_JWKS_URL=
+SSO_WORKSPACE_CLAIM=workspace_id
+```
 
-### Deliberately not wired into any route by default
+`verify_sso_token` returns the resolved `workspace_id`, matching the existing
+API-key dependency contract.
 
-`sso_enabled` defaults to `false`, and no existing route's `Depends()` was
-changed — `verify_api_key` remains the only active auth path, exactly as
-before this ADR. Same reasoning as every Phase 8 feature-flagged addition
-in this document's history: built real and tested, not force-adopted
-without a live IdP to actually verify the end-to-end integration against.
-Flipping a route over is a one-line change once a real IdP is configured
-via the four new settings (`SSO_ENABLED`, `SSO_ISSUER`, `SSO_AUDIENCE`,
-`SSO_JWKS_URL`) plus `SSO_WORKSPACE_CLAIM` for mapping whichever claim
-name a given IdP uses for tenant identity (Okta/Auth0 commonly use a
-custom namespaced claim; this isn't hardcoded to one vendor's convention).
+## Current authentication and authorization boundary
 
-## Consequences
+API-key authentication remains the default route authentication path. SSO is
+not connected to a live Okta, Auth0, Azure AD or other IdP tenant in this
+repository, and no route has been globally switched to `verify_sso_token`.
 
-- **Positive:** the specific gap named — "no SSO/SAML/OIDC/SCIM at all" —
-  now has real, tested validation code behind it, not nothing. Connecting
-  an actual IdP later is a configuration exercise, not a development
-  project.
-- **Negative:** a new dependency (`PyJWT[crypto]`), and code that has
-  never been exercised against a real IdP's actual token shape, clock
-  skew behavior, or key-rotation timing — those are genuine unknowns a
-  live integration would surface that a locally-signed test JWT cannot.
-- **Deferred deliberately, and explicitly not implied by this ADR:**
-  RBAC/permissions (this only ever resolves a workspace_id, exactly like
-  `verify_api_key` — no notion of per-user roles was added), SCIM
-  provisioning/deprovisioning, and any actual connection to a real IdP
-  tenant. Multi-tenant per-user auditing (`api/main.py`'s
-  `audit.access` log) still only ever logs at the workspace level for the
-  same reason — this ADR does not change what identity the rest of the
-  system has to work with, only how a workspace_id could eventually be
-  established through a real login instead of a shared static API key.
+Application authorization is implemented separately in `src/auth/policy.py`.
+It supports deny-by-default role checks, division scope, opportunity scope,
+sensitive-content rules and signed panel-token scope. Enabling
+`AUTHZ_ENFORCEMENT_ENABLED=true` requires either `SSO_ENABLED=true` or an
+explicitly trusted claims gateway (`AUTHZ_TRUSTED_GATEWAY_ENABLED=true`), and
+requires an actor/user identity.
 
-## Current integration boundary
+Local API-key and demo flows remain available with authorization enforcement
+disabled. A panel token is a signed, workspace/opportunity-scoped synthetic
+principal and is not a replacement for enterprise user identity.
 
-The application-owned authorization layer is now implemented separately in
-`src/auth/policy.py` and wired into API middleware and resource routes. It
-supports deny-by-default role, division, opportunity and sensitive-content
-checks, plus signed panel-token scope. `AUTHZ_ENFORCEMENT_ENABLED=true` fails
-closed unless `SSO_ENABLED=true` or an explicitly trusted claims gateway is
-configured; this prevents clients from self-asserting `X-User-Roles`.
+## Verification coverage
 
-The remaining external work is identity provisioning and claim production:
-connect a real IdP, map groups/divisions/opportunities, add SCIM
-deprovisioning, rotate keys/tokens and validate the deployment against the
-customer's tenant. The policy code does not pretend those contracts exist.
+`tests/unit/auth/test_sso.py` generates real RSA keypairs and signed JWTs and
+exercises the real PyJWT validation path. It covers valid tokens, forged
+signatures, expiry, issuer/audience mismatches, missing workspace claims and
+configurable claim names. Only the network retrieval of the IdP JWKS document
+is mocked; no live IdP tenant is part of the test suite.
 
-## Not done in this ADR
+## Consequences and remaining external work
 
-Wiring `verify_sso_token` into any actual route, RBAC/scoped permissions
-beyond workspace-level access, SCIM, session/refresh-token handling, and
-any real IdP account or tenant all remain out of scope. `verify_api_key`
-stays the default and only active auth path.
+- Connecting a customer IdP requires production values for the issuer,
+  audience, JWKS URL and workspace claim mapping.
+- SAML, SCIM provisioning/deprovisioning, session/refresh-token management,
+  key-rotation operations and customer-tenant validation are not implemented
+  by this repository.
+- RBAC policy primitives exist, but the IdP or trusted gateway must provide
+  verified user, role, division and opportunity claims before enforcement can
+  be enabled safely.
+- Until that integration is configured and tested against the customer's
+  tenant, API-key authentication remains the supported default.
