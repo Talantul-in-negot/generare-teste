@@ -345,10 +345,34 @@ workflow APIs for the previously absent product pillars:
   compiles recent conversations and claim evidence; seller-confirmed work is
   saved via `POST /api/v1/opportunities/{opportunity_id}/meeting-follow-ups`.
 
-These are authenticated, tenant-scoped application workflows, not a live
-Showpad/Salesforce integration or a buyer-facing product UI. They intentionally
-do not claim OAuth, buyer identity, participant ACLs, uploads, mobile/offline
-operation or CRM write-back.
+These are tenant-scoped application workflows, not a live
+Showpad/Salesforce integration. Buyer-token access, bounded text uploads and
+an offline-safe PWA shell are implemented locally; they do not claim OAuth,
+binary object storage, native mobile operation or CRM write-back.
+
+### Workflow, buyer and governance completion update
+
+The local product surface now extends those initial API slices:
+
+- `/viz` contains a responsive, keyboard-navigable **Workflows** tab for
+  Readiness, Buyer Spaces, Revenue Intelligence and Meeting Brief. It is an
+  installable PWA: the UI shell and unsent workflow draft are available
+  offline, while authenticated deal data is deliberately never cached.
+- Readiness adds knowledge-check attempts, role-play submission, manager
+  coaching reviews and certification issuance after a completed assignment.
+- Buyer Spaces support participant invitations with revocable, hashed access
+  tokens. Accepted buyer editors can upload bounded text artifacts; sellers
+  can update/revoke spaces and participants, and receive in-app notices.
+- Content assets retain immutable `ContentAssetRevision` snapshots for every
+  version transition. `GET /api/v1/content-assets/{content_asset_id}/revisions`
+  returns the history.
+- Versioned agent definitions may request only an allow-listed local action.
+  A manager must approve it; execution is recorded in the workflow audit
+  export. `LegalHold` blocks the erasure route until explicitly released.
+
+Binary object storage, virus scanning, native mobile apps, OAuth/CRM write-back
+and managed retention/SIEM infrastructure remain integration or deployment
+work; this repository does not pretend they are complete.
 
 ## Runtime defaults
 

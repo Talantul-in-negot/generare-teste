@@ -90,6 +90,12 @@ async def test_ingest_shares_and_asset_views_pipeline_wiring(executor):
     assert len(shares) == 1
     assert shares[0].triggered_by_claim_id == "claim-1"
 
+    # The mutable asset projection keeps an immutable snapshot for every
+    # lifecycle version, rather than overwriting an approved content state.
+    await content_repo.upsert_content_asset(asset.model_copy(update={"version": 2, "title": "ROI Calculator v2"}))
+    revisions = await content_repo.list_content_asset_revisions(workspace_id, asset.content_asset_id)
+    assert [revision.version for revision in revisions] == [2, 1]
+
     view_time = _T0 + timedelta(hours=2)
     await pipeline.ingest_asset_views(
         workspace_id,

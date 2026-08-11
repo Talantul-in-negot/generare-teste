@@ -96,6 +96,37 @@ async def context_graph_viz() -> str:
     return page
 
 
+@router.get("/viz/manifest.webmanifest")
+async def viz_manifest() -> Response:
+    return Response(
+        json.dumps({
+            "name": "Sales Context Graph", "short_name": "Sales Graph",
+            "start_url": "/viz", "display": "standalone",
+            "background_color": "#f0ece8", "theme_color": "#8c3fcc",
+        }),
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@router.get("/viz/service-worker.js")
+async def viz_service_worker() -> Response:
+    """Offline shell and local draft support for the responsive `/viz` PWA.
+
+    Authenticated API responses are deliberately never cached: a shared device
+    must not expose a previous user's deal data while offline.
+    """
+    script = """const CACHE = 'scg-viz-v1';
+self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.add('/viz'))));
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (request.method !== 'GET' || !new URL(request.url).pathname.startsWith('/viz')) return;
+  event.respondWith(fetch(request).then(response => { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put(request, copy)); return response; }).catch(() => caches.match(request).then(hit => hit || caches.match('/viz'))));
+});"""
+    return Response(script, media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+
+
 @router.get("/viz/panel", response_class=HTMLResponse)
 async def opportunity_panel(response: Response, token: str, claims: PanelTokenClaims = Depends(verify_panel_token)) -> str:
     settings = get_settings()
@@ -311,6 +342,8 @@ _PAGE = """<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/viz/manifest.webmanifest">
 <title>Sales Context Graph Viz</title>
 <style>
 """ + _SHARED_STYLES + """
@@ -345,23 +378,28 @@ _PAGE = """<!doctype html>
   .legend div { display: flex; align-items: center; margin-bottom: 3px; }
   .legend span.swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
   .tabs { display: flex; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; }
-  .tab { flex: 1; padding: 10px 6px; text-align: center; cursor: pointer; font-size: 12px; color: var(--color-text-muted); border-bottom: 2px solid transparent; }
+  .tab { flex: 1; padding: 10px 6px; text-align: center; cursor: pointer; font-size: 12px; color: var(--color-text-muted); border: 0; background: transparent; border-bottom: 2px solid transparent; font-family: var(--font-body); }
   .tab.active { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 600; }
+  .tab:focus-visible, #panel input:focus-visible, #panel select:focus-visible, #panel textarea:focus-visible, #panel button:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
   .tabpage { display: none; padding: 20px; }
   .tabpage.active { display: block; }
   .citation { font-size: 11px; color: var(--color-text-muted); margin: 2px 0; }
   .uncited { font-size: 11px; color: var(--color-danger-text); margin: 2px 0; }
   .ambiguity { background: var(--color-warning-bg); border: 1px solid var(--color-warning-border); padding: 8px; border-radius: 4px; margin: 6px 0; font-size: 12px; }
+  .product-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+  .product-card { border:1px solid var(--color-border); border-radius:6px; padding:12px; background:var(--color-surface); }
+  @media (max-width: 760px) { body { display:block; height:auto; min-height:100vh; } #panel { width:100%; border-right:0; border-bottom:1px solid var(--color-border); } #main { min-height:58vh; } #graph-page { min-height:58vh; } .tab { flex-basis:31%; } .tabpage { padding:12px; } }
 </style>
 </head>
 <body>
 <div id="panel">
-  <div class="tabs">
-    <div class="tab active" data-tab="graph">Context Graph</div>
-    <div class="tab" data-tab="qa">Browse Intents</div>
-    <div class="tab" data-tab="ask">Ask</div>
-    <div class="tab" data-tab="alerts">Alerts</div>
-    <div class="tab" data-tab="review">Review Console</div>
+  <div class="tabs" role="tablist" aria-label="Sales Context Graph sections">
+    <button class="tab active" id="graph-tab" role="tab" aria-selected="true" aria-controls="graph-page" data-tab="graph">Context Graph</button>
+    <button class="tab" id="qa-tab" role="tab" aria-selected="false" aria-controls="qa-page" data-tab="qa">Browse Intents</button>
+    <button class="tab" id="ask-tab" role="tab" aria-selected="false" aria-controls="ask-page" data-tab="ask">Ask</button>
+    <button class="tab" id="alerts-tab" role="tab" aria-selected="false" aria-controls="alerts-page" data-tab="alerts">Alerts</button>
+    <button class="tab" id="review-tab" role="tab" aria-selected="false" aria-controls="review-page" data-tab="review">Review Console</button>
+    <button class="tab" id="workflows-tab" role="tab" aria-selected="false" aria-controls="workflows-page" data-tab="workflows">Workflows</button>
   </div>
 
   <div id="graph-controls">
@@ -475,10 +513,23 @@ _PAGE = """<!doctype html>
     <button id="reviewObjectionsBtn">Load top objections</button>
     <div id="reviewStatus"></div>
   </div>
+
+  <div id="workflows-controls" style="display:none">
+    <h3>Sales workflows</h3>
+    <p style="font-size:12px;color:var(--color-text-muted)">Readiness, Buyer Spaces, revenue outcomes and meeting preparation. Draft inputs are retained locally for offline reconnect.</p>
+    <label>Workspace ID <input id="workflowWorkspaceId" value="ws-demo"></label>
+    <label>API Key <input id="workflowApiKey" type="password" placeholder="X-Api-Key"></label>
+    <label>Opportunity ID <input id="workflowOpportunityId" placeholder="required for Buyer Space and meeting brief"></label>
+    <label>Seller ID <input id="workflowSellerId" placeholder="required for readiness"></label>
+    <label>New Buyer Space title <input id="workflowSpaceTitle" placeholder="Mutual action plan"></label>
+    <button id="workflowLoadBtn" type="button">Load workflow dashboard</button>
+    <button id="workflowCreateSpaceBtn" type="button">Create Buyer Space</button>
+    <div id="workflowStatus" role="status" aria-live="polite"></div>
+  </div>
 </div>
 
 <div id="main">
-  <div id="graph-page" class="tabpage active" style="position:absolute;inset:0;padding:0">
+  <div id="graph-page" class="tabpage active" role="tabpanel" aria-labelledby="graph-tab" style="position:absolute;inset:0;padding:0">
     <div id="graph">
       <svg id="svg"></svg>
       <div class="legend">
@@ -486,34 +537,49 @@ _PAGE = """<!doctype html>
       </div>
     </div>
   </div>
-  <div id="qa-page" class="tabpage">
+  <div id="qa-page" class="tabpage" role="tabpanel" aria-labelledby="qa-tab">
     <div id="qaResult"></div>
   </div>
-  <div id="ask-page" class="tabpage">
+  <div id="ask-page" class="tabpage" role="tabpanel" aria-labelledby="ask-tab">
     <div id="askResult"></div>
   </div>
-  <div id="alerts-page" class="tabpage">
+  <div id="alerts-page" class="tabpage" role="tabpanel" aria-labelledby="alerts-tab">
     <div id="alertsResult"></div>
   </div>
-  <div id="review-page" class="tabpage">
+  <div id="review-page" class="tabpage" role="tabpanel" aria-labelledby="review-tab">
     <div id="reviewResult"></div>
+  </div>
+  <div id="workflows-page" class="tabpage" role="tabpanel" aria-labelledby="workflows-tab">
+    <div id="workflowResult" class="product-grid"></div>
   </div>
 </div>
 
 <script>
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/viz/service-worker.js').catch(() => {});
 /* ── Tabs ─────────────────────────────────────────────────────────────── */
 const demoOpportunityId = __DEMO_OPPORTUNITY_ID_JSON__;
-const TAB_NAMES = ["graph", "qa", "ask", "alerts", "review"];
+const TAB_NAMES = ["graph", "qa", "ask", "alerts", "review", "workflows"];
 for (const tab of document.querySelectorAll(".tab")) {
-  tab.addEventListener("click", () => {
+  function activate() {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", "false"));
     tab.classList.add("active");
+    tab.setAttribute("aria-selected", "true");
     const target = tab.dataset.tab;
     for (const name of TAB_NAMES) {
       document.getElementById(name + "-controls").style.display = name === target ? "" : "none";
       document.getElementById(name + "-page").classList.toggle("active", name === target);
     }
     if (target === "qa" && qaSelect.options.length === 0) loadIntents();
+  }
+  tab.addEventListener("click", activate);
+  tab.addEventListener("keydown", event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const tabs = Array.from(document.querySelectorAll('.tab'));
+    const current = tabs.indexOf(tab);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[next].focus(); tabs[next].click();
   });
 }
 
@@ -1310,6 +1376,68 @@ async function loadTopObjections() {
     resultEl.innerHTML = "";
   }
 }
+
+/* â”€â”€ Product workflows: responsive seller console + reconnect-safe drafts â”€â”€ */
+function workflowCredentials() {
+  return { workspaceId: document.getElementById('workflowWorkspaceId').value.trim(), apiKey: document.getElementById('workflowApiKey').value.trim() };
+}
+function workflowHeaders(json = false) {
+  const credentials = workflowCredentials();
+  const headers = { 'X-Workspace-Id': credentials.workspaceId, 'X-Api-Key': credentials.apiKey };
+  if (json) headers['Content-Type'] = 'application/json';
+  return headers;
+}
+function workflowDraft() {
+  return { opportunityId: document.getElementById('workflowOpportunityId').value.trim(), sellerId: document.getElementById('workflowSellerId').value.trim(), title: document.getElementById('workflowSpaceTitle').value.trim() };
+}
+function saveWorkflowDraft() { localStorage.setItem('scg-workflow-draft', JSON.stringify(workflowDraft())); }
+function restoreWorkflowDraft() {
+  try { const draft = JSON.parse(localStorage.getItem('scg-workflow-draft') || '{}');
+    if (draft.opportunityId) document.getElementById('workflowOpportunityId').value = draft.opportunityId;
+    if (draft.sellerId) document.getElementById('workflowSellerId').value = draft.sellerId;
+    if (draft.title) document.getElementById('workflowSpaceTitle').value = draft.title;
+  } catch (_) { /* invalid local draft is safely ignored */ }
+}
+for (const id of ['workflowOpportunityId', 'workflowSellerId', 'workflowSpaceTitle']) document.getElementById(id).addEventListener('input', saveWorkflowDraft);
+restoreWorkflowDraft();
+
+async function workflowFetch(path, options = {}) {
+  const response = await fetch(path, { ...options, headers: { ...workflowHeaders(Boolean(options.body)), ...(options.headers || {}) } });
+  const text = await response.text();
+  if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + text);
+  return text ? JSON.parse(text) : null;
+}
+function workflowCard(title, data) {
+  const card = document.createElement('section'); card.className = 'product-card';
+  const heading = document.createElement('h3'); heading.textContent = title; card.appendChild(heading);
+  card.appendChild(renderJson(data)); return card;
+}
+async function loadWorkflowDashboard() {
+  const status = document.getElementById('workflowStatus'); const result = document.getElementById('workflowResult');
+  const credentials = workflowCredentials(); const draft = workflowDraft();
+  saveWorkflowDraft(); status.textContent = ''; result.innerHTML = '';
+  if (!credentials.workspaceId || !credentials.apiKey) { status.textContent = 'Workspace ID and API Key are required.'; return; }
+  if (!navigator.onLine) { status.textContent = 'Offline: draft saved locally. Reconnect to refresh server data.'; return; }
+  const requests = [workflowFetch('/api/v1/revenue/summary').then(data => ['Revenue intelligence', data])];
+  if (draft.sellerId) requests.push(workflowFetch('/api/v1/readiness/sellers/' + encodeURIComponent(draft.sellerId)).then(data => ['Sales readiness', data]));
+  if (draft.opportunityId) {
+    requests.push(workflowFetch('/api/v1/opportunities/' + encodeURIComponent(draft.opportunityId) + '/buyer-spaces').then(data => ['Buyer Spaces', data]));
+    requests.push(workflowFetch('/api/v1/opportunities/' + encodeURIComponent(draft.opportunityId) + '/meeting-brief').then(data => ['Meeting brief', data]));
+  }
+  try { for (const [title, data] of await Promise.all(requests)) result.appendChild(workflowCard(title, data)); }
+  catch (error) { status.textContent = String(error); }
+}
+async function createWorkflowSpace() {
+  const status = document.getElementById('workflowStatus'); const draft = workflowDraft(); saveWorkflowDraft();
+  if (!draft.opportunityId || !draft.title) { status.textContent = 'Opportunity ID and Buyer Space title are required.'; return; }
+  if (!navigator.onLine) { status.textContent = 'Offline: draft saved locally; reconnect before creating the Buyer Space.'; return; }
+  try {
+    const data = await workflowFetch('/api/v1/opportunities/' + encodeURIComponent(draft.opportunityId) + '/buyer-spaces', { method: 'POST', body: JSON.stringify({ title: draft.title }) });
+    status.textContent = 'Buyer Space created: ' + data.space_id; document.getElementById('workflowSpaceTitle').value = ''; saveWorkflowDraft(); await loadWorkflowDashboard();
+  } catch (error) { status.textContent = String(error); }
+}
+document.getElementById('workflowLoadBtn').addEventListener('click', loadWorkflowDashboard);
+document.getElementById('workflowCreateSpaceBtn').addEventListener('click', createWorkflowSpace);
 
 """ + _RENDER_JSON_JS + """
 </script>

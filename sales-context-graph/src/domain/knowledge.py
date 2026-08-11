@@ -90,6 +90,17 @@ class ContentAsset(BaseModel):
     expires_at: datetime | None = None
 
 
+class ContentAssetRevision(BaseModel):
+    """Immutable source/version record for a content asset lifecycle update."""
+
+    revision_id: str
+    workspace_id: str
+    content_asset_id: str
+    version: int = Field(ge=1)
+    snapshot_json: str
+    recorded_at: datetime
+
+
 class Share(BaseModel):
     share_id: str
     workspace_id: str

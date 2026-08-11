@@ -46,6 +46,22 @@ async def test_viz_page_includes_review_console() -> None:
     assert "/conflicts/" in text
 
 
+async def test_viz_has_accessible_responsive_workflow_pwa_surface() -> None:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        page = await client.get("/viz")
+        manifest = await client.get("/viz/manifest.webmanifest")
+        worker = await client.get("/viz/service-worker.js")
+
+    assert "Sales workflows" in page.text
+    assert 'role="tablist"' in page.text
+    assert "ArrowRight" in page.text
+    assert "@media (max-width: 760px)" in page.text
+    assert "serviceWorker.register" in page.text
+    assert manifest.status_code == 200
+    assert worker.status_code == 200
+    assert "Authenticated API responses are deliberately never cached" not in worker.text
+
+
 @pytest.fixture
 async def panel_token(monkeypatch) -> str:
     """A real, minted panel token (docs/evaluation.md's Showpad-compatibility

@@ -16,7 +16,7 @@ general write credential).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.dependencies import verify_api_key
@@ -24,6 +24,7 @@ from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
 from src.graph.repositories.crm_repository import CrmRepository
+from src.graph.repositories.product_workflow_repository import ProductWorkflowRepository
 from src.usecases.erasure import ErasureUseCase
 
 router = APIRouter(prefix="/api/v1", tags=["erasure"])
@@ -36,6 +37,9 @@ class ErasureRequest(BaseModel):
 
 @router.post("/erasure")
 async def erase(body: ErasureRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+    hold = await ProductWorkflowRepository().active_hold(workspace_id, body.subject_id)
+    if hold is not None:
+        raise HTTPException(status_code=409, detail="subject has an active legal hold")
     executor = GraphExecutor()
     usecase = ErasureUseCase(
         ClaimRepository(executor), ConversationRepository(executor), CrmRepository(executor)

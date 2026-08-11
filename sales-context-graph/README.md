@@ -77,13 +77,16 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
   embeddable panel, not a packaged app (no OAuth, no AppExchange packaging).
 
 The repository has a broad unit/integration/security/evaluation suite with
-**547 tests collected**. The latest full local run executed all 547 tests and
-finished with **547 passed** in 241 seconds; it emitted 28 Windows asyncio
-cleanup warnings but no test failures. RAGAS remains an optional
-external-judge evaluation
-and is not included in the default test count. See the completion report at
-the end of this document for the phase-by-phase breakdown, measured numbers
-and known limitations. Deferred work is centralized in
+**555 tests collected**. The latest full local run
+(`pytest tests/ -q -p no:unraisableexception`, against the Docker-Compose
+Neo4j/Redis stack) executed all 555 and finished **555 passed / 0 failed in
+255 seconds**. Windows emits asyncio "Event loop is closed" noise at
+interpreter teardown; that is teardown-time only and does not affect any
+result. RAGAS remains an optional external-judge evaluation and is not
+included in this count. See the completion report at the end of this
+document for the phase-by-phase breakdown, measured numbers and known
+limitations — including two scope caveats worth reading before the code
+("Known limitations", first two bullets). Deferred work is centralized in
 [`docs/evaluation.md`](docs/evaluation.md), rather than hidden in code
 comments.
 

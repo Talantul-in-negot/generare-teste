@@ -3,9 +3,11 @@ crm_repository.py."""
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from hashlib import sha256
 
-from src.domain.knowledge import AssetView, ContentAsset, Share
+from src.domain.knowledge import AssetView, ContentAsset, ContentAssetRevision, Share
 from src.graph.execution import GraphExecutor, scoped_match
 
 _ASSET_RETURN = (
@@ -35,12 +37,19 @@ _SHARE_RETURN = (
     "s.opportunity_id AS opportunity_id, s.triggered_by_claim_id AS triggered_by_claim_id"
 )
 
+_REVISION_RETURN = (
+    "r.revision_id AS revision_id, r.workspace_id AS workspace_id, "
+    "r.content_asset_id AS content_asset_id, r.version AS version, "
+    "r.snapshot_json AS snapshot_json, r.recorded_at AS recorded_at"
+)
+
 
 class ContentRepository:
     def __init__(self, executor: GraphExecutor | None = None):
         self._executor = executor or GraphExecutor()
 
     async def upsert_content_asset(self, asset: ContentAsset) -> None:
+        previous = await self.get_content_asset(asset.workspace_id, asset.content_asset_id)
         match = scoped_match("ContentAsset", "n", content_asset_id="content_asset_id")
         await self._executor.tenant_query(
             f"""
@@ -81,6 +90,38 @@ class ContentRepository:
             effective_from=asset.effective_from.isoformat() if asset.effective_from else None,
             expires_at=asset.expires_at.isoformat() if asset.expires_at else None,
         )
+        # ContentAsset is the mutable current projection. Every first write or
+        # version transition also creates an immutable revision carrying the
+        # exact serialized source-facing fields, so lifecycle reconciliation
+        # never silently destroys the prior approved/expiry state.
+        if previous is None or previous.version != asset.version:
+            snapshot = json.dumps(asset.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+            revision = ContentAssetRevision(
+                revision_id=sha256(f"{asset.workspace_id}:{asset.content_asset_id}:{asset.version}".encode()).hexdigest(),
+                workspace_id=asset.workspace_id,
+                content_asset_id=asset.content_asset_id,
+                version=asset.version,
+                snapshot_json=snapshot,
+                recorded_at=datetime.now(timezone.utc),
+            )
+            asset_match = scoped_match("ContentAsset", "a", content_asset_id="content_asset_id")
+            revision_match = scoped_match("ContentAssetRevision", "r", revision_id="revision_id")
+            await self._executor.tenant_query(
+                f"MATCH {asset_match} MERGE {revision_match} ON CREATE SET r += $revision MERGE (a)-[:HAS_REVISION]->(r)",
+                workspace_id=asset.workspace_id,
+                content_asset_id=asset.content_asset_id,
+                revision_id=revision.revision_id,
+                revision=revision.model_dump(mode="json"),
+            )
+
+    async def list_content_asset_revisions(self, workspace_id: str, content_asset_id: str) -> list[ContentAssetRevision]:
+        asset_match = scoped_match("ContentAsset", "a", content_asset_id="content_asset_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {asset_match}-[:HAS_REVISION]->(r:ContentAssetRevision) RETURN {_REVISION_RETURN} ORDER BY r.version DESC",
+            workspace_id=workspace_id,
+            content_asset_id=content_asset_id,
+        )
+        return [ContentAssetRevision(**row) for row in rows]
 
     async def get_content_asset(
         self, workspace_id: str, content_asset_id: str, *, division_id: str | None = None

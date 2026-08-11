@@ -55,6 +55,7 @@ from src.domain.knowledge import (
     BuyingSignal,
     Commitment,
     ContentAsset,
+    ContentAssetRevision,
     Feature,
     Objection,
     PainPoint,
@@ -114,6 +115,7 @@ MODEL_STRATEGIES: list[tuple[type, object]] = [
     (ActionItem, st.builds(ActionItem)),
     (Commitment, st.builds(Commitment)),
     (ContentAsset, st.builds(ContentAsset)),
+    (ContentAssetRevision, st.builds(ContentAssetRevision)),
     (Share, st.builds(Share)),
     (AssetView, st.builds(AssetView)),
     # ── assertion.py ────────────────────────────────────────────────────────

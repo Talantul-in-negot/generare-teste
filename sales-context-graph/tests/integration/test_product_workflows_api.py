@@ -59,6 +59,31 @@ async def test_readiness_buyer_engagement_revenue_and_meeting_workflow(executor,
         assert readiness.json()["assignments"][0]["assignment_id"] == assignment.json()["assignment_id"]
         assert readiness.json()["completion_rate"] == 1
         assert readiness.json()["average_score"] == 92
+        check = await client.post(
+            "/api/v1/readiness/knowledge-checks", headers=headers,
+            json={"curriculum_id": curriculum.json()["curriculum_id"], "title": "Discovery quiz"},
+        )
+        assert check.status_code == 201
+        attempt = await client.post(
+            f"/api/v1/readiness/knowledge-checks/{check.json()['check_id']}/attempts", headers=headers,
+            json={"seller_id": "seller-workflow", "score": 90},
+        )
+        assert attempt.status_code == 201 and attempt.json()["passed"] is True
+        roleplay = await client.post(
+            "/api/v1/readiness/roleplays", headers=headers,
+            json={"curriculum_id": curriculum.json()["curriculum_id"], "seller_id": "seller-workflow", "scenario": "Discovery call", "transcript": "Seller: What matters most?"},
+        )
+        assert roleplay.status_code == 201
+        coaching = await client.post(
+            "/api/v1/readiness/coaching-reviews", headers=headers,
+            json={"seller_id": "seller-workflow", "subject": "Discovery", "note": "Ask one follow-up question."},
+        )
+        assert coaching.status_code == 201
+        certification = await client.post(
+            "/api/v1/readiness/certifications", headers=headers,
+            json={"curriculum_id": curriculum.json()["curriculum_id"], "seller_id": "seller-workflow"},
+        )
+        assert certification.status_code == 201
 
         space = await client.post(
             f"/api/v1/opportunities/{opportunity_id}/buyer-spaces", headers=headers,
@@ -80,6 +105,29 @@ async def test_readiness_buyer_engagement_revenue_and_meeting_workflow(executor,
         assert detail.status_code == 200
         assert detail.json()["next_steps"][0]["title"] == "Confirm security review"
         assert detail.json()["comments"][0]["body"] == "Security review planned for Thursday."
+        invitation = await client.post(
+            f"/api/v1/buyer-spaces/{space_id}/participants", headers=headers,
+            json={"email": "buyer@example.test", "role": "EDITOR"},
+        )
+        assert invitation.status_code == 201
+        buyer_token = invitation.json()["buyer_token"]
+        accepted = await client.post("/api/v1/buyer-portal/accept", params={"token": buyer_token})
+        assert accepted.status_code == 200
+        upload = await client.post(
+            f"/api/v1/buyer-portal/{space_id}/uploads", params={"token": buyer_token},
+            json={"filename": "security-notes.txt", "content_type": "text/plain", "content_text": "SOC2 evidence requested"},
+        )
+        assert upload.status_code == 201
+        portal = await client.get(f"/api/v1/buyer-portal/{space_id}", params={"token": buyer_token})
+        assert portal.status_code == 200
+        assert portal.json()["uploads"][0]["filename"] == "security-notes.txt"
+        revoked = await client.patch(
+            f"/api/v1/buyer-spaces/{space_id}/participants/{invitation.json()['participant']['participant_id']}",
+            headers=headers, json={"status": "REVOKED"},
+        )
+        assert revoked.status_code == 200
+        denied_portal = await client.get(f"/api/v1/buyer-portal/{space_id}", params={"token": buyer_token})
+        assert denied_portal.status_code == 401
 
         outcome = await client.post(
             f"/api/v1/opportunities/{opportunity_id}/revenue-outcomes", headers=headers,
@@ -102,6 +150,33 @@ async def test_readiness_buyer_engagement_revenue_and_meeting_workflow(executor,
         follow_ups = await client.get(f"/api/v1/opportunities/{opportunity_id}/meeting-follow-ups", headers=headers)
         assert follow_ups.status_code == 200
         assert follow_ups.json()[0]["title"] == "Send recap"
+        agent = await client.post(
+            "/api/v1/agents", headers=headers,
+            json={"name": "Meeting assistant", "version": 1, "allowed_actions": ["CREATE_FOLLOW_UP"]},
+        )
+        assert agent.status_code == 201
+        action = await client.post(
+            "/api/v1/assistant-actions", headers=headers,
+            json={"agent_id": agent.json()["agent_id"], "action_type": "CREATE_FOLLOW_UP", "payload": {"opportunity_id": opportunity_id, "title": "Send approved recap"}},
+        )
+        assert action.status_code == 201
+        approved = await client.post(f"/api/v1/assistant-actions/{action.json()['action_id']}/approve", headers=headers)
+        assert approved.status_code == 200
+        executed = await client.post(f"/api/v1/assistant-actions/{action.json()['action_id']}/execute", headers=headers)
+        assert executed.status_code == 200 and executed.json()["status"] == "EXECUTED"
+        hold = await client.post(
+            "/api/v1/legal-holds", headers=headers,
+            json={"subject_type": "Contact", "subject_id": "contact-on-hold", "reason": "Litigation hold"},
+        )
+        assert hold.status_code == 201
+        blocked_erasure = await client.post(
+            "/api/v1/erasure", headers=headers,
+            json={"subject_type": "Contact", "subject_id": "contact-on-hold"},
+        )
+        assert blocked_erasure.status_code == 409
+        exported = await client.get("/api/v1/audit-export", headers=headers)
+        assert exported.status_code == 200
+        assert any(event["action"] == "assistant_action.executed" for event in exported.json()["events"])
 
 
 async def test_assignment_rejects_unknown_curriculum(executor, monkeypatch):

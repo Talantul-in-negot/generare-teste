@@ -57,6 +57,10 @@ INDEX_STATEMENTS: list[str] = [
     "CREATE INDEX readiness_assignment_workspace_seller IF NOT EXISTS FOR (n:ReadinessAssignment) ON (n.workspace_id, n.seller_id)",
     "CREATE INDEX buyer_space_workspace_opportunity IF NOT EXISTS FOR (n:BuyerSpace) ON (n.workspace_id, n.opportunity_id)",
     "CREATE INDEX revenue_outcome_workspace_recorded IF NOT EXISTS FOR (n:RevenueOutcome) ON (n.workspace_id, n.recorded_at)",
+    "CREATE INDEX buyer_participant_workspace_space IF NOT EXISTS FOR (n:BuyerSpaceParticipant) ON (n.workspace_id, n.space_id)",
+    "CREATE INDEX notification_workspace_recipient IF NOT EXISTS FOR (n:Notification) ON (n.workspace_id, n.recipient_id)",
+    "CREATE INDEX audit_event_workspace_occurred IF NOT EXISTS FOR (n:WorkflowAuditEvent) ON (n.workspace_id, n.occurred_at)",
+    "CREATE INDEX content_revision_workspace_asset IF NOT EXISTS FOR (n:ContentAssetRevision) ON (n.workspace_id, n.content_asset_id)",
 ]
 
 # Existing deployments created non-unique identity indexes before uniqueness
@@ -113,6 +117,19 @@ CONSTRAINT_STATEMENTS: list[str] = [
     "CREATE CONSTRAINT buyer_space_comment_workspace_id_unique IF NOT EXISTS FOR (n:BuyerSpaceComment) REQUIRE (n.workspace_id, n.comment_id) IS UNIQUE",
     "CREATE CONSTRAINT revenue_outcome_workspace_id_unique IF NOT EXISTS FOR (n:RevenueOutcome) REQUIRE (n.workspace_id, n.outcome_id) IS UNIQUE",
     "CREATE CONSTRAINT meeting_follow_up_workspace_id_unique IF NOT EXISTS FOR (n:MeetingFollowUp) REQUIRE (n.workspace_id, n.follow_up_id) IS UNIQUE",
+    "CREATE CONSTRAINT knowledge_check_workspace_id_unique IF NOT EXISTS FOR (n:KnowledgeCheck) REQUIRE (n.workspace_id, n.check_id) IS UNIQUE",
+    "CREATE CONSTRAINT knowledge_attempt_workspace_id_unique IF NOT EXISTS FOR (n:KnowledgeCheckAttempt) REQUIRE (n.workspace_id, n.attempt_id) IS UNIQUE",
+    "CREATE CONSTRAINT roleplay_workspace_id_unique IF NOT EXISTS FOR (n:RoleplaySession) REQUIRE (n.workspace_id, n.session_id) IS UNIQUE",
+    "CREATE CONSTRAINT coaching_review_workspace_id_unique IF NOT EXISTS FOR (n:CoachingReview) REQUIRE (n.workspace_id, n.review_id) IS UNIQUE",
+    "CREATE CONSTRAINT certification_workspace_id_unique IF NOT EXISTS FOR (n:Certification) REQUIRE (n.workspace_id, n.certification_id) IS UNIQUE",
+    "CREATE CONSTRAINT buyer_participant_workspace_id_unique IF NOT EXISTS FOR (n:BuyerSpaceParticipant) REQUIRE (n.workspace_id, n.participant_id) IS UNIQUE",
+    "CREATE CONSTRAINT buyer_upload_workspace_id_unique IF NOT EXISTS FOR (n:BuyerSpaceUpload) REQUIRE (n.workspace_id, n.upload_id) IS UNIQUE",
+    "CREATE CONSTRAINT notification_workspace_id_unique IF NOT EXISTS FOR (n:Notification) REQUIRE (n.workspace_id, n.notification_id) IS UNIQUE",
+    "CREATE CONSTRAINT agent_definition_workspace_id_unique IF NOT EXISTS FOR (n:AgentDefinition) REQUIRE (n.workspace_id, n.agent_id) IS UNIQUE",
+    "CREATE CONSTRAINT assistant_action_workspace_id_unique IF NOT EXISTS FOR (n:AssistantAction) REQUIRE (n.workspace_id, n.action_id) IS UNIQUE",
+    "CREATE CONSTRAINT legal_hold_workspace_id_unique IF NOT EXISTS FOR (n:LegalHold) REQUIRE (n.workspace_id, n.hold_id) IS UNIQUE",
+    "CREATE CONSTRAINT workflow_audit_workspace_id_unique IF NOT EXISTS FOR (n:WorkflowAuditEvent) REQUIRE (n.workspace_id, n.audit_event_id) IS UNIQUE",
+    "CREATE CONSTRAINT content_revision_workspace_id_unique IF NOT EXISTS FOR (n:ContentAssetRevision) REQUIRE (n.workspace_id, n.revision_id) IS UNIQUE",
 ]
 
 ALL_STATEMENTS: list[str] = [
@@ -141,6 +158,10 @@ ALL_INDEX_NAMES: list[str] = [
     "readiness_assignment_workspace_seller",
     "buyer_space_workspace_opportunity",
     "revenue_outcome_workspace_recorded",
+    "buyer_participant_workspace_space",
+    "notification_workspace_recipient",
+    "audit_event_workspace_occurred",
+    "content_revision_workspace_asset",
     "account_contact_names",
     "contact_embeddings_v1",
 ]
@@ -166,4 +187,17 @@ ALL_CONSTRAINT_NAMES: list[str] = [
     "buyer_space_comment_workspace_id_unique",
     "revenue_outcome_workspace_id_unique",
     "meeting_follow_up_workspace_id_unique",
+    "knowledge_check_workspace_id_unique",
+    "knowledge_attempt_workspace_id_unique",
+    "roleplay_workspace_id_unique",
+    "coaching_review_workspace_id_unique",
+    "certification_workspace_id_unique",
+    "buyer_participant_workspace_id_unique",
+    "buyer_upload_workspace_id_unique",
+    "notification_workspace_id_unique",
+    "agent_definition_workspace_id_unique",
+    "assistant_action_workspace_id_unique",
+    "legal_hold_workspace_id_unique",
+    "workflow_audit_workspace_id_unique",
+    "content_revision_workspace_id_unique",
 ]
