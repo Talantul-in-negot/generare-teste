@@ -310,8 +310,9 @@ _PAGE = """<!doctype html>
   #panel input, #panel select, #panel textarea { width: 100%; padding: 6px; box-sizing: border-box; margin-top: 2px; font-family: inherit; }
   #panel button { margin-top: 14px; width: 100%; padding: 8px; background: var(--color-accent); color: var(--color-on-accent); border: none; border-radius: 4px; cursor: pointer; font-family: var(--font-body); }
   #panel button:hover { background: var(--color-accent-hover); }
-  .quick-questions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 12px; }
-  .quick-question { width: auto !important; min-height: 30px; margin: 0 !important; padding: 5px 9px !important; border-radius: 5px !important; text-align: left; }
+  .quick-questions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 8px 0 12px; }
+  .quick-questions > span { display: block; }
+  .quick-question { width: 100% !important; min-height: 30px; margin: 0 !important; padding: 5px 9px !important; border-radius: 5px !important; text-align: left; }
   #panel input[type=checkbox] { width: auto; }
   #status, #qaStatus, #askStatus, #alertsStatus { margin-top: 10px; font-size: 12px; color: var(--color-danger-text); white-space: pre-wrap; }
   #meta { margin-top: 14px; font-size: 12px; color: var(--color-text-muted); }
