@@ -77,10 +77,10 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
   embeddable panel, not a packaged app (no OAuth, no AppExchange packaging).
 
 The repository has a broad unit/integration/security/evaluation suite with
-**555 tests collected**. The latest full local run
+**560 tests collected**. The latest full local run
 (`pytest tests/ -q -p no:unraisableexception`, against the Docker-Compose
-Neo4j/Redis stack) executed all 555 and finished **555 passed / 0 failed in
-255 seconds**. Windows emits asyncio "Event loop is closed" noise at
+Neo4j/Redis stack) executed all 560 and finished **560 passed / 0 failed in
+324 seconds**, with `ruff check` and `mypy` (162 source files) both clean. Windows emits asyncio "Event loop is closed" noise at
 interpreter teardown; that is teardown-time only and does not affect any
 result. RAGAS remains an optional external-judge evaluation and is not
 included in this count. See the completion report at the end of this

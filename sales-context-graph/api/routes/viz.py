@@ -69,10 +69,11 @@ async def create_panel_token(body: PanelTokenRequest, workspace_id: str = Depend
 
 
 @router.get("/viz", response_class=HTMLResponse)
-async def context_graph_viz() -> str:
+async def context_graph_viz(locale: str = "en") -> str:
+    locale = locale if locale in {"en", "ro"} else "en"
     settings = get_settings()
     if not (settings.demo_public_access_enabled and settings.demo_public_api_key):
-        return _PAGE.replace("__DEMO_OPPORTUNITY_ID_JSON__", "null")
+        return _PAGE.replace("__DEMO_OPPORTUNITY_ID_JSON__", "null").replace("__LOCALE__", locale)
     # The key is exposed only in the deliberately opt-in demo mode. It is
     # scoped to the synthetic workspace and accepted only on read-only paths.
     key = html.escape(settings.demo_public_api_key, quote=True)
@@ -93,7 +94,7 @@ async def context_graph_viz() -> str:
     page = page.replace('id="askSubjectId">',
                         f'id="askSubjectId" value="{_DEMO_SUBJECT_ID}">')
     page = page.replace("__DEMO_OPPORTUNITY_ID_JSON__", json.dumps(_DEMO_OPPORTUNITY_ID))
-    return page
+    return page.replace("__LOCALE__", locale)
 
 
 @router.get("/viz/manifest.webmanifest")
@@ -125,6 +126,18 @@ self.addEventListener('fetch', event => {
   event.respondWith(fetch(request).then(response => { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put(request, copy)); return response; }).catch(() => caches.match(request).then(hit => hit || caches.match('/viz'))));
 });"""
     return Response(script, media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/viz/buyer", response_class=HTMLResponse)
+async def buyer_space_portal() -> str:
+    """A standalone, buyer-safe surface.
+
+    The invitation bearer token is supplied in the URL fragment, which a
+    browser never sends to the server or a referrer.  The page subsequently
+    sends it only in ``X-Buyer-Token`` request headers and keeps it in session
+    storage for the tab lifetime.
+    """
+    return _BUYER_PORTAL_PAGE
 
 
 @router.get("/viz/panel", response_class=HTMLResponse)
@@ -339,7 +352,7 @@ _SHARED_STYLES = """
 """
 
 _PAGE = """<!doctype html>
-<html>
+<html lang="__LOCALE__">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -388,18 +401,21 @@ _PAGE = """<!doctype html>
   .ambiguity { background: var(--color-warning-bg); border: 1px solid var(--color-warning-border); padding: 8px; border-radius: 4px; margin: 6px 0; font-size: 12px; }
   .product-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
   .product-card { border:1px solid var(--color-border); border-radius:6px; padding:12px; background:var(--color-surface); }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   @media (max-width: 760px) { body { display:block; height:auto; min-height:100vh; } #panel { width:100%; border-right:0; border-bottom:1px solid var(--color-border); } #main { min-height:58vh; } #graph-page { min-height:58vh; } .tab { flex-basis:31%; } .tabpage { padding:12px; } }
 </style>
 </head>
 <body>
 <div id="panel">
+  <label for="localeSelect" class="sr-only">Language</label>
+  <select id="localeSelect" aria-label="Language"><option value="en">English</option><option value="ro">Română</option></select>
   <div class="tabs" role="tablist" aria-label="Sales Context Graph sections">
-    <button class="tab active" id="graph-tab" role="tab" aria-selected="true" aria-controls="graph-page" data-tab="graph">Context Graph</button>
-    <button class="tab" id="qa-tab" role="tab" aria-selected="false" aria-controls="qa-page" data-tab="qa">Browse Intents</button>
-    <button class="tab" id="ask-tab" role="tab" aria-selected="false" aria-controls="ask-page" data-tab="ask">Ask</button>
-    <button class="tab" id="alerts-tab" role="tab" aria-selected="false" aria-controls="alerts-page" data-tab="alerts">Alerts</button>
-    <button class="tab" id="review-tab" role="tab" aria-selected="false" aria-controls="review-page" data-tab="review">Review Console</button>
-    <button class="tab" id="workflows-tab" role="tab" aria-selected="false" aria-controls="workflows-page" data-tab="workflows">Workflows</button>
+    <button class="tab active" id="graph-tab" role="tab" aria-selected="true" aria-controls="graph-page" data-tab="graph" data-i18n="graph">Context Graph</button>
+    <button class="tab" id="qa-tab" role="tab" aria-selected="false" aria-controls="qa-page" data-tab="qa" data-i18n="browse">Browse Intents</button>
+    <button class="tab" id="ask-tab" role="tab" aria-selected="false" aria-controls="ask-page" data-tab="ask" data-i18n="ask">Ask</button>
+    <button class="tab" id="alerts-tab" role="tab" aria-selected="false" aria-controls="alerts-page" data-tab="alerts" data-i18n="alerts">Alerts</button>
+    <button class="tab" id="review-tab" role="tab" aria-selected="false" aria-controls="review-page" data-tab="review" data-i18n="review">Review Console</button>
+    <button class="tab" id="workflows-tab" role="tab" aria-selected="false" aria-controls="workflows-page" data-tab="workflows" data-i18n="workflows">Workflows</button>
   </div>
 
   <div id="graph-controls">
@@ -502,7 +518,11 @@ _PAGE = """<!doctype html>
     <label>Reviewer ID
       <input id="reviewerId" placeholder="required for mention decisions">
     </label>
+    <label>Review SLA (hours)
+      <input id="reviewSlaHours" type="number" min="1" max="720" value="24">
+    </label>
     <button id="reviewMentionsBtn">Load pending mentions</button>
+    <button id="reviewAssignmentsBtn">Load my assignments</button>
     <label>Opportunity ID (conflict review)
       <input id="reviewOpportunityId" placeholder="opportunity id">
     </label>
@@ -556,6 +576,20 @@ _PAGE = """<!doctype html>
 
 <script>
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/viz/service-worker.js').catch(() => {});
+const localeSelect = document.getElementById('localeSelect');
+const I18N = {
+  en: {graph:'Context Graph', browse:'Browse Intents', ask:'Ask', alerts:'Alerts', review:'Review Console', workflows:'Workflows'},
+  ro: {graph:'Graf de context', browse:'Intentii', ask:'Intreaba', alerts:'Alerte', review:'Consola de revizuire', workflows:'Fluxuri'}
+};
+function applyLocale(locale) {
+  const labels = I18N[locale] || I18N.en;
+  document.documentElement.lang = locale;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = labels[el.dataset.i18n]; });
+  localStorage.setItem('scgLocale', locale);
+}
+localeSelect.value = localStorage.getItem('scgLocale') || document.documentElement.lang || 'en';
+applyLocale(localeSelect.value);
+localeSelect.addEventListener('change', () => applyLocale(localeSelect.value));
 /* ── Tabs ─────────────────────────────────────────────────────────────── */
 const demoOpportunityId = __DEMO_OPPORTUNITY_ID_JSON__;
 const TAB_NAMES = ["graph", "qa", "ask", "alerts", "review", "workflows"];
@@ -1198,6 +1232,7 @@ function requireReviewCredentials() {
 }
 
 document.getElementById("reviewMentionsBtn").addEventListener("click", loadPendingMentions);
+document.getElementById("reviewAssignmentsBtn").addEventListener("click", loadReviewAssignments);
 document.getElementById("reviewConflictsBtn").addEventListener("click", loadOpenConflicts);
 document.getElementById("reviewObjectionsBtn").addEventListener("click", loadTopObjections);
 
@@ -1246,7 +1281,11 @@ async function mentionReviewCard(mention, credentials) {
   accept.type = "button"; accept.textContent = "Accept selected candidate";
   const reject = document.createElement("button");
   reject.type = "button"; reject.textContent = "Reject all candidates";
-  card.appendChild(accept); card.appendChild(reject);
+  const assign = document.createElement("button");
+  assign.type = "button"; assign.textContent = "Assign to reviewer";
+  const history = document.createElement("button");
+  history.type = "button"; history.textContent = "View history";
+  card.appendChild(accept); card.appendChild(reject); card.appendChild(assign); card.appendChild(history);
   const decisionStatus = document.createElement("div");
   decisionStatus.className = "result-scalar";
   card.appendChild(decisionStatus);
@@ -1304,7 +1343,47 @@ async function mentionReviewCard(mention, credentials) {
   }
   accept.addEventListener("click", () => submit(false));
   reject.addEventListener("click", () => submit(true));
+  assign.addEventListener("click", async () => {
+    const reviewerId = document.getElementById("reviewerId").value.trim();
+    const slaHours = Number(document.getElementById("reviewSlaHours").value || 24);
+    if (!reviewerId) { decisionStatus.textContent = "Reviewer ID is required."; return; }
+    try {
+      const response = await fetch("/api/v1/unresolved-mentions/" + encodeURIComponent(mention.mention_id) + "/assignment", {
+        method: "POST", headers: reviewHeaders(credentials, true),
+        body: JSON.stringify({ reviewer_id: reviewerId, sla_hours: slaHours }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || ("HTTP " + response.status));
+      decisionStatus.textContent = "Assigned until " + data.due_at;
+      assign.disabled = true;
+    } catch (error) { decisionStatus.textContent = String(error); }
+  });
+  history.addEventListener("click", async () => {
+    try {
+      const response = await fetch("/api/v1/unresolved-mentions/" + encodeURIComponent(mention.mention_id) + "/history", { headers: reviewHeaders(credentials) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || ("HTTP " + response.status));
+      const historyEl = document.createElement("div");
+      historyEl.appendChild(renderJson(data));
+      card.appendChild(historyEl);
+      history.disabled = true;
+    } catch (error) { decisionStatus.textContent = String(error); }
+  });
   return card;
+}
+
+async function loadReviewAssignments() {
+  const credentials = requireReviewCredentials();
+  if (!credentials) return;
+  const reviewerId = document.getElementById("reviewerId").value.trim();
+  if (!reviewerId) { document.getElementById("reviewStatus").textContent = "Reviewer ID is required."; return; }
+  const resultEl = document.getElementById("reviewResult");
+  try {
+    const response = await fetch("/api/v1/unresolved-mentions/assignments?reviewer_id=" + encodeURIComponent(reviewerId), { headers: reviewHeaders(credentials) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || ("HTTP " + response.status));
+    resultEl.replaceChildren(Object.assign(document.createElement("h3"), {textContent: "Review assignments"}), renderJson(data));
+  } catch (error) { document.getElementById("reviewStatus").textContent = String(error); }
 }
 
 async function loadOpenConflicts() {
@@ -1520,3 +1599,31 @@ loadPanel();
 </body>
 </html>
 """
+
+
+_BUYER_PORTAL_PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Buyer Space</title>
+<style>
+  body{max-width:860px;margin:0 auto;padding:24px;font-family:system-ui,sans-serif;background:#f0ece8;color:#15254e}
+  main{background:#fff;padding:24px;border-radius:10px;box-shadow:0 2px 12px #15254e22} label{display:block;margin:12px 0 4px}
+  input,textarea,button{font:inherit;padding:8px;max-width:100%;box-sizing:border-box} input,textarea{width:100%}
+  button{background:#8c3fcc;color:white;border:0;border-radius:4px;cursor:pointer;margin-top:10px} button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #0d5189;outline-offset:2px}
+  #status{white-space:pre-wrap;color:#b3492f}.card{border-top:1px solid #ddd0c4;margin-top:18px;padding-top:12px}.muted{color:#6b6258;font-size:.9rem}
+</style>
+</head>
+<body><main>
+<h1>Buyer Space</h1><p class="muted">Use the secure invitation link supplied by your seller. The token remains in this browser tab only.</p>
+<label for="spaceId">Space ID</label><input id="spaceId" autocomplete="off" placeholder="Provided with your invitation">
+<button id="open">Open Buyer Space</button><div id="status" role="status" aria-live="polite"></div><section id="content" hidden></section>
+</main><script>
+const status=document.getElementById('status'), content=document.getElementById('content'), space=document.getElementById('spaceId');
+const hash=new URLSearchParams(location.hash.slice(1)); if(hash.get('token')) sessionStorage.setItem('scgBuyerToken',hash.get('token'));
+const headers=()=>({'X-Buyer-Token':sessionStorage.getItem('scgBuyerToken')||''});
+function item(label,value){const p=document.createElement('p');const b=document.createElement('b');b.textContent=label+': ';p.append(b,document.createTextNode(value||'—'));return p}
+async function openSpace(){status.textContent='';content.hidden=true;const id=space.value.trim();if(!id){status.textContent='Space ID is required.';return}try{await fetch('/api/v1/buyer-portal/accept',{method:'POST',headers});const r=await fetch('/api/v1/buyer-portal/'+encodeURIComponent(id),{headers});const data=await r.json();if(!r.ok) throw new Error(data.detail||'Unable to open Buyer Space');content.replaceChildren();content.append(Object.assign(document.createElement('h2'),{textContent:data.space.title}));content.append(item('Status',data.space.status));for(const [title,entries,field] of [['Next steps',data.next_steps,'title'],['Comments',data.comments,'body'],['Uploads',data.uploads,'filename']]){const section=document.createElement('div');section.className='card';section.append(Object.assign(document.createElement('h3'),{textContent:title}));if(!entries.length)section.append(Object.assign(document.createElement('p'),{textContent:'Nothing yet.'}));for(const entry of entries)section.append(item('',entry[field]));content.append(section)}content.hidden=false}catch(error){status.textContent=error.message||String(error)}}
+document.getElementById('open').addEventListener('click',openSpace);
+</script></body></html>"""

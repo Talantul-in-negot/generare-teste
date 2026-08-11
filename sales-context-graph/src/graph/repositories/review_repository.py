@@ -197,3 +197,21 @@ class ReviewRepository:
         row = dict(rows[0])
         row["original_scores"] = json.loads(row["original_scores"]) if row.get("original_scores") else {}
         return ReviewDecision(**row)
+
+    async def list_review_decisions_for_mention(
+        self, workspace_id: str, mention_id: str
+    ) -> list[ReviewDecision]:
+        mention_match = scoped_match("Mention", "m", mention_id="mention_id")
+        rows = await self._executor.tenant_query(
+            f"""
+            MATCH {mention_match}
+            MATCH (m)-[:HAS_REVIEW_DECISION]->(rvd:ReviewDecision)
+            RETURN {_REVIEW_DECISION_RETURN}
+            ORDER BY rvd.decided_at DESC
+            """,
+            workspace_id=workspace_id,
+            mention_id=mention_id,
+        )
+        for row in rows:
+            row["original_scores"] = json.loads(row["original_scores"]) if row.get("original_scores") else {}
+        return [ReviewDecision(**row) for row in rows]

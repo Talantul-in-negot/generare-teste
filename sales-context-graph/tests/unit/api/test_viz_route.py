@@ -62,6 +62,20 @@ async def test_viz_has_accessible_responsive_workflow_pwa_surface() -> None:
     assert "Authenticated API responses are deliberately never cached" not in worker.text
 
 
+async def test_viz_has_a_locale_contract_and_buyer_portal_keeps_tokens_out_of_queries() -> None:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        viz_page = await client.get("/viz", params={"locale": "ro"})
+        buyer_page = await client.get("/viz/buyer")
+
+    assert 'lang="ro"' in viz_page.text
+    assert 'id="localeSelect"' in viz_page.text
+    assert "data-i18n" in viz_page.text
+    assert buyer_page.status_code == 200
+    assert "X-Buyer-Token" in buyer_page.text
+    assert "location.hash" in buyer_page.text
+    assert 'name="referrer" content="no-referrer"' in buyer_page.text
+
+
 @pytest.fixture
 async def panel_token(monkeypatch) -> str:
     """A real, minted panel token (docs/evaluation.md's Showpad-compatibility

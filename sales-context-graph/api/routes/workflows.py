@@ -8,12 +8,13 @@ credential, webhook and reconciliation boundary has been implemented.
 from __future__ import annotations
 
 from collections import Counter
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from hashlib import sha256
 from secrets import token_urlsafe
+from typing import Literal, cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from api.dependencies import get_access_context, verify_api_key
@@ -25,6 +26,7 @@ from src.domain.product_workflows import (
     AuditEvent,
     BuyerSpace,
     BuyerSpaceComment,
+    BuyerSpaceEngagement,
     BuyerSpaceNextStep,
     BuyerSpaceParticipant,
     BuyerSpaceUpload,
@@ -33,6 +35,7 @@ from src.domain.product_workflows import (
     Curriculum,
     KnowledgeCheck,
     KnowledgeCheckAttempt,
+    LearningResource,
     LegalHold,
     MeetingFollowUp,
     Notification,
@@ -46,6 +49,7 @@ from src.graph.repositories.content_repository import ContentRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
 from src.graph.repositories.crm_repository import CrmRepository
 from src.graph.repositories.product_workflow_repository import ProductWorkflowRepository
+from src.storage.buyer_uploads import UploadScanError, delete_scanned_upload, store_scanned_upload
 
 router = APIRouter(prefix="/api/v1", tags=["product-workflows"])
 
@@ -255,7 +259,12 @@ async def buyer_space_detail(
     repo = ProductWorkflowRepository()
     space = await _space_or_404(repo, workspace_id, space_id)
     _opportunity(access, space.opportunity_id)
-    return {"space": space.model_dump(mode="json"), "next_steps": [x.model_dump(mode="json") for x in await repo.list_next_steps(workspace_id, space_id)], "comments": [x.model_dump(mode="json") for x in await repo.list_comments(workspace_id, space_id)]}
+    return {
+        "space": space.model_dump(mode="json"),
+        "next_steps": [x.model_dump(mode="json") for x in await repo.list_next_steps(workspace_id, space_id)],
+        "comments": [x.model_dump(mode="json") for x in await repo.list_comments(workspace_id, space_id)],
+        "engagement": [x.model_dump(mode="json") for x in await repo.list_engagement(workspace_id, space_id)],
+    }
 
 
 class OutcomeRequest(BaseModel):
@@ -410,6 +419,98 @@ async def submit_roleplay(
     return item
 
 
+class RoleplayScoreRequest(BaseModel):
+    score: float = Field(ge=0, le=100)
+    feedback: str = Field(min_length=1, max_length=4000)
+    passed: bool = False
+
+
+@router.post("/readiness/roleplays/{session_id}/score")
+async def score_roleplay(
+    session_id: str, body: RoleplayScoreRequest, workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> RoleplaySession:
+    """Persist a manager's scored review; sellers cannot self-certify roleplay."""
+    _manager(access)
+    repo = ProductWorkflowRepository()
+    session = await repo.get_roleplay(workspace_id, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="roleplay session not found")
+    status = "PASSED" if body.passed else "COACHED"
+    updated = session.model_copy(update={"score": body.score, "feedback": body.feedback, "status": status})
+    await repo.add_roleplay(updated)
+    await repo.add_notification(Notification(
+        notification_id=_id("notification"), workspace_id=workspace_id, recipient_id=session.seller_id,
+        kind="ROLEPLAY_SCORED", title="Role-play reviewed", body=session.scenario[:300],
+        resource_id=session.session_id, created_at=_now(),
+    ))
+    await _audit(repo, workspace_id, access, "roleplay.scored", "RoleplaySession", session_id, score=body.score, passed=body.passed)
+    return updated
+
+
+class LearningResourceRequest(BaseModel):
+    curriculum_id: str
+    title: str = Field(min_length=1, max_length=300)
+    resource_type: str
+    url: str = Field(min_length=1, max_length=2000)
+    content_asset_id: str | None = None
+    required: bool = False
+
+
+@router.post("/readiness/learning-resources", status_code=201)
+async def create_learning_resource(
+    body: LearningResourceRequest, workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> LearningResource:
+    _manager(access)
+    repo = ProductWorkflowRepository()
+    if await repo.get_curriculum(workspace_id, body.curriculum_id) is None:
+        raise HTTPException(status_code=404, detail="curriculum not found")
+    try:
+        item = LearningResource(
+            resource_id=_id("learning"), workspace_id=workspace_id, created_by=access.subject_id,
+            created_at=_now(), **body.model_dump(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await repo.add_learning_resource(item)
+    await _audit(repo, workspace_id, access, "learning_resource.created", "LearningResource", item.resource_id)
+    return item
+
+
+@router.get("/readiness/curricula/{curriculum_id}/learning-resources")
+async def list_learning_resources(
+    curriculum_id: str, workspace_id: str = Depends(verify_api_key),
+    _: AccessContext = Depends(get_access_context),
+) -> list[LearningResource]:
+    return await ProductWorkflowRepository().list_learning_resources(workspace_id, curriculum_id)
+
+
+@router.get("/readiness/cohorts/{curriculum_id}")
+async def readiness_cohort_dashboard(
+    curriculum_id: str, workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
+    _manager(access)
+    repo = ProductWorkflowRepository()
+    assignments = await repo.list_assignments_for_curriculum(workspace_id, curriculum_id)
+    roleplays = await repo.list_roleplays(workspace_id, curriculum_id=curriculum_id)
+    completed = [assignment for assignment in assignments if assignment.status in {"COMPLETED", "WAIVED"}]
+    scores = [assignment.score for assignment in assignments if assignment.score is not None]
+    roleplay_scores = [session.score for session in roleplays if session.score is not None]
+    return {
+        "curriculum_id": curriculum_id,
+        "assigned": len(assignments),
+        "completed": len(completed),
+        "completion_rate": len(completed) / len(assignments) if assignments else None,
+        "average_assignment_score": sum(scores) / len(scores) if scores else None,
+        "roleplay_submitted": len(roleplays),
+        "roleplay_scored": len(roleplay_scores),
+        "average_roleplay_score": sum(roleplay_scores) / len(roleplay_scores) if roleplay_scores else None,
+        "assignments": [assignment.model_dump(mode="json") for assignment in assignments],
+    }
+
+
 class CoachingRequest(BaseModel):
     seller_id: str
     subject: str = Field(min_length=1, max_length=300)
@@ -484,6 +585,13 @@ def _buyer_token(token: str) -> tuple[str, str]:
     return workspace_id, secret
 
 
+def _present_buyer_token(token: str | None, header_token: str | None) -> str:
+    value = header_token or token
+    if not value:
+        raise HTTPException(status_code=401, detail="buyer token is required")
+    return value
+
+
 async def _buyer_participant(token: str) -> BuyerSpaceParticipant:
     workspace_id, secret = _buyer_token(token)
     participant = await ProductWorkflowRepository().get_participant_by_secret(workspace_id, _secret_hash(secret))
@@ -493,8 +601,8 @@ async def _buyer_participant(token: str) -> BuyerSpaceParticipant:
 
 
 @router.post("/buyer-portal/accept")
-async def accept_buyer_invitation(token: str) -> dict:
-    participant = await _buyer_participant(token)
+async def accept_buyer_invitation(token: str | None = None, x_buyer_token: str | None = Header(default=None)) -> dict:
+    participant = await _buyer_participant(_present_buyer_token(token, x_buyer_token))
     if participant.status == "INVITED":
         updated = participant.model_copy(update={"status": "ACTIVE", "accepted_at": _now()})
         await ProductWorkflowRepository().upsert_participant(updated)
@@ -503,14 +611,18 @@ async def accept_buyer_invitation(token: str) -> dict:
 
 
 @router.get("/buyer-portal/{space_id}")
-async def buyer_portal(space_id: str, token: str) -> dict:
-    participant = await _buyer_participant(token)
+async def buyer_portal(space_id: str, token: str | None = None, x_buyer_token: str | None = Header(default=None)) -> dict:
+    participant = await _buyer_participant(_present_buyer_token(token, x_buyer_token))
     if participant.space_id != space_id or participant.status != "ACTIVE":
         raise HTTPException(status_code=403, detail="buyer is not authorized for this space")
     repo = ProductWorkflowRepository()
     space = await _space_or_404(repo, participant.workspace_id, space_id)
     if space.status != "ACTIVE" or (space.expires_at and space.expires_at <= _now()):
         raise HTTPException(status_code=410, detail="buyer space is unavailable")
+    await repo.add_engagement(BuyerSpaceEngagement(
+        engagement_id=_id("engagement"), workspace_id=participant.workspace_id, space_id=space_id,
+        participant_id=participant.participant_id, event_type="PORTAL_VIEW", occurred_at=_now(),
+    ))
     return {"space": space.model_dump(mode="json"), "participant": participant.model_dump(mode="json", exclude={"invitation_secret_hash"}), "next_steps": [x.model_dump(mode="json") for x in await repo.list_next_steps(participant.workspace_id, space_id)], "comments": [x.model_dump(mode="json") for x in await repo.list_comments(participant.workspace_id, space_id)], "uploads": [x.model_dump(mode="json") for x in await repo.list_uploads(participant.workspace_id, space_id)]}
 
 
@@ -546,14 +658,58 @@ class UploadRequest(BaseModel):
 
 
 @router.post("/buyer-portal/{space_id}/uploads", status_code=201)
-async def buyer_upload(space_id: str, body: UploadRequest, token: str) -> BuyerSpaceUpload:
-    participant = await _buyer_participant(token)
+async def buyer_upload(space_id: str, body: UploadRequest, token: str | None = None, x_buyer_token: str | None = Header(default=None)) -> BuyerSpaceUpload:
+    participant = await _buyer_participant(_present_buyer_token(token, x_buyer_token))
     if participant.space_id != space_id or participant.status != "ACTIVE" or participant.role == "VIEWER":
         raise HTTPException(status_code=403, detail="buyer is not allowed to upload")
     item = BuyerSpaceUpload(upload_id=_id("upload"), workspace_id=participant.workspace_id, space_id=space_id, uploaded_by=participant.participant_id, uploaded_at=_now(), **body.model_dump())
     repo = ProductWorkflowRepository()
     await repo.add_upload(item)
+    await repo.add_engagement(BuyerSpaceEngagement(
+        engagement_id=_id("engagement"), workspace_id=participant.workspace_id, space_id=space_id,
+        participant_id=participant.participant_id, event_type="UPLOAD", occurred_at=_now(),
+    ))
     await repo.add_notification(Notification(notification_id=_id("notification"), workspace_id=participant.workspace_id, recipient_id=(await _space_or_404(repo, participant.workspace_id, space_id)).created_by, kind="BUYER_UPLOAD", title="Buyer uploaded a file", body=item.filename, resource_id=item.upload_id, created_at=_now()))
+    return item
+
+
+@router.post("/buyer-portal/{space_id}/binary-uploads", status_code=201)
+async def buyer_binary_upload(space_id: str, file: UploadFile = File(...), token: str | None = None, x_buyer_token: str | None = Header(default=None)) -> BuyerSpaceUpload:
+    """Persist a buyer-provided file only after a mandatory malware scan.
+
+    The file bytes do not enter Neo4j; Neo4j receives retained metadata,
+    integrity hash and object key.  The endpoint fails closed if clamd is not
+    configured/reachable, which is safer than a development-only bypass.
+    """
+    participant = await _buyer_participant(_present_buyer_token(token, x_buyer_token))
+    if participant.space_id != space_id or participant.status != "ACTIVE" or participant.role == "VIEWER":
+        raise HTTPException(status_code=403, detail="buyer is not allowed to upload")
+    content = await file.read(get_settings().buyer_upload_max_bytes + 1)
+    try:
+        stored = await store_scanned_upload(
+            participant.workspace_id, space_id, file.filename or "upload", content
+        )
+    except UploadScanError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    item = BuyerSpaceUpload(
+        upload_id=_id("upload"), workspace_id=participant.workspace_id, space_id=space_id,
+        filename=file.filename or "upload", content_type=file.content_type or "application/octet-stream",
+        content_text=None, object_key=stored.object_key, sha256=stored.sha256, byte_size=stored.byte_size,
+        scan_status="PASSED", retention_until=_now() + timedelta(days=get_settings().buyer_upload_retention_days),
+        uploaded_by=participant.participant_id, uploaded_at=_now(),
+    )
+    repo = ProductWorkflowRepository()
+    await repo.add_upload(item)
+    await repo.add_engagement(BuyerSpaceEngagement(
+        engagement_id=_id("engagement"), workspace_id=participant.workspace_id, space_id=space_id,
+        participant_id=participant.participant_id, event_type="UPLOAD", occurred_at=_now(),
+    ))
+    owner = (await _space_or_404(repo, participant.workspace_id, space_id)).created_by
+    await repo.add_notification(Notification(
+        notification_id=_id("notification"), workspace_id=participant.workspace_id, recipient_id=owner,
+        kind="BUYER_BINARY_UPLOAD", title="Buyer uploaded a scanned file", body=item.filename,
+        resource_id=item.upload_id, created_at=_now(),
+    ))
     return item
 
 
@@ -634,7 +790,15 @@ async def request_assistant_action(
     if agent is None or not agent.active or body.action_type not in agent.allowed_actions:
         raise HTTPException(status_code=403, detail="agent is not allowed to request this action")
     try:
-        item = AssistantAction(action_id=_id("action"), workspace_id=workspace_id, agent_id=body.agent_id, action_type=body.action_type, payload=body.payload, requested_by=access.subject_id, requested_at=_now())
+        # cast, not a Literal on AssistantActionRequest.action_type: the real
+        # check is AssistantAction's own Literal field, and pydantic's
+        # ValidationError (a ValueError) is caught just below and returned as
+        # 422. Tightening the *request* model instead would make FastAPI
+        # reject at the edge, ahead of the agent-allowlist check above, so a
+        # disallowed agent sending a bad action_type would get 422 where it
+        # currently gets 403 -- a change to an authorization-visible response,
+        # which this type-only fix deliberately avoids.
+        item = AssistantAction(action_id=_id("action"), workspace_id=workspace_id, agent_id=body.agent_id, action_type=cast(Literal["CREATE_FOLLOW_UP", "CREATE_BUYER_SPACE", "RECORD_OUTCOME"], body.action_type), payload=body.payload, requested_by=access.subject_id, requested_at=_now())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await repo.upsert_action(item)
@@ -697,7 +861,11 @@ async def execute_approved_assistant_action(
         if raw_amount is not None and isinstance(raw_amount, bool):
             raise HTTPException(status_code=422, detail="invalid revenue-outcome payload")
         try:
-            outcome = RevenueOutcome(outcome_id=_id("outcome"), workspace_id=workspace_id, opportunity_id=opportunity_id, outcome_type=outcome_type, recorded_by=f"agent:{action.agent_id}", recorded_at=_now(), amount_cents=int(raw_amount) if isinstance(raw_amount, (str, int, float)) else None, note=title or None)
+            # cast is safe for the same reason as the assistant-action site
+            # above: RevenueOutcome's own Literal field does the real
+            # validation, and the resulting ValidationError (a ValueError) is
+            # caught immediately below and surfaced as 422.
+            outcome = RevenueOutcome(outcome_id=_id("outcome"), workspace_id=workspace_id, opportunity_id=opportunity_id, outcome_type=cast(Literal["WON", "LOST", "STAGE_ADVANCED", "STAGE_REGRESSED"], outcome_type), recorded_by=f"agent:{action.agent_id}", recorded_at=_now(), amount_cents=int(raw_amount) if isinstance(raw_amount, (str, int, float)) else None, note=title or None)
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail="invalid revenue-outcome payload") from exc
         await repo.record_outcome(outcome)
@@ -749,6 +917,37 @@ async def audit_export(
     _manager(access)
     events = await ProductWorkflowRepository().list_audit(workspace_id, limit=1000)
     return {"format": "application/json", "events": [event.model_dump(mode="json") for event in events]}
+
+
+@router.post("/retention/buyer-uploads/sweep")
+async def sweep_expired_buyer_uploads(
+    workspace_id: str = Depends(verify_api_key), access: AccessContext = Depends(get_access_context),
+) -> dict:
+    """Erase application-owned buyer-upload bytes at the configured retention boundary.
+
+    A legal hold on the Buyer Space is honored before the object or its text
+    metadata is touched.  This endpoint is intentionally scheduler-friendly:
+    deployment automation invokes it, while the application keeps the actual
+    decision and audit record deterministic and testable.
+    """
+    _manager(access)
+    repo = ProductWorkflowRepository()
+    now = _now()
+    erased: list[str] = []
+    held: list[str] = []
+    for upload in await repo.list_expired_uploads(workspace_id, now.isoformat()):
+        if await repo.active_hold(workspace_id, upload.space_id):
+            held.append(upload.upload_id)
+            continue
+        try:
+            await delete_scanned_upload(upload.object_key)
+        except UploadScanError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        deleted = upload.model_copy(update={"content_text": None, "deleted_at": now})
+        await repo.add_upload(deleted)
+        await _audit(repo, workspace_id, access, "retention.buyer_upload_erased", "BuyerSpaceUpload", upload.upload_id, space_id=upload.space_id)
+        erased.append(upload.upload_id)
+    return {"erased_upload_ids": erased, "held_upload_ids": held, "evaluated_at": now.isoformat()}
 
 
 @router.get("/content-assets/{content_asset_id}/revisions")

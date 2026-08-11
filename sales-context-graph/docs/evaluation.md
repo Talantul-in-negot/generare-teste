@@ -2044,18 +2044,18 @@ There are two honest launch positions:
 | Four-pillar product surface | Graph ingestion/context/Q&A/recommendations; responsive `/viz` Workflow console covers readiness, Buyer Spaces, revenue and meeting brief | **Partial** | Add role-specific production UX and production integrations; do not equate the bounded console with full platform parity |
 | Content Management | `ContentAsset` carries lifecycle policy fields and writes an immutable `ContentAssetRevision` snapshot on every source version transition; recommendations enforce `only_servable` | **Partial** | Add real Showpad lifecycle reconciliation and production permission/version evidence |
 | Permissions intact | `workspace_id` is structurally enforced; deny-by-default `AccessContext` covers opportunity/division routes, body-scoped Q&A/Ask/context/ingestion and signed panel tokens; `SSO_ENABLED=true` routes standard API requests through verified JWT/JWKS claims | **Partial / external IdP gap** | Connect a real IdP/SCIM directory, finalize group/division/opportunity claim mapping and extend policy to future connector/export surfaces |
-| Sales Readiness | Curriculum, assignment progress/score, knowledge-check attempts, role-play submissions, manager coaching reviews and certification issuance are executable | **Partial** | Add scored role-play review, team/cohort dashboards and richer learning-content delivery |
-| Buyer Engagement | Buyer Space ACL participants receive revocable token invitations; buyer portal supports acceptance, editor uploads, comments, MAP/Next Steps, seller notifications and update/revoke controls | **Partial** | Add a branded standalone buyer UI, binary object storage/virus scanning and engagement attribution |
+| Sales Readiness | Curriculum, assignments, knowledge checks, scored role-play reviews, manager coaching, certifications, learning resources and cohort progress dashboards are executable | **Partial** | Add rubric/clip-based scoring, richer learning delivery and production analytics |
+| Buyer Engagement | Buyer Space ACL participants receive revocable token invitations; the standalone buyer portal uses fragment/header tokens, supports comments, MAP/Next Steps, engagement events, text uploads and fail-closed ClamAV-scanned binary uploads | **Partial** | Configure encrypted production object storage/ClamAV and add branded customer theming plus measured attribution |
 | Revenue Intelligence | Signals/digests/content-effectiveness plus immutable manual/CRM-import-shaped `RevenueOutcome` records and a revenue summary with explicit non-causal attribution caveat | **Partial** | Reconcile real CRM outcomes, link activities/conversations/assets automatically, add configurable cohort dashboards and causal/attribution measurement |
 | Genie-style governed assistant | `/ask` stays evidence-backed; versioned agent definitions can request only allow-listed local actions, which require manager approval, execution and audit events | **Partial** | Add richer modalities, a complete custom-agent lifecycle and external action adapters with their own scoped credentials |
 | External sources and extensibility | LLM, Slack and parser adapters exist; no production Showpad OAuth/API client, content-picker SDK, Shares API, Salesforce/Dynamics installed app, MCP or Teams integration | **Gap** | Build connector contracts with OAuth2, token rotation, webhook/CDC cursors, retries and reconciliation; ship a Showpad sandbox connector first, then CRM auto-log and MCP/Teams adapters |
 | Field Meeting AI / CRM loop | Deterministic opportunity meeting brief exposes recent conversations and cited graph evidence; seller-confirmed follow-ups persist as application workflow state | **Partial** | Add live/post-meeting extraction review, calendar/CRM embedding, idempotent CRM write-back, conflict handling and per-field external-write audit trail |
 | Mobile and offline | `/viz` is responsive and installable as a PWA; the offline shell and workflow drafts are cached locally while authenticated deal responses are never cached | **Partial** | Add encrypted device storage, background write sync/conflict policy, native clients and mobile telemetry; do not imply Genie parity offline |
 | Identity and administration | API-key-per-workspace remains default; enabling `SSO_ENABLED=true` switches standard routes to tested OIDC/JWKS validation and verified-claim RBAC, but there is no live IdP/SCIM or self-service admin surface | **Partial / external IdP gap** | Connect a real OIDC/SAML IdP, map groups to roles/divisions/opportunities, implement SCIM deprovisioning, session/token rotation and user-level identity evidence |
-| Privacy and compliance | PII egress redaction, authenticated erasure, legal holds that block erasure, and JSON export of persisted workflow audit events exist | **Partial / compliance gap** | Complete third-party/object-store propagation, full access-log/SIEM export, DPA/subprocessor/data-residency controls and managed restore evidence |
-| Reliability and operations | CI, type/lint checks, queue visibility/reaper, bounded worker concurrency, metrics/alert rules, opt-in Prometheus/Alertmanager/Grafana and a weekly local backup/restore drill exist | **Partial** | Publish dated load results, p95/p99/error/queue-lag SLOs, managed telemetry/notification deployment, strict tenant-fair scheduling, capacity model, on-call runbooks and failure-injection tests |
+| Privacy and compliance | PII egress redaction, authenticated erasure, legal holds, application-owned Buyer Space upload retention sweep, and JSON export of persisted workflow audit events exist | **Partial / compliance gap** | Complete third-party/object-store propagation, full access-log/SIEM export, DPA/subprocessor/data-residency controls and managed restore evidence |
+| Reliability and operations | CI, type/lint checks, queue visibility/reaper, bounded worker concurrency, metrics/alert rules, local observability, weekly backup/restore and scheduled deterministic failure drills exist | **Partial** | Publish dated production-shaped load results, deploy managed telemetry/notification receivers, implement strict tenant-fair scheduling and run managed-service failure drills |
 | Data integrity and search | Workspace scoping, pagination/batching, uniqueness constraints, bounded full-text/prefix candidates and operator-run vector backfill are present | **Partial / production-data gap** | Run production embedding/index backfill with rollback/rebuild evidence, native blocking benchmarks and recall/latency gates |
-| UX and accessibility | `/viz` has semantic keyboard tabs, visible focus, responsive layout, live status and a unit-tested PWA/workflow surface | **Partial** | Run automated/manual WCAG 2.2 AA and screen-reader tests, add i18n/RTL, timezone/currency policy, a design-system review and product analytics |
+| UX and accessibility | `/viz` has semantic keyboard tabs, visible focus, responsive layout, live status, English/Romanian locale infrastructure, Buyer Space portal and unit-tested PWA/workflow contracts | **Partial** | Run browser-assisted/manual WCAG 2.2 AA and screen-reader tests, add an RTL locale together with direction testing, timezone/currency policy, design-system review and product analytics |
 
 ### Release gates to add to the implementation backlog
 
@@ -2082,13 +2082,17 @@ There are two honest launch positions:
   `PENDING_REVIEW` mentions, Conflict Detection resolution and Cross-deal
   Aggregation. It shows bounded candidates and scores, captures reviewer id
   and reason, persists decisions through the existing REST APIs, and restricts
-  mutation to reviewer/admin roles when RBAC enforcement is active. Add
-  reviewer assignment/SLA queues and a complete audit-history browser later.
-- **Implemented (API slice):** curriculum assignment and seller-readiness
-  summary; still add knowledge checks, coaching, certifications and UI.
-- **Implemented (API slice):** opportunity Buyer Spaces with comments and
-  MAP/Next Steps; still add participant ACLs, buyer-facing UI, uploads,
-  notification and engagement attribution.
+  mutation to reviewer/admin roles when RBAC enforcement is active. Reviewers
+  can assign a mention with a bounded SLA, list their assignments and inspect
+  decision/assignment history in the console.
+- **Implemented:** curriculum assignment, seller-readiness summary, knowledge
+  checks, role-play scoring, coaching, certifications, learning resources and
+  cohort dashboards; live content delivery and enterprise analytics remain
+  integration work.
+- **Implemented:** opportunity Buyer Spaces with participant ACLs, a standalone
+  buyer portal, text and scanner-gated binary uploads, notifications, comments,
+  MAP/Next Steps and engagement events; production object storage/scanner
+  operations and richer attribution evidence remain deployment work.
 - **Implemented (API slice):** deterministic pre-meeting brief and seller
   follow-up confirmation; still add CRM/calendar embedding and idempotent
   external activity/task write-back.
@@ -2246,3 +2250,30 @@ hosting, notification receivers, managed retention, OTLP collector credentials,
 multi-region database replication and restore evidence still require deployment
 authority and managed-service configuration; they are not claimed as complete
 merely because local manifests exist.
+
+### Implementation update: workflow governance, accessibility and reliability (2026-08-11)
+
+The remaining application-owned workflow gaps have been narrowed further:
+
+- Human Review now has persisted reviewer assignments, configurable bounded
+  SLA due dates, assignment completion on resolution, reviewer worklists and
+  a console history view combining decisions with assignment audit events.
+- Sales Readiness now includes manager-scored role plays, seller notification,
+  curriculum learning resources and cohort-level completion/score summaries.
+- Buyer Spaces now record portal/upload engagement. A standalone buyer portal
+  keeps invitation tokens in the URL fragment and sends them only as headers.
+  Binary uploads are stored outside Neo4j with hash/size metadata and are
+  fail-closed unless the ClamAV scanner is configured; retention sweeping
+  deletes expired application-owned upload bytes while honoring a legal hold
+  on the space.
+- The product surface has English/Romanian locale infrastructure, an automated
+  accessibility contract and a manual WCAG/screen-reader release checklist.
+- `docs/slo-and-capacity.md` records the pilot targets, sizing formula and
+  controlled failure drills. A scheduled CI workflow exercises deterministic
+  queue recovery, DLQ, alerting and rate-limit failure paths.
+
+These controls do not replace external evidence: production ClamAV/object
+storage encryption, manual assistive-technology testing, real workload SLO
+results, strict tenant-fair scheduling, IdP/SCIM, CRM/Showpad contracts and
+managed-service recovery exercises still require deployment credentials or
+customer-scale data.

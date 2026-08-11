@@ -184,7 +184,13 @@ def run_ragas(
     # configured count explicitly; providers that return fewer generations are
     # surfaced by RAGAS as warnings rather than hidden in the output.
     judge = LangchainLLMWrapper(ChatOpenAI(model=model, temperature=0, n=generations))
-    result = evaluate(dataset, metrics=metrics, llm=judge)
+    # Annotated Any because ragas types `evaluate()` as returning
+    # `EvaluationResult | Executor`; only the former is subscriptable, and
+    # mypy therefore rejects the `result[metric_name]` lookup below. The
+    # lookup is already defensive at runtime -- it is wrapped in
+    # `except (KeyError, TypeError, ValueError)` and falls back to None per
+    # metric -- so the union is handled, just not in a way mypy can see.
+    result: Any = evaluate(dataset, metrics=metrics, llm=judge)
     per_metric: dict[str, list[float | None]] = {}
     for metric_name in METRIC_NAMES:
         try:

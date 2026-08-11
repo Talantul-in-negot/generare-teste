@@ -75,7 +75,11 @@ async def verify_api_key(
     x_api_key: str | None = Header(None, alias="X-Api-Key"),
     workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
     authorization: str | None = Header(None, alias="Authorization"),
-    request: Request = None,
+    # A concrete Request annotation is a special FastAPI-injected value. A
+    # Request union is not supported by every FastAPI/Pydantic combination
+    # and may be treated as a response field. The None default remains only
+    # for direct unit calls; ASGI requests receive an actual Request.
+    request: Request = None,  # type: ignore[assignment]
 ) -> str:
     settings = get_settings()
     if settings.sso_enabled:
@@ -89,7 +93,12 @@ async def verify_api_key(
     if not workspace_id or not x_api_key:
         raise HTTPException(status_code=401, detail="X-Workspace-Id and X-Api-Key are required")
     expected = settings.workspace_api_keys.get(workspace_id)
-    valid_regular_key = bool(expected) and secrets.compare_digest(x_api_key, expected)
+    # `is not None` rather than `bool(...)` so mypy can narrow `expected` for
+    # compare_digest, which rejects str | None. Behaviour is unchanged: an
+    # empty-string configured key still fails, because x_api_key is guaranteed
+    # non-empty by the check above and compare_digest("<something>", "") is
+    # False. Comparison stays constant-time either way.
+    valid_regular_key = expected is not None and secrets.compare_digest(x_api_key, expected)
     valid_demo_key = (
         settings.demo_public_access_enabled
         and workspace_id == settings.demo_public_workspace_id

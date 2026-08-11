@@ -48,6 +48,16 @@ async def test_list_and_resolve_unresolved_mention(executor, monkeypatch):
         assert candidate_payload["mention_id"] == mention.mention_id
         assert isinstance(candidate_payload["candidates"], list)
 
+        assignment_resp = await client.post(
+            f"/api/v1/unresolved-mentions/{mention.mention_id}/assignment",
+            headers=headers,
+            json={"reviewer_id": "reviewer@example.com", "sla_hours": 2},
+        )
+        assert assignment_resp.status_code == 201
+        assignments = await client.get("/api/v1/unresolved-mentions/assignments", headers=headers)
+        assert assignments.status_code == 200
+        assert assignments.json()["assignments"][0]["mention_id"] == mention.mention_id
+
         resolve_resp = await client.post(
             f"/api/v1/unresolved-mentions/{mention.mention_id}/resolve",
             headers=headers,
@@ -61,6 +71,11 @@ async def test_list_and_resolve_unresolved_mention(executor, monkeypatch):
         assert resolve_resp.status_code == 200
         body = resolve_resp.json()
         assert body["selected_entity_id"] == "account-vw-group"
+        history = await client.get(
+            f"/api/v1/unresolved-mentions/{mention.mention_id}/history", headers=headers
+        )
+        assert history.status_code == 200
+        assert history.json()["decisions"][0]["reviewer_id"] == "reviewer@example.com"
 
         list_resp_after = await client.get("/api/v1/unresolved-mentions", headers=headers)
         remaining_ids = {m["mention_id"] for m in list_resp_after.json()["mentions"]}

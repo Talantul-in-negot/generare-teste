@@ -129,6 +129,26 @@ class RoleplaySession(BaseModel):
     submitted_at: datetime
 
 
+class LearningResource(BaseModel):
+    """A governed learning item attached to a curriculum.
+
+    This is intentionally metadata plus a source URL, not a second content
+    repository.  A future Showpad connector can resolve ``content_asset_id``
+    into a permission-aware asset without changing the readiness contract.
+    """
+
+    resource_id: str
+    workspace_id: str
+    curriculum_id: str
+    title: str = Field(min_length=1, max_length=300)
+    resource_type: Literal["ARTICLE", "VIDEO", "PLAYBOOK", "EXERCISE"]
+    url: str = Field(min_length=1, max_length=2000)
+    content_asset_id: str | None = None
+    required: bool = False
+    created_by: str
+    created_at: datetime
+
+
 class CoachingReview(BaseModel):
     review_id: str
     workspace_id: str
@@ -170,9 +190,38 @@ class BuyerSpaceUpload(BaseModel):
     space_id: str
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=1, max_length=200)
-    content_text: str = Field(min_length=1, max_length=20000)
+    content_text: str | None = Field(default=None, max_length=20000)
+    object_key: str | None = None
+    sha256: str | None = None
+    byte_size: int | None = Field(default=None, ge=0)
+    scan_status: Literal["TEXT_ONLY", "PASSED", "REJECTED"] = "TEXT_ONLY"
+    retention_until: datetime | None = None
+    deleted_at: datetime | None = None
     uploaded_by: str
     uploaded_at: datetime
+
+
+class BuyerSpaceEngagement(BaseModel):
+    engagement_id: str
+    workspace_id: str
+    space_id: str
+    participant_id: str
+    event_type: Literal["PORTAL_VIEW", "UPLOAD", "COMMENT", "NEXT_STEP_COMPLETED"]
+    occurred_at: datetime
+
+
+class ReviewAssignment(BaseModel):
+    """Explicit ownership and SLA for a PENDING_REVIEW mention."""
+
+    assignment_id: str
+    workspace_id: str
+    mention_id: str
+    reviewer_id: str
+    assigned_by: str
+    assigned_at: datetime
+    due_at: datetime
+    status: Literal["ASSIGNED", "COMPLETED", "CANCELLED"] = "ASSIGNED"
+    completed_at: datetime | None = None
 
 
 class Notification(BaseModel):

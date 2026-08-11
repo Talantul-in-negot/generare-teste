@@ -10,6 +10,7 @@ from src.domain.product_workflows import (
     AuditEvent,
     BuyerSpace,
     BuyerSpaceComment,
+    BuyerSpaceEngagement,
     BuyerSpaceNextStep,
     BuyerSpaceParticipant,
     BuyerSpaceUpload,
@@ -18,11 +19,13 @@ from src.domain.product_workflows import (
     Curriculum,
     KnowledgeCheck,
     KnowledgeCheckAttempt,
+    LearningResource,
     LegalHold,
     MeetingFollowUp,
     Notification,
     ReadinessAssignment,
     RevenueOutcome,
+    ReviewAssignment,
     RoleplaySession,
 )
 from src.graph.execution import GraphExecutor, scoped_match
@@ -42,10 +45,13 @@ _FOLLOW_UP = _return("f", ["follow_up_id", "workspace_id", "opportunity_id", "ti
 _CHECK = _return("k", ["check_id", "workspace_id", "curriculum_id", "title", "passing_score", "active", "created_by", "created_at"])
 _ATTEMPT = _return("a", ["attempt_id", "workspace_id", "check_id", "seller_id", "score", "passed", "submitted_at"])
 _ROLEPLAY = _return("r", ["session_id", "workspace_id", "curriculum_id", "seller_id", "scenario", "transcript", "score", "feedback", "status", "submitted_at"])
+_LEARNING_RESOURCE = _return("r", ["resource_id", "workspace_id", "curriculum_id", "title", "resource_type", "url", "content_asset_id", "required", "created_by", "created_at"])
 _COACHING = _return("c", ["review_id", "workspace_id", "seller_id", "reviewer_id", "subject", "note", "created_at"])
 _CERTIFICATION = _return("c", ["certification_id", "workspace_id", "curriculum_id", "seller_id", "issued_by", "issued_at", "expires_at", "status"])
 _PARTICIPANT = _return("p", ["participant_id", "workspace_id", "space_id", "email", "display_name", "role", "status", "invitation_secret_hash", "invited_by", "invited_at", "accepted_at"])
-_UPLOAD = _return("u", ["upload_id", "workspace_id", "space_id", "filename", "content_type", "content_text", "uploaded_by", "uploaded_at"])
+_UPLOAD = _return("u", ["upload_id", "workspace_id", "space_id", "filename", "content_type", "content_text", "object_key", "sha256", "byte_size", "scan_status", "retention_until", "deleted_at", "uploaded_by", "uploaded_at"])
+_ENGAGEMENT = _return("e", ["engagement_id", "workspace_id", "space_id", "participant_id", "event_type", "occurred_at"])
+_REVIEW_ASSIGNMENT = _return("r", ["assignment_id", "workspace_id", "mention_id", "reviewer_id", "assigned_by", "assigned_at", "due_at", "status", "completed_at"])
 _NOTIFICATION = _return("n", ["notification_id", "workspace_id", "recipient_id", "kind", "title", "body", "resource_id", "read_at", "created_at"])
 _AGENT = _return("a", ["agent_id", "workspace_id", "name", "version", "allowed_actions", "active", "created_by", "created_at"])
 _ACTION = _return("a", ["action_id", "workspace_id", "agent_id", "action_type", "payload", "requested_by", "requested_at", "status", "approved_by", "approved_at", "executed_at"])
@@ -78,6 +84,15 @@ class ProductWorkflowRepository:
     async def list_assignments(self, workspace_id: str, seller_id: str) -> list[ReadinessAssignment]:
         match = scoped_match("ReadinessAssignment", "a", seller_id="seller_id")
         rows = await self._executor.tenant_query(f"MATCH {match} RETURN {_ASSIGNMENT} ORDER BY a.assigned_at DESC", workspace_id=workspace_id, seller_id=seller_id)
+        return [ReadinessAssignment(**row) for row in rows]
+
+    async def list_assignments_for_curriculum(self, workspace_id: str, curriculum_id: str) -> list[ReadinessAssignment]:
+        match = scoped_match("ReadinessAssignment", "a", curriculum_id="curriculum_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN {_ASSIGNMENT} ORDER BY a.assigned_at DESC",
+            workspace_id=workspace_id,
+            curriculum_id=curriculum_id,
+        )
         return [ReadinessAssignment(**row) for row in rows]
 
     async def get_assignment(self, workspace_id: str, assignment_id: str) -> ReadinessAssignment | None:
@@ -164,6 +179,49 @@ class ProductWorkflowRepository:
         session = scoped_match("RoleplaySession", "r", session_id="session_id")
         await self._executor.tenant_query(f"MATCH {curriculum} MERGE {session} SET r += $item MERGE (c)-[:HAS_ROLEPLAY]->(r)", workspace_id=item.workspace_id, curriculum_id=item.curriculum_id, session_id=item.session_id, item=item.model_dump(mode="json"))
 
+    async def get_roleplay(self, workspace_id: str, session_id: str) -> RoleplaySession | None:
+        match = scoped_match("RoleplaySession", "r", session_id="session_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN {_ROLEPLAY}", workspace_id=workspace_id, session_id=session_id
+        )
+        return RoleplaySession(**rows[0]) if rows else None
+
+    async def list_roleplays(self, workspace_id: str, *, curriculum_id: str | None = None, seller_id: str | None = None) -> list[RoleplaySession]:
+        match = scoped_match("RoleplaySession", "r")
+        clauses: list[str] = []
+        params: dict[str, str] = {"workspace_id": workspace_id}
+        if curriculum_id:
+            clauses.append("r.curriculum_id = $curriculum_id")
+            params["curriculum_id"] = curriculum_id
+        if seller_id:
+            clauses.append("r.seller_id = $seller_id")
+            params["seller_id"] = seller_id
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = await self._executor.tenant_query(
+            f"MATCH {match}{where} RETURN {_ROLEPLAY} ORDER BY r.submitted_at DESC", **params
+        )
+        return [RoleplaySession(**row) for row in rows]
+
+    async def add_learning_resource(self, item: LearningResource) -> None:
+        curriculum = scoped_match("Curriculum", "c", curriculum_id="curriculum_id")
+        resource = scoped_match("LearningResource", "r", resource_id="resource_id")
+        await self._executor.tenant_query(
+            f"MATCH {curriculum} MERGE {resource} SET r += $item MERGE (c)-[:HAS_LEARNING_RESOURCE]->(r)",
+            workspace_id=item.workspace_id,
+            curriculum_id=item.curriculum_id,
+            resource_id=item.resource_id,
+            item=item.model_dump(mode="json"),
+        )
+
+    async def list_learning_resources(self, workspace_id: str, curriculum_id: str) -> list[LearningResource]:
+        match = scoped_match("LearningResource", "r", curriculum_id="curriculum_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN {_LEARNING_RESOURCE} ORDER BY r.created_at",
+            workspace_id=workspace_id,
+            curriculum_id=curriculum_id,
+        )
+        return [LearningResource(**row) for row in rows]
+
     async def add_coaching_review(self, item: CoachingReview) -> None:
         review = scoped_match("CoachingReview", "c", review_id="review_id")
         await self._executor.tenant_query(f"MERGE {review} SET c += $item", workspace_id=item.workspace_id, review_id=item.review_id, item=item.model_dump(mode="json"))
@@ -190,12 +248,68 @@ class ProductWorkflowRepository:
     async def add_upload(self, item: BuyerSpaceUpload) -> None:
         space = scoped_match("BuyerSpace", "s", space_id="space_id")
         upload = scoped_match("BuyerSpaceUpload", "u", upload_id="upload_id")
-        await self._executor.tenant_query(f"MATCH {space} CREATE {upload} SET u += $item MERGE (s)-[:HAS_UPLOAD]->(u)", workspace_id=item.workspace_id, space_id=item.space_id, upload_id=item.upload_id, item=item.model_dump(mode="json"))
+        await self._executor.tenant_query(f"MATCH {space} MERGE {upload} SET u += $item MERGE (s)-[:HAS_UPLOAD]->(u)", workspace_id=item.workspace_id, space_id=item.space_id, upload_id=item.upload_id, item=item.model_dump(mode="json"))
 
     async def list_uploads(self, workspace_id: str, space_id: str) -> list[BuyerSpaceUpload]:
         match = scoped_match("BuyerSpaceUpload", "u", space_id="space_id")
         rows = await self._executor.tenant_query(f"MATCH {match} RETURN {_UPLOAD} ORDER BY u.uploaded_at DESC", workspace_id=workspace_id, space_id=space_id)
         return [BuyerSpaceUpload(**row) for row in rows]
+
+    async def list_expired_uploads(self, workspace_id: str, before: str) -> list[BuyerSpaceUpload]:
+        match = scoped_match("BuyerSpaceUpload", "u")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} WHERE u.retention_until IS NOT NULL AND u.retention_until <= $before AND u.deleted_at IS NULL RETURN {_UPLOAD}",
+            workspace_id=workspace_id,
+            before=before,
+        )
+        return [BuyerSpaceUpload(**row) for row in rows]
+
+    async def add_engagement(self, item: BuyerSpaceEngagement) -> None:
+        space = scoped_match("BuyerSpace", "s", space_id="space_id")
+        engagement = scoped_match("BuyerSpaceEngagement", "e", engagement_id="engagement_id")
+        await self._executor.tenant_query(
+            f"MATCH {space} CREATE {engagement} SET e += $item MERGE (s)-[:HAS_ENGAGEMENT]->(e)",
+            workspace_id=item.workspace_id,
+            space_id=item.space_id,
+            engagement_id=item.engagement_id,
+            item=item.model_dump(mode="json"),
+        )
+
+    async def list_engagement(self, workspace_id: str, space_id: str) -> list[BuyerSpaceEngagement]:
+        match = scoped_match("BuyerSpaceEngagement", "e", space_id="space_id")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} RETURN {_ENGAGEMENT} ORDER BY e.occurred_at DESC LIMIT 500",
+            workspace_id=workspace_id,
+            space_id=space_id,
+        )
+        return [BuyerSpaceEngagement(**row) for row in rows]
+
+    async def upsert_review_assignment(self, item: ReviewAssignment) -> None:
+        assignment = scoped_match("ReviewAssignment", "r", assignment_id="assignment_id")
+        await self._executor.tenant_query(
+            f"MERGE {assignment} SET r += $item",
+            workspace_id=item.workspace_id,
+            assignment_id=item.assignment_id,
+            item=item.model_dump(mode="json"),
+        )
+
+    async def active_review_assignment(self, workspace_id: str, mention_id: str) -> ReviewAssignment | None:
+        rows = await self._executor.tenant_query(
+            f"MATCH (r:ReviewAssignment {{workspace_id: $workspace_id, mention_id: $mention_id, status: 'ASSIGNED'}}) RETURN {_REVIEW_ASSIGNMENT} ORDER BY r.assigned_at DESC LIMIT 1",
+            workspace_id=workspace_id,
+            mention_id=mention_id,
+        )
+        return ReviewAssignment(**rows[0]) if rows else None
+
+    async def list_review_assignments(self, workspace_id: str, *, reviewer_id: str | None = None) -> list[ReviewAssignment]:
+        match = scoped_match("ReviewAssignment", "r")
+        where = " WHERE r.reviewer_id = $reviewer_id" if reviewer_id else ""
+        rows = await self._executor.tenant_query(
+            f"MATCH {match}{where} RETURN {_REVIEW_ASSIGNMENT} ORDER BY r.due_at",
+            workspace_id=workspace_id,
+            **({"reviewer_id": reviewer_id} if reviewer_id else {}),
+        )
+        return [ReviewAssignment(**row) for row in rows]
 
     async def add_notification(self, item: Notification) -> None:
         notification = scoped_match("Notification", "n", notification_id="notification_id")

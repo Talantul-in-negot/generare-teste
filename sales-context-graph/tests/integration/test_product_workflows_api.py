@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import httpx
@@ -9,7 +10,9 @@ import pytest
 
 from api.main import app
 from src.domain.crm import Opportunity
+from src.domain.product_workflows import BuyerSpace, BuyerSpaceUpload
 from src.graph.repositories.crm_repository import CrmRepository
+from src.graph.repositories.product_workflow_repository import ProductWorkflowRepository
 from tests.conftest import auth_headers
 
 pytestmark = pytest.mark.asyncio
@@ -74,6 +77,31 @@ async def test_readiness_buyer_engagement_revenue_and_meeting_workflow(executor,
             json={"curriculum_id": curriculum.json()["curriculum_id"], "seller_id": "seller-workflow", "scenario": "Discovery call", "transcript": "Seller: What matters most?"},
         )
         assert roleplay.status_code == 201
+        scored_roleplay = await client.post(
+            f"/api/v1/readiness/roleplays/{roleplay.json()['session_id']}/score", headers=headers,
+            json={"score": 88, "feedback": "Good discovery framing.", "passed": True},
+        )
+        assert scored_roleplay.status_code == 200
+        assert scored_roleplay.json()["status"] == "PASSED"
+        learning_resource = await client.post(
+            "/api/v1/readiness/learning-resources", headers=headers,
+            json={
+                "curriculum_id": curriculum.json()["curriculum_id"],
+                "title": "Discovery playbook", "resource_type": "PLAYBOOK",
+                "url": "https://example.test/discovery", "required": True,
+            },
+        )
+        assert learning_resource.status_code == 201
+        resources = await client.get(
+            f"/api/v1/readiness/curricula/{curriculum.json()['curriculum_id']}/learning-resources",
+            headers=headers,
+        )
+        assert resources.status_code == 200 and resources.json()[0]["required"] is True
+        cohort = await client.get(
+            f"/api/v1/readiness/cohorts/{curriculum.json()['curriculum_id']}", headers=headers
+        )
+        assert cohort.status_code == 200
+        assert cohort.json()["roleplay_scored"] == 1
         coaching = await client.post(
             "/api/v1/readiness/coaching-reviews", headers=headers,
             json={"seller_id": "seller-workflow", "subject": "Discovery", "note": "Ask one follow-up question."},
@@ -121,6 +149,9 @@ async def test_readiness_buyer_engagement_revenue_and_meeting_workflow(executor,
         portal = await client.get(f"/api/v1/buyer-portal/{space_id}", params={"token": buyer_token})
         assert portal.status_code == 200
         assert portal.json()["uploads"][0]["filename"] == "security-notes.txt"
+        detail_after_portal = await client.get(f"/api/v1/buyer-spaces/{space_id}", headers=headers)
+        assert detail_after_portal.status_code == 200
+        assert detail_after_portal.json()["engagement"][0]["event_type"] in {"PORTAL_VIEW", "UPLOAD"}
         revoked = await client.patch(
             f"/api/v1/buyer-spaces/{space_id}/participants/{invitation.json()['participant']['participant_id']}",
             headers=headers, json={"status": "REVOKED"},
@@ -188,3 +219,42 @@ async def test_assignment_rejects_unknown_curriculum(executor, monkeypatch):
             json={"curriculum_id": "not-present", "seller_id": "seller"},
         )
     assert response.status_code == 404
+
+
+async def test_buyer_upload_retention_sweep_respects_legal_hold(executor, monkeypatch):
+    workspace_id = f"ws-retention-{uuid4().hex[:8]}"
+    headers = auth_headers(monkeypatch, workspace_id)
+    opportunity_id = await _seed_opportunity(executor, workspace_id)
+    repo = ProductWorkflowRepository(executor)
+    now = datetime.now(timezone.utc)
+    space = BuyerSpace(
+        space_id=f"space-{uuid4().hex}", workspace_id=workspace_id, opportunity_id=opportunity_id,
+        title="Retention room", created_by="seller", created_at=now,
+    )
+    await repo.upsert_space(space)
+    expired = BuyerSpaceUpload(
+        upload_id=f"upload-{uuid4().hex}", workspace_id=workspace_id, space_id=space.space_id,
+        filename="expired.txt", content_type="text/plain", content_text="delete this",
+        retention_until=now - timedelta(days=1), uploaded_by="buyer", uploaded_at=now,
+    )
+    await repo.add_upload(expired)
+
+    async with _client() as client:
+        sweep = await client.post("/api/v1/retention/buyer-uploads/sweep", headers=headers)
+        assert sweep.status_code == 200
+        assert expired.upload_id in sweep.json()["erased_upload_ids"]
+
+        held = BuyerSpaceUpload(
+            upload_id=f"upload-{uuid4().hex}", workspace_id=workspace_id, space_id=space.space_id,
+            filename="held.txt", content_type="text/plain", content_text="preserve this",
+            retention_until=now - timedelta(days=1), uploaded_by="buyer", uploaded_at=now,
+        )
+        await repo.add_upload(held)
+        hold = await client.post(
+            "/api/v1/legal-holds", headers=headers,
+            json={"subject_type": "BuyerSpace", "subject_id": space.space_id, "reason": "Preservation"},
+        )
+        assert hold.status_code == 201
+        held_sweep = await client.post("/api/v1/retention/buyer-uploads/sweep", headers=headers)
+        assert held_sweep.status_code == 200
+        assert held.upload_id in held_sweep.json()["held_upload_ids"]

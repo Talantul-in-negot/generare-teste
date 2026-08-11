@@ -255,6 +255,17 @@ class Settings(BaseSettings):
     # early, not a short TTL forcing every embed to be re-minted constantly.
     panel_token_ttl_seconds: int = 60 * 60 * 24 * 365
 
+    # Buyer-space binary uploads are written outside Neo4j and are never
+    # accepted unscanned.  ``buyer_upload_scanner=clamav`` enables the clamd
+    # INSTREAM protocol; the endpoint returns 503 when disabled/unavailable
+    # instead of quietly persisting an unscanned file.
+    buyer_upload_storage_dir: str = "data/buyer_uploads"
+    buyer_upload_max_bytes: int = 10 * 1024 * 1024
+    buyer_upload_scanner: Literal["disabled", "clamav"] = "disabled"
+    buyer_upload_clamav_host: str = "localhost"
+    buyer_upload_clamav_port: int = 3310
+    buyer_upload_retention_days: int = 90
+
     # ── App ───────────────────────────────────────────────────────────────────────
     log_level: str = "INFO"
     env: str = "development"

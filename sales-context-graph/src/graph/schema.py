@@ -61,6 +61,8 @@ INDEX_STATEMENTS: list[str] = [
     "CREATE INDEX notification_workspace_recipient IF NOT EXISTS FOR (n:Notification) ON (n.workspace_id, n.recipient_id)",
     "CREATE INDEX audit_event_workspace_occurred IF NOT EXISTS FOR (n:WorkflowAuditEvent) ON (n.workspace_id, n.occurred_at)",
     "CREATE INDEX content_revision_workspace_asset IF NOT EXISTS FOR (n:ContentAssetRevision) ON (n.workspace_id, n.content_asset_id)",
+    "CREATE INDEX review_assignment_workspace_reviewer IF NOT EXISTS FOR (n:ReviewAssignment) ON (n.workspace_id, n.reviewer_id, n.due_at)",
+    "CREATE INDEX buyer_engagement_workspace_space IF NOT EXISTS FOR (n:BuyerSpaceEngagement) ON (n.workspace_id, n.space_id, n.occurred_at)",
 ]
 
 # Existing deployments created non-unique identity indexes before uniqueness
@@ -130,6 +132,9 @@ CONSTRAINT_STATEMENTS: list[str] = [
     "CREATE CONSTRAINT legal_hold_workspace_id_unique IF NOT EXISTS FOR (n:LegalHold) REQUIRE (n.workspace_id, n.hold_id) IS UNIQUE",
     "CREATE CONSTRAINT workflow_audit_workspace_id_unique IF NOT EXISTS FOR (n:WorkflowAuditEvent) REQUIRE (n.workspace_id, n.audit_event_id) IS UNIQUE",
     "CREATE CONSTRAINT content_revision_workspace_id_unique IF NOT EXISTS FOR (n:ContentAssetRevision) REQUIRE (n.workspace_id, n.revision_id) IS UNIQUE",
+    "CREATE CONSTRAINT review_assignment_workspace_id_unique IF NOT EXISTS FOR (n:ReviewAssignment) REQUIRE (n.workspace_id, n.assignment_id) IS UNIQUE",
+    "CREATE CONSTRAINT learning_resource_workspace_id_unique IF NOT EXISTS FOR (n:LearningResource) REQUIRE (n.workspace_id, n.resource_id) IS UNIQUE",
+    "CREATE CONSTRAINT buyer_engagement_workspace_id_unique IF NOT EXISTS FOR (n:BuyerSpaceEngagement) REQUIRE (n.workspace_id, n.engagement_id) IS UNIQUE",
 ]
 
 ALL_STATEMENTS: list[str] = [
@@ -162,6 +167,8 @@ ALL_INDEX_NAMES: list[str] = [
     "notification_workspace_recipient",
     "audit_event_workspace_occurred",
     "content_revision_workspace_asset",
+    "review_assignment_workspace_reviewer",
+    "buyer_engagement_workspace_space",
     "account_contact_names",
     "contact_embeddings_v1",
 ]
@@ -200,4 +207,7 @@ ALL_CONSTRAINT_NAMES: list[str] = [
     "legal_hold_workspace_id_unique",
     "workflow_audit_workspace_id_unique",
     "content_revision_workspace_id_unique",
+    "review_assignment_workspace_id_unique",
+    "learning_resource_workspace_id_unique",
+    "buyer_engagement_workspace_id_unique",
 ]

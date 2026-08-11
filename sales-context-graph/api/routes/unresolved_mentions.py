@@ -5,16 +5,19 @@ phase. No review UI is required.'
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.dependencies import get_access_context, verify_api_key
 from src.auth.policy import AccessContext, AccessDenied, require_role
 from src.core.config import get_settings
+from src.domain.product_workflows import AuditEvent, ReviewAssignment
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
+from src.graph.repositories.product_workflow_repository import ProductWorkflowRepository
 from src.graph.repositories.review_repository import ReviewRepository
 from src.resolution.candidates import CandidateGenerator, union_candidates
 from src.resolution.scoring import rank_candidates, score_candidate
@@ -40,6 +43,97 @@ class ResolveMentionRequest(BaseModel):
     original_scores: dict = {}
     reason: str | None = None
     previous_review_decision_id: str | None = None
+
+
+def _id(prefix: str) -> str:
+    return f"{prefix}_{uuid4().hex}"
+
+
+async def _audit_assignment(
+    repo: ProductWorkflowRepository,
+    workspace_id: str,
+    access: AccessContext,
+    action: str,
+    assignment: ReviewAssignment,
+) -> None:
+    await repo.record_audit(AuditEvent(
+        audit_event_id=_id("audit"), workspace_id=workspace_id, actor_id=access.subject_id,
+        action=action, resource_type="ReviewAssignment", resource_id=assignment.assignment_id,
+        detail={"mention_id": assignment.mention_id, "reviewer_id": assignment.reviewer_id,
+                "due_at": assignment.due_at.isoformat(), "status": assignment.status},
+        occurred_at=datetime.now(timezone.utc),
+    ))
+
+
+class ReviewAssignmentRequest(BaseModel):
+    reviewer_id: str = Field(min_length=1, max_length=320)
+    due_at: datetime | None = None
+    sla_hours: int = Field(default=24, ge=1, le=24 * 30)
+
+
+@router.post("/{mention_id}/assignment", status_code=201)
+async def assign_review(
+    mention_id: str,
+    body: ReviewAssignmentRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> ReviewAssignment:
+    _require_reviewer(access)
+    review_repo = ReviewRepository()
+    mention = await review_repo.get_mention(workspace_id, mention_id)
+    if mention is None or mention.resolution_status.value != "PENDING_REVIEW":
+        raise HTTPException(status_code=409, detail="mention is not pending review")
+    repo = ProductWorkflowRepository()
+    existing = await repo.active_review_assignment(workspace_id, mention_id)
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="mention already has an active review assignment")
+    now = datetime.now(timezone.utc)
+    item = ReviewAssignment(
+        assignment_id=_id("review_assignment"), workspace_id=workspace_id, mention_id=mention_id,
+        reviewer_id=body.reviewer_id, assigned_by=access.subject_id, assigned_at=now,
+        due_at=body.due_at or now + timedelta(hours=body.sla_hours),
+    )
+    await repo.upsert_review_assignment(item)
+    await _audit_assignment(repo, workspace_id, access, "review.assignment_created", item)
+    return item
+
+
+@router.get("/assignments")
+async def list_review_assignments(
+    reviewer_id: str | None = None,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
+    _require_reviewer(access)
+    assignments = await ProductWorkflowRepository().list_review_assignments(workspace_id, reviewer_id=reviewer_id)
+    now = datetime.now(timezone.utc)
+    return {
+        "assignments": [assignment.model_dump(mode="json") for assignment in assignments],
+        "overdue_assignment_ids": [assignment.assignment_id for assignment in assignments if assignment.status == "ASSIGNED" and assignment.due_at < now],
+    }
+
+
+@router.get("/{mention_id}/history")
+async def review_history(
+    mention_id: str,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
+    _require_reviewer(access)
+    review_repo = ReviewRepository()
+    mention = await review_repo.get_mention(workspace_id, mention_id)
+    if mention is None:
+        raise HTTPException(status_code=404, detail="mention not found")
+    workflow_repo = ProductWorkflowRepository()
+    assignment = await workflow_repo.active_review_assignment(workspace_id, mention_id)
+    decisions = await review_repo.list_review_decisions_for_mention(workspace_id, mention_id)
+    audit = await workflow_repo.list_audit(workspace_id, limit=1000)
+    return {
+        "mention": mention.model_dump(mode="json"),
+        "assignment": assignment.model_dump(mode="json") if assignment else None,
+        "decisions": [decision.model_dump(mode="json") for decision in decisions],
+        "events": [event.model_dump(mode="json") for event in audit if event.detail.get("mention_id") == mention_id],
+    }
 
 
 @router.get("")
@@ -145,6 +239,13 @@ async def resolve_mention(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    workflow_repo = ProductWorkflowRepository()
+    assignment = await workflow_repo.active_review_assignment(workspace_id, mention_id)
+    if assignment is not None:
+        completed = assignment.model_copy(update={"status": "COMPLETED", "completed_at": datetime.now(timezone.utc)})
+        await workflow_repo.upsert_review_assignment(completed)
+        await _audit_assignment(workflow_repo, workspace_id, access, "review.assignment_completed", completed)
 
     return {
         "review_decision_id": decision.review_decision_id,

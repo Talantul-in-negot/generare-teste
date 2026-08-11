@@ -358,11 +358,17 @@ The local product surface now extends those initial API slices:
   Readiness, Buyer Spaces, Revenue Intelligence and Meeting Brief. It is an
   installable PWA: the UI shell and unsent workflow draft are available
   offline, while authenticated deal data is deliberately never cached.
-- Readiness adds knowledge-check attempts, role-play submission, manager
-  coaching reviews and certification issuance after a completed assignment.
+- Readiness adds knowledge-check attempts, manager-scored role-play reviews,
+  coaching, certifications, curriculum learning resources and cohort-level
+  completion/score summaries.
 - Buyer Spaces support participant invitations with revocable, hashed access
-  tokens. Accepted buyer editors can upload bounded text artifacts; sellers
-  can update/revoke spaces and participants, and receive in-app notices.
+  tokens. Accepted buyer editors can upload bounded text artifacts; a
+  standalone `/viz/buyer` portal keeps bearer tokens in the URL fragment and
+  sends them as headers. Binary uploads are stored outside Neo4j only after a
+  configured ClamAV scan, while engagement events and in-app notices give the
+  seller a local audit trail.
+- Human Review supports explicit reviewer assignment, SLA due dates, reviewer
+  worklists and a decision/assignment history before or after resolution.
 - Content assets retain immutable `ContentAssetRevision` snapshots for every
   version transition. `GET /api/v1/content-assets/{content_asset_id}/revisions`
   returns the history.
@@ -370,9 +376,10 @@ The local product surface now extends those initial API slices:
   A manager must approve it; execution is recorded in the workflow audit
   export. `LegalHold` blocks the erasure route until explicitly released.
 
-Binary object storage, virus scanning, native mobile apps, OAuth/CRM write-back
-and managed retention/SIEM infrastructure remain integration or deployment
-work; this repository does not pretend they are complete.
+Production object storage encryption/ClamAV operation, native mobile apps,
+OAuth/CRM write-back and managed retention/SIEM infrastructure remain
+integration or deployment work; this repository does not pretend they are
+complete.
 
 ## Runtime defaults
 
