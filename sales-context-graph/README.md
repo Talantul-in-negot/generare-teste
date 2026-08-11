@@ -400,6 +400,34 @@ breakdown per module.
 
 ## Known limitations
 
+- **Entity resolution is not invoked by the ingestion worker.** This is the
+  most important scope caveat in this document, so it is first. The
+  resolution engine (`src/resolution/`: deterministic Stage A, candidate
+  blocking, lexical+semantic+relational scoring, and the
+  AUTO_LINKED / PENDING_REVIEW / UNRESOLVED policy with its margin and
+  threshold rules) is implemented, explainable and covered by integration
+  tests — but the callers that actually run `resolve_mention()` are
+  `demo_volkswagen.py`, the test suite, and the human-review service
+  (`src/review/`), **not** `TranscriptIngestionPipeline`. Ingesting a
+  transcript today persists segments, runs *speaker* resolution
+  (`src/resolution/speaker.py`, a narrower email/name match) and writes
+  Claims whose `subject_id` is the opaque `speaker_label`. The pipeline's
+  own module docstring describes the intended follow-up — Claims are
+  late-reconciled "once a Mention naming that speaker resolves" — but
+  nothing in the ingestion path constructs those `Mention`s yet, so that
+  reconciliation does not fire in a deployed run. Closing this is the next
+  increment, not a rewrite: the engine and the review UI on both sides of
+  the gap already exist.
+- **Extraction in the worker is the fixture provider, not the LLM one.**
+  `src/ingestion/worker.py` constructs `FixtureExtractionProvider()`
+  (deterministic regex) directly; `LlmExtractionProvider` is implemented
+  against the same Protocol and unit-tested, but is not constructed
+  anywhere outside tests, so no runtime configuration currently selects it.
+  Claim extraction in a deployed ingestion run is therefore rule-based.
+  The Protocol boundary is the point — swapping providers is a
+  constructor change, not a refactor — but the swap is not wired to a
+  setting today, and the architecture diagram's "Fixture / LLM" pairing
+  describes the interface, not two live runtime options.
 - **No real packaging**: imports resolve via `pythonpath = ["."]`
   (`pyproject.toml`) and `PYTHONPATH=/app` (`Dockerfile`), not an installable
   package — a deliberate Increment 1 decision, documented in `src/core/config.py`'s

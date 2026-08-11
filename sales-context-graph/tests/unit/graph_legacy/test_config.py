@@ -53,7 +53,10 @@ def test_get_settings_is_a_cached_singleton():
 
 def test_production_with_default_password_raises():
     with pytest.raises(ValueError, match="neo4j_password"):
-        Settings(env="production", neo4j_password="scg_dev_local", workspace_api_keys={"ws-1": "k"})
+        Settings(
+            _env_file=None, env="production", neo4j_password="scg_dev_local",
+            workspace_api_keys={"ws-1": "k"},
+        )
 
 
 def test_production_without_workspace_api_keys_raises():
@@ -73,8 +76,16 @@ def test_production_without_panel_token_secret_raises():
 
 
 def test_production_with_changed_password_and_api_keys_does_not_raise():
+    # _env_file=None is load-bearing here, not boilerplate (see this module's
+    # docstring). Without it this test reads the developer's real `.env`, and
+    # once that file gained DEMO_PUBLIC_ACCESS_ENABLED=true (for the public
+    # demo), the production guard for *that* field fired and failed a test
+    # that has nothing to do with it. CI never caught it -- CI has no `.env`
+    # -- so it only broke on machines that followed the README's own
+    # `cp .env.example .env` instruction. Exactly the failure mode this
+    # module's docstring already warned about.
     settings = Settings(
-        env="production", neo4j_password="a-real-secret", workspace_api_keys={"ws-1": "k"},
-        panel_token_secret="a-real-panel-secret",
+        _env_file=None, env="production", neo4j_password="a-real-secret",
+        workspace_api_keys={"ws-1": "k"}, panel_token_secret="a-real-panel-secret",
     )
     assert settings.env == "production"

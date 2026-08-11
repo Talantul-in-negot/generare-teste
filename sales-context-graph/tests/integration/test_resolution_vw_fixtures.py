@@ -219,15 +219,60 @@ async def test_weak_base_candidate_cannot_autolink_through_relational_bonus_alon
         relational_signals_by_entity={weak_match.account_id: frozenset({"a", "b", "c", "d", "e"})},
     )
 
+    # "Totally Unrelated Company" shares no token with "Volks Wagen", so
+    # name_candidates() surfaces it via neither the full-text query nor the
+    # first-token prefix fallback ("volks") -- it is deterministically not a
+    # candidate at all. That is the property under test here: maximal
+    # relational evidence cannot *conjure* a candidate that lexical blocking
+    # never proposed. The companion test below covers the other half (a
+    # candidate that IS surfaced, but too weak to auto-link).
     assert outcome.decision.status != ResolutionStatus.AUTO_LINKED
-    if outcome.decision.base_score is None:
-        # A full-text index can legitimately return no weak candidate while it
-        # is refreshing. That is fail-safe, but it does not provide a score to
-        # threshold; keep the stronger invariant that this account was not
-        # surfaced for linking.
-        assert weak_match.account_id not in outcome.candidates_shown
-    else:
-        assert outcome.decision.base_score < 0.70
+    assert outcome.decision.resolved_entity_id is None
+    assert weak_match.account_id not in outcome.candidates_shown
+    assert outcome.decision.base_score is None  # no candidate => nothing to score
+
+
+async def test_surfaced_but_weak_candidate_cannot_autolink_through_relational_bonus_alone(executor):
+    """The scoring-threshold half of the invariant above.
+
+    History worth keeping: this coverage was silently lost. The original test
+    asserted `base_score < 0.70` against "Totally Unrelated Company", which
+    only worked while name_candidates() fell back to all_names_in_workspace
+    (the entire tenant). Commit 1c12a01 replaced that with a bounded
+    full-text + prefix lookup -- a correct scale fix -- after which the weak
+    account was never surfaced and `base_score` was always None. The
+    assertion was then relaxed to tolerate None, which made it vacuous (it
+    checked that an *empty* list did not contain the account). This test
+    restores the real check with a fixture that survives bounded blocking:
+    "Volksbank" shares the "volks" prefix token, so it is genuinely
+    surfaced and genuinely scored -- and must still fail to auto-link.
+    """
+    workspace_id = _ws()
+    crm_repo = CrmRepository(executor)
+    candidate_generator = CandidateGenerator(executor)
+
+    weak_match = Account(
+        account_id=crm_entity_id(workspace_id, "salesforce", "Account", "001VOLKSBANK"),
+        workspace_id=workspace_id, source_record_id="rec-volksbank",
+        name="Volksbank Retail Holdings", domain="volksbank-retail.example",
+    )
+    await crm_repo.upsert_account(weak_match)
+
+    mention = _vw_mention(workspace_id, segment_id("conv-weak-surfaced", 0))
+
+    outcome = await resolve_mention(
+        workspace_id=workspace_id, mention=mention, entity_type="Account",
+        candidate_generator=candidate_generator, decided_at=_T0,
+        relational_signals_by_entity={weak_match.account_id: frozenset({"a", "b", "c", "d", "e"})},
+    )
+
+    # Surfaced by the prefix fallback, so it really is scored...
+    assert weak_match.account_id in outcome.candidates_shown
+    assert outcome.decision.base_score is not None
+    # ...and still below the base threshold, so no amount of relational
+    # bonus (applied only after base) can push it over the auto-link line.
+    assert outcome.decision.base_score < 0.70
+    assert outcome.decision.status != ResolutionStatus.AUTO_LINKED
 
 
 async def test_duplicate_exact_names_do_not_deterministic_link_and_tied_margin_forces_review(executor):

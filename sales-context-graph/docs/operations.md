@@ -45,6 +45,37 @@ For a repeatable local performance baseline, run `make loadtest`. For a
 destructive local backup/restore round-trip, run `make backup-verify` only
 against disposable infrastructure.
 
+## Local observability stack
+
+The application already exposes Prometheus metrics at `GET /metrics`. Set a
+unique `GRAFANA_ADMIN_PASSWORD` in `.env` before exposing Grafana outside a
+local machine, then start the opt-in local stack:
+
+```bash
+docker compose --profile observability up -d
+```
+
+- Prometheus: `http://localhost:9090` scrapes `api:8000/metrics` every 15
+  seconds and loads `alerting/prometheus_rules.yml`.
+- Alertmanager: `http://localhost:9093` displays alerts locally. Its committed
+  receiver is intentionally log-only; production notification credentials
+  belong in deployment-managed secrets.
+- Grafana: `http://localhost:3000` uses the configured admin credentials and
+  provisions the **Sales Context Graph Overview** dashboard automatically.
+
+Prometheus metrics and Grafana are distinct from OpenTelemetry tracing. A
+production deployment must also configure an OTLP collector/exporter with the
+standard `OTEL_*` variables; no hosted telemetry credentials are committed.
+
+## Backup and recovery drill
+
+`.github/workflows/dr-drill.yml` runs the disposable local Neo4j
+backup/restore round trip weekly and on demand. It proves that the repository's
+backup scripts can recover a marker after simulated local data loss. It does
+not back up AuraDB or Fly Redis, and it is not evidence of multi-region failover;
+those production recovery controls must be supplied and tested with the managed
+providers under the agreed RPO/RTO.
+
 ## Triggering the digest
 
 Any scheduler that can make an authenticated HTTPS POST works. Two examples:

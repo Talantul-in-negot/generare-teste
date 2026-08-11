@@ -36,7 +36,7 @@ def _client() -> httpx.AsyncClient:
 async def test_alerts_check_requires_auth():
     async with _client() as client:
         resp = await client.post("/api/v1/alerts/check", headers={"X-Workspace-Id": "ws-alerts-test"})
-    assert resp.status_code == 422  # missing required X-Api-Key header
+    assert resp.status_code == 401  # neither API key nor SSO Bearer token
 
 
 async def test_alerts_check_returns_empty_breaches_when_healthy(monkeypatch):

@@ -40,6 +40,14 @@ async def test_list_and_resolve_unresolved_mention(executor, monkeypatch):
         mentions = list_resp.json()["mentions"]
         assert any(m["mention_id"] == mention.mention_id for m in mentions)
 
+        candidates_resp = await client.get(
+            f"/api/v1/unresolved-mentions/{mention.mention_id}/candidates", headers=headers
+        )
+        assert candidates_resp.status_code == 200
+        candidate_payload = candidates_resp.json()
+        assert candidate_payload["mention_id"] == mention.mention_id
+        assert isinstance(candidate_payload["candidates"], list)
+
         resolve_resp = await client.post(
             f"/api/v1/unresolved-mentions/{mention.mention_id}/resolve",
             headers=headers,
@@ -85,7 +93,7 @@ async def test_unresolved_mentions_rejects_missing_or_wrong_api_key(monkeypatch)
     headers = auth_headers(monkeypatch, "ws-authcheck")
     async with _client() as client:
         no_key_resp = await client.get("/api/v1/unresolved-mentions", headers={"X-Workspace-Id": "ws-authcheck"})
-        assert no_key_resp.status_code == 422
+        assert no_key_resp.status_code == 401
 
         wrong_key_resp = await client.get(
             "/api/v1/unresolved-mentions", headers={"X-Workspace-Id": "ws-authcheck", "X-Api-Key": "wrong"}

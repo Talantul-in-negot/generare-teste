@@ -28,6 +28,17 @@ from src.viz.panel_tokens import verify_panel_token as _verify_panel_token_strin
 log = structlog.get_logger(__name__)
 
 
+def _claim_values(value: object) -> frozenset[str]:
+    """Normalize a verified JWT scalar/list claim into a bounded policy set."""
+    if isinstance(value, str):
+        values = value.split(",")
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        values = [str(item) for item in value]
+    else:
+        return frozenset()
+    return frozenset(item.strip() for item in values if item and item.strip())
+
+
 def _demo_public_path_allowed(request: Request | None) -> bool:
     """Allow only the read/analysis surface needed by the public demo UI."""
     if request is None:
@@ -61,11 +72,22 @@ async def get_workspace_id(x_workspace_id: str = Header(..., alias="X-Workspace-
 
 
 async def verify_api_key(
-    x_api_key: str = Header(..., alias="X-Api-Key"),
-    workspace_id: str = Depends(get_workspace_id),
+    x_api_key: str | None = Header(None, alias="X-Api-Key"),
+    workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
+    authorization: str | None = Header(None, alias="Authorization"),
     request: Request = None,
 ) -> str:
     settings = get_settings()
+    if settings.sso_enabled:
+        # Keep every existing route on one authentication dependency while
+        # allowing an operator to switch the entire API to verified OIDC/JWT
+        # without a risky, error-prone route-by-route migration.
+        from src.auth.sso import verify_sso_token
+
+        return await verify_sso_token(authorization=authorization, request=request)
+
+    if not workspace_id or not x_api_key:
+        raise HTTPException(status_code=401, detail="X-Workspace-Id and X-Api-Key are required")
     expected = settings.workspace_api_keys.get(workspace_id)
     valid_regular_key = bool(expected) and secrets.compare_digest(x_api_key, expected)
     valid_demo_key = (
@@ -82,6 +104,7 @@ async def verify_api_key(
 
 
 async def get_access_context(
+    request: Request,
     workspace_id: str = Depends(verify_api_key),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
     x_actor_id: str | None = Header(None, alias="X-Actor-Id"),
@@ -105,12 +128,23 @@ async def get_access_context(
             status_code=503,
             detail="authorization enforcement requires SSO or a trusted claims gateway",
         )
-    subject_id = x_user_id or x_actor_id
+    sso_claims = getattr(request.state, "sso_claims", None) if settings.sso_enabled else None
+    if sso_claims is not None:
+        # These values were decoded only after signature, issuer, audience and
+        # expiry verification in verify_sso_token. Never merge caller headers
+        # into this path: that would let a valid low-privilege user assert an
+        # admin role simply by adding X-User-Roles.
+        subject_id = str(sso_claims.get("sub") or sso_claims.get("oid") or "")
+        roles = frozenset(value.lower() for value in _claim_values(sso_claims.get("roles")))
+        divisions = _claim_values(sso_claims.get("division_ids"))
+        opportunities = _claim_values(sso_claims.get("opportunity_ids"))
+    else:
+        subject_id = x_user_id or x_actor_id or ""
+        roles = frozenset(item.strip().lower() for item in (x_user_roles or "").split(",") if item.strip())
+        divisions = frozenset(item.strip() for item in (x_division_ids or "").split(",") if item.strip())
+        opportunities = frozenset(item.strip() for item in (x_opportunity_ids or "").split(",") if item.strip())
     if settings.authz_enforcement_enabled and not subject_id:
         raise HTTPException(status_code=401, detail="authenticated user identity is required")
-    roles = frozenset(item.strip().lower() for item in (x_user_roles or "").split(",") if item.strip())
-    divisions = frozenset(item.strip() for item in (x_division_ids or "").split(",") if item.strip())
-    opportunities = frozenset(item.strip() for item in (x_opportunity_ids or "").split(",") if item.strip())
     return AccessContext(
         workspace_id=workspace_id,
         subject_id=subject_id or "api-key-service",

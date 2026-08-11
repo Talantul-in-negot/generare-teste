@@ -460,3 +460,64 @@ same principle applies to local versus cloud latency and to optional TTS.
 **How to apply:** label measured local results, cloud assumptions and external
 integration work explicitly. A precise boundary builds more trust than a demo
 that implies capabilities it cannot yet verify.
+
+## L31 — A test that turns green under a "stabilize the suite" commit deserves more scrutiny than one that turns red
+
+`test_weak_base_candidate_cannot_autolink_through_relational_bonus_alone`
+was failing, and a commit titled "Improve RAGAS evaluation and stabilize
+full test suite" made it pass by replacing a hard assertion with a branch:
+if `base_score is None`, assert `weak_account_id not in candidates_shown`.
+But `candidates_shown` was *empty* in exactly that case, so the new
+assertion checked that an empty list did not contain something — vacuously
+true, forever. The suite went green while coverage of the scoring threshold
+silently dropped to zero. Red tests announce themselves; a test quietly
+downgraded to a no-op does not.
+
+**How to apply:** when a previously-failing test starts passing, read the
+diff of the *assertion*, not just the test result. Ask specifically: in the
+branch that used to fail, what does this now assert, and can that assertion
+ever fail? An assertion over a collection that is empty in the failure path
+is the classic shape of this bug.
+
+## L32 — Diagnosing a failure from its symptoms produced a confidently wrong root cause; reading the actual query path took two minutes and disproved it
+
+The zero-candidates failure above was diagnosed (by me) as a Neo4j fulltext
+eventual-consistency race — plausible, since fulltext indexes really are
+Lucene-backed and refresh asynchronously, and the test queried immediately
+after a write. It was wrong. `SHOW INDEXES` already reported `ONLINE`/100%,
+which should have killed the theory rather than being explained away. The
+real cause was found only by reading `name_candidates()`: commit `1c12a01`
+("retrieval hardening") had replaced the full-workspace `all_names_in_workspace`
+fuzzy pool with a bounded full-text query plus a first-token prefix fallback
+(`"volks"`). The fixture account, `"Totally Unrelated Company"`, matches
+neither — so it is deterministically never a candidate. A legitimate scale
+fix had silently invalidated the test's premise, and the "flake" was 100%
+reproducible all along.
+
+**How to apply:** before accepting a concurrency/timing explanation for a
+test failure, first check whether the code path changed. Re-run in isolation
+and count: a genuine race is intermittent, a 100%-reproducible failure is
+not a race no matter how race-shaped it looks. And when a performance or
+scale refactor narrows what a query returns, grep the tests that depended on
+the old breadth — they will not fail loudly at refactor time, they will fail
+later and look like flakes.
+
+## L33 — A unit test that constructs a pydantic-settings object reads the developer's real `.env`, so CI green does not mean local green
+
+`tests/unit/graph_legacy/test_config.py` failed on a developer machine but
+passed in CI. `Settings` declares `model_config = {"env_file": ROOT/".env"}`,
+so any `Settings(...)` built without `_env_file=None` inherits whatever the
+local `.env` holds. Once that file gained `DEMO_PUBLIC_ACCESS_ENABLED=true`
+for the public demo, a production guard for that field fired inside a test
+about `neo4j_password` and `workspace_api_keys`. CI never saw it because
+`.env` is gitignored and absent there — the inverse of the usual
+"works in CI, fails locally" asymmetry. The file's own module docstring had
+already documented this exact hazard and the `_env_file=None` remedy; two of
+its five `Settings(...)` call sites simply omitted it.
+
+**How to apply:** every test that instantiates a settings/config object must
+explicitly isolate it from ambient configuration (`_env_file=None`, a
+cleared env, or a tmp_path env file) — the defaults exist to serve the app,
+not the test. When a module docstring already states a convention, grep that
+the convention holds at *every* call site in the file; partial application is
+the failure mode, not ignorance of the rule.

@@ -319,6 +319,13 @@ LLM judge is stochastic. Raw output is saved locally at
   to) and closes the loser's bitemporal interval; see the "Known measurement
   gaps" entry below for what that unblocks.
 
+  **Operational boundary:** `/viz` now provides a Review Console over the
+  existing REST workflows: pending mentions receive a bounded ranked candidate
+  set with accept/reject and reason capture; open conflicts support manual or
+  automatic arbitration; seller-wide top objections are shown alongside their
+  grounded example claim IDs. Reviewer assignment/SLA management and a broader
+  audit-history browser remain product work.
+
 ## Known measurement gaps
 
 - ✅ **Observability (`docs/plan.md` §14) implemented 2026-08-07** (Phase 0
@@ -529,6 +536,7 @@ the relevant enterprise benchmark.
 | Grounded Q&A, deal/account context, point-in-time answers | Implemented for a bounded intent catalog, citation/grounding tests, partial bitemporal reconstruction | Return deep links to the exact transcript time/span and CRM record in every answer; preserve full history when human review changes identity; evaluate arbitrary multi-hop questions. |
 | Fuzzy names and ambiguous people/accounts | Deterministic + fuzzy/semantic/relational resolution, review states and 6 targeted VW cases | Production alias lifecycle, multilingual/transliteration handling, tenant-specific calibration, active-learning review UI and a large labeled benchmark. |
 | Deal risk / next-best action / proactive updates | Five rule-based signals, digest and a content recommendation use case | Make signals configurable, explainable and feedback-trained; rank actions by expected impact; support owner acknowledgement, due dates and CRM/Slack write-back approval. |
+| Cross-deal objection aggregation | `top-objections` aggregates affirmed, non-rejected `RAISED_OBJECTION` claims across a seller's open opportunities and returns grounded example claim IDs | Current grouping is exact `object_value` matching, not semantic aliasing; add governed objection taxonomy, synonym/version management and a pipeline analytics UI. |
 | Content intelligence | Showpad-shaped asset/view/share adapters and objection-to-unviewed-content recommendation | Real Showpad connector, permission-aware content retrieval, content version/expiry/compliance status, buyer-room and outcome attribution. |
 | Coaching and readiness | Narrative summaries and optional stakeholder role classification | Call scorecards, coachable moments with clips, role-play/practice loop, competency model, certifications and manager workflow. |
 | In-flow seller experience | API, simple `/viz` panel and Slack webhook digest | OAuth-installed Salesforce/Showpad/Slack/Teams app, record-page widgets, mobile/offline experience, notifications/preferences and accessible UX. |
@@ -604,7 +612,9 @@ citations; threat model and security review are signed off.
    validation, incremental cursor/CDC polling, backfill, source rate-limit
    handling, source schema versioning and replay. Fixture parsers remain useful
    contract-test adapters, but do not constitute an integration.
-2. Implement the queued-worker ADR, plus retries with exponential backoff and
+2. Operationalize the queued-worker ADR in production (the Redis queue,
+   worker, retries, visibility recovery and DLQ primitives already exist but
+   are opt-in), plus retries with exponential backoff and
    jitter, bounded concurrency per tenant/source, poison-message dead-letter
    queue, replay tooling, idempotency under at-least-once delivery, queue-age
    alarms and an ingestion reconciliation dashboard.
@@ -1176,7 +1186,7 @@ what `docs/plan.md` §7–§9 already specified and this repo already ships:
 | Treat transcript as untrusted; rigid framing; never execute embedded instructions | `src/extraction/prompt.py`, plus 3 dedicated tests in `tests/security/` |
 | Structured outputs via Pydantic to prevent malformed JSON | Pydantic v2 throughout; bounded retry/repair in `src/llm/json_completion.py` |
 | Refuse rather than answer when a claim can't be mapped to a retrieved span | `src/narrative/grounding.py` — mechanically verifies every `[claim_id]`; **one bad citation rejects the whole summary** |
-| Async ingestion, 202 Accepted, out-of-band processing | `POST /api/v1/ingestions/*` returns 202 + `ingestion_id`; durable worker in `src/ingestion/{queue,worker}.py` |
+| Async ingestion, 202 Accepted, out-of-band processing | `POST /api/v1/ingestions/*` returns 202 + `ingestion_id`; the Redis worker path exists in `src/ingestion/{queue,worker}.py` but is opt-in (`INGESTION_QUEUE_ENABLED=true`); the default local path executes synchronously in the API process |
 | Multi-hop graph retrieval via Neo4j | the entire `src/graph/` layer |
 | Deal memory state that updates when a later call resolves an earlier objection | bitemporal Claims + `close_claim_interval()` + `POST /api/v1/qa/as-of` |
 
@@ -1209,6 +1219,13 @@ This was not previously tracked in "Known measurement gaps" above. It should
 have been. Of everything in the brief, this is the highest-value item,
 because several other gaps (queue depth, oldest-job age, ingestion failure
 rate) are *unobservable* until it exists.
+
+> **Current-state correction (2026-08-11):** Observability is implemented
+> locally: Prometheus metrics are exposed at `GET /metrics`, FastAPI and Neo4j
+> OpenTelemetry spans are wired, and the plan's named signals have call-site
+> instrumentation. Remaining work is operational (OTLP/Prometheus backend,
+> dashboards, retention and SLO alerts); without `OTEL_*` exporter settings,
+> local spans are created and dropped. Blocking recall is evaluation-only.
 
 **B2. No semantic/result caching.** The brief's "LLM Semantic Cache"
 (Redis vector search / GPTCache) targets repeated rep questions. Verified:
@@ -1746,15 +1763,15 @@ best-practice weight.
 | Code cleanliness | **Meets it** — 1 TODO, 2 ignores repo-wide | — |
 | Decision documentation | **Meets it** — 5 ADRs incl. rejected paths | — |
 | Test *suite* | **Meets it** in volume and realism (live-infra integration tests) | — |
-| Test *automation* | **Fails** — no CI at all | **Defect** — cheap to fix, highest leverage |
-| Type/lint enforcement | **Fails** — mypy unconfigured, ruff at defaults | **Defect** — tooling declared, not wired |
-| Version contract | **Fails** — declares 3.12, tested on 3.11 | **Defect** — inconsistency, not scope |
-| Enterprise identity (SSO/RBAC) | **Fails** | **Scope** — documented, correctly deferred for a slice |
-| Rate limiting / quotas | **Fails** | **Scope-ish** — cheap, and its absence was undocumented |
-| GDPR erasure execution | **Fails** | **Scope** — honestly documented in-code |
-| Access audit logging | **Fails** | **Scope** — undocumented as a gap until now |
-| Availability / DR | **Fails** | **Scope** — single-region by design |
-| Alerting | **Fails** | **Gap** — metrics exist, consumption doesn't |
+| Test *automation* | **Meets it** — GitHub Actions runs Ruff, Mypy and unit tests on every push; PRs to `main` run the full Neo4j/Redis suite | CI evidence still requires successful remote runs after push |
+| Type/lint enforcement | **Meets it** — configured Ruff and Mypy run in CI | Preserve the gate as dependencies and Python versions evolve |
+| Version contract | **Meets it** — `pyproject`, Docker tooling and CI use Python 3.11 | Add a 3.12 matrix job only after it is deliberately supported |
+| Enterprise identity (SSO/RBAC) | **Partial** — JWT/JWKS route switching and verified-claim RBAC are implemented | A live IdP tenant, SCIM and production group mapping require external configuration |
+| Rate limiting / quotas | **Meets it** — per-workspace fixed-window limit, Redis backing/fallback and rejection metrics | Capacity-based quota tuning needs production traffic evidence |
+| GDPR erasure execution | **Partial** — authenticated erasure clears claims, transcript evidence and configured embeddings with audit events | External stores, retention/legal hold and compliance evidence remain deployment work |
+| Access audit logging | **Partial** — structured request audit events include workspace, route, latency and verified SSO actor claims | Durable SIEM retention/export and enterprise actor lifecycle remain external |
+| Availability / DR | **Partial** — local backup/restore drill runs weekly in CI | Single-region Fly/Aura deployment and managed-service replication/RPO-RTO are unresolved external infrastructure work |
+| Alerting | **Partial** — metrics, alert rules and opt-in Prometheus/Alertmanager/Grafana Compose profile exist | Managed telemetry, notification receivers, dashboards/SLO ownership and retention still need deployment configuration |
 
 **The shape of the result:** the gaps do not cluster in engineering craft —
 they cluster in *institutional apparatus*. The reasoning quality, isolation
@@ -1961,12 +1978,12 @@ Slack webhook
 
 ### Updated verdict
 
-Of the verdict table's four **Defect** rows (test automation, type/lint
-enforcement, version contract) — all three now read **Meets it**. Of the
-remaining **Scope**/**Gap** rows: rate limiting, GDPR erasure execution,
-and alerting now also read **Meets it** (or close to it, honestly bounded
-per the notes above); SSO/RBAC moved from "Fails, undocumented" to
-"Scaffolded and tested, not connected to a live IdP" — a real, verifiable
+Of the verdict table's earlier **Defect** rows (test automation, type/lint
+enforcement, version contract) — all three now read **Meets it**. Rate
+limiting also reads **Meets it**. Erasure, audit logging, alerting and
+SSO/RBAC are intentionally marked **Partial**: their application-owned
+controls are real and verified, while the required managed-service or IdP
+integration is not falsely represented as completed. This is a verifiable
 middle state, not a binary flip. Availability/DR and access audit logging
 moved from "Fails" to "workspace-level audit logging: done;
 multi-region: reasoned about, correctly not faked." What remains
@@ -2025,20 +2042,20 @@ There are two honest launch positions:
 | Showpad expectation | Current evidence in this repo | Status | Required update |
 |---|---|---|---|
 | Four-pillar product surface | Graph ingestion, context building, Q&A, recommendations and engagement-shaped records; no readiness, buyer room or revenue product surface | **Partial** | Add a product-scope decision and separate the evidence service from any parity claim; implement the missing pillar surfaces or document them as non-goals |
-| Content Management | `ContentAsset` has title, URL, type, tags and optional `division_id`; no lifecycle, version, locale, sensitivity or approval policy | **Gap** | Add immutable source/version records, `is_archived`, approval state, effective/expiry dates, language/country/channel, sensitivity and shareability; enforce filters at ingest and retrieval |
-| Permissions intact | `workspace_id` is structurally enforced; optional deny-by-default `AccessContext` policy now covers opportunity/division route paths, body-scoped Q&A/Ask/context/ingestion and signed panel tokens | **Partial / external IdP gap** | Connect real IdP/SCIM claims and extend policy to any future connector/export surface; retain deny-case tests |
+| Content Management | `ContentAsset` carries version, approval, archive, sensitivity, shareability, locale/channel and effective/expiry metadata; recommendation queries enforce an `only_servable` policy | **Partial** | Add immutable source/version history, a real Showpad content lifecycle connector and production permission/version reconciliation |
+| Permissions intact | `workspace_id` is structurally enforced; deny-by-default `AccessContext` covers opportunity/division routes, body-scoped Q&A/Ask/context/ingestion and signed panel tokens; `SSO_ENABLED=true` routes standard API requests through verified JWT/JWKS claims | **Partial / external IdP gap** | Connect a real IdP/SCIM directory, finalize group/division/opportunity claim mapping and extend policy to future connector/export surfaces |
 | Sales Readiness | Claim summaries and seller-facing context exist; no courses, certifications, knowledge checks, coaching scorecards or readiness dashboards | **Gap** | Add curriculum/certification entities, assignment and completion events, assessment/roleplay workflows, manager review and readiness reporting |
 | Buyer Engagement | Historical `Share`/`AssetView` records and content recommendation exist; no real share creation, Shared Spaces, buyer uploads/comments, mutual action plan or Next Steps | **Gap** | Implement a buyer-facing room with participant ACLs, uploads/comments, MAP/Next Steps, expiry/revocation, seller notifications and engagement-to-opportunity attribution |
 | Revenue Intelligence | Signals/digests and content-effectiveness analysis exist; no closed-loop CRM outcome attribution or dashboard/report builder | **Partial** | Link assets, conversations, activities and outcomes to opportunity stage/win/loss; add configurable dashboards, cohort metrics, seller feedback and causal/attribution caveats |
-| Genie-style governed assistant | `/ask` and narrative use cases are bounded and evidence-backed; no agent registry, delegated action policy, citations/disclaimers contract, voice/vision or custom agent lifecycle | **Partial** | Add a permissioned tool/action layer, agent definitions and versioning, approval/confirmation steps, source citations in every answer, refusal/escalation policy, and audit records for delegated actions |
+| Genie-style governed assistant | `/ask` and narrative use cases are bounded and evidence-backed; responses expose citations, disclaimer and `requires_human_review`, with optional text-to-speech | **Partial** | Add a permissioned tool/action layer, agent definitions/versioning, delegated-action approval and audit, richer modality support and a custom-agent lifecycle |
 | External sources and extensibility | LLM, Slack and parser adapters exist; no production Showpad OAuth/API client, content-picker SDK, Shares API, Salesforce/Dynamics installed app, MCP or Teams integration | **Gap** | Build connector contracts with OAuth2, token rotation, webhook/CDC cursors, retries and reconciliation; ship a Showpad sandbox connector first, then CRM auto-log and MCP/Teams adapters |
 | Field Meeting AI / CRM loop | Transcript ingestion and post-hoc graph analysis exist; no pre-meeting brief action in CRM and no automatic Salesforce/Dynamics note/task update | **Gap** | Implement pre-meeting brief, live/post-meeting extraction review, seller confirmation, idempotent CRM write-back, conflict handling and per-field audit trail |
 | Mobile and offline | `/viz` is a web/iframe panel; no native mobile client, offline cache, reconnect sync or conflict resolution | **Gap** | Add mobile capability (or explicitly exclude it from the companion scope), encrypted offline cache, content freshness/expiry, background sync, conflict policy and telemetry; do not imply Genie parity because Genie is not available offline |
-| Identity and administration | API-key-per-workspace auth; tested OIDC/JWKS validation plus application RBAC policy are present, but no live IdP/SCIM provisioning or self-service admin surface | **Partial / external IdP gap** | Connect a real OIDC/SAML IdP, map groups to roles/divisions, implement SCIM deprovisioning, session/token rotation and user-level identity evidence |
-| Privacy and compliance | PII egress redaction, prompt-injection tests, access audit events and bounded erasure execution exist; contact embeddings are cleared in Neo4j and optional Qdrant, but no certification evidence is present | **Partial / compliance gap** | Define retention/legal-hold policies, complete third-party/object-store propagation, exportable audit evidence, DPA/subprocessor/data-residency controls and restore-tested backup procedures |
-| Reliability and operations | CI, type/lint checks, alerts, queue visibility/reaper, bounded worker concurrency and single-machine k6 baseline scripts exist | **Partial** | Publish dated load results, p95/p99/error/queue-lag SLOs, CI regression thresholds, strict tenant-fair scheduling, capacity model, on-call runbooks and failure-injection tests |
+| Identity and administration | API-key-per-workspace remains default; enabling `SSO_ENABLED=true` switches standard routes to tested OIDC/JWKS validation and verified-claim RBAC, but there is no live IdP/SCIM or self-service admin surface | **Partial / external IdP gap** | Connect a real OIDC/SAML IdP, map groups to roles/divisions/opportunities, implement SCIM deprovisioning, session/token rotation and user-level identity evidence |
+| Privacy and compliance | PII egress redaction, prompt-injection tests, request audit events and authenticated erasure exist; erasure clears claims, transcript evidence and Neo4j/Qdrant embeddings as configured | **Partial / compliance gap** | Define retention/legal-hold policies, complete third-party/object-store propagation, exportable audit evidence, DPA/subprocessor/data-residency controls and managed restore evidence |
+| Reliability and operations | CI, type/lint checks, queue visibility/reaper, bounded worker concurrency, metrics/alert rules, opt-in Prometheus/Alertmanager/Grafana and a weekly local backup/restore drill exist | **Partial** | Publish dated load results, p95/p99/error/queue-lag SLOs, managed telemetry/notification deployment, strict tenant-fair scheduling, capacity model, on-call runbooks and failure-injection tests |
 | Data integrity and search | Workspace scoping, pagination/batching, uniqueness constraints, bounded full-text/prefix candidates and operator-run vector backfill are present | **Partial / production-data gap** | Run production embedding/index backfill with rollback/rebuild evidence, native blocking benchmarks and recall/latency gates |
-| UX and accessibility | Showpad palette/token indirection and browser checks were added; the product remains a small custom panel with no complete navigation, keyboard/mobile/RTL/i18n/accessibility acceptance suite | **Partial** | Run WCAG 2.2 AA checks, keyboard/screen-reader/mobile tests, localization and timezone/currency/date policy, design-system review and product analytics for search/answer/task completion |
+| UX and accessibility | The custom `/viz` UI includes Context Graph, intents, Ask, alerts and a Review Console; it still lacks complete navigation, keyboard/mobile/RTL/i18n/accessibility acceptance suites | **Partial** | Run WCAG 2.2 AA checks, keyboard/screen-reader/mobile tests, localization and timezone/currency/date policy, design-system review and product analytics for search/answer/task completion |
 
 ### Release gates to add to the implementation backlog
 
@@ -2061,6 +2078,12 @@ There are two honest launch positions:
 
 **P1 - required for a differentiated sales workflow**
 
+- **Implemented: Review Console.** `/viz` now exposes Human Review for
+  `PENDING_REVIEW` mentions, Conflict Detection resolution and Cross-deal
+  Aggregation. It shows bounded candidates and scores, captures reviewer id
+  and reason, persists decisions through the existing REST APIs, and restricts
+  mutation to reviewer/admin roles when RBAC enforcement is active. Add
+  reviewer assignment/SLA queues and a complete audit-history browser later.
 - Implement Shared Spaces (or explicitly keep buyer engagement out of scope),
   including uploads/comments/MAP/Next Steps, branded buyer permissions and
   engagement attribution.
@@ -2072,6 +2095,13 @@ There are two honest launch positions:
   per-user/role tool permissions; expose a stable API/SDK or MCP contract.
 
 **P2 - required for production scale**
+
+- **TODO: Prometheus/Grafana operations.** Deploy a Prometheus server with a
+  scrape job for `GET /metrics`, load `alerting/prometheus_rules.yml` into
+  Prometheus/Alertmanager, and add Grafana dashboards for ingestion status and
+  latency, extraction/provider outcomes, resolution decisions, claims,
+  context-graph truncation, queue age/depth and DLQ depth. Configure OTLP
+  export and a collector separately for OpenTelemetry traces.
 
 - Add strict tenant-fair scheduling/horizontally scalable partitions and
   explicit backpressure; the current Redis worker already supports retries,
@@ -2193,3 +2223,25 @@ processing list per slot. A slow transcript can no longer occupy the only
 execution slot, while crash recovery remains intact. This is an execution
 capacity control, not a claim of tenant-fair scheduling; fair partitions and
 measured capacity remain deployment-scale work.
+
+### Implementation update: quality gates, SSO routing and local observability (2026-08-11)
+
+The earlier assessment table contains historical findings that are no longer
+current. The repository now has a GitHub Actions CI workflow that runs Ruff,
+Mypy and offline unit tests for every push (including `main`), and its full
+Neo4j/Redis suite for pull requests to `main`. `pyproject.toml`, the Docker
+toolchain and CI all use the verified Python 3.11 contract.
+
+API-key authentication remains the default, but enabling `SSO_ENABLED=true`
+now switches the shared route dependency to RS256 JWT/JWKS validation for all
+standard API routes; verified token claims supply `AccessContext` identity and
+scope rather than caller-controlled role headers. A live IdP tenant, SCIM and
+production group/claim mapping remain external integration work.
+
+The repository-owned Prometheus/Alertmanager/Grafana stack is available through
+the opt-in Compose `observability` profile. It scrapes `/metrics`, loads the
+checked-in alert rules, and provisions a Grafana overview dashboard. Production
+hosting, notification receivers, managed retention, OTLP collector credentials,
+multi-region database replication and restore evidence still require deployment
+authority and managed-service configuration; they are not claimed as complete
+merely because local manifests exist.

@@ -182,6 +182,15 @@ canonical technical diagram and includes governance and durable worker paths.
    tries Stage A (deterministic, unique-match-only) first; on failure it
    generates candidates, scores them, and applies the decision policy. Ties
    into `src/review/service.py` for the human-review half of the loop.
+
+   > **Scope caveat — step 3 is not yet invoked by the ingestion worker.**
+   > `resolve_mention()` is called by `demo_volkswagen.py`, the test suite
+   > and the review service, but not by `TranscriptIngestionPipeline`. A
+   > deployed ingestion run performs *speaker* resolution
+   > (`src/resolution/speaker.py`) and writes Claims keyed on the opaque
+   > `speaker_label`; the `Mention` records that would drive step 3 are not
+   > constructed on that path yet. Steps 1, 2 and 4 run end-to-end as
+   > described. See README's "Known limitations" for the full statement.
 4. **Serve.** `src/context_graph/builder.py` fetches Claims for a scope, scores
    by confidence/recency/adjudication, greedily selects under a node/token
    budget with a per-predicate diversity cap.

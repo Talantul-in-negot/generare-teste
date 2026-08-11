@@ -16,6 +16,14 @@ the actor claims; set `AUTHZ_TRUSTED_GATEWAY_ENABLED=true` only for that
 trusted ingress. The API fails closed with 503 if enforcement is enabled
 without either boundary.
 
+To use the built-in OIDC route path instead of API keys, set
+`SSO_ENABLED=true` together with `SSO_ISSUER`, `SSO_AUDIENCE`,
+`SSO_JWKS_URL`, and (when needed) `SSO_WORKSPACE_CLAIM`. All standard API
+routes then validate `Authorization: Bearer <JWT>` against JWKS; this is a
+deployment switch on the shared authentication dependency, not a route-by-route
+migration. A live IdP tenant, user/group claim mapping, SCIM provisioning and
+operational key-rotation procedures remain external deployment responsibilities.
+
 ## One-time setup
 
 1. **Neo4j AuraDB Free** — create an instance at

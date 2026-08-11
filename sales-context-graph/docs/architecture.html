@@ -182,6 +182,24 @@ h1 {
   margin: 0 0 14px;
 }
 
+/* Scope caveat: visually distinct from the "hover me" affordance hint above
+   it, because it states what the diagram does NOT yet do. A diagram that
+   overstates its own coverage is worse than no diagram. */
+.scope-note {
+  border-left: 3px solid var(--accent);
+  background: var(--paper-raised);
+  padding: 10px 14px;
+  line-height: 1.65;
+  max-width: 95ch;
+}
+.scope-note b { color: var(--accent); }
+.scope-note code {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0 4px;
+}
+
 .node {
   background: var(--paper-raised);
   border: 1px solid var(--line);
@@ -468,6 +486,13 @@ footer {
 
   <!-- PIPELINE -->
   <p class="hint">Hover or focus any box for a real example from the code.</p>
+  <p class="hint scope-note"><b>Scope:</b> stage 03's <i>entity</i> resolution
+    (<code>resolve_mention</code>) is implemented, explainable and tested, but is
+    invoked by the demo and the human-review service — not yet by the ingestion
+    worker, which currently does <i>speaker</i> resolution and keys Claims on the
+    opaque speaker label. Stage 03's extraction runs the deterministic fixture
+    provider in the worker; the LLM provider implements the same Protocol but is
+    not selected at runtime. Everything else shown runs end-to-end.</p>
   <div class="pipeline-scroll"><div class="pipeline">
     <div class="stage">
       <div class="stage-label"><b>01</b> · Sources</div>

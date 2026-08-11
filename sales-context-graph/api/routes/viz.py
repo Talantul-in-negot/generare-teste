@@ -25,8 +25,8 @@ Salesforce/Showpad app (no OAuth, no AppExchange packaging; see README.md).
 
 from __future__ import annotations
 
-import json
 import html
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import HTMLResponse
@@ -331,6 +331,7 @@ _PAGE = """<!doctype html>
   .audio-speed { display: none !important; }
   #panel input[type=checkbox] { width: auto; }
   #status, #qaStatus, #askStatus, #alertsStatus { margin-top: 10px; font-size: 12px; color: var(--color-danger-text); white-space: pre-wrap; }
+  #reviewStatus { margin-top: 10px; font-size: 12px; color: var(--color-danger-text); white-space: pre-wrap; }
   #meta { margin-top: 14px; font-size: 12px; color: var(--color-text-muted); }
   #detail { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--color-border); font-size: 12px; }
   #detail h4 { margin: 0 0 6px 0; }
@@ -360,6 +361,7 @@ _PAGE = """<!doctype html>
     <div class="tab" data-tab="qa">Browse Intents</div>
     <div class="tab" data-tab="ask">Ask</div>
     <div class="tab" data-tab="alerts">Alerts</div>
+    <div class="tab" data-tab="review">Review Console</div>
   </div>
 
   <div id="graph-controls">
@@ -449,6 +451,30 @@ _PAGE = """<!doctype html>
     <button id="alertsRunBtn">Get digest</button>
     <div id="alertsStatus"></div>
   </div>
+
+  <div id="review-controls" style="display:none">
+    <h3>Review Console</h3>
+    <p style="font-size:12px;color:var(--color-text-muted)">Resolve ambiguous mentions, contradictory claims, or inspect seller-wide objection patterns.</p>
+    <label>Workspace ID
+      <input id="reviewWorkspaceId" value="ws-demo">
+    </label>
+    <label>API Key
+      <input id="reviewApiKey" type="password" placeholder="X-Api-Key">
+    </label>
+    <label>Reviewer ID
+      <input id="reviewerId" placeholder="required for mention decisions">
+    </label>
+    <button id="reviewMentionsBtn">Load pending mentions</button>
+    <label>Opportunity ID (conflict review)
+      <input id="reviewOpportunityId" placeholder="opportunity id">
+    </label>
+    <button id="reviewConflictsBtn">Load open conflicts</button>
+    <label>Seller ID (cross-deal aggregation)
+      <input id="reviewSellerId" placeholder="seller id">
+    </label>
+    <button id="reviewObjectionsBtn">Load top objections</button>
+    <div id="reviewStatus"></div>
+  </div>
 </div>
 
 <div id="main">
@@ -469,12 +495,15 @@ _PAGE = """<!doctype html>
   <div id="alerts-page" class="tabpage">
     <div id="alertsResult"></div>
   </div>
+  <div id="review-page" class="tabpage">
+    <div id="reviewResult"></div>
+  </div>
 </div>
 
 <script>
 /* ── Tabs ─────────────────────────────────────────────────────────────── */
 const demoOpportunityId = __DEMO_OPPORTUNITY_ID_JSON__;
-const TAB_NAMES = ["graph", "qa", "ask", "alerts"];
+const TAB_NAMES = ["graph", "qa", "ask", "alerts", "review"];
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -1075,6 +1104,211 @@ async function runAlerts() {
     "<h3>Digest</h3><div class='result-scalar'>" +
     data.opportunity_count + " open opportunities, " + data.signals.length + " signal(s)</div>";
   resultEl.appendChild(renderJson(data.signals));
+}
+
+/* ── Review Console: human mention review, conflicts, cross-deal objections ── */
+function reviewCredentials() {
+  return {
+    workspaceId: document.getElementById("reviewWorkspaceId").value.trim(),
+    apiKey: document.getElementById("reviewApiKey").value.trim(),
+  };
+}
+
+function reviewHeaders(credentials, json = false) {
+  const headers = { "X-Workspace-Id": credentials.workspaceId, "X-Api-Key": credentials.apiKey };
+  if (json) headers["Content-Type"] = "application/json";
+  return headers;
+}
+
+function requireReviewCredentials() {
+  const credentials = reviewCredentials();
+  const statusEl = document.getElementById("reviewStatus");
+  statusEl.textContent = "";
+  if (!credentials.workspaceId || !credentials.apiKey) {
+    statusEl.textContent = "Workspace ID and API Key are required.";
+    return null;
+  }
+  return credentials;
+}
+
+document.getElementById("reviewMentionsBtn").addEventListener("click", loadPendingMentions);
+document.getElementById("reviewConflictsBtn").addEventListener("click", loadOpenConflicts);
+document.getElementById("reviewObjectionsBtn").addEventListener("click", loadTopObjections);
+
+async function loadPendingMentions() {
+  const credentials = requireReviewCredentials();
+  if (!credentials) return;
+  const resultEl = document.getElementById("reviewResult");
+  const statusEl = document.getElementById("reviewStatus");
+  resultEl.innerHTML = "<h3>Pending mentions</h3><p>Loading…</p>";
+  try {
+    const resp = await fetch("/api/v1/unresolved-mentions", { headers: reviewHeaders(credentials) });
+    const data = await resp.json();
+    if (!resp.ok) { statusEl.textContent = "HTTP " + resp.status + ": " + JSON.stringify(data); resultEl.innerHTML = ""; return; }
+    resultEl.innerHTML = "<h3>Pending mentions (" + data.mentions.length + ")</h3>";
+    if (!data.mentions.length) { resultEl.appendChild(renderJson(data)); return; }
+    for (const mention of data.mentions) resultEl.appendChild(await mentionReviewCard(mention, credentials));
+  } catch (error) {
+    statusEl.textContent = "Request failed: " + error;
+    resultEl.innerHTML = "";
+  }
+}
+
+async function mentionReviewCard(mention, credentials) {
+  const card = document.createElement("section");
+  card.className = "ambiguity";
+  const title = document.createElement("h4");
+  title.textContent = mention.surface_text + " (" + mention.entity_type + ")";
+  card.appendChild(title);
+  const detail = document.createElement("div");
+  detail.className = "result-scalar";
+  detail.textContent = "mention: " + mention.mention_id;
+  card.appendChild(detail);
+
+  const candidates = document.createElement("select");
+  candidates.setAttribute("aria-label", "Candidate entity for " + mention.surface_text);
+  candidates.disabled = true;
+  const placeholder = document.createElement("option");
+  placeholder.value = ""; placeholder.textContent = "Loading candidates…";
+  candidates.appendChild(placeholder);
+  card.appendChild(candidates);
+
+  const reason = document.createElement("textarea");
+  reason.rows = 2; reason.placeholder = "Decision reason (recommended)";
+  card.appendChild(reason);
+  const accept = document.createElement("button");
+  accept.type = "button"; accept.textContent = "Accept selected candidate";
+  const reject = document.createElement("button");
+  reject.type = "button"; reject.textContent = "Reject all candidates";
+  card.appendChild(accept); card.appendChild(reject);
+  const decisionStatus = document.createElement("div");
+  decisionStatus.className = "result-scalar";
+  card.appendChild(decisionStatus);
+
+  let scoreById = {};
+  let candidateIds = [];
+  try {
+    const resp = await fetch("/api/v1/unresolved-mentions/" + encodeURIComponent(mention.mention_id) + "/candidates", { headers: reviewHeaders(credentials) });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error("HTTP " + resp.status + ": " + JSON.stringify(data));
+    candidates.innerHTML = "";
+    const choose = document.createElement("option");
+    choose.value = ""; choose.textContent = "Choose a candidate"; candidates.appendChild(choose);
+    for (const candidate of data.candidates) {
+      const option = document.createElement("option");
+      option.value = candidate.entity_id;
+      option.textContent = candidate.name + " — score " + candidate.final_score.toFixed(3);
+      candidates.appendChild(option);
+      candidateIds.push(candidate.entity_id);
+      scoreById[candidate.entity_id] = candidate;
+    }
+    candidates.disabled = false;
+  } catch (error) {
+    candidates.innerHTML = "";
+    const failure = document.createElement("option");
+    failure.textContent = "Candidates unavailable"; candidates.appendChild(failure);
+    decisionStatus.textContent = String(error);
+  }
+
+  async function submit(rejected) {
+    const reviewerId = document.getElementById("reviewerId").value.trim();
+    if (!reviewerId) { decisionStatus.textContent = "Reviewer ID is required."; return; }
+    const selectedEntityId = candidates.value;
+    if (!rejected && !selectedEntityId) { decisionStatus.textContent = "Select a candidate or reject all."; return; }
+    decisionStatus.textContent = "Saving…";
+    try {
+      const resp = await fetch("/api/v1/unresolved-mentions/" + encodeURIComponent(mention.mention_id) + "/resolve", {
+        method: "POST", headers: reviewHeaders(credentials, true),
+        body: JSON.stringify({
+          reviewer_id: reviewerId,
+          selected_entity_id: rejected ? null : selectedEntityId,
+          rejected,
+          candidates_shown: candidateIds,
+          original_scores: scoreById,
+          reason: reason.value.trim() || null,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error("HTTP " + resp.status + ": " + JSON.stringify(data));
+      decisionStatus.textContent = "Saved. Affected claims: " + (data.affected_claim_ids || []).length;
+      accept.disabled = true; reject.disabled = true; candidates.disabled = true;
+    } catch (error) {
+      decisionStatus.textContent = String(error);
+    }
+  }
+  accept.addEventListener("click", () => submit(false));
+  reject.addEventListener("click", () => submit(true));
+  return card;
+}
+
+async function loadOpenConflicts() {
+  const credentials = requireReviewCredentials();
+  if (!credentials) return;
+  const opportunityId = document.getElementById("reviewOpportunityId").value.trim();
+  const resultEl = document.getElementById("reviewResult");
+  const statusEl = document.getElementById("reviewStatus");
+  if (!opportunityId) { statusEl.textContent = "Opportunity ID is required for conflict review."; return; }
+  resultEl.innerHTML = "<h3>Open conflicts</h3><p>Loading…</p>";
+  try {
+    const resp = await fetch("/api/v1/opportunities/" + encodeURIComponent(opportunityId) + "/conflicts", { headers: reviewHeaders(credentials) });
+    const data = await resp.json();
+    if (!resp.ok) { statusEl.textContent = "HTTP " + resp.status + ": " + JSON.stringify(data); resultEl.innerHTML = ""; return; }
+    resultEl.innerHTML = "<h3>Open conflicts (" + data.conflicts.length + ")</h3>";
+    for (const conflict of data.conflicts) resultEl.appendChild(conflictReviewCard(conflict, opportunityId, credentials));
+  } catch (error) {
+    statusEl.textContent = "Request failed: " + error;
+    resultEl.innerHTML = "";
+  }
+}
+
+function conflictReviewCard(conflict, opportunityId, credentials) {
+  const card = document.createElement("section");
+  card.className = "ambiguity";
+  card.appendChild(renderJson(conflict));
+  const winner = document.createElement("select");
+  for (const id of ["", conflict.claim_id_a, conflict.claim_id_b]) {
+    const option = document.createElement("option");
+    option.value = id; option.textContent = id ? "Choose " + id : "Use automatic arbitration";
+    winner.appendChild(option);
+  }
+  const resolve = document.createElement("button");
+  resolve.type = "button"; resolve.textContent = "Resolve conflict";
+  const result = document.createElement("div"); result.className = "result-scalar";
+  resolve.addEventListener("click", async () => {
+    result.textContent = "Resolving…";
+    try {
+      const resp = await fetch("/api/v1/opportunities/" + encodeURIComponent(opportunityId) + "/conflicts/" + encodeURIComponent(conflict.conflict_id) + "/resolve", {
+        method: "POST", headers: reviewHeaders(credentials, true),
+        body: JSON.stringify({ winner_claim_id: winner.value || null }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error("HTTP " + resp.status + ": " + JSON.stringify(data));
+      result.textContent = data.resolved ? "Resolved: " + data.reason : "Left open: " + data.reason;
+      if (data.resolved) { resolve.disabled = true; winner.disabled = true; }
+    } catch (error) { result.textContent = String(error); }
+  });
+  card.appendChild(winner); card.appendChild(resolve); card.appendChild(result);
+  return card;
+}
+
+async function loadTopObjections() {
+  const credentials = requireReviewCredentials();
+  if (!credentials) return;
+  const sellerId = document.getElementById("reviewSellerId").value.trim();
+  const resultEl = document.getElementById("reviewResult");
+  const statusEl = document.getElementById("reviewStatus");
+  if (!sellerId) { statusEl.textContent = "Seller ID is required for cross-deal aggregation."; return; }
+  resultEl.innerHTML = "<h3>Top objections</h3><p>Loading…</p>";
+  try {
+    const resp = await fetch("/api/v1/sellers/" + encodeURIComponent(sellerId) + "/top-objections", { headers: reviewHeaders(credentials) });
+    const data = await resp.json();
+    if (!resp.ok) { statusEl.textContent = "HTTP " + resp.status + ": " + JSON.stringify(data); resultEl.innerHTML = ""; return; }
+    resultEl.innerHTML = "<h3>Top objections across open deals</h3>";
+    resultEl.appendChild(renderJson(data));
+  } catch (error) {
+    statusEl.textContent = "Request failed: " + error;
+    resultEl.innerHTML = "";
+  }
 }
 
 """ + _RENDER_JSON_JS + """

@@ -73,6 +73,11 @@ entity-resolution story in Stage 4.
 `POST /api/v1/ingestions/crm` → `CrmIngestionPipeline.ingest_accounts()` /
 `ingest_contacts()` / `ingest_opportunities()`.
 
+When `INGESTION_QUEUE_ENABLED=true`, the API stores an `ACCEPTED` job in Redis
+and `src/ingestion/worker.py` executes the same pipeline with retries,
+visibility-timeout recovery, and dead-letter handling. This fixture uses the
+synchronous local path (`INGESTION_QUEUE_ENABLED=false`).
+
 **2a. Adapter parses the raw record.**
 `SalesforceAdapter.parse_account()` (`src/ingestion/adapters/salesforce.py`)
 turns the raw `{"Id": "001VWGROUP", ...}` dict into a
@@ -240,8 +245,11 @@ Popescu at Volkswagen to address her pricing objection?"}`,
 `X-Workspace-Id: ws-demo`.
 
 **5a. Workspace is trusted, not client-supplied.**
-`verify_api_key` (`api/dependencies.py`) resolves `workspace_id` from the
-`X-Workspace-Id` header + matching `X-Api-Key`, never from the JSON body.
+For this walkthrough, `verify_api_key` (`api/dependencies.py`) resolves
+`workspace_id` from the `X-Workspace-Id` header + matching `X-Api-Key`, never
+from the JSON body. A deployment may instead wire `verify_sso_token`, which
+validates an RS256 JWT against JWKS, issuer, audience, expiry, and the
+configured workspace claim; SSO remains opt-in (`SSO_ENABLED=false`).
 
 **5b. Intent classification.**
 `src/nlq/`'s classifier matches the question against `INTENT_CATALOG`
@@ -315,9 +323,17 @@ exact character span in the original transcript sentence.
   worked conflict example on other data.
 - **Cross-deal aggregation** (`top-objections`) — needs a second deal; see
   the same script's Scene 6 for the Acme/Northwind example.
-- **The durable ingestion queue** — Stages 2-3 above ran synchronously
-  in-process, per `docs/adr-0001-durable-ingestion-queue.md`'s documented
-  (not yet implemented) gap.
+- **The durable queue path** — this fixture uses the synchronous local
+  fallback. Production-like runs can enable the Redis worker path described in
+  `docs/adr-0001-durable-ingestion-queue.md`; Kafka remains optional.
+
+## Runtime defaults
+
+This walkthrough follows `main`: Redis is the default durable ingestion
+transport when enabled (Kafka is optional), Neo4j is the default vector
+backend (Qdrant is optional), and the LLM fallback gateway is opt-in and
+disabled by default. The examples use API-key authentication; JWT/JWKS SSO
+validation is available but disabled and unwired by default.
 
 ## Source of truth
 

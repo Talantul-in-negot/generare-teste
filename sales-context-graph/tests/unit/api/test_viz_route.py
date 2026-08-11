@@ -35,6 +35,17 @@ async def test_viz_page_includes_ask_and_alerts_tabs() -> None:
     assert "/api/v1/qa/intents" in text
 
 
+async def test_viz_page_includes_review_console() -> None:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/viz")
+
+    text = resp.text
+    assert "Review Console" in text
+    assert "/api/v1/unresolved-mentions" in text
+    assert "/top-objections" in text
+    assert "/conflicts/" in text
+
+
 @pytest.fixture
 async def panel_token(monkeypatch) -> str:
     """A real, minted panel token (docs/evaluation.md's Showpad-compatibility

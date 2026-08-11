@@ -15,7 +15,7 @@ from api.dependencies import (
     verify_api_key,
     verify_api_key_or_panel_token,
 )
-from src.auth.policy import AccessContext, AccessDenied, require_opportunity
+from src.auth.policy import AccessContext, AccessDenied, require_opportunity, require_role
 from src.core.config import get_settings
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
@@ -95,6 +95,7 @@ async def resolve_conflict(
     if get_settings().authz_enforcement_enabled:
         try:
             require_opportunity(access, opportunity_id)
+            require_role(access, "admin", "workspace_admin", "reviewer")
         except AccessDenied as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
     executor = GraphExecutor()

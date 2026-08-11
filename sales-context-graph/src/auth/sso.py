@@ -36,7 +36,7 @@ import functools
 
 import jwt
 import structlog
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Request
 
 from src.core.config import get_settings
 
@@ -59,7 +59,7 @@ def _jwks_client(jwks_url: str) -> jwt.PyJWKClient:
     return jwt.PyJWKClient(jwks_url)
 
 
-async def verify_sso_token(authorization: str = Header(None)) -> str:
+async def verify_sso_token(authorization: str | None = Header(None), request: Request | None = None) -> str:
     """FastAPI dependency: validates `Authorization: Bearer <jwt>` against
     the configured IdP and returns the workspace_id claim. Raises 503 when
     unconfigured (same "fail loud, never silently degrade" posture as
@@ -99,4 +99,8 @@ async def verify_sso_token(authorization: str = Header(None)) -> str:
             status_code=401,
             detail=f"SSO token has no {settings.sso_workspace_claim!r} claim",
         )
+    if request is not None:
+        # Downstream authorization consumes only claims verified above, never
+        # caller-supplied X-User-* headers, when the SSO route path is active.
+        request.state.sso_claims = claims
     return str(workspace_id)

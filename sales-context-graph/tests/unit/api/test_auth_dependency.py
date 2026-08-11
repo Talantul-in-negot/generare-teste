@@ -12,7 +12,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from api.dependencies import verify_api_key
+from api.dependencies import _claim_values, verify_api_key
 from src.core.config import get_settings
 
 pytestmark = pytest.mark.asyncio
@@ -87,3 +87,24 @@ async def test_public_demo_key_cannot_mutate(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         await verify_api_key(x_api_key="preview-key", workspace_id="ws-demo", request=request)
     assert exc_info.value.status_code == 403
+
+
+async def test_sso_enabled_switches_the_shared_route_dependency(monkeypatch):
+    """All normal routes depend on verify_api_key, so this proves SSO can be
+    enabled once at deployment time rather than migrated route by route."""
+    monkeypatch.setenv("SSO_ENABLED", "true")
+    get_settings.cache_clear()
+
+    async def verified_sso(*, authorization, request):
+        assert authorization == "Bearer signed-token"
+        return "ws-from-jwt"
+
+    monkeypatch.setattr("src.auth.sso.verify_sso_token", verified_sso)
+
+    assert await verify_api_key(authorization="Bearer signed-token") == "ws-from-jwt"
+
+
+async def test_verified_claim_values_accept_idp_list_or_csv_shapes():
+    assert _claim_values(["seller", "workspace_admin"]) == {"seller", "workspace_admin"}
+    assert _claim_values("seller, workspace_admin") == {"seller", "workspace_admin"}
+    assert _claim_values(None) == frozenset()
