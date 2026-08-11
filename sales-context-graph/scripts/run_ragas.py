@@ -19,5 +19,11 @@ parser = argparse.ArgumentParser(description="Run RAGAS metrics on a golden JSON
 parser.add_argument("--input", type=Path, default=Path("data/eval/ragas_golden.jsonl"))
 parser.add_argument("--output", type=Path, default=Path("artifacts/ragas/latest.json"))
 parser.add_argument("--model", default="gpt-4o-mini", help="OpenAI judge model")
+parser.add_argument(
+    "--generations",
+    type=int,
+    default=3,
+    help="Judge generations requested by RAGAS (1 for a cheap smoke run, default: 3)",
+)
 args = parser.parse_args()
-main(args.input, args.output, model=args.model)
+main(args.input, args.output, model=args.model, generations=args.generations)

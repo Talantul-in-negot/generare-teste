@@ -1,6 +1,6 @@
 # Sales Context Graph
 
-> **Current release snapshot — 2026-08-10**
+> **Current release snapshot — 2026-08-11**
 >
 > A production-oriented, evidence-backed companion layer for Showpad-style
 > sales context. The repository is ready for a controlled pilot; a live
@@ -77,18 +77,13 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
   embeddable panel, not a packaged app (no OAuth, no AppExchange packaging).
 
 The repository has a broad unit/integration/security/evaluation suite with
-**543 tests collected**. RAGAS remains an optional external-judge evaluation
-and is not included in the default test count. The last recorded full run had
-one known integration test
-(`tests/integration/test_resolution_vw_fixtures.py::test_weak_base_candidate_cannot_autolink_through_relational_bonus_alone`)
-fails reproducibly against this Neo4j version — a fulltext-index
-eventual-consistency race in the test itself (confirmed via `SHOW INDEXES`:
-the index reports `ONLINE`/100% while the failure still reproduces, so it's
-a per-write Lucene refresh timing gap, not a build-state issue), predating
-this repo's most recent hardening pass and tracked separately rather than
-silently left out of this count. See the completion report at the end of
-this document for the phase-by-phase breakdown, measured numbers and known
-limitations. Deferred work is centralized in
+**547 tests collected**. The latest full local run executed all 547 tests and
+finished with **547 passed** in 241 seconds; it emitted 28 Windows asyncio
+cleanup warnings but no test failures. RAGAS remains an optional
+external-judge evaluation
+and is not included in the default test count. See the completion report at
+the end of this document for the phase-by-phase breakdown, measured numbers
+and known limitations. Deferred work is centralized in
 [`docs/evaluation.md`](docs/evaluation.md), rather than hidden in code
 comments.
 

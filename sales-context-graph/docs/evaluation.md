@@ -1,6 +1,6 @@
 # Evaluation
 
-## Current release status — 2026-08-10
+## Current release status — 2026-08-11
 
 The repository-owned hardening work is complete for the controlled-pilot
 scope. The current release includes:
@@ -16,11 +16,14 @@ scope. The current release includes:
 - workspace+identity constraints, bounded entity candidate retrieval, rate
   limiting, readiness/metrics and reproducible load/backup exercises.
 
-The current checkout collects **543 tests**. The historical numeric snapshots
-below are retained as dated audit captures; they explain how the system
-evolved, but must not be read as the current release count. The RAGAS runner is
-optional and is not included in the default collection unless its evaluation
-dependencies are installed.
+The current checkout collects **547 tests**: 379 unit, 157 integration, 8
+security and 3 evaluation tests. The latest full local run against the active
+Neo4j and Redis containers completed with **547 passed in 241.07s** and 28
+Windows asyncio cleanup warnings. The detailed numeric snapshots below are
+retained as dated audit captures; they explain how the system evolved, but must
+not be read as the current release count. The RAGAS runner is optional and is
+not included in the default collection unless its evaluation dependencies are
+installed.
 
 The remaining release boundary is external: Showpad OAuth/API synchronization,
 CRM write-back, real IdP/SCIM provisioning, Shared Spaces/mobile workflows,
@@ -37,7 +40,7 @@ narrative summaries, proactive digest, LLM role classification, conflict
 resolution + point-in-time queries, seller-facing UI). Reproduce with `make
 test` (or `pytest tests/` directly, after `docker compose up -d neo4j redis`).
 
-## Test suite results
+## Historical test suite detail
 
 ```
 367 passed in 173.20s (2026-08-05, this session's final full run)
@@ -59,9 +62,9 @@ test` (or `pytest tests/` directly, after `docker compose up -d neo4j redis`).
 | `tests/unit/delivery/` | 3 | Slack Block Kit digest formatting, no network. |
 | `tests/unit/usecases/` | 5 | Content-effectiveness stage-as-of reconstruction. |
 | `tests/unit/ingestion/` | 6 | Showpad adapter parsing (asset views, shares); `src/ingestion/queue.py`'s enqueue-once idempotency, retry-then-dead-letter, and `queue_enabled()` flag gating. |
-| `tests/integration/` | 115 | Everything above, end to end, against live Neo4j: tenant isolation, CRM reconciliation, transcript ingestion, the full VW fixture suite, async review (now closing the reviewed Claim's bitemporal interval), Context Graph budget/diversity enforcement, content effectiveness, conflict detection + resolution, buying-committee + LLM role classification, cross-deal aggregation, temporal + point-in-time queries (including the review-path interval-closing case), natural-language ask (including tenant-isolated entity linking and every refusal path), narrative summaries, and the proactive digest. |
+| `tests/integration/` | 157 (historical detail) | Everything above, end to end, against live Neo4j: tenant isolation, CRM reconciliation, transcript ingestion, the full VW fixture suite, async review (now closing the reviewed Claim's bitemporal interval), Context Graph budget/diversity enforcement, content effectiveness, conflict detection + resolution, buying-committee + LLM role classification, cross-deal aggregation, temporal + point-in-time queries (including the review-path interval-closing case), natural-language ask (including tenant-isolated entity linking and every refusal path), narrative summaries, and the proactive digest. |
 | `tests/eval/` | 3 | Blocking recall at small (10) and realistic (600) scale; Context Graph build latency at 300 Claims (see below). |
-| `tests/security/` | 3 | Prompt delimiting, size limits, injected-instruction containment. |
+| `tests/security/` | 8 (historical detail) | Prompt delimiting, size limits, injected-instruction containment and tenant-isolation guards. |
 
 No test is skipped, xfailed, or marked slow-and-ignored. Every LLM-backed test
 (Increments 15/16/18) runs against a deterministic stub `chat_fn` — the suite
@@ -186,18 +189,57 @@ python scripts/run_ragas.py
 ```
 
 The runner writes `artifacts/ragas/latest.json` with
-`faithfulness`, `answer_relevancy`, `context_precision`, and `context_recall`.
-These are LLM-judge scores and must be reported with the dataset version,
-judge model, and prompt/provider configuration. They complement rather than
-replace deterministic citation-grounding checks, entity-resolution recall,
-and the k6 load baseline. The optional runner is intentionally not part of the
-normal API/test dependency set and fails closed when `OPENAI_API_KEY` is absent.
+`faithfulness`, `answer_relevancy`, `context_precision`, and `context_recall`,
+plus per-row and `by_category` (`answerable`/`refusal`) breakdowns and the
+requested generation count. It also reports the deterministic
+`safe_refusal_rate`, `safe_refusal_cases`, and `refusal_cases` fields. This
+metric applies only to rows labeled `refusal`: a pass requires the answer to
+lead with an explicit inability/missing-evidence cue and state what is missing
+or what should happen next. It is a refusal-contract check, not an LLM
+semantic-accuracy score. It requests three judge generations by default
+(`--generations 1` is available for a cheap smoke run). If the provider
+returns fewer generations, RAGAS emits a warning and the output remains
+explicit rather than silently pretending the sample count was met. These are
+LLM-judge scores and must be reported with the dataset version, judge model,
+and prompt/provider configuration. They complement rather than replace
+deterministic citation-grounding checks, entity-resolution recall, and the k6
+load baseline. The optional runner is intentionally not part of the normal
+API/test dependency set and fails closed when `OPENAI_API_KEY` is absent.
 
 The entity-resolution golden set is kept separate at
 `data/eval/entity_resolution_golden.jsonl`. Export predictions with one JSONL
 row per matching `id` and a `predicted_entity_id`, then score them with
 `scripts/score_resolution.py`; this reports precision, recall, F1, false
 positives and false negatives without putting predictions into the labels.
+
+Latest local RAGAS run (2026-08-11, `gpt-4o-mini`, 8 golden rows,
+`--generations 3`) produced:
+
+```text
+faithfulness        = 0.7708
+answer_relevancy    = 0.4213
+context_precision   = 0.7813
+context_recall      = 1.0000
+
+answerable / faithfulness       = 0.7778
+answerable / answer_relevancy   = 0.5617
+answerable / context_precision  = 0.9306
+answerable / context_recall     = 1.0000
+
+refusal / faithfulness          = 0.7500
+refusal / answer_relevancy      = 0.0000 (expected: refusal is not a direct answer)
+refusal / context_precision     = 0.3333
+refusal / context_recall        = 1.0000
+
+safe_refusal_rate               = 1.0000 (2/2 refusal cases)
+```
+
+Compared with the initial run (`0.6250 / 0.3148 / 0.6979 / 0.8750`), the
+grounding, relevance, precision and recall scores all improved after tightening
+the answer/context pairs and adding explicit evidence for safe refusals. These
+are still a baseline, not a release gate: the sample is small and an external
+LLM judge is stochastic. Raw output is saved locally at
+`artifacts/ragas/latest.json` and is not committed with credentials.
 
 ## Extraction and provenance
 

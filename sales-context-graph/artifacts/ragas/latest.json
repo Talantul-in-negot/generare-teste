@@ -1,0 +1,102 @@
+{
+  "model": "gpt-4o-mini",
+  "rows": 8,
+  "metrics": {
+    "faithfulness": 0.7708333333333333,
+    "answer_relevancy": 0.421297532807694,
+    "context_precision": 0.7812499999401041,
+    "context_recall": 1.0
+  },
+  "safe_refusal_rate": 1.0,
+  "safe_refusal_cases": 2,
+  "refusal_cases": 2,
+  "by_category": {
+    "answerable": {
+      "faithfulness": 0.7777777777777777,
+      "answer_relevancy": 0.561730043743592,
+      "context_precision": 0.9305555554868056,
+      "context_recall": 1.0
+    },
+    "refusal": {
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.3333333333,
+      "context_recall": 1.0
+    }
+  },
+  "per_row": [
+    {
+      "id": "vw_pricing_01",
+      "category": "answerable",
+      "safe_refusal": null,
+      "faithfulness": 0.6666666666666666,
+      "answer_relevancy": 0.8000881718120227,
+      "context_precision": 0.5833333333041666,
+      "context_recall": 1.0
+    },
+    {
+      "id": "vw_stakeholder_01",
+      "category": "answerable",
+      "safe_refusal": null,
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.99999999995,
+      "context_recall": 1.0
+    },
+    {
+      "id": "vw_change_01",
+      "category": "answerable",
+      "safe_refusal": null,
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7969251258035901,
+      "context_precision": 0.9999999999666667,
+      "context_recall": 1.0
+    },
+    {
+      "id": "vw_refusal_01",
+      "category": "refusal",
+      "safe_refusal": true,
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.3333333333,
+      "context_recall": 1.0
+    },
+    {
+      "id": "vw_evidence_01",
+      "category": "refusal",
+      "safe_refusal": true,
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.3333333333,
+      "context_recall": 1.0
+    },
+    {
+      "id": "vw_followup_01",
+      "category": "answerable",
+      "safe_refusal": null,
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.9409120538856186,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "id": "vw_temporal_01",
+      "category": "answerable",
+      "safe_refusal": null,
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.0,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "id": "vw_content_01",
+      "category": "answerable",
+      "safe_refusal": null,
+      "faithfulness": 0.5,
+      "answer_relevancy": 0.8324549109603208,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    }
+  ],
+  "generations": 3
+}
