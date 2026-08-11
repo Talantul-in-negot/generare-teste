@@ -57,13 +57,19 @@ GET /api/v1/ingestions/{id}
   → unchanged: reads RedisIngestionStore, same as today
 ```
 
-### Library choice: Redis primitives, not RQ or Celery
+### Library choice: Redis primitives by default, not RQ or Celery
 
-The implementation uses `redis.asyncio` directly: `RPUSH`/`BLMOVE` for
+The default implementation uses `redis.asyncio` directly: `RPUSH`/`BLMOVE` for
 delivery, per-worker processing lists, timestamps for visibility and a DLQ
 list. This keeps the worker async with the existing FastAPI/Neo4j stack and
 avoids adding a second job abstraction. Celery/RQ scheduling is intentionally
 not part of this service; external schedulers own periodic digest delivery.
+
+An optional Kafka transport is also implemented behind
+`INGESTION_TRANSPORT=kafka` for deployments that already operate Kafka. It
+reuses the same pipeline, idempotency marker and job-state contract; Redis
+remains required for the job store and deduplication. The default remains
+`INGESTION_TRANSPORT=redis`.
 
 ### Idempotency and retry
 
