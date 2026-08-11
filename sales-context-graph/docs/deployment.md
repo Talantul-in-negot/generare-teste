@@ -115,6 +115,11 @@ fly secrets set TTS_PROVIDER="openai" TTS_API_KEY="<provider-key>"
 fly secrets set TTS_MODEL="gpt-4o-mini-tts" TTS_VOICE="alloy" TTS_TIMEOUT_SECONDS="2"
 ```
 
+For the temporary public Cloudflare demo only, additionally set
+`DEMO_PUBLIC_TTS_ENABLED=true`. This opt-in allows the demo key to call `/tts`;
+leave it false for normal deployments because public audio requests can incur
+provider costs. Restart/redeploy after changing the variables.
+
 The `POST /api/v1/tts` route returns MP3 only when explicitly requested by the
 client. The Ask response is not blocked by audio generation; after the
 two-second timeout the UI keeps the text answer and reports the audio fallback.

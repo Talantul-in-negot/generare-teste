@@ -315,9 +315,11 @@ required API surface — with four tabs:
   otherwise renders the honest `503`.
 - **Optional voice output**: `POST /api/v1/tts` accepts grounded answer text
   and returns `audio/mpeg`. Enable it with `TTS_PROVIDER=openai` and
-  `TTS_API_KEY`; the Ask response remains text-first, so TTS latency never
+  `TTS_API_KEY`; for the temporary public preview also set
+  `DEMO_PUBLIC_TTS_ENABLED=true`. The Ask response remains text-first, so TTS latency never
   blocks the answer. Keep audio behind an explicit user toggle and retain the
-  text fallback if the provider times out.
+  text fallback if the provider times out. Public TTS can incur provider costs;
+  keep it disabled unless the tunnel is short-lived and rate-limited.
 - **RAGAS evaluation**: the optional `eval` extra provides a version-pinned
   runner for `faithfulness`, `answer_relevancy`, `context_precision`, and
   `context_recall`. Install with `pip install -e ".[eval]"`, set

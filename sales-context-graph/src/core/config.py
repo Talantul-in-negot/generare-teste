@@ -86,6 +86,7 @@ class Settings(BaseSettings):
     demo_public_access_enabled: bool = False
     demo_public_workspace_id: str = "ws-demo"
     demo_public_api_key: str = ""
+    demo_public_tts_enabled: bool = False
 
     # ── OIDC/JWT SSO (docs/evaluation.md's Showpad engineering-rigor ────────────
     # assessment, Band 2: "no SSO/SAML/OIDC/SCIM") -- see src/auth/sso.py.

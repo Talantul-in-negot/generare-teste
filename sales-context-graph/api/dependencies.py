@@ -48,6 +48,7 @@ def _demo_public_path_allowed(request: Request | None) -> bool:
         or path == "/api/v1/narrative/summarize"
         or path == "/api/v1/alerts/check"
         or path.startswith("/api/v1/qa/")
+        or (path == "/api/v1/tts" and get_settings().demo_public_tts_enabled)
     ):
         return True
     return False
