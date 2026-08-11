@@ -9,7 +9,11 @@ from pathlib import Path
 # Allow direct invocation from the repository root (`python scripts/...`).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from dotenv import load_dotenv
+
 from src.evaluation.ragas_runner import main
+
+load_dotenv()
 
 parser = argparse.ArgumentParser(description="Run RAGAS metrics on a golden JSONL dataset")
 parser.add_argument("--input", type=Path, default=Path("data/eval/ragas_golden.jsonl"))
