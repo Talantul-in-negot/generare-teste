@@ -42,6 +42,7 @@ router = APIRouter(tags=["viz"])
 # seeded into the default ws-demo workspace. Used only to make the opt-in
 # public preview useful on first click; normal deployments keep the field empty.
 _DEMO_CONVERSATION_ID = "eb91dade3fd7c13bd32a60989af6d0ea1b2a1d61cd601c8b6a0b640619282dbe"
+_DEMO_OPPORTUNITY_ID = "14acbc36edf9af9616f29e2662a0fe9cd2ca16c843485c022780e4c75627ac32"
 
 
 class PanelTokenRequest(BaseModel):
@@ -69,7 +70,7 @@ async def create_panel_token(body: PanelTokenRequest, workspace_id: str = Depend
 async def context_graph_viz() -> str:
     settings = get_settings()
     if not (settings.demo_public_access_enabled and settings.demo_public_api_key):
-        return _PAGE
+        return _PAGE.replace("__DEMO_OPPORTUNITY_ID_JSON__", "null")
     # The key is exposed only in the deliberately opt-in demo mode. It is
     # scoped to the synthetic workspace and accepted only on read-only paths.
     key = html.escape(settings.demo_public_api_key, quote=True)
@@ -83,6 +84,9 @@ async def context_graph_viz() -> str:
                             f'id="{element_id}" value="{workspace}"')
     page = page.replace('id="conversationId" placeholder="optional"',
                         f'id="conversationId" value="{_DEMO_CONVERSATION_ID}" placeholder="optional"')
+    page = page.replace('id="askOpportunityId">',
+                        f'id="askOpportunityId" value="{_DEMO_OPPORTUNITY_ID}">')
+    page = page.replace("__DEMO_OPPORTUNITY_ID_JSON__", json.dumps(_DEMO_OPPORTUNITY_ID))
     return page
 
 
@@ -457,6 +461,7 @@ _PAGE = """<!doctype html>
 
 <script>
 /* ── Tabs ─────────────────────────────────────────────────────────────── */
+const demoOpportunityId = __DEMO_OPPORTUNITY_ID_JSON__;
 const TAB_NAMES = ["graph", "qa", "ask", "alerts"];
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => {
@@ -756,6 +761,7 @@ function renderQaFields() {
     label.textContent = f.label + (f.required ? " *" : "");
     const input = document.createElement("input");
     input.id = "qaField_" + f.name;
+    if (f.name === "opportunity_id" && demoOpportunityId) input.value = demoOpportunityId;
     label.appendChild(input);
     container.appendChild(label);
   }
