@@ -43,6 +43,8 @@ router = APIRouter(tags=["viz"])
 # public preview useful on first click; normal deployments keep the field empty.
 _DEMO_CONVERSATION_ID = "eb91dade3fd7c13bd32a60989af6d0ea1b2a1d61cd601c8b6a0b640619282dbe"
 _DEMO_OPPORTUNITY_ID = "14acbc36edf9af9616f29e2662a0fe9cd2ca16c843485c022780e4c75627ac32"
+_DEMO_BUYER_CONTACT_ID = "e7122acf4d06d2aa02c9f053637580536c39eb3ffc40e7ca51512c2b44145b72"
+_DEMO_SUBJECT_ID = "spk_1"
 
 
 class PanelTokenRequest(BaseModel):
@@ -86,6 +88,10 @@ async def context_graph_viz() -> str:
                         f'id="conversationId" value="{_DEMO_CONVERSATION_ID}" placeholder="optional"')
     page = page.replace('id="askOpportunityId">',
                         f'id="askOpportunityId" value="{_DEMO_OPPORTUNITY_ID}">')
+    page = page.replace('id="askBuyerContactId">',
+                        f'id="askBuyerContactId" value="{_DEMO_BUYER_CONTACT_ID}">')
+    page = page.replace('id="askSubjectId">',
+                        f'id="askSubjectId" value="{_DEMO_SUBJECT_ID}">')
     page = page.replace("__DEMO_OPPORTUNITY_ID_JSON__", json.dumps(_DEMO_OPPORTUNITY_ID))
     return page
 
@@ -406,7 +412,7 @@ _PAGE = """<!doctype html>
       <button type="button" class="quick-question" data-question="What objections are currently open?"><b>1</b> What objections are currently open?</button>
       <button type="button" class="quick-question" data-question="Who have we not engaged in this opportunity?"><b>2</b> Who have we not engaged?</button>
       <button type="button" class="quick-question" data-question="What content should I send next?"><b>3</b> What content should I send?</button>
-      <button type="button" class="quick-question" data-question="What changed since the last call?"><b>4</b> What changed since last call?</button>
+      <button type="button" class="quick-question" data-question="What changed since June 1, 2026?"><b>4</b> What changed since June 1, 2026?</button>
     </div>
     <label><input id="askNarrative" type="checkbox"> Include narrative summary</label>
     <label><input id="askVoice" type="checkbox"> Read answer aloud (optional TTS)</label>
