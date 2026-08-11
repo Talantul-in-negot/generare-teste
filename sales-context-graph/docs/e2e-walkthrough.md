@@ -327,6 +327,29 @@ exact character span in the original transcript sentence.
   fallback. Production-like runs can enable the Redis worker path described in
   `docs/adr-0001-durable-ingestion-queue.md`; Kafka remains optional.
 
+## Product-workflow API slices
+
+The main demo remains evidence-first, but `main` also contains executable
+workflow APIs for the previously absent product pillars:
+
+- `POST /api/v1/readiness/curricula`, `POST /api/v1/readiness/assignments`
+  and `GET /api/v1/readiness/sellers/{seller_id}` create curriculum work and
+  report assignment completion/score summaries.
+- `POST /api/v1/opportunities/{opportunity_id}/buyer-spaces` creates an
+  opportunity-linked Buyer Space; `POST /api/v1/buyer-spaces/{space_id}/next-steps`
+  and `/comments` persist a mutual plan and discussion.
+- `POST /api/v1/opportunities/{opportunity_id}/revenue-outcomes` records a
+  manual or CRM-import-shaped outcome. `GET /api/v1/revenue/summary` totals
+  those observations and explicitly says that association is not causal proof.
+- `GET /api/v1/opportunities/{opportunity_id}/meeting-brief` deterministically
+  compiles recent conversations and claim evidence; seller-confirmed work is
+  saved via `POST /api/v1/opportunities/{opportunity_id}/meeting-follow-ups`.
+
+These are authenticated, tenant-scoped application workflows, not a live
+Showpad/Salesforce integration or a buyer-facing product UI. They intentionally
+do not claim OAuth, buyer identity, participant ACLs, uploads, mobile/offline
+operation or CRM write-back.
+
 ## Runtime defaults
 
 This walkthrough follows `main`: Redis is the default durable ingestion

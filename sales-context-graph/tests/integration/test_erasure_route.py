@@ -53,12 +53,15 @@ async def test_erasure_route_rejects_missing_or_wrong_api_key(monkeypatch):
             headers={"X-Workspace-Id": workspace_id},
             json={"subject_type": "Speaker", "subject_id": "spk_1"},
         )
-        # 422, not 401: verify_api_key (api/dependencies.py) declares
-        # X-Api-Key as a required header, so a genuinely missing one is
-        # FastAPI's own signature validation, before verify_api_key's body
-        # ever runs -- same pattern as test_context_api.py's equivalent
-        # check for this same dependency.
-        assert no_key_resp.status_code == 422
+        # 401, not 422. This assertion used to expect 422, because
+        # verify_api_key declared X-Api-Key as a *required* FastAPI header,
+        # so a missing one failed signature validation before the
+        # dependency body ever ran. Commit a19b2c4 ("Add secure opt-in
+        # public demo access") changed it to Header(None, ...) so the demo
+        # path can be reached without a key, and raises 401 explicitly
+        # instead. The rejection is unchanged -- and 401 is the more
+        # correct status for absent credentials than 422 ever was.
+        assert no_key_resp.status_code == 401
 
         wrong_key_resp = await client.post(
             "/api/v1/erasure",

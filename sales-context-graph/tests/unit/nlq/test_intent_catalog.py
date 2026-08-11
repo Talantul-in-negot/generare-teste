@@ -25,7 +25,17 @@ _QUERY_PREFIXES = ("/api/v1/qa/", "/api/v1/opportunities/", "/api/v1/sellers/")
 # read-only intents (src/usecases/nlq/ask.py never mutates), so it's excluded
 # by design, not oversight.
 _NOT_INTENTS = {"/api/v1/qa/intents"}
-_NOT_INTENT_ROUTES = {("POST", "/api/v1/opportunities/{opportunity_id}/conflicts/{conflict_id}/resolve")}
+_NOT_INTENT_ROUTES = {
+    ("POST", "/api/v1/opportunities/{opportunity_id}/conflicts/{conflict_id}/resolve"),
+    # Product-workflow routes are stateful seller/buyer operations, not
+    # read-only questions the NL dispatcher is permitted to execute.
+    ("GET", "/api/v1/opportunities/{opportunity_id}/buyer-spaces"),
+    ("POST", "/api/v1/opportunities/{opportunity_id}/buyer-spaces"),
+    ("GET", "/api/v1/opportunities/{opportunity_id}/meeting-brief"),
+    ("GET", "/api/v1/opportunities/{opportunity_id}/meeting-follow-ups"),
+    ("POST", "/api/v1/opportunities/{opportunity_id}/meeting-follow-ups"),
+    ("POST", "/api/v1/opportunities/{opportunity_id}/revenue-outcomes"),
+}
 
 
 def _query_routes() -> set[tuple[str, str]]:

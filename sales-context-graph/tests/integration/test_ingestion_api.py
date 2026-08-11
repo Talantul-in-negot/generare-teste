@@ -39,7 +39,9 @@ async def test_ready_reports_ready_after_schema_bootstrap(executor):
 async def test_crm_ingestion_requires_workspace_header():
     async with _client() as client:
         resp = await client.post("/api/v1/ingestions/crm", json={"accounts": []})
-    assert resp.status_code == 422  # missing required X-Workspace-Id (and X-Api-Key) header
+    # 401, not 422 -- both headers became Header(None, ...) in a19b2c4 (opt-in
+    # public demo access); the dependency raises 401 explicitly instead.
+    assert resp.status_code == 401
 
 
 async def test_crm_ingestion_rejects_missing_or_wrong_api_key(executor, monkeypatch):
@@ -50,7 +52,7 @@ async def test_crm_ingestion_rejects_missing_or_wrong_api_key(executor, monkeypa
         no_key_resp = await client.post(
             "/api/v1/ingestions/crm", headers={"X-Workspace-Id": workspace_id}, json={"accounts": []}
         )
-        assert no_key_resp.status_code == 422  # missing required X-Api-Key header
+        assert no_key_resp.status_code == 401  # see the note above on 401 vs 422
 
         wrong_key_resp = await client.post(
             "/api/v1/ingestions/crm",

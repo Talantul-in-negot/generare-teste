@@ -464,10 +464,11 @@ breakdown per module.
   behavior is covered by tests.
   Real OIDC/JWT validation exists (`src/auth/sso.py`, RS256 signature +
   issuer + audience + expiry checks, tested against a locally-signed JWT —
-  see `docs/adr-0006-sso-scaffolding.md`) but isn't connected to a live
-  identity provider or wired into any route — `SSO_ENABLED` defaults
-  `false`. See `docs/security-and-tenancy.md` for exactly what the active
-  path does and doesn't cover.
+  see `docs/adr-0006-sso-scaffolding.md`). Setting `SSO_ENABLED=true`
+  switches the shared API authentication dependency to that verified-token
+  path; it remains disabled by default and still needs a real IdP/SCIM
+  deployment and claim mapping. See `docs/security-and-tenancy.md` for
+  exactly what the active path does and doesn't cover.
 - **Conflict detection**: one detection strategy only (same subject+predicate,
   differing object, both AFFIRMED, neither superseded —
   `src/resolution/conflict_detection.py`). The legacy `contradiction_detector.py`'s

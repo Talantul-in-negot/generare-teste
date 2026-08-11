@@ -83,7 +83,10 @@ async def test_context_build_requires_valid_api_key(monkeypatch):
         no_key_resp = await client.post(
             "/api/v1/context/build", headers={"X-Workspace-Id": "ws-authcheck"}, json={},
         )
-        assert no_key_resp.status_code == 422  # missing required X-Api-Key header
+        # 401, not 422 -- X-Api-Key became Header(None, ...) in a19b2c4 so the
+        # opt-in public demo path is reachable; verify_api_key now raises 401
+        # explicitly. Still rejected, with a more correct status.
+        assert no_key_resp.status_code == 401
 
         wrong_key_resp = await client.post(
             "/api/v1/context/build",

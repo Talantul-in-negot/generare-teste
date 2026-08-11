@@ -54,6 +54,9 @@ INDEX_STATEMENTS: list[str] = [
     # (workspace_id, viewer_contact_id) — ContentRepository.list_viewed_asset_ids
     # and list_views_for_asset_and_contact.
     "CREATE INDEX asset_view_workspace_viewer_contact_id IF NOT EXISTS FOR (n:AssetView) ON (n.workspace_id, n.viewer_contact_id)",
+    "CREATE INDEX readiness_assignment_workspace_seller IF NOT EXISTS FOR (n:ReadinessAssignment) ON (n.workspace_id, n.seller_id)",
+    "CREATE INDEX buyer_space_workspace_opportunity IF NOT EXISTS FOR (n:BuyerSpace) ON (n.workspace_id, n.opportunity_id)",
+    "CREATE INDEX revenue_outcome_workspace_recorded IF NOT EXISTS FOR (n:RevenueOutcome) ON (n.workspace_id, n.recorded_at)",
 ]
 
 # Existing deployments created non-unique identity indexes before uniqueness
@@ -103,6 +106,13 @@ CONSTRAINT_STATEMENTS: list[str] = [
     "CREATE CONSTRAINT share_workspace_id_unique IF NOT EXISTS FOR (n:Share) REQUIRE (n.workspace_id, n.share_id) IS UNIQUE",
     "CREATE CONSTRAINT source_record_workspace_id_unique IF NOT EXISTS FOR (n:SourceRecord) REQUIRE (n.workspace_id, n.source_record_id) IS UNIQUE",
     "CREATE CONSTRAINT claim_revision_workspace_id_unique IF NOT EXISTS FOR (n:ClaimRevision) REQUIRE (n.workspace_id, n.revision_id) IS UNIQUE",
+    "CREATE CONSTRAINT curriculum_workspace_id_unique IF NOT EXISTS FOR (n:Curriculum) REQUIRE (n.workspace_id, n.curriculum_id) IS UNIQUE",
+    "CREATE CONSTRAINT readiness_assignment_workspace_id_unique IF NOT EXISTS FOR (n:ReadinessAssignment) REQUIRE (n.workspace_id, n.assignment_id) IS UNIQUE",
+    "CREATE CONSTRAINT buyer_space_workspace_id_unique IF NOT EXISTS FOR (n:BuyerSpace) REQUIRE (n.workspace_id, n.space_id) IS UNIQUE",
+    "CREATE CONSTRAINT buyer_space_step_workspace_id_unique IF NOT EXISTS FOR (n:BuyerSpaceNextStep) REQUIRE (n.workspace_id, n.next_step_id) IS UNIQUE",
+    "CREATE CONSTRAINT buyer_space_comment_workspace_id_unique IF NOT EXISTS FOR (n:BuyerSpaceComment) REQUIRE (n.workspace_id, n.comment_id) IS UNIQUE",
+    "CREATE CONSTRAINT revenue_outcome_workspace_id_unique IF NOT EXISTS FOR (n:RevenueOutcome) REQUIRE (n.workspace_id, n.outcome_id) IS UNIQUE",
+    "CREATE CONSTRAINT meeting_follow_up_workspace_id_unique IF NOT EXISTS FOR (n:MeetingFollowUp) REQUIRE (n.workspace_id, n.follow_up_id) IS UNIQUE",
 ]
 
 ALL_STATEMENTS: list[str] = [
@@ -128,6 +138,9 @@ ALL_INDEX_NAMES: list[str] = [
     "conversation_workspace_opportunity_id",
     "share_workspace_opportunity_id",
     "asset_view_workspace_viewer_contact_id",
+    "readiness_assignment_workspace_seller",
+    "buyer_space_workspace_opportunity",
+    "revenue_outcome_workspace_recorded",
     "account_contact_names",
     "contact_embeddings_v1",
 ]
@@ -146,4 +159,11 @@ ALL_CONSTRAINT_NAMES: list[str] = [
     "share_workspace_id_unique",
     "source_record_workspace_id_unique",
     "claim_revision_workspace_id_unique",
+    "curriculum_workspace_id_unique",
+    "readiness_assignment_workspace_id_unique",
+    "buyer_space_workspace_id_unique",
+    "buyer_space_step_workspace_id_unique",
+    "buyer_space_comment_workspace_id_unique",
+    "revenue_outcome_workspace_id_unique",
+    "meeting_follow_up_workspace_id_unique",
 ]

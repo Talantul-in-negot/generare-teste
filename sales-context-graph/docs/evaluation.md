@@ -2041,15 +2041,15 @@ There are two honest launch positions:
 
 | Showpad expectation | Current evidence in this repo | Status | Required update |
 |---|---|---|---|
-| Four-pillar product surface | Graph ingestion, context building, Q&A, recommendations and engagement-shaped records; no readiness, buyer room or revenue product surface | **Partial** | Add a product-scope decision and separate the evidence service from any parity claim; implement the missing pillar surfaces or document them as non-goals |
+| Four-pillar product surface | Graph ingestion/context/Q&A/recommendations plus executable API slices for readiness assignments, Buyer Spaces/MAP comments and next steps, and opportunity revenue outcomes | **Partial** | Add seller/buyer product UI and production integrations; do not equate bounded API workflows with full platform parity |
 | Content Management | `ContentAsset` carries version, approval, archive, sensitivity, shareability, locale/channel and effective/expiry metadata; recommendation queries enforce an `only_servable` policy | **Partial** | Add immutable source/version history, a real Showpad content lifecycle connector and production permission/version reconciliation |
 | Permissions intact | `workspace_id` is structurally enforced; deny-by-default `AccessContext` covers opportunity/division routes, body-scoped Q&A/Ask/context/ingestion and signed panel tokens; `SSO_ENABLED=true` routes standard API requests through verified JWT/JWKS claims | **Partial / external IdP gap** | Connect a real IdP/SCIM directory, finalize group/division/opportunity claim mapping and extend policy to future connector/export surfaces |
-| Sales Readiness | Claim summaries and seller-facing context exist; no courses, certifications, knowledge checks, coaching scorecards or readiness dashboards | **Gap** | Add curriculum/certification entities, assignment and completion events, assessment/roleplay workflows, manager review and readiness reporting |
-| Buyer Engagement | Historical `Share`/`AssetView` records and content recommendation exist; no real share creation, Shared Spaces, buyer uploads/comments, mutual action plan or Next Steps | **Gap** | Implement a buyer-facing room with participant ACLs, uploads/comments, MAP/Next Steps, expiry/revocation, seller notifications and engagement-to-opportunity attribution |
-| Revenue Intelligence | Signals/digests and content-effectiveness analysis exist; no closed-loop CRM outcome attribution or dashboard/report builder | **Partial** | Link assets, conversations, activities and outcomes to opportunity stage/win/loss; add configurable dashboards, cohort metrics, seller feedback and causal/attribution caveats |
+| Sales Readiness | `Curriculum` and tenant-scoped assignments are executable; sellers/managers can record assignment progress/score and readiness reports completion rate and average score | **Partial** | Add knowledge-check/role-play execution, manager coaching review/UI, certifications and reporting by team/cohort |
+| Buyer Engagement | Opportunity-linked `BuyerSpace` supports expiry state, MAP/Next Steps and immutable comments through authenticated APIs | **Partial** | Add participant ACL/invitation and buyer authentication, uploads/assets, seller notifications, revoke/update operations, branded buyer UI and engagement attribution |
+| Revenue Intelligence | Signals/digests/content-effectiveness plus immutable manual/CRM-import-shaped `RevenueOutcome` records and a revenue summary with explicit non-causal attribution caveat | **Partial** | Reconcile real CRM outcomes, link activities/conversations/assets automatically, add configurable cohort dashboards and causal/attribution measurement |
 | Genie-style governed assistant | `/ask` and narrative use cases are bounded and evidence-backed; responses expose citations, disclaimer and `requires_human_review`, with optional text-to-speech | **Partial** | Add a permissioned tool/action layer, agent definitions/versioning, delegated-action approval and audit, richer modality support and a custom-agent lifecycle |
 | External sources and extensibility | LLM, Slack and parser adapters exist; no production Showpad OAuth/API client, content-picker SDK, Shares API, Salesforce/Dynamics installed app, MCP or Teams integration | **Gap** | Build connector contracts with OAuth2, token rotation, webhook/CDC cursors, retries and reconciliation; ship a Showpad sandbox connector first, then CRM auto-log and MCP/Teams adapters |
-| Field Meeting AI / CRM loop | Transcript ingestion and post-hoc graph analysis exist; no pre-meeting brief action in CRM and no automatic Salesforce/Dynamics note/task update | **Gap** | Implement pre-meeting brief, live/post-meeting extraction review, seller confirmation, idempotent CRM write-back, conflict handling and per-field audit trail |
+| Field Meeting AI / CRM loop | Deterministic opportunity meeting brief exposes recent conversations and cited graph evidence; seller-confirmed follow-ups persist as application workflow state | **Partial** | Add live/post-meeting extraction review, calendar/CRM embedding, idempotent CRM write-back, conflict handling and per-field external-write audit trail |
 | Mobile and offline | `/viz` is a web/iframe panel; no native mobile client, offline cache, reconnect sync or conflict resolution | **Gap** | Add mobile capability (or explicitly exclude it from the companion scope), encrypted offline cache, content freshness/expiry, background sync, conflict policy and telemetry; do not imply Genie parity because Genie is not available offline |
 | Identity and administration | API-key-per-workspace remains default; enabling `SSO_ENABLED=true` switches standard routes to tested OIDC/JWKS validation and verified-claim RBAC, but there is no live IdP/SCIM or self-service admin surface | **Partial / external IdP gap** | Connect a real OIDC/SAML IdP, map groups to roles/divisions/opportunities, implement SCIM deprovisioning, session/token rotation and user-level identity evidence |
 | Privacy and compliance | PII egress redaction, prompt-injection tests, request audit events and authenticated erasure exist; erasure clears claims, transcript evidence and Neo4j/Qdrant embeddings as configured | **Partial / compliance gap** | Define retention/legal-hold policies, complete third-party/object-store propagation, exportable audit evidence, DPA/subprocessor/data-residency controls and managed restore evidence |
@@ -2084,13 +2084,14 @@ There are two honest launch positions:
   and reason, persists decisions through the existing REST APIs, and restricts
   mutation to reviewer/admin roles when RBAC enforcement is active. Add
   reviewer assignment/SLA queues and a complete audit-history browser later.
-- Implement Shared Spaces (or explicitly keep buyer engagement out of scope),
-  including uploads/comments/MAP/Next Steps, branded buyer permissions and
-  engagement attribution.
-- Add the seller-readiness loop (training/certification/roleplay or a clear
-  integration boundary to an existing system).
-- Add Field Meeting AI's pre/post meeting flow with seller confirmation and
-  CRM activity/task updates.
+- **Implemented (API slice):** curriculum assignment and seller-readiness
+  summary; still add knowledge checks, coaching, certifications and UI.
+- **Implemented (API slice):** opportunity Buyer Spaces with comments and
+  MAP/Next Steps; still add participant ACLs, buyer-facing UI, uploads,
+  notification and engagement attribution.
+- **Implemented (API slice):** deterministic pre-meeting brief and seller
+  follow-up confirmation; still add CRM/calendar embedding and idempotent
+  external activity/task write-back.
 - Add assistant citations, answer disclaimers, action confirmation and
   per-user/role tool permissions; expose a stable API/SDK or MCP contract.
 

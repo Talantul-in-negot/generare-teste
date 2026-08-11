@@ -20,6 +20,7 @@ from api.routes import (
     tts,
     unresolved_mentions,
     viz,
+    workflows,
 )
 from src.core.config import get_settings
 from src.core.logging import configure_logging
@@ -204,6 +205,7 @@ app.include_router(erasure.router)
 app.include_router(alerts.router)
 app.include_router(viz.router)
 app.include_router(tts.router)
+app.include_router(workflows.router)
 
 
 @app.get("/metrics", include_in_schema=False)
