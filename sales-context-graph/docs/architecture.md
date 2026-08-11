@@ -22,6 +22,9 @@ src/resolution/       Stage A deterministic rules, candidate generation,
                        generation, which is the only piece that queries Neo4j.
 src/review/           Async human-review service (§9) — reviewer resolves a
                        PENDING_REVIEW Mention, targeted Claim reconciliation.
+src/storage/          Application-owned binary Buyer Space storage: bounded,
+                       hash-bearing metadata and fail-closed ClamAV scan
+                       boundary; Neo4j stores metadata, never file bytes.
 src/context_graph/    Bounded, scored Claim selection for one scope.
 src/usecases/         Q&A, Ask, narrative, digest, conflict, committee,
                       temporal and objection-to-unviewed-content use cases.
@@ -51,6 +54,12 @@ data/eval/            Versioned RAGAS and entity-resolution golden datasets.
 
 Dependency direction is one-way: `api` depends on everything below it;
 `src/domain` depends on nothing in this repo.
+
+`src/domain/product_workflows.py` and
+`src/graph/repositories/product_workflow_repository.py` form a separate,
+application-owned workflow plane. It persists readiness, Buyer Space, meeting,
+assistant-approval, legal-hold and audit records without representing them as
+authoritative CRM or Showpad source data.
 
 ## Data flow
 
@@ -147,6 +156,62 @@ flowchart LR
 configured separately, has a bounded two-second default timeout, and never
 blocks the structured Ask response. The browser keeps the text answer when
 audio is unavailable.
+
+### Product-workflow and governance plane
+
+The evidence graph remains the source for answers, recommendations and meeting
+briefs. Workflow state is deliberately separate so a user action never becomes
+a fabricated source fact:
+
+```mermaid
+flowchart LR
+    SELLER[Seller / manager in /viz] --> READY[Readiness APIs]
+    READY --> RDB[(Neo4j workflow nodes)]
+    SELLER --> REVIEW[Review Console]
+    REVIEW --> SLA[Reviewer assignment + SLA]
+    SLA --> RDB
+    REVIEW --> RESOLVE[ReviewService targeted reconciliation]
+    RESOLVE --> GRAPH[Evidence graph]
+
+    BUYER[Buyer /viz/buyer] --> TOKEN[Fragment token → session storage → X-Buyer-Token]
+    TOKEN --> SPACE[Buyer Space APIs]
+    SPACE --> RDB
+    BUYER --> FILE[Binary upload]
+    FILE --> SCAN[ClamAV INSTREAM scan]
+    SCAN --> STORE[Application-owned object storage]
+    STORE --> META[Hash / object key / retention metadata]
+    META --> RDB
+    HOLD[Legal hold] -. blocks .-> RETAIN[Retention sweep]
+    RETAIN --> STORE
+```
+
+`/viz/buyer` receives an invitation token in the URL fragment, which browsers
+do not send to the server. The browser holds it in `sessionStorage` and sends
+it only as `X-Buyer-Token`. Text uploads are bounded workflow records. Binary
+uploads are accepted only when `BUYER_UPLOAD_SCANNER=clamav`; unavailable or
+rejecting scanning fails the request before any bytes are stored. Expired
+application-owned Buyer Space uploads are removed by the scheduler-invoked
+retention sweep unless a legal hold exists for the space.
+
+Review assignment and decision history are persisted separately from the
+`ReviewDecision` itself: `ReviewAssignment` owns reviewer, due time and
+completion; `ReviewRepository` owns candidate evidence and the resulting
+reconciliation. The `/viz` Review Console combines both views.
+
+Readiness includes curriculum assignments, knowledge checks, manager-scored
+role plays, coaching reviews, certifications, learning resources and cohort
+summaries. These are workflow facts only; they do not claim Showpad learning
+delivery, CRM write-back or causal revenue attribution.
+
+### Operational plane
+
+`GET /metrics` exposes Prometheus signals, while FastAPI and Neo4j produce
+OpenTelemetry spans. The opt-in Compose `observability` profile runs local
+Prometheus, Alertmanager and Grafana; production collectors, receivers and
+retention remain deployment configuration. The weekly backup/restore drill and
+scheduled reliability-drill workflow exercise deterministic local failure
+paths. `docs/slo-and-capacity.md` defines pilot targets, a worker-slot sizing
+formula and the evidence required before making a production capacity claim.
 
 RAGAS is deliberately outside the serving path. `scripts/run_ragas.py` reads
 `data/eval/ragas_golden.jsonl`, evaluates faithfulness, answer relevancy,
@@ -250,11 +315,14 @@ opportunity path routes, while body-scoped Ask, Context, Q&A and ingestion
 routes validate `AccessContext` after Pydantic parsing. The signed panel token
 path becomes a narrow opportunity-scoped context.
 
-The route surface includes readiness/metrics, ingestion, unresolved mentions,
-Context Graph, Ask, narrative summaries, intent-based Q&A, insights, digest,
-alerts, erasure, visualization/panel and optional TTS. The visualization page
-also exposes numbered quick questions (1–4) that populate the Ask field; this
-is a browser convenience and does not bypass API authentication.
+The route surface includes readiness, workflow, metrics, ingestion, unresolved
+mentions, Context Graph, Ask, narrative summaries, intent-based Q&A, insights,
+digest, alerts, erasure, visualization/panel/buyer portal and optional TTS.
+The visualization page includes Human Review assignment/history, a responsive
+workflow dashboard and English/Romanian locale infrastructure. These browser
+surfaces remain API-key protected by default; `SSO_ENABLED=true` switches the
+shared dependency to verified RS256 JWT/JWKS claims. A live IdP and SCIM
+directory are deployment integrations, not bundled credentials.
 
 Ingestion supports two explicit modes. With `INGESTION_QUEUE_ENABLED=false`,
 the API executes the pipeline synchronously for local development. With it

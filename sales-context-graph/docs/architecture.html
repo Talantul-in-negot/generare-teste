@@ -474,8 +474,9 @@ footer {
     <p class="tagline">
       Three untrusted-shaped sources — <code>Salesforce</code>, <code>Gong</code>,
       <code>Showpad</code> — become tenant-isolated, evidence-backed <code>Claim</code>
-      nodes in Neo4j, then a bounded, scored selection served to one recommendation
-      workflow. Nothing is asserted without a source segment and a character span behind it.
+      nodes in Neo4j, then a bounded, scored selection served to seller, review
+      and readiness workflows. Application-owned workflow state stays separate
+      from evidence; nothing is asserted without a source segment and character span.
     </p>
     <div class="legend">
       <span><i class="swatch" style="background:var(--ink-soft)"></i> raw source</span>
@@ -568,6 +569,20 @@ footer {
     </div>
   </div>
 
+  <!-- WORKFLOW AND GOVERNANCE PLANE -->
+  <div class="section-title">Application-owned workflow and governance plane</div>
+  <p class="section-sub">Evidence remains evidence: reviews, readiness, Buyer Spaces and
+    approved actions are separate tenant-scoped workflow records, never invented CRM facts.</p>
+
+  <div class="stack">
+    <div class="stack-row"><div class="lbl">Human Review</div><div class="body">Review Console loads bounded candidates, persists reviewer assignment and SLA due date, then records the decision and targeted Claim reconciliation. Assignment/decision history remains inspectable.</div></div>
+    <div class="stack-row"><div class="lbl">Readiness</div><div class="body">Curricula, assignments, knowledge checks, manager-scored role plays, coaching, certifications, learning resources and cohort summaries live in the workflow repository.</div></div>
+    <div class="stack-row"><div class="lbl">Buyer Space</div><div class="body">A revocable invitation token begins in the buyer page URL fragment, moves to session storage, and is sent only as X-Buyer-Token. Portal views and uploads become engagement events.</div></div>
+    <div class="stack-row"><div class="lbl">Binary uploads</div><div class="body">Bytes remain outside Neo4j. The upload boundary requires a ClamAV INSTREAM scan, writes only hash/object-key metadata to Neo4j, and rejects unavailable or unsafe scans before storage.</div></div>
+    <div class="stack-row"><div class="lbl">Retention + hold</div><div class="body">A scheduler-invoked retention sweep removes expired application-owned Buyer Space upload bytes and metadata content, unless the Buyer Space is under a legal hold.</div></div>
+    <div class="stack-row"><div class="lbl">Operations</div><div class="body">Prometheus metrics, FastAPI/Neo4j OpenTelemetry spans, local Prometheus/Alertmanager/Grafana, backup/restore and scheduled deterministic failure drills provide local evidence; managed production operations remain deployment work.</div></div>
+  </div>
+
   <!-- LAYERING -->
   <div class="section-title">Dependency direction</div>
   <p class="section-sub">One-way. <code>api/</code> depends on everything below it;
@@ -581,6 +596,7 @@ footer {
     <div class="stack-row"><div class="lbl">src/extraction/</div><div class="body">windowing + extraction provider Protocol — fixture and LLM implementations, same interface.</div></div>
     <div class="stack-row"><div class="lbl">src/ingestion/</div><div class="body">source adapters + reconciliation — identical / changed / deleted handled explicitly.</div></div>
     <div class="stack-row"><div class="lbl">src/auth/ · src/core/</div><div class="body">AccessContext policy, OIDC/JWKS validation, rate limiting, audit, telemetry, caching and readiness.</div></div>
+    <div class="stack-row"><div class="lbl">src/storage/</div><div class="body">Fail-closed binary Buyer Space boundary: bounded bytes, ClamAV scan, hash/object key metadata and retention deletion.</div></div>
     <div class="stack-row"><div class="lbl">worker</div><div class="body">Redis delivery with retries, visibility timeout, DLQ recovery and bounded concurrency per claim slot.</div></div>
     <div class="stack-row"><div class="lbl">src/graph/</div><div class="body">tenant-safe execution modes, schema/indexes, migrations, one repository per aggregate.</div></div>
     <div class="stack-row"><div class="lbl">src/domain/</div><div class="body">pure Pydantic v2 contracts + deterministic ID hashing. Nothing depends on it; it depends on nothing.</div></div>
