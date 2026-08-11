@@ -285,7 +285,7 @@ Sample request payloads for every endpoint live under
 ## Visualizing the Context Graph and asking questions
 
 The interactive architecture diagram is published through GitHub Pages at
-`https://sergiunicoara.github.io/Generative-AI/sales-context-graph/architecture.html`.
+`https://sergiunicoara.github.io/Generative-AI/architecture.html`.
 The GitHub `blob` link intentionally shows the HTML source instead of executing
 it.
 
