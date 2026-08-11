@@ -71,6 +71,18 @@ reuses the same pipeline, idempotency marker and job-state contract; Redis
 remains required for the job store and deduplication. The default remains
 `INGESTION_TRANSPORT=redis`.
 
+RabbitMQ was considered but is not implemented as a transport in this
+service. It would provide a dedicated task broker with explicit acknowledgements,
+exchange-based routing, retry queues and native dead-letter exchanges. Those
+capabilities are useful when the platform already standardises on RabbitMQ or
+needs complex routing and priority queues, but adding it here would introduce
+another stateful infrastructure dependency without changing the ingestion
+pipeline contract. The current Redis transport already provides the required
+at-least-once delivery, visibility-timeout recovery, bounded retries and
+dead-letter handling for this system's scale. If Showpad standardises on
+RabbitMQ, it can be added behind the same transport seam later; it should not
+be enabled by setting `INGESTION_TRANSPORT=rabbitmq` today.
+
 ### Idempotency and retry
 
 Nothing new to invent here — §6/§7 of `docs/plan.md` already define
