@@ -28,6 +28,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from datetime import datetime, timezone
 
@@ -46,6 +47,7 @@ from src.graph.repositories.crm_repository import CrmRepository
 from src.graph.repositories.source_repository import SourceRepository
 from src.ingestion.adapters.gong import GongAdapter
 from src.ingestion.adapters.salesforce import SalesforceAdapter
+from src.ingestion.adapters.showpad import ShowpadAdapter
 from src.ingestion.pipeline import CrmIngestionPipeline
 from src.ingestion.transcript_pipeline import TranscriptIngestionPipeline
 from src.resolution.candidates import CandidateGenerator
@@ -53,6 +55,12 @@ from src.resolution.pipeline import gather_relational_signals, resolve_mention
 from src.usecases.objection_content_recommendation import ObjectionContentRecommendationUseCase
 
 _T0 = datetime(2026, 6, 15, 14, 0, tzinfo=timezone.utc)
+_SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "data", "sample")
+
+
+def _sample(name: str) -> dict:
+    with open(os.path.join(_SAMPLE_DIR, name), encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def _hr(title: str) -> None:
@@ -75,6 +83,9 @@ async def main() -> None:
     # DEMO_WORKSPACE_ID if you want an isolated one instead.
     workspace_id = os.environ.get("DEMO_WORKSPACE_ID", "ws-demo")
     print(f"workspace_id = {workspace_id}")
+    crm_sample = _sample("salesforce_accounts.json")
+    gong_sample = _sample("gong_call.json")
+    showpad_sample = _sample("showpad_content.json")
 
     crm_repo = CrmRepository(executor)
     conv_repo = ConversationRepository(executor)
@@ -87,10 +98,7 @@ async def main() -> None:
     crm_pipeline = CrmIngestionPipeline(crm_repo, source_repo, SalesforceAdapter())
     await crm_pipeline.ingest_accounts(
         workspace_id,
-        [
-            {"Id": "001VWGROUP", "Name": "Volkswagen Group", "Website": "vw.com", "IsDeleted": False, "MasterRecordId": None},
-            {"Id": "001VWFIN", "Name": "Volkswagen Financial Services", "Website": "vwfs.com", "IsDeleted": False, "MasterRecordId": None},
-        ],
+        crm_sample["accounts"],
         ingestion_run_id="demo-run", observed_at=_T0,
     )
     vw_group_id = crm_entity_id(workspace_id, "salesforce", "Account", "001VWGROUP")
@@ -98,15 +106,14 @@ async def main() -> None:
 
     await crm_pipeline.ingest_contacts(
         workspace_id,
-        [{"Id": "003ELENA", "AccountId": "001VWGROUP", "Name": "Elena Popescu", "Email": "elena.popescu@vw.com", "IsDeleted": False}],
+        crm_sample["contacts"],
         ingestion_run_id="demo-run", observed_at=_T0,
     )
     elena_id = crm_entity_id(workspace_id, "salesforce", "Contact", "003ELENA")
 
     await crm_pipeline.ingest_opportunities(
         workspace_id,
-        [{"Id": "006VWDEAL", "Name": "VW Group Renewal", "AccountId": "001VWGROUP", "OwnerId": "005SAM",
-          "StageName": "Negotiation", "IsClosed": False, "IsDeleted": False}],
+        crm_sample["opportunities"],
         ingestion_run_id="demo-run", observed_at=_T0,
     )
     opportunity_id = crm_entity_id(workspace_id, "salesforce", "Opportunity", "006VWDEAL")
@@ -119,6 +126,8 @@ async def main() -> None:
     transcript_pipeline = TranscriptIngestionPipeline(
         conv_repo, source_repo, claim_repo, GongAdapter(), FixtureExtractionProvider()
     )
+    raw_call = gong_sample["calls"][0]
+    """legacy inline fixture retained below for readable demo docs
     raw_call = {
         "id": "call-vw-demo", "started": "2026-06-15T14:00:00Z", "deleted": False,
         "parties": [
@@ -134,6 +143,7 @@ async def main() -> None:
             ]},
         ],
     }
+    """
     transcript_result = await transcript_pipeline.ingest_call(
         workspace_id, raw_call, ingestion_run_id="demo-run", observed_at=_T0,
         opportunity_id=opportunity_id, account_id=vw_group_id,
@@ -151,18 +161,15 @@ async def main() -> None:
     print(f"seller_id = {seller_id}")
 
     # ── Content: two assets addressing "pricing", one already viewed ──
-    viewed_asset = ContentAsset(
-        content_asset_id="asset-pricing-guide-demo", workspace_id=workspace_id,
-        title="Pricing Objection Handling Guide", url="https://showpad.example/pricing-guide",
-        tags=["pricing", "objection"],
-    )
-    unviewed_asset = ContentAsset(
-        content_asset_id="asset-roi-calculator-demo", workspace_id=workspace_id,
-        title="Enterprise Pricing ROI Calculator", url="https://showpad.example/roi-calculator",
-        tags=["pricing", "roi"],
-    )
-    await content_repo.upsert_content_asset(viewed_asset)
-    await content_repo.upsert_content_asset(unviewed_asset)
+    showpad_adapter = ShowpadAdapter()
+    parsed_assets = [
+        showpad_adapter.parse_content_asset(workspace_id, raw, division_id=showpad_sample.get("division_id"))
+        for raw in showpad_sample["content_assets"]
+    ]
+    for parsed in parsed_assets:
+        await content_repo.upsert_content_asset(parsed.entity)
+    viewed_asset = next(parsed.entity for parsed in parsed_assets if parsed.external_id == "asset-pricing-guide")
+    unviewed_asset = next(parsed.entity for parsed in parsed_assets if parsed.external_id == "asset-roi-calculator")
     await content_repo.upsert_asset_view(AssetView(
         asset_view_id="view-demo-1", workspace_id=workspace_id,
         content_asset_id=viewed_asset.content_asset_id, viewer_contact_id=elena_id, viewed_at=_T0,
