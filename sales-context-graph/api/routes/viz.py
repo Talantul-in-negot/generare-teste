@@ -38,6 +38,11 @@ from src.viz.panel_tokens import PanelTokenClaims, PanelTokenError, mint_panel_t
 
 router = APIRouter(tags=["viz"])
 
+# Deterministic id produced by the canonical data/sample Gong call when it is
+# seeded into the default ws-demo workspace. Used only to make the opt-in
+# public preview useful on first click; normal deployments keep the field empty.
+_DEMO_CONVERSATION_ID = "eb91dade3fd7c13bd32a60989af6d0ea1b2a1d61cd601c8b6a0b640619282dbe"
+
 
 class PanelTokenRequest(BaseModel):
     opportunity_id: str
@@ -76,6 +81,8 @@ async def context_graph_viz() -> str:
     for element_id in ("workspaceId", "qaWorkspaceId", "askWorkspaceId", "alertsWorkspaceId"):
         page = page.replace(f'id="{element_id}" value="ws-demo"',
                             f'id="{element_id}" value="{workspace}"')
+    page = page.replace('id="conversationId" placeholder="optional"',
+                        f'id="conversationId" value="{_DEMO_CONVERSATION_ID}" placeholder="optional"')
     return page
 
 
