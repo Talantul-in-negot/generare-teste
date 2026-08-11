@@ -284,6 +284,11 @@ Sample request payloads for every endpoint live under
 
 ## Visualizing the Context Graph and asking questions
 
+The interactive architecture diagram is published through GitHub Pages at
+`https://sergiunicoara.github.io/Generative-AI/sales-context-graph/architecture.html`.
+The GitHub `blob` link intentionally shows the HTML source instead of executing
+it.
+
 `GET /viz` (open `http://localhost:8000/viz` in a browser once the API is
 running) is a small, self-contained debugging page — not part of docs/plan.md's
 required API surface — with four tabs:
