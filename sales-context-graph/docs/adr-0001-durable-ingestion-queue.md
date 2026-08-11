@@ -48,6 +48,9 @@ worker.py (new, separate process)
   → runs the same CrmIngestionPipeline / TranscriptIngestionPipeline /
     ContentIngestionPipeline calls api/routes/ingestions.py calls today —
     the pipeline layer does not change, only what calls it
+  → inside those pipelines, validates controlled ontology values before graph
+    writes: transcript claim predicates via `validate_claim_predicate()` and
+    governed relationship endpoints via `validate_relation()`
   → updates IngestionJob state through the existing
     ACCEPTED → NORMALIZING → EXTRACTING → RESOLVING → PERSISTING →
     COMPLETED / COMPLETED_WITH_REVIEW / FAILED_RETRYABLE / FAILED_PERMANENT
