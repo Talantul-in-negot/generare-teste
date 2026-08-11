@@ -2,7 +2,7 @@ name: Publish documentation site
 
 on:
   push:
-    branches: [feat/evaluation-full-implementation]
+    branches: [main, feat/evaluation-full-implementation]
   workflow_dispatch:
 
 permissions:
