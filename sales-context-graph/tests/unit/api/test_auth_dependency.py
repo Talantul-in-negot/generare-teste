@@ -10,6 +10,7 @@ import json
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 from api.dependencies import verify_api_key
 from src.core.config import get_settings
@@ -63,3 +64,26 @@ async def test_wrong_key_for_registered_workspace_is_rejected(monkeypatch):
         await verify_api_key(x_api_key="wrong-secret", workspace_id="ws-a")
 
     assert exc_info.value.status_code == 401
+
+
+async def test_public_demo_key_is_opt_in_and_workspace_scoped(monkeypatch):
+    monkeypatch.setenv("DEMO_PUBLIC_ACCESS_ENABLED", "true")
+    monkeypatch.setenv("DEMO_PUBLIC_WORKSPACE_ID", "ws-demo")
+    monkeypatch.setenv("DEMO_PUBLIC_API_KEY", "preview-key")
+    get_settings.cache_clear()
+    assert await verify_api_key(x_api_key="preview-key", workspace_id="ws-demo") == "ws-demo"
+
+    with pytest.raises(HTTPException) as exc_info:
+        await verify_api_key(x_api_key="preview-key", workspace_id="ws-other")
+    assert exc_info.value.status_code == 401
+
+
+async def test_public_demo_key_cannot_mutate(monkeypatch):
+    monkeypatch.setenv("DEMO_PUBLIC_ACCESS_ENABLED", "true")
+    monkeypatch.setenv("DEMO_PUBLIC_WORKSPACE_ID", "ws-demo")
+    monkeypatch.setenv("DEMO_PUBLIC_API_KEY", "preview-key")
+    get_settings.cache_clear()
+    request = Request({"type": "http", "method": "POST", "path": "/api/v1/ingestions/crm", "headers": []})
+    with pytest.raises(HTTPException) as exc_info:
+        await verify_api_key(x_api_key="preview-key", workspace_id="ws-demo", request=request)
+    assert exc_info.value.status_code == 403

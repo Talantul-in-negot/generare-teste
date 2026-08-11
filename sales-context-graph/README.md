@@ -288,6 +288,12 @@ Sample request payloads for every endpoint live under
 running) is a small, self-contained debugging page — not part of docs/plan.md's
 required API surface — with four tabs:
 
+- **Demo preview:** set `DEMO_PUBLIC_ACCESS_ENABLED=true`,
+  `DEMO_PUBLIC_WORKSPACE_ID=ws-demo`, and a short-lived
+  `DEMO_PUBLIC_API_KEY` for a temporary Cloudflare tunnel. `/viz` pre-fills
+  this key for the synthetic workspace; only read/analysis endpoints are
+  allowed. Ingestion, erasure, token minting, conflict resolution and TTS are
+  denied, and production startup rejects this mode.
 - **Context Graph**: calls `POST /api/v1/context/build` from the form inputs
   (workspace, API key, subject/conversation id, max nodes) and renders the
   returned Claims as a subject→predicate→object node-link graph (hand-rolled

@@ -26,6 +26,7 @@ Salesforce/Showpad app (no OAuth, no AppExchange packaging; see README.md).
 from __future__ import annotations
 
 import json
+import html
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import HTMLResponse
@@ -61,7 +62,21 @@ async def create_panel_token(body: PanelTokenRequest, workspace_id: str = Depend
 
 @router.get("/viz", response_class=HTMLResponse)
 async def context_graph_viz() -> str:
-    return _PAGE
+    settings = get_settings()
+    if not (settings.demo_public_access_enabled and settings.demo_public_api_key):
+        return _PAGE
+    # The key is exposed only in the deliberately opt-in demo mode. It is
+    # scoped to the synthetic workspace and accepted only on read-only paths.
+    key = html.escape(settings.demo_public_api_key, quote=True)
+    workspace = html.escape(settings.demo_public_workspace_id, quote=True)
+    page = _PAGE
+    for element_id in ("apiKey", "qaApiKey", "askApiKey", "alertsApiKey"):
+        page = page.replace(f'id="{element_id}" type="password" placeholder="X-Api-Key"',
+                            f'id="{element_id}" type="password" value="{key}" placeholder="X-Api-Key"')
+    for element_id in ("workspaceId", "qaWorkspaceId", "askWorkspaceId", "alertsWorkspaceId"):
+        page = page.replace(f'id="{element_id}" value="ws-demo"',
+                            f'id="{element_id}" value="{workspace}"')
+    return page
 
 
 @router.get("/viz/panel", response_class=HTMLResponse)

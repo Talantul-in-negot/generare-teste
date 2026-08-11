@@ -28,6 +28,31 @@ from src.viz.panel_tokens import verify_panel_token as _verify_panel_token_strin
 log = structlog.get_logger(__name__)
 
 
+def _demo_public_path_allowed(request: Request | None) -> bool:
+    """Allow only the read/analysis surface needed by the public demo UI."""
+    if request is None:
+        return True  # direct dependency tests do not have an ASGI request
+    method = request.method.upper()
+    path = request.url.path
+    if method == "GET" and (
+        path.startswith("/api/v1/claims/")
+        or path.startswith("/api/v1/opportunities/")
+        or path.startswith("/api/v1/sellers/")
+        or path == "/api/v1/digest"
+        or path == "/api/v1/qa/intents"
+    ):
+        return True
+    if method == "POST" and (
+        path == "/api/v1/context/build"
+        or path == "/api/v1/ask"
+        or path == "/api/v1/narrative/summarize"
+        or path == "/api/v1/alerts/check"
+        or path.startswith("/api/v1/qa/")
+    ):
+        return True
+    return False
+
+
 async def get_workspace_id(x_workspace_id: str = Header(..., alias="X-Workspace-Id")) -> str:
     if not x_workspace_id or not x_workspace_id.strip():
         raise HTTPException(status_code=401, detail="X-Workspace-Id is required")
@@ -37,9 +62,20 @@ async def get_workspace_id(x_workspace_id: str = Header(..., alias="X-Workspace-
 async def verify_api_key(
     x_api_key: str = Header(..., alias="X-Api-Key"),
     workspace_id: str = Depends(get_workspace_id),
+    request: Request = None,
 ) -> str:
-    expected = get_settings().workspace_api_keys.get(workspace_id)
-    if not expected or not secrets.compare_digest(x_api_key, expected):
+    settings = get_settings()
+    expected = settings.workspace_api_keys.get(workspace_id)
+    valid_regular_key = bool(expected) and secrets.compare_digest(x_api_key, expected)
+    valid_demo_key = (
+        settings.demo_public_access_enabled
+        and workspace_id == settings.demo_public_workspace_id
+        and bool(settings.demo_public_api_key)
+        and secrets.compare_digest(x_api_key, settings.demo_public_api_key)
+    )
+    if valid_demo_key and not _demo_public_path_allowed(request):
+        raise HTTPException(status_code=403, detail="public demo access is read-only")
+    if not valid_regular_key and not valid_demo_key:
         raise HTTPException(status_code=401, detail="invalid API key for workspace")
     return workspace_id
 
@@ -125,7 +161,7 @@ async def verify_api_key_or_panel_token(
         request.state.panel_claims = claims
         return claims.workspace_id
     if x_api_key and x_workspace_id:
-        return await verify_api_key(x_api_key=x_api_key, workspace_id=x_workspace_id)
+        return await verify_api_key(x_api_key=x_api_key, workspace_id=x_workspace_id, request=request)
     raise HTTPException(status_code=401, detail="X-Api-Key+X-Workspace-Id or X-Panel-Token is required")
 
 

@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     # pydantic-settings JSON-decodes dict-typed fields from a single env var.
     workspace_api_keys: dict[str, str] = {}
 
+    # Temporary, explicitly opt-in access for a read-only public product demo.
+    # Never enable this in production; the demo key is intentionally separate
+    # from the real workspace key map and is scoped to one synthetic workspace.
+    demo_public_access_enabled: bool = False
+    demo_public_workspace_id: str = "ws-demo"
+    demo_public_api_key: str = ""
+
     # ── OIDC/JWT SSO (docs/evaluation.md's Showpad engineering-rigor ────────────
     # assessment, Band 2: "no SSO/SAML/OIDC/SCIM") -- see src/auth/sso.py.
     # Off by default and not wired into any route's Depends() -- verify_api_key
@@ -272,6 +279,8 @@ class Settings(BaseSettings):
                 "panel_token_secret must be configured in production (PANEL_TOKEN_SECRET) "
                 "for /viz/panel to mint or verify tokens."
             )
+        if self.env == "production" and self.demo_public_access_enabled:
+            raise ValueError("demo_public_access_enabled must remain disabled in production.")
         return self
 
     def __init__(self, **data):
