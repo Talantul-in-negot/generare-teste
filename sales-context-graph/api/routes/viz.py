@@ -323,6 +323,12 @@ _PAGE = """<!doctype html>
   .quick-questions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 8px 0 12px; }
   .quick-questions > span { display: block; }
   .quick-question { width: 100% !important; min-height: 30px; margin: 0 !important; padding: 5px 9px !important; border-radius: 5px !important; text-align: left; }
+  .audio-player-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: auto; margin: 6px 0; }
+  .audio-controls { display: flex; align-items: center; gap: 8px; width: 360px; max-width: 100%; }
+  .audio-controls button { width: 34px !important; height: 30px; margin: 0 !important; padding: 0 !important; }
+  .audio-progress { flex: 1; min-width: 120px; }
+  .audio-time { min-width: 72px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .audio-speed { display: none !important; }
   #panel input[type=checkbox] { width: auto; }
   #status, #qaStatus, #askStatus, #alertsStatus { margin-top: 10px; font-size: 12px; color: var(--color-danger-text); white-space: pre-wrap; }
   #meta { margin-top: 14px; font-size: 12px; color: var(--color-text-muted); }
@@ -904,7 +910,15 @@ async function runAsk() {
   resultEl.appendChild(header);
 
   if (document.getElementById("askVoice").checked && data.answered) {
-    const audioText = data.narrative?.text || data.reasoning || JSON.stringify(data.result || {});
+    // Speak only human-readable prose. Never send the structured result to
+    // TTS: it contains opaque claim/contact/opportunity IDs that are useful in
+    // the UI but distracting and unsafe to read aloud.
+    const rawAudioText = data.narrative?.text || data.reasoning || "The answer is available in the text result.";
+    const audioText = rawAudioText
+      .replace(/\s*\[[a-f0-9]{32,}\]\s*/gi, " ")
+      .replace(/\b[a-f0-9]{40,}\b/gi, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
     const audioStatus = document.createElement("div");
     audioStatus.className = "result-scalar";
     audioStatus.textContent = "Preparing audio…";
@@ -916,10 +930,73 @@ async function runAsk() {
     }).then(async (audioResp) => {
       if (!audioResp.ok) throw new Error("TTS HTTP " + audioResp.status);
       const player = document.createElement("audio");
-      player.controls = true;
-      player.autoplay = false;
+      player.controls = false;
+      player.autoplay = true;
+      player.style.display = "none";
       player.src = URL.createObjectURL(await audioResp.blob());
-      audioStatus.replaceWith(player);
+      const audioWrap = document.createElement("div");
+      audioWrap.className = "audio-player-wrap";
+      const controls = document.createElement("div");
+      controls.className = "audio-controls";
+      const play = document.createElement("button");
+      play.type = "button";
+      play.textContent = "▶";
+      play.title = "Play audio";
+      const progress = document.createElement("input");
+      progress.className = "audio-progress";
+      progress.type = "range";
+      progress.min = "0";
+      progress.max = "100";
+      progress.value = "0";
+      progress.setAttribute("aria-label", "Audio progress");
+      const time = document.createElement("span");
+      time.className = "audio-time";
+      time.textContent = "0:00 / 0:00";
+      const formatTime = (seconds) => {
+        if (!Number.isFinite(seconds)) return "0:00";
+        return Math.floor(seconds / 60) + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
+      };
+      play.addEventListener("click", () => {
+        if (player.paused) player.play(); else player.pause();
+      });
+      player.addEventListener("play", () => { play.textContent = "⏸"; });
+      player.addEventListener("pause", () => { play.textContent = "▶"; });
+      player.addEventListener("loadedmetadata", () => { time.textContent = "0:00 / " + formatTime(player.duration); });
+      player.addEventListener("timeupdate", () => {
+        progress.value = player.duration ? String((player.currentTime / player.duration) * 100) : "0";
+        time.textContent = formatTime(player.currentTime) + " / " + formatTime(player.duration);
+      });
+      progress.addEventListener("input", () => {
+        if (player.duration) player.currentTime = (Number(progress.value) / 100) * player.duration;
+      });
+      controls.appendChild(play);
+      controls.appendChild(progress);
+      controls.appendChild(time);
+      audioWrap.appendChild(controls);
+      audioWrap.appendChild(player);
+      const speedLabel = document.createElement("label");
+      speedLabel.className = "audio-speed";
+      speedLabel.textContent = "Speed ";
+      const speed = document.createElement("select");
+      for (const rate of [0.75, 1, 1.25, 1.5, 2]) {
+        const option = document.createElement("option");
+        option.value = String(rate);
+        option.textContent = rate + "×";
+        if (rate === 1) option.selected = true;
+        speed.appendChild(option);
+      }
+      speed.addEventListener("change", () => { player.playbackRate = Number(speed.value); });
+      speedLabel.appendChild(speed);
+      audioWrap.appendChild(speedLabel);
+      audioStatus.replaceWith(audioWrap);
+      // Browsers may still require an explicit gesture after the async fetch;
+      // the controls remain visible and the status explains that fallback.
+      player.play().catch(() => {
+        const hint = document.createElement("span");
+        hint.className = "result-scalar";
+        hint.textContent = "Audio ready — press Play if autoplay is blocked by the browser.";
+        player.insertAdjacentElement("afterend", hint);
+      });
     }).catch((error) => { audioStatus.textContent = "Audio unavailable; text answer remains available. " + error; });
   }
 
