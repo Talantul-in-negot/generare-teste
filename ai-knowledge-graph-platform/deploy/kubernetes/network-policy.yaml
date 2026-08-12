@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: graphrag-default-deny-ingress
+  namespace: graphrag
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: graphrag-api-ingress
+  namespace: graphrag
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graphrag-api
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: http

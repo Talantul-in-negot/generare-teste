@@ -1,0 +1,46 @@
+# Apply only after installing KEDA in the cluster. Queue names are defined in
+# graphrag/messaging/exchanges.py. `hostFromEnv` reads RABBITMQ_URL from each
+# target Deployment's existing Secret-backed environment.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: graphrag-ingestion-worker
+  namespace: graphrag
+spec:
+  scaleTargetRef:
+    name: graphrag-ingestion-worker
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  pollingInterval: 15
+  cooldownPeriod: 300
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: graphrag.ingest.queue
+        mode: QueueLength
+        value: "5"
+        activationValue: "0"
+        hostFromEnv: RABBITMQ_URL
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: graphrag-query-worker
+  namespace: graphrag
+spec:
+  scaleTargetRef:
+    name: graphrag-query-worker
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  pollingInterval: 15
+  cooldownPeriod: 120
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: graphrag.query.queue
+        mode: QueueLength
+        value: "10"
+        activationValue: "0"
+        hostFromEnv: RABBITMQ_URL

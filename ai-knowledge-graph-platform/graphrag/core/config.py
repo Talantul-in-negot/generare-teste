@@ -127,7 +127,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _validate_production_secrets(self) -> "Settings":
         """Fail fast if production is running with insecure defaults."""
-        if self.env == "production":
+        if self.env.lower() == "production":
             if self.jwt_secret_key == "change-me-in-production":
                 raise ValueError(
                     "jwt_secret_key must be set to a strong random secret in production. "
@@ -136,6 +136,23 @@ class Settings(BaseSettings):
             if self.neo4j_password == "graphrag_dev":
                 raise ValueError(
                     "neo4j_password must be changed from the default 'graphrag_dev' in production."
+                )
+            if not self.session_secret_key:
+                raise ValueError(
+                    "session_secret_key must be explicitly set in production so cookie signing keys "
+                    "can be rotated independently from JWT keys."
+                )
+            if self.session_secret_key == self.jwt_secret_key:
+                raise ValueError(
+                    "session_secret_key must differ from jwt_secret_key in production."
+                )
+            if "graphrag_dev" in self.rabbitmq_url or "localhost" in self.rabbitmq_url:
+                raise ValueError(
+                    "rabbitmq_url must not use local or development credentials in production."
+                )
+            if any(origin.startswith("http://") or "localhost" in origin for origin in self.cors_origins):
+                raise ValueError(
+                    "cors_origins must contain only approved HTTPS production origins."
                 )
         return self
 

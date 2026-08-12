@@ -9,6 +9,10 @@ results/kpi_snapshots/kpis.db
 results/ragas_reports/
 *.egg-info/
 .pytest_cache/
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/terraform.tfvars
 
 # Sample/eval data — not tracked; add real samples per project
 eval_data/*.json

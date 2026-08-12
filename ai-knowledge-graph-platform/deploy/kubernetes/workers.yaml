@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphrag-ingestion-worker
+  namespace: graphrag
+spec:
+  replicas: 2
+  selector: {matchLabels: {app.kubernetes.io/name: graphrag-ingestion-worker}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: graphrag-ingestion-worker}}
+    spec:
+      serviceAccountName: graphrag-workload
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: worker
+          image: REGION-docker.pkg.dev/PROJECT_ID/graphrag/ingestion:TAG
+          command: ["python", "workers/ingestion_worker.py"]
+          env:
+            - name: WORKER_HEALTH_PORT
+              value: "8081"
+            - name: TMPDIR
+              value: /tmp
+          envFrom:
+            - configMapRef: {name: graphrag-config}
+            - secretRef: {name: graphrag-secrets}
+          ports:
+            - containerPort: 8081
+              name: health
+          readinessProbe:
+            httpGet: {path: /ready, port: health}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /live, port: health}
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 1, memory: 2Gi}
+            limits: {cpu: "3", memory: 4Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphrag-query-worker
+  namespace: graphrag
+spec:
+  replicas: 2
+  selector: {matchLabels: {app.kubernetes.io/name: graphrag-query-worker}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: graphrag-query-worker}}
+    spec:
+      serviceAccountName: graphrag-workload
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: worker
+          image: REGION-docker.pkg.dev/PROJECT_ID/graphrag/query:TAG
+          command: ["python", "workers/query_worker.py"]
+          env:
+            - name: WORKER_HEALTH_PORT
+              value: "8082"
+            - name: TMPDIR
+              value: /tmp
+            - name: HF_HOME
+              value: /tmp/huggingface
+          envFrom:
+            - configMapRef: {name: graphrag-config}
+            - secretRef: {name: graphrag-secrets}
+          ports:
+            - containerPort: 8082
+              name: health
+          readinessProbe:
+            httpGet: {path: /ready, port: health}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /live, port: health}
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 1, memory: 2Gi}
+            limits: {cpu: "3", memory: 4Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

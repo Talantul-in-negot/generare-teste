@@ -1,0 +1,5 @@
+-r base.txt
+
+# GCS transport for scheduled production backups. Authentication is supplied
+# by GKE Workload Identity, not a JSON credential file.
+google-cloud-storage>=2.18.0

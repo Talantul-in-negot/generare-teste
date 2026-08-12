@@ -5,14 +5,14 @@ Usage
 -----
     # Backup
     python scripts/kg_backup.py backup --tenant acme --output kg_backup.ndjson
-    python scripts/kg_backup.py backup --tenant acme --output s3://my-bucket/backups/kg.ndjson
+    python scripts/kg_backup.py backup --tenant acme --output gs://my-bucket/backups/kg.ndjson
 
     # Restore
     python scripts/kg_backup.py restore --input kg_backup.ndjson --tenant acme
-    python scripts/kg_backup.py restore --input s3://my-bucket/backups/kg.ndjson --tenant acme
+    python scripts/kg_backup.py restore --input gs://my-bucket/backups/kg.ndjson --tenant acme
 
     # List backups in an S3 prefix
-    python scripts/kg_backup.py list --prefix s3://my-bucket/backups/
+    python scripts/kg_backup.py list --prefix gs://my-bucket/backups/
 
 File format
 -----------
@@ -22,12 +22,11 @@ NDJSON â€” one JSON object per line.  Each line is tagged with a ``_type`` 
   {"_type": "chunk",    "id": ...,   "text": ..., ...}
   {"_type": "meta",     "tenant": ..., "exported_at": ..., "version": "1.0"}
 
-S3 support
-----------
-If the output/input path begins with ``s3://``, the script uses boto3.
-Install boto3 with: pip install boto3
-AWS credentials must be available via the standard boto3 chain
-(env vars, ~/.aws/credentials, IAM role, etc.).
+Remote storage support
+----------------------
+``s3://`` paths use boto3; ``gs://`` paths use google-cloud-storage. GCS uses
+Application Default Credentials, so the scheduled GKE job authenticates through
+Workload Identity and does not need a service-account JSON key.
 """
 
 from __future__ import annotations
@@ -50,6 +49,14 @@ def _is_s3(path: str) -> bool:
     return path.startswith("s3://")
 
 
+def _is_gcs(path: str) -> bool:
+    return path.startswith("gs://")
+
+
+def _is_remote(path: str) -> bool:
+    return _is_s3(path) or _is_gcs(path)
+
+
 def _parse_s3(path: str) -> tuple[str, str]:
     """Return (bucket, key) from an s3://bucket/key URI."""
     without_scheme = path[5:]
@@ -57,9 +64,16 @@ def _parse_s3(path: str) -> tuple[str, str]:
     return bucket, key
 
 
+def _parse_gcs(path: str) -> tuple[str, str]:
+    """Return (bucket, blob) from a gs://bucket/blob URI."""
+    without_scheme = path[5:]
+    bucket, _, blob = without_scheme.partition("/")
+    return bucket, blob
+
+
 def _open_write(path: str):
     """Return a file-like object opened for writing (local or S3 buffer)."""
-    if _is_s3(path):
+    if _is_remote(path):
         import io
         return io.StringIO()   # collect into memory then upload
     return open(path, "w", encoding="utf-8")
@@ -81,6 +95,27 @@ def _upload_s3(buf, path: str) -> None:
     print(f"[kg_backup] Uploaded to s3://{bucket}/{key}")
 
 
+def _upload_gcs(buf, path: str) -> None:
+    try:
+        from google.cloud import storage
+    except ImportError:
+        print("ERROR: google-cloud-storage not installed. Use requirements/backup.txt", file=sys.stderr)
+        sys.exit(1)
+    bucket_name, blob_name = _parse_gcs(path)
+    client = storage.Client()
+    client.bucket(bucket_name).blob(blob_name).upload_from_string(
+        buf.getvalue(), content_type="application/x-ndjson; charset=utf-8"
+    )
+    print(f"[kg_backup] Uploaded to gs://{bucket_name}/{blob_name}")
+
+
+def _upload_remote(buf, path: str) -> None:
+    if _is_s3(path):
+        _upload_s3(buf, path)
+    else:
+        _upload_gcs(buf, path)
+
+
 def _open_read_lines(path: str):
     """Return an iterable of raw JSON lines from local file or S3."""
     if _is_s3(path):
@@ -94,6 +129,14 @@ def _open_read_lines(path: str):
         obj  = s3.get_object(Bucket=bucket, Key=key)
         body = obj["Body"].read().decode("utf-8")
         return body.splitlines()
+    if _is_gcs(path):
+        try:
+            from google.cloud import storage
+        except ImportError:
+            print("ERROR: google-cloud-storage not installed. Use requirements/backup.txt", file=sys.stderr)
+            sys.exit(1)
+        bucket_name, blob_name = _parse_gcs(path)
+        return storage.Client().bucket(bucket_name).blob(blob_name).download_as_text().splitlines()
     return open(path, "r", encoding="utf-8").readlines()
 
 
@@ -105,7 +148,7 @@ async def do_backup(args: argparse.Namespace) -> None:
     neo4j  = get_neo4j()
     tenant = args.tenant
     output = args.output
-    is_s3  = _is_s3(output)
+    is_remote = _is_remote(output)
 
     print(f"[kg_backup] Backing up tenant={tenant!r} â†’ {output}")
 
@@ -185,8 +228,8 @@ async def do_backup(args: argparse.Namespace) -> None:
     n_chunks = len(chunk_rows)
     print(f"[kg_backup]   chunks   : {n_chunks}")
 
-    if is_s3:
-        _upload_s3(f, output)
+    if is_remote:
+        _upload_remote(f, output)
     else:
         f.close()
         print(f"[kg_backup] Written to {output}")
@@ -304,7 +347,7 @@ async def do_restore(args: argparse.Namespace) -> None:
 
 def do_list(args: argparse.Namespace) -> None:
     prefix = args.prefix
-    if not _is_s3(prefix):
+    if not _is_remote(prefix):
         # Local directory listing
         p = Path(prefix)
         if not p.exists():
@@ -314,17 +357,27 @@ def do_list(args: argparse.Namespace) -> None:
             print(f"  {f}")
         return
 
-    try:
-        import boto3
-    except ImportError:
-        print("ERROR: boto3 not installed. Run: pip install boto3", file=sys.stderr)
-        sys.exit(1)
+    if _is_s3(prefix):
+        try:
+            import boto3
+        except ImportError:
+            print("ERROR: boto3 not installed. Run: pip install boto3", file=sys.stderr)
+            sys.exit(1)
+        bucket, key_prefix = _parse_s3(prefix)
+        s3  = boto3.client("s3")
+        res = s3.list_objects_v2(Bucket=bucket, Prefix=key_prefix)
+        for obj in res.get("Contents", []):
+            print(f"  s3://{bucket}/{obj['Key']}  ({obj['Size']} bytes,  {obj['LastModified']})")
+        return
 
-    bucket, key_prefix = _parse_s3(prefix)
-    s3  = boto3.client("s3")
-    res = s3.list_objects_v2(Bucket=bucket, Prefix=key_prefix)
-    for obj in res.get("Contents", []):
-        print(f"  s3://{bucket}/{obj['Key']}  ({obj['Size']} bytes,  {obj['LastModified']})")
+    try:
+        from google.cloud import storage
+    except ImportError:
+        print("ERROR: google-cloud-storage not installed. Use requirements/backup.txt", file=sys.stderr)
+        sys.exit(1)
+    bucket, key_prefix = _parse_gcs(prefix)
+    for blob in storage.Client().list_blobs(bucket, prefix=key_prefix):
+        print(f"  gs://{bucket}/{blob.name}  ({blob.size} bytes,  {blob.updated})")
 
 
 # â”€â”€ CLI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

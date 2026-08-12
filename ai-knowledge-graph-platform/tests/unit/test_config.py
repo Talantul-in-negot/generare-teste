@@ -8,6 +8,9 @@ present, win over the global default for that tenant only.
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from graphrag.core.config import Settings
 
 
@@ -92,3 +95,36 @@ class TestRetrievalForMerge:
         result = s.retrieval_for("aerospace")
         result["local_top_k"] = 99            # mutate the returned dict
         assert s.retrieval["local_top_k"] == 10   # global unaffected
+
+
+class TestProductionSettings:
+    """Production must fail closed for unsafe deployment defaults."""
+
+    @staticmethod
+    def _production(**overrides) -> Settings:
+        values = {
+            "env": "production",
+            "jwt_secret_key": "j" * 64,
+            "session_secret_key": "s" * 64,
+            "neo4j_password": "strong-neo4j-password",
+            "rabbitmq_url": "amqps://worker:strong-password@rabbitmq.example.com/vhost",
+            "cors_origins": ["https://graph.example.com"],
+        }
+        values.update(overrides)
+        return Settings(**values)
+
+    def test_accepts_hardened_production_settings(self):
+        assert self._production().env == "production"
+
+    @pytest.mark.parametrize(
+        ("override", "message"),
+        [
+            ({"session_secret_key": ""}, "session_secret_key must be explicitly set"),
+            ({"session_secret_key": "j" * 64}, "must differ"),
+            ({"rabbitmq_url": "amqp://graphrag:graphrag_dev@localhost:5672/"}, "rabbitmq_url"),
+            ({"cors_origins": ["http://localhost:8000"]}, "cors_origins"),
+        ],
+    )
+    def test_rejects_insecure_production_settings(self, override, message):
+        with pytest.raises(ValidationError, match=message):
+            self._production(**override)
