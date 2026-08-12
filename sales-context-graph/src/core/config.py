@@ -129,6 +129,21 @@ class Settings(BaseSettings):
     # the only claim slot hostage. Horizontal replicas remain supported; this
     # setting is a bounded local concurrency knob, not a fairness guarantee.
     ingestion_worker_concurrency: int = 1
+    # Which ExtractionProvider the API route and the worker construct. Default
+    # stays "fixture" -- the deterministic regex provider this repo has always
+    # run in-process, so this setting changes nothing until an operator opts
+    # in. "llm" selects LlmExtractionProvider, which is what actually routes
+    # window text through redact_pii() and the injection guardrail (both are
+    # implemented inside that provider, so on the fixture path they are inert
+    # by construction, not by accident).
+    extraction_provider: Literal["fixture", "llm"] = "fixture"
+    # Bounds how many extraction windows of a single transcript may have an
+    # in-flight provider call at once. 1 preserves the previous strictly
+    # sequential behaviour. Kept small by default: a transcript fans out to
+    # many windows, and an unbounded gather would hand the LLM vendor (and
+    # Neo4j, via the claim writes that follow) a burst sized by transcript
+    # length rather than by anything this system chose.
+    extraction_max_concurrency: int = 4
     # Phase 4 (docs/evaluation.md's ingestion-reliability item, ADR-0001's
     # addendum) -- SQS-style visibility timeout: how long a job may sit
     # claimed-but-unfinished in a worker's own processing list before the

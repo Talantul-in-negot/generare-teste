@@ -9,14 +9,20 @@ stub result standing in for a real one).
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from typing import Awaitable, Callable
 
 import structlog
 from pydantic import ValidationError
 
 from src.core.config import get_settings
-from src.core.telemetry import EXTRACTION_PROVIDER_CALLS_TOTAL, EXTRACTION_WINDOWS_TOTAL
+from src.core.telemetry import (
+    EXTRACTION_PROVIDER_CALLS_TOTAL,
+    EXTRACTION_WINDOW_DURATION_SECONDS,
+    EXTRACTION_WINDOWS_TOTAL,
+)
 from src.extraction.guardrail import scan_for_injection_attempt
 from src.extraction.prompt import build_extraction_prompt
 from src.extraction.provider import ExtractionInput, ExtractionResult
@@ -38,16 +44,55 @@ class ExtractionFailedPermanently(RuntimeError):
 
 
 class LlmExtractionProvider:
-    def __init__(self, chat_fn: ChatFn, *, max_attempts: int = 3):
+    def __init__(self, chat_fn: ChatFn, *, max_attempts: int = 3, max_concurrency: int | None = None):
         if max_attempts < 1:
             raise ValueError("max_attempts must be >= 1")
         self._chat_fn = chat_fn
         self._max_attempts = max_attempts
+        # None -> read the configured bound. Explicit values stay available for
+        # tests that need to assert a specific ceiling without touching config.
+        resolved = get_settings().extraction_max_concurrency if max_concurrency is None else max_concurrency
+        if resolved < 1:
+            raise ValueError("max_concurrency must be >= 1")
+        self._max_concurrency = resolved
 
     async def extract(self, inputs: list[ExtractionInput]) -> list[ExtractionResult]:
-        return [await self._extract_one(item) for item in inputs]
+        """Extract every window, at most `max_concurrency` calls in flight.
+
+        Was a sequential comprehension. A transcript fans out to as many
+        windows as its length dictates, so sequential made a long call's
+        ingestion latency the *sum* of its windows, while an unbounded
+        `gather` would have handed the vendor a burst sized by transcript
+        length. The semaphore makes the ceiling this system's choice.
+
+        `gather` preserves input order, so results still line up positionally
+        with `inputs` -- `transcript_pipeline.py` relies on each result
+        carrying its own window/segment ids rather than on ordering, but
+        keeping the order stable makes the two agree either way.
+        """
+        if self._max_concurrency == 1 or len(inputs) <= 1:
+            return [await self._extract_one(item) for item in inputs]
+
+        semaphore = asyncio.Semaphore(self._max_concurrency)
+
+        async def bounded(item: ExtractionInput) -> ExtractionResult:
+            async with semaphore:
+                return await self._extract_one(item)
+
+        return list(await asyncio.gather(*(bounded(item) for item in inputs)))
 
     async def _extract_one(self, item: ExtractionInput) -> ExtractionResult:
+        started_at = time.monotonic()
+        try:
+            return await self._extract_one_inner(item)
+        finally:
+            # Observed in `finally` so a permanently-failed window still
+            # records how long it burned before giving up -- that is exactly
+            # the case worth seeing in the histogram, and skipping it would
+            # bias the distribution toward the successes.
+            EXTRACTION_WINDOW_DURATION_SECONDS.observe(time.monotonic() - started_at)
+
+    async def _extract_one_inner(self, item: ExtractionInput) -> ExtractionResult:
         EXTRACTION_WINDOWS_TOTAL.inc()
         window_text = "\n".join(f"[{s.speaker_label}] {s.text}" for s in item.segments)
 

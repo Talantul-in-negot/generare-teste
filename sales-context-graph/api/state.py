@@ -29,6 +29,60 @@ class IngestionJob:
     updated_at: datetime
     item_results: list[dict] = field(default_factory=list)
     error: str | None = None
+    # Transcript fan-out progress. Both stay 0 for kinds that aren't windowed
+    # (crm, content-assets, engagement) -- a caller reads windows_total == 0 as
+    # "this job kind has no window progress to report", not as "no progress".
+    # Defaulted (not required) so records written before this field existed
+    # still deserialize -- see _deserialize's .get() calls.
+    windows_total: int = 0
+    windows_processed: int = 0
+
+
+# §11's IngestionState is deliberately richer than a generic job status
+# (NORMALIZING/EXTRACTING/RESOLVING/PERSISTING are real, separately observable
+# phases). API clients polling for "is it done yet" should not have to know
+# that vocabulary, nor should adding a phase later break them -- so the route
+# exposes this coarse projection *alongside* the precise state rather than
+# replacing it. Mapping is intentionally total: every enum member maps.
+_COARSE_STATUS: dict[IngestionState, str] = {
+    IngestionState.ACCEPTED: "queued",
+    IngestionState.NORMALIZING: "running",
+    IngestionState.EXTRACTING: "running",
+    IngestionState.RESOLVING: "running",
+    IngestionState.PERSISTING: "running",
+    IngestionState.COMPLETED: "completed",
+    # Completed, with items flagged for human review -- the job itself did
+    # finish, so "completed" is honest; the review flag lives in item_results.
+    IngestionState.COMPLETED_WITH_REVIEW: "completed",
+    # Retryable means the worker will try again, so it is still in flight from
+    # the caller's perspective -- reporting "failed" here would be wrong until
+    # the attempt budget is actually exhausted (at which point _run promotes
+    # the job to FAILED_PERMANENT).
+    IngestionState.FAILED_RETRYABLE: "running",
+    IngestionState.FAILED_PERMANENT: "failed",
+}
+
+
+def coarse_status(state: IngestionState) -> str:
+    """Project §11's lifecycle onto queued|running|completed|failed."""
+    return _COARSE_STATUS[state]
+
+
+# IngestionJob.error is returned verbatim by GET /api/v1/ingestions/{id}, so it
+# is a trust boundary: a raw str(exc) there can leak a Cypher fragment, an
+# upstream vendor response body, a filesystem path, or a key fragment embedded
+# in a client URL. These are the only two values written to that field. Full
+# exception detail still reaches the logs and the DLQ message, which stay
+# operator-side. Defined here, beside the record they populate, so the
+# synchronous route path and the queued worker path cannot drift apart.
+SAFE_PERMANENT_INGESTION_ERROR = (
+    "ingestion failed: the submitted payload could not be processed. "
+    "Check the request shape against the API contract and resubmit."
+)
+SAFE_RETRYABLE_INGESTION_ERROR = (
+    "ingestion failed after repeated attempts due to a temporary "
+    "downstream error. The payload was accepted; retry later."
+)
 
 
 class InMemoryIngestionStore:
@@ -68,6 +122,10 @@ def _deserialize(raw: str) -> IngestionJob:
         updated_at=datetime.fromisoformat(data["updated_at"]),
         item_results=data["item_results"],
         error=data["error"],
+        # .get(): job records written before progress tracking existed are
+        # still in Redis under a 30-day TTL, and must not fail to load.
+        windows_total=data.get("windows_total", 0),
+        windows_processed=data.get("windows_processed", 0),
     )
 
 

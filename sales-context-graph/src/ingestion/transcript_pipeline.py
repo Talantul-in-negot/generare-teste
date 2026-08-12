@@ -17,16 +17,24 @@ authority').
 
 from __future__ import annotations
 
+import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+import structlog
+
+from src.core.telemetry import RESOLUTION_CANDIDATES_CONSIDERED, RESOLUTION_DURATION_SECONDS
 from src.domain.assertion import Claim
-from src.domain.enums import AdjudicationStatus, SpeakerRole
+from src.domain.conversation import Mention
+from src.domain.enums import AdjudicationStatus, ResolutionStatus, SpeakerRole
 from src.domain.identity import assertion_id as _assertion_id
+from src.domain.identity import mention_id as _mention_id
 from src.extraction.provider import ExtractionInput, ExtractionProvider, WindowSegmentText
 from src.extraction.windowing import build_windows
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
+from src.graph.repositories.review_repository import ReviewRepository
 from src.graph.repositories.source_repository import SourceRepository
 from src.graph.sales_ontology import validate_claim_predicate
 from src.ingestion.reconciliation import (
@@ -34,6 +42,8 @@ from src.ingestion.reconciliation import (
     reconcile_deletion,
     reconcile_source_record,
 )
+from src.resolution.candidates import CandidateGenerator
+from src.resolution.pipeline import resolve_mention
 from src.resolution.speaker import resolve_speaker
 
 
@@ -42,6 +52,39 @@ class TranscriptIngestionResult:
     conversation_id: str
     outcome: ReconciliationOutcome
     claims_created: int
+    # How many windows this call produced. 0 on the identical-re-ingest path,
+    # which deliberately skips windowing entirely -- so a caller aggregating
+    # progress across calls sees "nothing to do" rather than a phantom total.
+    windows_total: int = 0
+
+
+# Reports (windows_processed, windows_total) for one call. Async because every
+# implementation this repo has persists the update (worker -> job store).
+ProgressCallback = Callable[[int, int], Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class _SpeakerSubject:
+    """What one speaker_label resolved to, carried to every Claim it produces.
+
+    Deliberately does NOT carry a replacement for `Claim.subject_id`. That
+    field stays the opaque speaker_label, because it is a load-bearing join
+    key elsewhere -- `src/usecases/buying_committee.py` matches
+    `claim.subject_id == participant.speaker_label` to attribute claims to
+    committee members, and this module's own header documents subject_id as
+    the opaque label that review later rewrites in place. Resolution is
+    therefore recorded in the four additive Claim fields below rather than by
+    overwriting the subject.
+    """
+
+    entity_id: str | None = None
+    entity_type: str | None = None
+    status: ResolutionStatus | None = None
+    score: float | None = None
+    candidate_count: int = 0
+
+
+log = structlog.get_logger(__name__)
 
 
 class TranscriptIngestionPipeline:
@@ -52,12 +95,144 @@ class TranscriptIngestionPipeline:
         claim_repo: ClaimRepository,
         adapter,  # GongAdapter-shaped
         extraction_provider: ExtractionProvider,
+        candidate_generator: CandidateGenerator | None = None,
+        review_repo: ReviewRepository | None = None,
     ):
         self._conversation_repo = conversation_repo
         self._source_repo = source_repo
         self._claim_repo = claim_repo
         self._adapter = adapter
         self._extraction_provider = extraction_provider
+        # Both optional so every existing construction site keeps working and
+        # entity resolution stays strictly additive: without a
+        # candidate_generator the pipeline behaves exactly as it did before
+        # (speaker resolution only, claims keyed on the opaque label). The
+        # worker and the API route both pass one; unit tests that only care
+        # about windowing or claim shape need not.
+        self._candidate_generator = candidate_generator
+        # Persisting the Mention is what makes a PENDING_REVIEW outcome
+        # reachable by ReviewService.list_pending() -- without it, an ambiguous
+        # speaker would be scored and then silently forgotten.
+        self._review_repo = review_repo
+
+    async def _resolve_speaker_identity(
+        self,
+        *,
+        workspace_id: str,
+        conversation_id: str,
+        speaker_label: str,
+        display_name: str | None,
+        speaker_resolution,
+        segments: list,
+        decided_at: datetime,
+        account_id: str | None,
+        email: str | None,
+    ) -> _SpeakerSubject:
+        """Decide what entity a speaker refers to, for every Claim they produce.
+
+        Three tiers, cheapest and most certain first:
+
+        1. `resolve_speaker` already matched an exact email to a Contact or
+           Seller. That is deterministic, so it is treated as AUTO_LINKED with
+           score 1.0 and no candidate search is run -- fuzzy scoring could only
+           weaken an exact identifier match.
+        2. The transcript names the speaker and a CandidateGenerator is wired:
+           build a Mention over the speaker's first segment and run the real
+           `resolve_mention` (blocking -> scoring -> policy). The existing
+           thresholds in src/resolution/policy.py decide AUTO_LINKED /
+           PENDING_REVIEW / UNRESOLVED -- no new thresholds are introduced here.
+        3. Anything else (opaque speaker, no generator wired): fail safe to the
+           opaque label, exactly the pre-existing behaviour.
+        """
+        # Tier 1 -- deterministic email match already succeeded.
+        if speaker_resolution.resolved_contact_id or speaker_resolution.resolved_seller_id:
+            entity_id = speaker_resolution.resolved_contact_id or speaker_resolution.resolved_seller_id
+            return _SpeakerSubject(
+                entity_id=entity_id,
+                entity_type="Contact" if speaker_resolution.resolved_contact_id else "Seller",
+                status=ResolutionStatus.AUTO_LINKED,
+                score=1.0,
+            )
+
+        # Tier 3 conditions -- nothing to resolve against.
+        if self._candidate_generator is None or not display_name or not display_name.strip():
+            return _SpeakerSubject()
+
+        anchor = next((s for s in segments if s.speaker_label == speaker_label), None)
+        if anchor is None:
+            # A named party who never speaks has no evidence span to anchor a
+            # Mention to, and Mention requires a well-formed one. Nothing to
+            # attribute claims to either, since they produced no segments.
+            return _SpeakerSubject()
+
+        mention = Mention(
+            mention_id=_mention_id(anchor.segment_id, 0, len(display_name), speaker_label, "PERSON"),
+            workspace_id=workspace_id,
+            segment_id=anchor.segment_id,
+            # The speaker's name is metadata about who is talking, not a span
+            # quoted inside the utterance, so there is no true offset to point
+            # at. Anchoring at the start of their first segment keeps the span
+            # well-formed and stable across re-ingest (segment_id is
+            # content-derived), which is what mention_id needs.
+            char_start=0,
+            char_end=len(display_name),
+            surface_text=display_name,
+            # The join key, not a normalization of surface_text. ReviewService
+            # reconciles a confirmed mention onto claims via
+            # list_claims_by_subject(workspace_id, mention.normalized_surface),
+            # and ingested claims are subject-keyed on the opaque speaker
+            # label -- so this must be that label for a reviewer's decision to
+            # reach them. Candidate lookup and scoring both read surface_text
+            # (src/resolution/pipeline.py lines 93 and 117), so match quality
+            # is unaffected; only the exact-name short-circuit and the
+            # pre-truncation sort read normalized_surface, and both degrade
+            # safely to the ordinary fuzzy path.
+            normalized_surface=speaker_label,
+            entity_type="PERSON",
+        )
+
+        started_at = time.monotonic()
+        outcome = await resolve_mention(
+            workspace_id=workspace_id,
+            mention=mention,
+            entity_type="Contact",  # PERSON -> Contact, same mapping the review route uses
+            candidate_generator=self._candidate_generator,
+            decided_at=decided_at,
+        )
+        status = outcome.decision.status
+        RESOLUTION_DURATION_SECONDS.labels(status=status.value.lower()).observe(
+            time.monotonic() - started_at
+        )
+        RESOLUTION_CANDIDATES_CONSIDERED.observe(len(outcome.candidates_shown))
+
+        if self._review_repo is not None:
+            # Persist both so a PENDING_REVIEW speaker is reachable by
+            # ReviewService.list_pending(), and so the reviewer sees the same
+            # scores the pipeline decided on.
+            await self._review_repo.upsert_mention(outcome.mention)
+            await self._review_repo.upsert_resolution_decision(outcome.decision)
+
+        log.info(
+            "ingestion.speaker_resolution",
+            conversation_id=conversation_id,
+            # Identifiers and scores only -- never surface_text, segment text,
+            # or the email that drove tier 1. The speaker label is an opaque
+            # source id by construction (§8), so it is safe to log.
+            speaker_label=speaker_label,
+            mention_id=mention.mention_id,
+            resolution_status=status.value,
+            resolution_score=outcome.decision.final_score,
+            candidates=len(outcome.candidates_shown),
+            account_id=account_id,
+        )
+
+        return _SpeakerSubject(
+            entity_id=outcome.decision.resolved_entity_id,
+            entity_type="Contact" if outcome.decision.resolved_entity_id else None,
+            status=status,
+            score=outcome.decision.final_score,
+            candidate_count=len(outcome.candidates_shown),
+        )
 
     async def ingest_call(
         self,
@@ -75,6 +250,7 @@ class TranscriptIngestionPipeline:
         window_max_duration_ms: int = 90_000,
         window_max_tokens: int = 200,
         window_overlap_segments: int = 1,
+        on_progress: ProgressCallback | None = None,
     ) -> TranscriptIngestionResult:
         email_to_contact_id = email_to_contact_id or {}
         email_to_seller_id = email_to_seller_id or {}
@@ -120,7 +296,12 @@ class TranscriptIngestionPipeline:
 
         participants = self._adapter.parse_participants(workspace_id, conversation_id_, raw_call)
         party_emails = self._adapter.parse_party_emails(raw_call)
+        party_names = (
+            self._adapter.parse_party_names(raw_call)
+            if hasattr(self._adapter, "parse_party_names") else {}
+        )
         speaker_role_by_label: dict[str, SpeakerRole] = {}
+        subject_by_label: dict[str, _SpeakerSubject] = {}
         for participant in participants:
             resolution = resolve_speaker(
                 workspace_id=workspace_id,
@@ -138,6 +319,17 @@ class TranscriptIngestionPipeline:
             await self._conversation_repo.upsert_participant(resolved_participant)
             await self._conversation_repo.upsert_speaker_resolution(resolution)
             speaker_role_by_label[participant.speaker_label] = resolution.role
+            subject_by_label[participant.speaker_label] = await self._resolve_speaker_identity(
+                workspace_id=workspace_id,
+                conversation_id=conversation_id_,
+                speaker_label=participant.speaker_label,
+                display_name=party_names.get(participant.speaker_label),
+                speaker_resolution=resolution,
+                segments=segments,
+                decided_at=observed_at,
+                account_id=account_id,
+                email=party_emails.get(participant.speaker_label),
+            )
 
         if not conversation_changed:
             # identical re-ingest — segments/participants already reconciled
@@ -167,7 +359,19 @@ class TranscriptIngestionPipeline:
             for window in windows
         ]
 
+        # Report the denominator before any extraction starts, so a poller
+        # that catches the job early sees 0/N rather than 0/0 (which the API
+        # contract defines as "this kind has no windows").
+        if on_progress is not None:
+            await on_progress(0, len(inputs))
+
         results = await self._extraction_provider.extract(inputs)
+
+        # The provider owns fan-out (and its own bounded concurrency), so the
+        # honest report is one update after it returns rather than a
+        # fabricated per-window trickle this layer cannot actually observe.
+        if on_progress is not None:
+            await on_progress(len(results), len(inputs))
 
         claims_created = 0
         for result in results:
@@ -185,6 +389,11 @@ class TranscriptIngestionPipeline:
                     assertion.object_text,
                     assertion.polarity.value,
                 )
+                # Resolved identity for this segment's speaker. Defaults to the
+                # opaque label so a speaker the pipeline never saw (or a
+                # pipeline wired without a CandidateGenerator) behaves exactly
+                # as before.
+                subject = subject_by_label.get(segment.speaker_label, _SpeakerSubject())
                 claim = Claim(
                     claim_id=claim_id,
                     workspace_id=workspace_id,
@@ -206,8 +415,18 @@ class TranscriptIngestionPipeline:
                     adjudication_status=AdjudicationStatus.UNREVIEWED,
                     retention_class=retention_class,
                     created_at=observed_at,
+                    resolved_entity_id=subject.entity_id,
+                    resolved_entity_type=subject.entity_type,
+                    resolution_status=subject.status,
+                    resolution_score=subject.score,
+                    # speaker_id below is unchanged and still the opaque label:
+                    # provenance survives resolution rather than being replaced
+                    # by it, so the original transcript attribution is always
+                    # recoverable even after a reviewer rewrites subject_id.
                 )
                 await self._claim_repo.create_claim(claim)
                 claims_created += 1
 
-        return TranscriptIngestionResult(conversation_id_, reconciliation.outcome, claims_created)
+        return TranscriptIngestionResult(
+            conversation_id_, reconciliation.outcome, claims_created, windows_total=len(inputs)
+        )

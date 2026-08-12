@@ -153,6 +153,45 @@ RATE_LIMIT_REJECTED_TOTAL = Counter(
     "Requests rejected for exceeding the per-workspace rate limit.",
 )
 
+# --- Async transcript ingestion: per-window visibility -----------------------
+# INGESTION_JOB_DURATION_SECONDS above measures a whole job; a transcript job
+# is a fan-out over N extraction windows, so a slow job gives no clue whether
+# one window stalled or every window is uniformly slow. These three close that
+# gap. Deliberately unlabeled by workspace_id (this file's cardinality rule).
+EXTRACTION_WINDOW_DURATION_SECONDS = Histogram(
+    "scg_extraction_window_duration_seconds",
+    "Wall-clock duration of a single extraction window's provider call, "
+    "including any in-provider retries.",
+)
+EXTRACTION_WINDOWS_FAILED_TOTAL = Counter(
+    "scg_extraction_windows_failed_total",
+    "Extraction windows that exhausted their retries and were skipped. The "
+    "job continues with the remaining windows -- one bad window must not "
+    "discard an entire transcript -- so this is the only signal that "
+    "partial extraction occurred.",
+)
+RESOLUTION_DURATION_SECONDS = Histogram(
+    "scg_resolution_duration_seconds",
+    "Wall-clock duration of one entity-resolution decision during ingestion "
+    "(candidate generation, scoring and policy), by outcome status.",
+    ["status"],
+)
+RESOLUTION_CANDIDATES_CONSIDERED = Histogram(
+    "scg_resolution_candidates_considered",
+    "How many candidates a single resolution decision scored. A persistent 0 "
+    "means blocking is surfacing nothing and every mention is failing safe to "
+    "UNRESOLVED -- indistinguishable from 'no matches exist' in the decision "
+    "counter alone.",
+    buckets=(0, 1, 2, 5, 10, 25, 50),
+)
+INGESTION_QUEUE_RETRIES_TOTAL = Counter(
+    "scg_ingestion_queue_retries_total",
+    "Jobs requeued after a retryable failure, by kind. Distinct from "
+    "scg_extraction_provider_calls_total{outcome=\"retry\"}, which counts "
+    "in-provider JSON-repair attempts rather than whole-job redeliveries.",
+    ["kind"],
+)
+
 
 def record_blocking_recall(value: float) -> None:
     """Called by tests/eval/* after scoring a labeled run's blocking output

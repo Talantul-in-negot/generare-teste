@@ -16,20 +16,27 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.dependencies import get_access_context, verify_api_key
-from api.state import IngestionJob, get_ingestion_store
+from api.state import (
+    SAFE_PERMANENT_INGESTION_ERROR,
+    IngestionJob,
+    coarse_status,
+    get_ingestion_store,
+)
 from src.auth.policy import AccessContext, AccessDenied, require_division, require_role
 from src.core.config import get_settings
 from src.domain.enums import IngestionState
-from src.extraction.fixture_provider import FixtureExtractionProvider
+from src.extraction.provider_factory import build_extraction_provider
 from src.graph.execution import GraphExecutor
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.content_repository import ContentRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
 from src.graph.repositories.crm_repository import CrmRepository
+from src.graph.repositories.review_repository import ReviewRepository
 from src.graph.repositories.source_repository import SourceRepository
 from src.ingestion.adapters.gong import GongAdapter
 from src.ingestion.adapters.salesforce import SalesforceAdapter
@@ -37,6 +44,9 @@ from src.ingestion.adapters.showpad import ShowpadAdapter
 from src.ingestion.pipeline import ContentIngestionPipeline, CrmIngestionPipeline
 from src.ingestion.queue import IngestionQueueMessage, maybe_enqueue
 from src.ingestion.transcript_pipeline import TranscriptIngestionPipeline
+from src.resolution.candidates import CandidateGenerator
+
+log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/ingestions", tags=["ingestions"])
 
@@ -249,12 +259,15 @@ async def ingest_transcripts(
         return {"ingestion_id": ingestion_id, "state": job.state.value}
 
     executor = GraphExecutor()
-    # Fixture extractor by default — pyproject.toml's own open item notes no
-    # LLM provider is pinned yet. Swapping in LlmExtractionProvider later
-    # doesn't change this route, only which provider is constructed here.
+    # Provider is chosen by Settings.extraction_provider via one shared factory
+    # (src/extraction/provider_factory.py), so this synchronous fallback and
+    # the queued worker path can never drift onto different extractors.
+    # Default remains the fixture provider.
     pipeline = TranscriptIngestionPipeline(
         ConversationRepository(executor), SourceRepository(executor), ClaimRepository(executor),
-        GongAdapter(), FixtureExtractionProvider(),
+        GongAdapter(), build_extraction_provider(),
+        candidate_generator=CandidateGenerator(executor),
+        review_repo=ReviewRepository(executor),
     )
 
     job.state = IngestionState.EXTRACTING
@@ -272,11 +285,19 @@ async def ingest_transcripts(
                 "outcome": result.outcome.value,
                 "claims_created": result.claims_created,
             })
+            job.windows_processed += result.windows_total
+            job.windows_total += result.windows_total
         job.item_results = results
         job.state = IngestionState.COMPLETED
     except Exception as exc:
         job.state = IngestionState.FAILED_PERMANENT
-        job.error = str(exc)
+        # Same reasoning as the worker's _safe_error: this string is returned
+        # verbatim by GET /{id}, so it must not carry exception text.
+        job.error = SAFE_PERMANENT_INGESTION_ERROR
+        log.error(
+            "ingestion.sync_transcript_failed",
+            extra={"ingestion_id": ingestion_id, "error_type": type(exc).__name__, "error": str(exc)},
+        )
     job.updated_at = datetime.now(timezone.utc)
     await _store.put(job)
 
@@ -294,7 +315,17 @@ async def get_ingestion(ingestion_id: str, workspace_id: str = Depends(verify_ap
     return {
         "ingestion_id": job.ingestion_id,
         "kind": job.kind,
+        # `state` is §11's precise lifecycle; `status` is the coarse
+        # queued|running|completed|failed projection for callers that only
+        # poll for completion. Both are returned -- existing consumers of
+        # `state` keep working, and a new phase in the enum doesn't break
+        # anyone polling `status`.
         "state": job.state.value,
+        "status": coarse_status(job.state),
+        "progress": {
+            "windows_processed": job.windows_processed,
+            "windows_total": job.windows_total,
+        },
         "created_at": job.created_at.isoformat(),
         "updated_at": job.updated_at.isoformat(),
         "item_results": job.item_results,
