@@ -50,6 +50,44 @@ class Claim(BaseModel):
     erasure_status: ErasureStatus = ErasureStatus.ACTIVE
     created_at: datetime
 
+    # --- Resolved subject identity (§8/§9) ---------------------------------
+    # `subject_id` above is the *surface* the claim was made about (a speaker's
+    # normalized name, or an opaque speaker_label when the transcript gives no
+    # name). These four record what entity resolution concluded that surface
+    # refers to, and are deliberately properties rather than a
+    # (:Claim)-[:ABOUT]->(:Contact) edge: §10 (quoted at the top of
+    # claim_repository.py) forbids Claim fan-out directly from Account/Contact,
+    # routing evidence through Conversation/TranscriptSegment instead.
+    #
+    # All four are optional and default to "not resolved", so every existing
+    # construction site and every stored Claim written before this existed
+    # stays valid -- resolution is additive evidence, never a precondition for
+    # recording that something was said.
+    resolved_entity_id: str | None = None
+    resolved_entity_type: str | None = None  # "Account" | "Contact"
+    resolution_status: ResolutionStatus | None = None
+    resolution_score: float | None = None
+
+    @model_validator(mode="after")
+    def _resolved_entity_requires_auto_link(self) -> "Claim":
+        """Mirror of ResolutionDecision's own invariant.
+
+        A resolved entity id may only be attached to a claim whose resolution
+        actually auto-linked. PENDING_REVIEW and UNRESOLVED must leave the id
+        empty -- otherwise a low-confidence guess becomes indistinguishable
+        from a confirmed link once it is read back out of the graph.
+        """
+        if self.resolved_entity_id and self.resolution_status not in (
+            ResolutionStatus.AUTO_LINKED,
+            None,  # None = set directly by a reviewer's confirmation path
+        ):
+            raise ValueError(
+                "resolved_entity_id may only be set when resolution_status is AUTO_LINKED"
+            )
+        if self.resolution_score is not None and not (0.0 <= self.resolution_score <= 1.0):
+            raise ValueError("resolution_score must be in [0.0, 1.0]")
+        return self
+
     @model_validator(mode="after")
     def _object_is_exactly_one_of_id_or_value(self) -> "Claim":
         if bool(self.object_id) == bool(self.object_value):

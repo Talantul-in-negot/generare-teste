@@ -72,6 +72,16 @@ class GongAdapter:
         emailAddress at all)."""
         return {party["speakerId"]: party.get("emailAddress") for party in raw.get("parties", [])}
 
+    def parse_party_names(self, raw: dict) -> dict[str, str | None]:
+        """speaker_label -> display name (or None when the party is opaque).
+
+        Sibling of parse_party_emails. The name never lands on `Participant`
+        (§8 keeps that model to opaque labels plus resolved ids); it is read
+        here so entity resolution has a surface to match a Contact against
+        when the deterministic email rule finds nothing.
+        """
+        return {party["speakerId"]: party.get("name") for party in raw.get("parties", [])}
+
     def parse_segments(self, workspace_id: str, conversation_id_: str, raw: dict) -> list[TranscriptSegment]:
         segments: list[TranscriptSegment] = []
         index = 0

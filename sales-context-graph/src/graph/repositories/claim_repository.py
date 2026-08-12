@@ -28,7 +28,14 @@ _CLAIM_RETURN = (
     "cl.transaction_from AS transaction_from, cl.transaction_to AS transaction_to, "
     "cl.is_superseded AS is_superseded, cl.adjudication_status AS adjudication_status, "
     "cl.retention_class AS retention_class, cl.erasure_status AS erasure_status, "
-    "cl.created_at AS created_at"
+    "cl.created_at AS created_at, "
+    # Resolved subject identity (§8/§9). Nodes written before these existed
+    # return null for all four, which is exactly the Claim model's default --
+    # so hydration of pre-existing claims keeps working untouched.
+    "cl.resolved_entity_id AS resolved_entity_id, "
+    "cl.resolved_entity_type AS resolved_entity_type, "
+    "cl.resolution_status AS resolution_status, "
+    "cl.resolution_score AS resolution_score"
 )
 
 
@@ -64,6 +71,10 @@ def _claim_params(claim: Claim) -> dict:
         "retention_class": claim.retention_class,
         "erasure_status": claim.erasure_status.value,
         "created_at": claim.created_at.isoformat(),
+        "resolved_entity_id": claim.resolved_entity_id,
+        "resolved_entity_type": claim.resolved_entity_type,
+        "resolution_status": claim.resolution_status.value if claim.resolution_status else None,
+        "resolution_score": claim.resolution_score,
     }
 
 
@@ -112,7 +123,11 @@ class ClaimRepository:
                     cl.is_superseded = $is_superseded,
                     cl.adjudication_status = $adjudication_status,
                     cl.retention_class = $retention_class,
-                    cl.erasure_status = $erasure_status
+                    cl.erasure_status = $erasure_status,
+                    cl.resolved_entity_id = $resolved_entity_id,
+                    cl.resolved_entity_type = $resolved_entity_type,
+                    cl.resolution_status = $resolution_status,
+                    cl.resolution_score = $resolution_score
                 MERGE (seg)-[:HAS_CLAIM]->(cl)
                 """,
                 **params,
@@ -149,7 +164,11 @@ class ClaimRepository:
                 cl.is_superseded = $is_superseded,
                 cl.adjudication_status = $adjudication_status,
                 cl.retention_class = $retention_class,
-                cl.erasure_status = $erasure_status
+                cl.erasure_status = $erasure_status,
+                cl.resolved_entity_id = $resolved_entity_id,
+                cl.resolved_entity_type = $resolved_entity_type,
+                cl.resolution_status = $resolution_status,
+                cl.resolution_score = $resolution_score
             """,
             **params,
         )
