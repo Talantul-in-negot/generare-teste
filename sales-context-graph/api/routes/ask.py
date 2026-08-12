@@ -8,6 +8,7 @@ after the bounded retries in src/llm/json_completion.py.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from neo4j.exceptions import ServiceUnavailable, TransientError
 from pydantic import BaseModel, Field
 
 from api.dependencies import get_access_context, verify_api_key
@@ -81,6 +82,14 @@ async def ask(
 
     try:
         result = await usecase.ask(workspace_id, body.question, context=context)
+    except (ServiceUnavailable, TransientError) as exc:
+        # A graph outage is an unavailable dependency, not an opaque 500. The
+        # UI can show a retryable error and operators can distinguish it from
+        # LLM configuration (503 above) or model output (502 below).
+        raise HTTPException(
+            status_code=503,
+            detail="Knowledge graph is temporarily unavailable; please retry.",
+        ) from exc
     except JsonCompletionFailedPermanently as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except (NoRelevantCallError, NoObjectionFoundError) as exc:
