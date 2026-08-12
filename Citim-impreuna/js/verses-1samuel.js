@@ -149,47 +149,47 @@ const VERSES_1SAMUEL = [
   },
   {
     ref: "1 Samuel 2:2",
-    text: "Nimeni nu este {0} ca Domnul;",
+    text: "Nimeni nu este {0} ca Domnul; nu este alt Dumnezeu decât Tine; nu este stâncă așa ca Dumnezeul nostru.",
     blanks: [{ answer: "sfânt", options: ["sfânt","mare","puternic","drept"] }],
   },
   {
     ref: "1 Samuel 2:3",
-    text: "Nu mai vorbiți cu atâta {0},",
+    text: "Nu mai vorbiți cu atâta {0}, să nu vă mai iasă din gură cuvinte de mândrie, căci Domnul este un Dumnezeu care știe totul, și toate faptele sunt cântărite de El.",
     blanks: [{ answer: "îngâmfare", options: ["îngâmfare","mândrie","trufie","semeție"] }],
   },
   {
     ref: "1 Samuel 2:4",
-    text: "Arcul celor puternici s-a {0},",
+    text: "Arcul celor puternici s-a {0}, și cei slabi sunt încinși cu putere.",
     blanks: [{ answer: "sfărâmat", options: ["sfărâmat","încordat","întins","ascuțit"] }],
   },
   {
     ref: "1 Samuel 2:5",
-    text: "Cei ce erau {0} se închiriază pentru pâine,",
+    text: "Cei ce erau {0} se închiriază pentru pâine, și cei ce erau flămânzi se odihnesc; chiar cea stearpă naște de șapte ori, și cea care avea mulți copii stă lâncezită.",
     blanks: [{ answer: "sătui", options: ["sătui","flămânzi","săraci","bogați"] }],
   },
   {
     ref: "1 Samuel 2:6",
-    text: "Domnul {0} și învie,",
+    text: "Domnul {0} și învie, El coboară în Locuința Morților și El scoate de acolo.",
     blanks: [{ answer: "omoară", options: ["omoară","ucide","lovește","doboară"] }],
   },
   {
     ref: "1 Samuel 2:7",
-    text: "Domnul sărăcește și El {0},",
+    text: "Domnul sărăcește și El {0}, El smerește și El înalță,",
     blanks: [{ answer: "îmbogățește", options: ["îmbogățește","ridică","binecuvântează","ajută"] }],
   },
   {
     ref: "1 Samuel 2:8",
-    text: "El îl ridică din {0} pe cel sărac,",
+    text: "El îl ridică din {0} pe cel sărac, îl ridică din gunoi pe cel lipsit, ca să-i pună să șadă cu cei mari. Și le dă de moștenire un scaun de domnie îmbrăcat cu slavă, căci ai Domnului sunt stâlpii pământului și pe ei a așezat El lumea.",
     blanks: [{ answer: "pulbere", options: ["pulbere","țărână","noroi","cenușă"] }],
   },
   {
     ref: "1 Samuel 2:9",
-    text: "El va {0} pașii preaiubiților Lui,",
+    text: "El va {0} pașii preaiubiților Lui, dar cei răi vor fi nimiciți în întuneric, căci omul nu va birui prin putere.",
     blanks: [{ answer: "păzi", options: ["păzi","apăra","ocroti","însoți"] }],
   },
   {
     ref: "1 Samuel 2:10",
-    text: "Vrăjmașii Domnului vor {0},",
+    text: "Vrăjmașii Domnului vor {0}, din înălțimea cerului El Își va arunca tunetul asupra lor; Domnul va judeca marginile pământului. El Îi va da Împăratului Său putere și El va înălța tăria Unsului Lui.",
     blanks: [{ answer: "tremura", options: ["tremura","fugi","striga","cădea"] }],
   },
   {
@@ -2354,7 +2354,7 @@ const VERSES_1SAMUEL = [
   },
   {
     ref: "1 Samuel 18:7",
-    text: "Femeile care {0} își răspundeau unele altora și ziceau:",
+    text: "Femeile care {0} își răspundeau unele altora și ziceau: „Saul a bătut miile lui, iar David, zecile lui de mii.”",
     blanks: [{ answer: "cântau", options: ["cântau","dansau","strigau","jucau"] }],
   },
   {
@@ -2854,7 +2854,7 @@ const VERSES_1SAMUEL = [
   },
   {
     ref: "1 Samuel 21:11",
-    text: "Slujitorii lui Achiș i-au zis: „Nu este acesta David, împăratul {0}? Nu este el acela pentru care se cânta jucând:",
+    text: "Slujitorii lui Achiș i-au zis: „Nu este acesta David, împăratul {0}? Nu este el acela pentru care se cânta jucând: «Saul și-a bătut miile lui, iar David, zecile lui de mii»?",
     blanks: [{ answer: "țării", options: ["țării","poporului","cetății","Israelului"] }],
   },
   {
@@ -3799,7 +3799,7 @@ const VERSES_1SAMUEL = [
   },
   {
     ref: "1 Samuel 29:5",
-    text: "Nu este acesta David, pentru care {0} jucând:",
+    text: "Nu este acesta David, pentru care {0} jucând: «Saul și-a bătut miile lui, iar David, zecile lui de mii»?",
     blanks: [{ answer: "cântau", options: ["cântau","strigau","vorbeau","ziceau"] }],
   },
   {
