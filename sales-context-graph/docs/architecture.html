@@ -493,13 +493,13 @@ footer {
 
   <!-- PIPELINE -->
   <p class="hint">Hover or focus any box for a real example from the code.</p>
-  <p class="hint scope-note"><b>Scope:</b> stage 03's <i>entity</i> resolution
-    (<code>resolve_mention</code>) is implemented, explainable and tested, but is
-    invoked by the demo and the human-review service — not yet by the ingestion
-    worker, which currently does <i>speaker</i> resolution and keys Claims on the
-    opaque speaker label. Stage 03's extraction runs the deterministic fixture
-    provider in the worker; the LLM provider implements the same Protocol but is
-    not selected at runtime. Everything else shown runs end-to-end.</p>
+  <p class="hint scope-note"><b>Live worker path:</b> transcript window → configured
+    extraction provider (<code>fixture</code> by default; <code>llm</code> through
+    <code>EXTRACTION_PROVIDER=llm</code>) → exact speaker-email match or
+    <code>resolve_mention</code> for a named speaker → Claim with entity-resolution
+    metadata and preserved <code>speaker_label</code> provenance. Ambiguous outcomes
+    are persisted for Human Review; opaque speakers safely remain unresolved. Everything
+    shown runs end-to-end.</p>
   <div class="pipeline-scroll"><div class="pipeline">
     <div class="stage">
       <div class="stage-label"><b>01</b> · Sources</div>
@@ -515,14 +515,14 @@ footer {
     </div>
     <div class="stage">
       <div class="stage-label"><b>03</b> · Extraction + Resolution</div>
-      <div class="node claim-bearing" tabindex="0" data-example="input: &quot;we are concerned about pricing this quarter&quot;&#10;regex pric(e|ing) matches&#10;→ ExtractedAssertion(predicate=&quot;RAISED_OBJECTION&quot;,&#10;    object_text=&quot;pricing&quot;, polarity=AFFIRMED)&#10;&#10;src/extraction/fixture_provider.py:38"><span class="name">Extraction provider</span><span class="desc">Fixture / LLM — same Protocol, injection-resistant prompt</span></div>
-      <div class="node" tabindex="0" data-example="rule A2_EXACT_NORMALIZED_EMAIL, 1 candidate (003ELENA)&#10;→ auto-link&#10;&#10;duplicate exact Account names in one workspace&#10;→ refuses, returns None (never deterministic-links)&#10;&#10;src/resolution/deterministic.py:31"><span class="name">Stage A</span><span class="desc">deterministic, unique-match-only</span></div>
-      <div class="node" tabindex="0" data-example="&quot;Volks Wagen&quot; vs &quot;Volkswagen Group&quot;:&#10;  lexical=0.7407  semantic=0.1718  base≈0.741&#10;  + relational signals → final ≥0.90 → AUTO_LINKED&#10;&#10;distractor &quot;Volkswagen Financial Services&quot;:&#10;  lexical=0.50 → stays below threshold&#10;&#10;thresholds: base≥0.70, final≥0.90, margin≥0.08, ≥1 signal&#10;src/resolution/policy.py:39"><span class="name">Candidates → scoring → policy</span><span class="desc">lexical + semantic + relational → AUTO_LINKED / PENDING_REVIEW / UNRESOLVED</span></div>
+      <div class="node claim-bearing" tabindex="0" data-example="Settings.extraction_provider selects the provider for both worker and synchronous fallback&#10;&#10;fixture (default): deterministic regex for &quot;pricing&quot;&#10;→ ExtractedAssertion(predicate=&quot;RAISED_OBJECTION&quot;, object_text=&quot;pricing&quot;)&#10;&#10;llm: LlmExtractionProvider with PII redaction, injection guardrail, bounded retry and concurrency&#10;→ selected with EXTRACTION_PROVIDER=llm&#10;&#10;src/extraction/provider_factory.py:27"><span class="name">Extraction provider</span><span class="desc">fixture default; LLM selected by configuration</span></div>
+      <div class="node" tabindex="0" data-example="tier 1: exact speaker email → Contact/Seller, AUTO_LINKED, score 1.0&#10;&#10;tier 2: named speaker + CandidateGenerator → build Mention → resolve_mention()&#10;&#10;tier 3: opaque speaker/no generator → no asserted entity link&#10;&#10;src/ingestion/transcript_pipeline.py:129"><span class="name">Worker entity resolution</span><span class="desc">exact speaker match, then mention resolution</span></div>
+      <div class="node" tabindex="0" data-example="&quot;Volks Wagen&quot; vs &quot;Volkswagen Group&quot;:&#10;  lexical=0.7407  semantic=0.1718  base≈0.741&#10;  + relational signals → final ≥0.90 → AUTO_LINKED&#10;&#10;distractor &quot;Volkswagen Financial Services&quot;:&#10;  lexical=0.50 → stays below threshold&#10;&#10;thresholds: base≥0.70, final≥0.90, margin≥0.08, ≥1 signal&#10;PENDING_REVIEW persists the Mention and decision for Human Review&#10;src/resolution/policy.py:39"><span class="name">Candidates → scoring → policy</span><span class="desc">worker + demo/review: lexical + semantic + relational → decision</span></div>
     </div>
     <div class="stage">
       <div class="stage-label"><b>04</b> · Graph</div>
       <div class="node tenant" tabindex="0" data-example="MATCH (a:Account {workspace_id: $workspace_id,&#10;                   account_id: $account_id})&#10;RETURN a&#10;&#10;an unscoped MATCH raises TenantScopingError&#10;before the query ever executes&#10;&#10;src/graph/execution.py:67"><span class="name">GraphExecutor</span><span class="desc">tenant_query / schema_query / operational_query</span></div>
-      <div class="node claim-bearing" tabindex="0" data-example="Claim(claim_id=&quot;claim-a&quot;, predicate=&quot;RAISED_OBJECTION&quot;,&#10;  object_value=&quot;pricing&quot;, polarity=AFFIRMED,&#10;  speaker_role=BUYER, confidence=0.9,&#10;  evidence_char_start=0, evidence_char_end=5)&#10;&#10;two contradicting Claims, same subject+predicate&#10;→ Conflict(conflict_type=CONTRADICTORY_CLAIM)&#10;&#10;tests/unit/resolution/test_conflict_detection.py:14"><span class="name">Claim, Mention, Conflict</span><span class="desc">span + polarity + confidence + adjudication</span></div>
+      <div class="node claim-bearing" tabindex="0" data-example="Claim(claim_id=&quot;claim-a&quot;, predicate=&quot;RAISED_OBJECTION&quot;,&#10;  object_value=&quot;pricing&quot;, polarity=AFFIRMED,&#10;  speaker_role=BUYER, confidence=0.9,&#10;  evidence_char_start=0, evidence_char_end=5)&#10;&#10;same subject + predicate, different object values, both AFFIRMED, neither superseded&#10;→ Conflict(conflict_type=CONTRADICTORY_CLAIM)&#10;both evidence-bearing Claims remain available for review/arbitration&#10;&#10;tests/unit/resolution/test_conflict_detection.py:14"><span class="name">Claim, Mention, Conflict</span><span class="desc">evidence span + confidence; conflicts preserve both Claims</span></div>
       <div class="node" tabindex="0" data-example="crm_repository.upsert_account():&#10;MERGE (a:Account {workspace_id: $workspace_id,&#10;                   account_id: $account_id})&#10;SET a.name = $name, a.domain = $domain&#10;&#10;Claims never attach directly to Account — routed&#10;through Conversation / TranscriptSegment (§10)&#10;&#10;src/graph/repositories/crm_repository.py:48"><span class="name">Account, Opportunity, ContentAsset…</span><span class="desc">one repository per aggregate</span></div>
     </div>
     <div class="stage">

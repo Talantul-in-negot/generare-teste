@@ -138,12 +138,13 @@ flowchart TB
 
     subgraph Extraction["src/extraction/"]
         WIN[windowing.py]
-        FIX[FixtureExtractionProvider]
-        LLM[LlmExtractionProvider]
+        FIX[FixtureExtractionProvider<br/>default]
+        LLM[LlmExtractionProvider<br/>EXTRACTION_PROVIDER=llm]
         PROMPT[prompt.py<br/>injection-resistant]
     end
 
     subgraph Resolution["src/resolution/ + src/review/"]
+        WORKER[Worker resolution<br/>exact email, then mention]
         DET[Stage A<br/>deterministic]
         CAND[candidate generation<br/>exact/fulltext/vector/relational]
         SCORE[scoring.py<br/>lexical+semantic+relational]
@@ -164,20 +165,61 @@ flowchart TB
     API[FastAPI — api/]
 
     SF --> SFA --> RECON
-    GONG --> GA --> WIN --> FIX & LLM
+    GONG --> GA --> RECON --> WIN --> FIX & LLM
     SP --> SPA --> RECON
     PROMPT -.delimits transcript.-> LLM
-    FIX & LLM --> RECON
-    RECON --> EXEC
+    FIX & LLM --> WORKER
+    WORKER --> DET
     DET --> POLICY
     CAND --> SCORE --> POLICY
     POLICY --> REVIEW
-    EXEC --> REPO --> Graph
+    POLICY --> EXEC --> REPO --> Graph
     REPO --> CTX --> UC
     API --> Ingestion
     API --> Resolution
     API --> Serving
 ```
+
+### Current transcript runtime path
+
+```text
+Gong transcript segment
+  -> bounded, overlapping windows
+  -> configured extraction provider
+       fixture (default) OR LLM (EXTRACTION_PROVIDER=llm)
+  -> entity resolution
+       1. exact speaker email -> Contact/Seller, AUTO_LINKED at 1.0
+       2. named speaker -> resolve_mention -> scoring/policy
+       3. opaque/insufficient data -> safe unresolved fallback
+  -> evidence-backed Claim with resolution metadata + speaker_label provenance
+```
+
+The worker and synchronous fallback both construct the provider through
+`build_extraction_provider()`. `fixture` remains the deterministic default;
+`EXTRACTION_PROVIDER=llm` selects `LlmExtractionProvider`, including its PII
+redaction, prompt-injection guardrail, bounded retry, and configured-concurrency
+behavior. If the operator explicitly selects LLM extraction without a configured
+LLM, construction fails safely rather than silently falling back to regex.
+
+For a named speaker, the worker calls `resolve_mention()`: unique deterministic
+matching first, then candidate generation and lexical, semantic, and relational
+scoring under the existing `AUTO_LINKED` / `PENDING_REVIEW` / `UNRESOLVED`
+policy. Claims retain the source `speaker_label` as provenance while storing
+`resolved_entity_id`, entity type, score, and resolution status. A pending
+outcome persists the Mention and decision so Human Review can confirm it and
+reconcile the existing Claims without duplicating them. Opaque speakers, or a
+pipeline deliberately constructed without a candidate generator, retain the
+safe legacy fallback: no asserted entity link.
+
+### Conflict semantics
+
+The graph preserves evidence rather than silently replacing it. The implemented
+conflict detector creates a conflict only when Claims have the same subject and
+predicate, different object values, are both `AFFIRMED`, and neither is
+superseded. Example: “budget is €100k” and “budget is €120k” for the same
+opportunity can coexist and be surfaced for review. Conflict arbitration picks
+the higher-confidence Claim, falls back to recency on a tie, and leaves a true
+double-tie undecided; it never invents a winner.
 
 Every node carries `workspace_id` (the tenant-isolation boundary); Showpad
 nodes additionally carry `division_id`. `GraphExecutor.tenant_query()`
@@ -403,34 +445,6 @@ breakdown per module.
 
 ## Known limitations
 
-- **Entity resolution is not invoked by the ingestion worker.** This is the
-  most important scope caveat in this document, so it is first. The
-  resolution engine (`src/resolution/`: deterministic Stage A, candidate
-  blocking, lexical+semantic+relational scoring, and the
-  AUTO_LINKED / PENDING_REVIEW / UNRESOLVED policy with its margin and
-  threshold rules) is implemented, explainable and covered by integration
-  tests — but the callers that actually run `resolve_mention()` are
-  `demo_volkswagen.py`, the test suite, and the human-review service
-  (`src/review/`), **not** `TranscriptIngestionPipeline`. Ingesting a
-  transcript today persists segments, runs *speaker* resolution
-  (`src/resolution/speaker.py`, a narrower email/name match) and writes
-  Claims whose `subject_id` is the opaque `speaker_label`. The pipeline's
-  own module docstring describes the intended follow-up — Claims are
-  late-reconciled "once a Mention naming that speaker resolves" — but
-  nothing in the ingestion path constructs those `Mention`s yet, so that
-  reconciliation does not fire in a deployed run. Closing this is the next
-  increment, not a rewrite: the engine and the review UI on both sides of
-  the gap already exist.
-- **Extraction in the worker is the fixture provider, not the LLM one.**
-  `src/ingestion/worker.py` constructs `FixtureExtractionProvider()`
-  (deterministic regex) directly; `LlmExtractionProvider` is implemented
-  against the same Protocol and unit-tested, but is not constructed
-  anywhere outside tests, so no runtime configuration currently selects it.
-  Claim extraction in a deployed ingestion run is therefore rule-based.
-  The Protocol boundary is the point — swapping providers is a
-  constructor change, not a refactor — but the swap is not wired to a
-  setting today, and the architecture diagram's "Fixture / LLM" pairing
-  describes the interface, not two live runtime options.
 - **No real packaging**: imports resolve via `pythonpath = ["."]`
   (`pyproject.toml`) and `PYTHONPATH=/app` (`Dockerfile`), not an installable
   package — a deliberate Increment 1 decision, documented in `src/core/config.py`'s
