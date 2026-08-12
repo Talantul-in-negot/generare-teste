@@ -49,8 +49,11 @@ def _demo_public_path_allowed(request: Request | None) -> bool:
         path.startswith("/api/v1/claims/")
         or path.startswith("/api/v1/opportunities/")
         or path.startswith("/api/v1/sellers/")
+        or path.startswith("/api/v1/unresolved-mentions")
         or path == "/api/v1/digest"
         or path == "/api/v1/qa/intents"
+        or path == "/api/v1/revenue/summary"
+        or path.startswith("/api/v1/readiness/sellers/")
     ):
         return True
     if method == "POST" and (

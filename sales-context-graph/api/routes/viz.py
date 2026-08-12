@@ -43,6 +43,8 @@ router = APIRouter(tags=["viz"])
 # public preview useful on first click; normal deployments keep the field empty.
 _DEMO_CONVERSATION_ID = "eb91dade3fd7c13bd32a60989af6d0ea1b2a1d61cd601c8b6a0b640619282dbe"
 _DEMO_OPPORTUNITY_ID = "14acbc36edf9af9616f29e2662a0fe9cd2ca16c843485c022780e4c75627ac32"
+_DEMO_SELLER_ID = "f462ce5ef6096057f0603576b8946be8e4362e9d4ea28144f2e23568212c08a8"
+_DEMO_REVIEWER_ID = "demo-reviewer"
 _DEMO_BUYER_CONTACT_ID = "e7122acf4d06d2aa02c9f053637580536c39eb3ffc40e7ca51512c2b44145b72"
 _DEMO_SUBJECT_ID = "spk_1"
 
@@ -79,10 +81,10 @@ async def context_graph_viz(locale: str = "en") -> str:
     key = html.escape(settings.demo_public_api_key, quote=True)
     workspace = html.escape(settings.demo_public_workspace_id, quote=True)
     page = _PAGE
-    for element_id in ("apiKey", "qaApiKey", "askApiKey", "alertsApiKey"):
+    for element_id in ("apiKey", "qaApiKey", "askApiKey", "alertsApiKey", "reviewApiKey", "workflowApiKey"):
         page = page.replace(f'id="{element_id}" type="password" placeholder="X-Api-Key"',
                             f'id="{element_id}" type="password" value="{key}" placeholder="X-Api-Key"')
-    for element_id in ("workspaceId", "qaWorkspaceId", "askWorkspaceId", "alertsWorkspaceId"):
+    for element_id in ("workspaceId", "qaWorkspaceId", "askWorkspaceId", "alertsWorkspaceId", "reviewWorkspaceId", "workflowWorkspaceId"):
         page = page.replace(f'id="{element_id}" value="ws-demo"',
                             f'id="{element_id}" value="{workspace}"')
     page = page.replace('id="conversationId" placeholder="optional"',
@@ -93,6 +95,16 @@ async def context_graph_viz(locale: str = "en") -> str:
                         f'id="askBuyerContactId" value="{_DEMO_BUYER_CONTACT_ID}">')
     page = page.replace('id="askSubjectId">',
                         f'id="askSubjectId" value="{_DEMO_SUBJECT_ID}">')
+    page = page.replace('id="reviewOpportunityId" placeholder="opportunity id">',
+                        f'id="reviewOpportunityId" value="{_DEMO_OPPORTUNITY_ID}" placeholder="opportunity id">')
+    page = page.replace('id="reviewSellerId" placeholder="seller id">',
+                        f'id="reviewSellerId" value="{_DEMO_SELLER_ID}" placeholder="seller id">')
+    page = page.replace('id="reviewerId" placeholder="required for mention decisions">',
+                        f'id="reviewerId" value="{_DEMO_REVIEWER_ID}" placeholder="required for mention decisions">')
+    page = page.replace('id="workflowOpportunityId" placeholder="required for Buyer Space and meeting brief">',
+                        f'id="workflowOpportunityId" value="{_DEMO_OPPORTUNITY_ID}" placeholder="required for Buyer Space and meeting brief">')
+    page = page.replace('id="workflowSellerId" placeholder="required for readiness">',
+                        f'id="workflowSellerId" value="{_DEMO_SELLER_ID}" placeholder="required for readiness">')
     page = page.replace("__DEMO_OPPORTUNITY_ID_JSON__", json.dumps(_DEMO_OPPORTUNITY_ID))
     return page.replace("__LOCALE__", locale)
 

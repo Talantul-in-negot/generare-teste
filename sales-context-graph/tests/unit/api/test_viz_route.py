@@ -46,6 +46,27 @@ async def test_viz_page_includes_review_console() -> None:
     assert "/conflicts/" in text
 
 
+async def test_public_demo_prefills_read_only_review_and_workflow_inputs(monkeypatch) -> None:
+    """Later-added Review and Workflows tabs receive the same frictionless
+    demo credentials as Graph, Ask and Alerts; API policy still makes writes
+    unavailable to the public demo key."""
+    monkeypatch.setenv("DEMO_PUBLIC_ACCESS_ENABLED", "true")
+    monkeypatch.setenv("DEMO_PUBLIC_WORKSPACE_ID", "ws-public-demo")
+    monkeypatch.setenv("DEMO_PUBLIC_API_KEY", "unit-demo-key")
+    get_settings.cache_clear()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/viz")
+
+    assert 'id="reviewApiKey" type="password" value="unit-demo-key"' in resp.text
+    assert 'id="workflowApiKey" type="password" value="unit-demo-key"' in resp.text
+    assert 'id="reviewWorkspaceId" value="ws-public-demo"' in resp.text
+    assert 'id="workflowWorkspaceId" value="ws-public-demo"' in resp.text
+    assert f'id="reviewOpportunityId" value="{viz._DEMO_OPPORTUNITY_ID}"' in resp.text
+    assert f'id="reviewerId" value="{viz._DEMO_REVIEWER_ID}"' in resp.text
+    assert f'id="workflowSellerId" value="{viz._DEMO_SELLER_ID}"' in resp.text
+    get_settings.cache_clear()
+
+
 async def test_viz_has_accessible_responsive_workflow_pwa_surface() -> None:
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         page = await client.get("/viz")
