@@ -25,8 +25,10 @@ from src.usecases.narrative_summary import NarrativeSummaryUseCase, NoCitableCla
 from src.usecases.nlq.ask import AskContext, AskUseCase
 from src.usecases.nlq.dispatch import IntentDispatcher
 from src.usecases.objection_content_recommendation import NoObjectionFoundError, NoRelevantCallError
+import structlog
 
 router = APIRouter(prefix="/api/v1", tags=["ask"])
+log = structlog.get_logger(__name__)
 
 
 class AskRequest(BaseModel):
@@ -67,20 +69,19 @@ async def ask(
     except LlmNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    executor = GraphExecutor()
-    usecase = AskUseCase(
-        chat_fn,
-        EntityLinker(CandidateGenerator(executor)),
-        CrmRepository(executor),
-        IntentDispatcher(executor),
-    )
-    context = AskContext(
-        seller_id=body.seller_id, opportunity_id=body.opportunity_id,
-        conversation_id=body.conversation_id, subject_id=body.subject_id,
-        buyer_contact_id=body.buyer_contact_id, division_id=body.division_id,
-    )
-
     try:
+        executor = GraphExecutor()
+        usecase = AskUseCase(
+            chat_fn,
+            EntityLinker(CandidateGenerator(executor)),
+            CrmRepository(executor),
+            IntentDispatcher(executor),
+        )
+        context = AskContext(
+            seller_id=body.seller_id, opportunity_id=body.opportunity_id,
+            conversation_id=body.conversation_id, subject_id=body.subject_id,
+            buyer_contact_id=body.buyer_contact_id, division_id=body.division_id,
+        )
         result = await usecase.ask(workspace_id, body.question, context=context)
     except (ServiceUnavailable, TransientError) as exc:
         # A graph outage is an unavailable dependency, not an opaque 500. The
@@ -94,6 +95,14 @@ async def ask(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except (NoRelevantCallError, NoObjectionFoundError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - last-resort deployment guard
+        # Keep infrastructure/configuration failures actionable without leaking
+        # driver details, credentials, or transcript content to the browser.
+        log.exception("ask.unavailable", workspace_id=workspace_id, error_type=type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail="Ask service is temporarily unavailable; check API/LLM/Neo4j configuration and retry.",
+        ) from exc
 
     payload = result.model_dump(mode="json")
 
