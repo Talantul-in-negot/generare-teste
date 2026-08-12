@@ -5,50 +5,56 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sales Context Graph — Architecture</title>
 <style>
-@font-face {
-  font-family: 'Spline Sans Mono';
-  src: local('Spline Sans Mono');
-}
-
 :root {
-  --ink: #14171c;
-  --ink-soft: #3c4249;
-  --paper: #f6f4ef;
-  --paper-raised: #ffffff;
-  --line: #dcd7cc;
-  --accent: #b5651d;
-  --accent-soft: #e7d3b8;
-  --claim: #2f6f5e;
-  --claim-soft: #d9e9e2;
-  --mono: 'SFMono-Regular', 'Spline Sans Mono', 'JetBrains Mono', Consolas, monospace;
-  --display: 'Fraunces', Georgia, serif;
-  --body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --radius: 3px;
+  /* Showpad visual language: the same palette and type hierarchy as /viz. */
+  --showpad-navy: #0d5189;
+  --showpad-navy-dark: #15254e;
+  --showpad-navy-mid: #0b4472;
+  --showpad-navy-light: #539dc4;
+  --showpad-brick: #dd7159;
+  --showpad-plum: #8c3fcc;
+  --showpad-sand: #e8ded4;
+  --showpad-cream: #f0ece8;
+  --showpad-white: #eeeeee;
+
+  --ink: var(--showpad-navy-dark);
+  --ink-soft: #6b6258;
+  --paper: var(--showpad-cream);
+  --paper-raised: var(--showpad-white);
+  --line: #ddd0c4;
+  --accent: var(--showpad-plum);
+  --accent-soft: color-mix(in srgb, var(--showpad-plum) 14%, var(--showpad-white));
+  --claim: #1f7a4d;
+  --claim-soft: #dbeee1;
+  --mono: 'Söhne Mono', 'Noto Sans Mono', monospace;
+  --display: 'Nib Pro SemiBold', Lora, serif;
+  --body: Söhne, 'Mona Sans', system-ui, sans-serif;
+  --radius: 4px;
 }
 
 :root[data-theme="dark"] {
-  --ink: #eee9df;
-  --ink-soft: #a8a196;
-  --paper: #16181c;
-  --paper-raised: #1e2126;
-  --line: #33373d;
-  --accent: #e08a3e;
-  --accent-soft: #3a2c1c;
-  --claim: #6fbfa4;
-  --claim-soft: #1e3730;
+  --ink: var(--showpad-white);
+  --ink-soft: var(--showpad-sand);
+  --paper: var(--showpad-navy-dark);
+  --paper-raised: color-mix(in srgb, var(--showpad-navy-dark) 84%, var(--showpad-navy-light));
+  --line: color-mix(in srgb, var(--showpad-navy-light) 38%, var(--showpad-navy-dark));
+  --accent: var(--showpad-navy-light);
+  --accent-soft: color-mix(in srgb, var(--showpad-navy-light) 22%, var(--showpad-navy-dark));
+  --claim: #7ecda4;
+  --claim-soft: #1d4d42;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ink: #eee9df;
-    --ink-soft: #a8a196;
-    --paper: #16181c;
-    --paper-raised: #1e2126;
-    --line: #33373d;
-    --accent: #e08a3e;
-    --accent-soft: #3a2c1c;
-    --claim: #6fbfa4;
-    --claim-soft: #1e3730;
+    --ink: var(--showpad-white);
+    --ink-soft: var(--showpad-sand);
+    --paper: var(--showpad-navy-dark);
+    --paper-raised: color-mix(in srgb, var(--showpad-navy-dark) 84%, var(--showpad-navy-light));
+    --line: color-mix(in srgb, var(--showpad-navy-light) 38%, var(--showpad-navy-dark));
+    --accent: var(--showpad-navy-light);
+    --accent-soft: color-mix(in srgb, var(--showpad-navy-light) 22%, var(--showpad-navy-dark));
+    --claim: #7ecda4;
+    --claim-soft: #1d4d42;
   }
 }
 
