@@ -330,8 +330,43 @@ Decide deliberately rather than by default:
 - **Split back out** with `git subtree split` or `git filter-repo` before
   any external exposure.
 
-Minor: an empty stray directory `loadtest;C` sits at the repository root,
-apparently from a mistyped command. Harmless; remove it.
+Minor: an empty stray directory `loadtest;C` sat at the repository root,
+apparently from a mistyped command. **Removed.**
+
+### Status — extraction prepared, publishing deliberately left undone
+
+A clean split branch now exists locally:
+
+```
+git branch sales-context-graph-standalone   # 94 commits, files at repo root
+```
+
+Verified: 94 commits (of the monorepo's 379), tree rooted correctly (no
+`sales-context-graph/` prefix), **zero unrelated commits** — none of the
+`Citim-impreuna` Bible-app history that motivated this finding. Creating the
+branch is non-destructive and reversible (`git branch -D` undoes it); `main`
+and the working tree were untouched.
+
+**Three steps are deliberately not done, because they are decisions rather
+than mechanics:**
+
+1. **Creating the GitHub repository.** Requires choosing a name and a
+   visibility (public/private) under the owner's account. Publishing under
+   someone's identity is not a step to take on inference.
+2. **Pushing the branch.** Follows from (1).
+3. **Removing `sales-context-graph/` from the monorepo.** Deleting the only
+   copy in the tracked tree is destructive, and keeping both during a
+   transition is a legitimate choice.
+
+When those calls are made:
+
+```bash
+# after creating the empty remote repo yourself
+git push <new-remote> sales-context-graph-standalone:main
+```
+
+Then decide separately whether the monorepo copy is deleted, kept as a
+mirror, or converted to a submodule.
 
 ---
 
