@@ -1,0 +1,549 @@
+{
+  "thresholds": {
+    "base_threshold": 0.7,
+    "final_auto_link_threshold": 0.9,
+    "min_relational_signals": 1,
+    "min_margin": 0.08,
+    "review_threshold": 0.55
+  },
+  "max_signals_tested": 3,
+  "summary_at_max_signals": {
+    "AUTO_LINKED": 2,
+    "PENDING_REVIEW": 9,
+    "UNRESOLVED": 3
+  },
+  "rows": [
+    {
+      "category": "baseline",
+      "mention": "Volks Wagen",
+      "true_candidate": "Volkswagen Group",
+      "distractor": "Volkswagen Financial Services",
+      "note": "the repo's own flagship case, included as the calibration anchor",
+      "semantic": 0.171837982723871,
+      "by_signal_count": {
+        "0": {
+          "base": 0.7236736580002346,
+          "final": 0.7236736580002346,
+          "margin": 0.23488715545184413,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.7236736580002346,
+          "final": 0.7836736580002346,
+          "margin": 0.23488715545184413,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.7236736580002346,
+          "final": 0.8436736580002346,
+          "margin": 0.23488715545184413,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.7236736580002346,
+          "final": 0.9036736580002347,
+          "margin": 0.23488715545184413,
+          "decision": "AUTO_LINKED",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "abbreviation",
+      "mention": "VW",
+      "true_candidate": "Volkswagen Group",
+      "distractor": "Volkswagen Financial Services",
+      "note": "",
+      "semantic": 0.6324114209924767,
+      "by_signal_count": {
+        "0": {
+          "base": 0.23452789818532985,
+          "final": 0.23452789818532985,
+          "margin": 0.09402774476282214,
+          "decision": "UNRESOLVED",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.23452789818532985,
+          "final": 0.2945278981853299,
+          "margin": 0.09402774476282216,
+          "decision": "UNRESOLVED",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.23452789818532985,
+          "final": 0.3545278981853298,
+          "margin": 0.09402774476282211,
+          "decision": "UNRESOLVED",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.23452789818532985,
+          "final": 0.41452789818532987,
+          "margin": 0.09402774476282216,
+          "decision": "UNRESOLVED",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "abbreviation",
+      "mention": "VW Group",
+      "true_candidate": "Volkswagen Group",
+      "distractor": "Volkswagen Financial Services",
+      "note": "",
+      "semantic": 0.896872284982813,
+      "by_signal_count": {
+        "0": {
+          "base": 0.6735728352161512,
+          "final": 0.6735728352161512,
+          "margin": 0.44962412696011966,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.6735728352161512,
+          "final": 0.7335728352161512,
+          "margin": 0.44962412696011966,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.6735728352161512,
+          "final": 0.7935728352161512,
+          "margin": 0.44962412696011966,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.6735728352161512,
+          "final": 0.8535728352161511,
+          "margin": 0.44962412696011955,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "abbreviation",
+      "mention": "GM",
+      "true_candidate": "General Motors Company",
+      "distractor": "GM Financial",
+      "note": "",
+      "semantic": 0.6313634937347342,
+      "by_signal_count": {
+        "0": {
+          "base": 0.29896943100426504,
+          "final": 0.29896943100426504,
+          "margin": 0.11836185952555636,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "1": {
+          "base": 0.29896943100426504,
+          "final": 0.35896943100426504,
+          "margin": 0.11836185952555636,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "2": {
+          "base": 0.29896943100426504,
+          "final": 0.41896943100426504,
+          "margin": 0.11836185952555639,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "3": {
+          "base": 0.29896943100426504,
+          "final": 0.47896943100426503,
+          "margin": 0.11836185952555633,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        }
+      }
+    },
+    {
+      "category": "abbreviation",
+      "mention": "BMW",
+      "true_candidate": "Bayerische Motoren Werke AG",
+      "distractor": "BMW Bank GmbH",
+      "note": "",
+      "semantic": 0.45817432911299777,
+      "by_signal_count": {
+        "0": {
+          "base": 0.3840309171020056,
+          "final": 0.3840309171020056,
+          "margin": 0.1762856872286157,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "1": {
+          "base": 0.3840309171020056,
+          "final": 0.4440309171020056,
+          "margin": 0.1762856872286157,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "2": {
+          "base": 0.3840309171020056,
+          "final": 0.5040309171020056,
+          "margin": 0.17628568722861576,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "3": {
+          "base": 0.3840309171020056,
+          "final": 0.5640309171020056,
+          "margin": 0.1762856872286157,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": false
+        }
+      }
+    },
+    {
+      "category": "legal_suffix",
+      "mention": "Volkswagen",
+      "true_candidate": "Volkswagen Group AG",
+      "distractor": "Volkswagen Financial Services",
+      "note": "",
+      "semantic": 0.7165135136696609,
+      "by_signal_count": {
+        "0": {
+          "base": 0.6904609226514692,
+          "final": 0.6904609226514692,
+          "margin": 0.17372133396500933,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.6904609226514692,
+          "final": 0.7504609226514691,
+          "margin": 0.17372133396500922,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.6904609226514692,
+          "final": 0.8104609226514692,
+          "margin": 0.17372133396500933,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.6904609226514692,
+          "final": 0.8704609226514692,
+          "margin": 0.17372133396500944,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "legal_suffix",
+      "mention": "Siemens",
+      "true_candidate": "Siemens AG",
+      "distractor": "Siemens Healthineers AG",
+      "note": "",
+      "semantic": 0.8388761720558822,
+      "by_signal_count": {
+        "0": {
+          "base": 0.8239898145734411,
+          "final": 0.8239898145734411,
+          "margin": 0.3495825984006109,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.8239898145734411,
+          "final": 0.8839898145734411,
+          "margin": 0.3495825984006109,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.8239898145734411,
+          "final": 0.9439898145734411,
+          "margin": 0.3495825984006109,
+          "decision": "AUTO_LINKED",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.8239898145734411,
+          "final": 1.0,
+          "margin": 0.34559278382716974,
+          "decision": "AUTO_LINKED",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "legal_suffix",
+      "mention": "Nestle",
+      "true_candidate": "Nestle S.A.",
+      "distractor": null,
+      "note": "also exercises the umlaut/diacritic category below",
+      "semantic": 0.8520878999835423,
+      "by_signal_count": {
+        "0": {
+          "base": 0.7102685193524474,
+          "final": 0.7102685193524474,
+          "margin": 0.7102685193524474,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.7102685193524474,
+          "final": 0.7702685193524474,
+          "margin": 0.7702685193524474,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.7102685193524474,
+          "final": 0.8302685193524474,
+          "margin": 0.8302685193524474,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.7102685193524474,
+          "final": 0.8902685193524473,
+          "margin": 0.8902685193524473,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "punctuation",
+      "mention": "AT&T",
+      "true_candidate": "AT&T Inc.",
+      "distractor": "AT&T Mobility LLC",
+      "note": "",
+      "semantic": 0.8619891532611,
+      "by_signal_count": {
+        "0": {
+          "base": 0.6227827515209099,
+          "final": 0.6227827515209099,
+          "margin": 0.23137941217015462,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.6227827515209099,
+          "final": 0.68278275152091,
+          "margin": 0.23137941217015467,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.6227827515209099,
+          "final": 0.7427827515209099,
+          "margin": 0.23137941217015456,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.6227827515209099,
+          "final": 0.8027827515209098,
+          "margin": 0.23137941217015456,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "punctuation",
+      "mention": "Coca Cola",
+      "true_candidate": "The Coca-Cola Company",
+      "distractor": "Coca-Cola Europacific Partners",
+      "note": "",
+      "semantic": 0.8297408623246054,
+      "by_signal_count": {
+        "0": {
+          "base": 0.5422255592030715,
+          "final": 0.5422255592030715,
+          "margin": 0.12670790551426603,
+          "decision": "UNRESOLVED",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.5422255592030715,
+          "final": 0.6022255592030714,
+          "margin": 0.12670790551426597,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.5422255592030715,
+          "final": 0.6622255592030715,
+          "margin": 0.12670790551426603,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.5422255592030715,
+          "final": 0.7222255592030715,
+          "margin": 0.12670790551426614,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "diacritic",
+      "mention": "Muller",
+      "true_candidate": "M\u00fcller Group",
+      "distractor": null,
+      "note": "ASCII mention (how a seller actually types it) vs. accented canonical name",
+      "semantic": 0.7765946891600902,
+      "by_signal_count": {
+        "0": {
+          "base": 0.5621867295636915,
+          "final": 0.5621867295636915,
+          "margin": 0.5621867295636915,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.5621867295636915,
+          "final": 0.6221867295636916,
+          "margin": 0.6221867295636916,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.5621867295636915,
+          "final": 0.6821867295636915,
+          "margin": 0.6821867295636915,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.5621867295636915,
+          "final": 0.7421867295636915,
+          "margin": 0.7421867295636915,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "diacritic",
+      "mention": "Nestle",
+      "true_candidate": "Nestl\u00e9 S.A.",
+      "distractor": null,
+      "note": "",
+      "semantic": 0.8520878999835423,
+      "by_signal_count": {
+        "0": {
+          "base": 0.596150872293624,
+          "final": 0.596150872293624,
+          "margin": 0.596150872293624,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "1": {
+          "base": 0.596150872293624,
+          "final": 0.656150872293624,
+          "margin": 0.656150872293624,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "2": {
+          "base": 0.596150872293624,
+          "final": 0.716150872293624,
+          "margin": 0.716150872293624,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        },
+        "3": {
+          "base": 0.596150872293624,
+          "final": 0.7761508722936239,
+          "margin": 0.7761508722936239,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": true
+        }
+      }
+    },
+    {
+      "category": "dba_rename",
+      "mention": "Facebook",
+      "true_candidate": "Meta Platforms, Inc.",
+      "distractor": "Instagram, LLC",
+      "note": "",
+      "semantic": 0.4049858883103234,
+      "by_signal_count": {
+        "0": {
+          "base": 0.19130531826673322,
+          "final": 0.19130531826673322,
+          "margin": 0.040584313045994885,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "1": {
+          "base": 0.19130531826673322,
+          "final": 0.2513053182667332,
+          "margin": 0.04058431304599486,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "2": {
+          "base": 0.19130531826673322,
+          "final": 0.31130531826673324,
+          "margin": 0.04058431304599491,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "3": {
+          "base": 0.19130531826673322,
+          "final": 0.3713053182667332,
+          "margin": 0.04058431304599486,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        }
+      }
+    },
+    {
+      "category": "dba_rename",
+      "mention": "Google",
+      "true_candidate": "Alphabet Inc.",
+      "distractor": "Google Fiber Inc.",
+      "note": "",
+      "semantic": 0.3595599003840777,
+      "by_signal_count": {
+        "0": {
+          "base": 0.5205959606558325,
+          "final": 0.5205959606558325,
+          "margin": 0.30559863732852066,
+          "decision": "UNRESOLVED",
+          "top1_is_true": false
+        },
+        "1": {
+          "base": 0.5205959606558325,
+          "final": 0.5805959606558324,
+          "margin": 0.3055986373285206,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": false
+        },
+        "2": {
+          "base": 0.5205959606558325,
+          "final": 0.6405959606558325,
+          "margin": 0.30559863732852066,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": false
+        },
+        "3": {
+          "base": 0.5205959606558325,
+          "final": 0.7005959606558325,
+          "margin": 0.3055986373285207,
+          "decision": "PENDING_REVIEW",
+          "top1_is_true": false
+        }
+      }
+    }
+  ]
+}

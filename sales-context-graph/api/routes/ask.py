@@ -7,6 +7,7 @@ after the bounded retries in src/llm/json_completion.py.
 
 from __future__ import annotations
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from neo4j.exceptions import ServiceUnavailable, TransientError
 from pydantic import BaseModel, Field
@@ -25,7 +26,6 @@ from src.usecases.narrative_summary import NarrativeSummaryUseCase, NoCitableCla
 from src.usecases.nlq.ask import AskContext, AskUseCase
 from src.usecases.nlq.dispatch import IntentDispatcher
 from src.usecases.objection_content_recommendation import NoObjectionFoundError, NoRelevantCallError
-import structlog
 
 router = APIRouter(prefix="/api/v1", tags=["ask"])
 log = structlog.get_logger(__name__)
