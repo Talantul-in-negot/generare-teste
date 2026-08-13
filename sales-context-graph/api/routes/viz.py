@@ -75,7 +75,9 @@ async def context_graph_viz(locale: str = "en") -> str:
     locale = locale if locale in {"en", "ro"} else "en"
     settings = get_settings()
     if not (settings.demo_public_access_enabled and settings.demo_public_api_key):
-        return _PAGE.replace("__DEMO_OPPORTUNITY_ID_JSON__", "null").replace("__LOCALE__", locale)
+        return (_PAGE.replace("__DEMO_OPPORTUNITY_ID_JSON__", "null")
+                .replace("__DEMO_BROWSER_TTS_ENABLED__", "false")
+                .replace("__LOCALE__", locale))
     # The key is exposed only in the deliberately opt-in demo mode. It is
     # scoped to the synthetic workspace and accepted only on read-only paths.
     key = html.escape(settings.demo_public_api_key, quote=True)
@@ -105,6 +107,14 @@ async def context_graph_viz(locale: str = "en") -> str:
                         f'id="workflowOpportunityId" value="{_DEMO_OPPORTUNITY_ID}" placeholder="required for Buyer Space and meeting brief">')
     page = page.replace('id="workflowSellerId" placeholder="required for readiness">',
                         f'id="workflowSellerId" value="{_DEMO_SELLER_ID}" placeholder="required for readiness">')
+    # The public preview does not hold a cloud TTS credential. Still make
+    # voice demonstrable there with the browser's native speech engine; it
+    # never sends answer text to a third-party TTS endpoint. An operator who
+    # enables DEMO_PUBLIC_TTS_ENABLED instead gets the configured cloud path.
+    page = page.replace(
+        "__DEMO_BROWSER_TTS_ENABLED__",
+        "false" if settings.demo_public_tts_enabled else "true",
+    )
     page = page.replace("__DEMO_OPPORTUNITY_ID_JSON__", json.dumps(_DEMO_OPPORTUNITY_ID))
     return page.replace("__LOCALE__", locale)
 
@@ -488,8 +498,8 @@ _PAGE = """<!doctype html>
       <button type="button" class="quick-question" data-question="What content should I send next?"><b>3</b> What content should I send?</button>
       <button type="button" class="quick-question" data-question="What changed since June 1, 2026?"><b>4</b> What changed since June 1, 2026?</button>
     </div>
-    <label><input id="askNarrative" type="checkbox"> Include narrative summary</label>
-    <label><input id="askVoice" type="checkbox"> Read answer aloud (optional TTS)</label>
+    <label><input id="askNarrative" type="checkbox"> Include narrative summary (next Ask)</label>
+    <label id="askVoiceControl"><input id="askVoice" type="checkbox"> Read answer aloud (optional TTS)</label>
     <details style="margin-top:10px">
       <summary style="font-size:12px;cursor:pointer">Optional context (ids the UI would already know)</summary>
       <label>Opportunity ID <input id="askOpportunityId"></label>
@@ -605,6 +615,7 @@ localeSelect.addEventListener('change', () => applyLocale(localeSelect.value));
 /* ── Tabs ─────────────────────────────────────────────────────────────── */
 const demoOpportunityId = __DEMO_OPPORTUNITY_ID_JSON__;
 const TAB_NAMES = ["graph", "qa", "ask", "alerts", "review", "workflows"];
+const DEMO_BROWSER_TTS_ENABLED = __DEMO_BROWSER_TTS_ENABLED__;
 for (const tab of document.querySelectorAll(".tab")) {
   function activate() {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -983,6 +994,19 @@ async function runQa() {
 
 /* ── Ask (natural language, Increment 15/16) ─────────────────────────────── */
 document.getElementById("askRunBtn").addEventListener("click", runAsk);
+document.getElementById("askNarrative").addEventListener("change", (event) => {
+  const narrative = document.getElementById("narrativeSummary");
+  const status = document.getElementById("askStatus");
+  if (!event.target.checked) {
+    // A summary is optional presentation on top of the grounded answer. Hide
+    // an already-rendered one immediately rather than making the user wonder
+    // whether the control had any effect.
+    narrative?.remove();
+    status.textContent = "Narrative summary hidden. Your next Ask will not generate one.";
+  } else {
+    status.textContent = "A narrative summary will be generated with your next Ask.";
+  }
+});
 document.querySelectorAll(".quick-question").forEach((button) => {
   button.addEventListener("click", () => {
     document.getElementById("askQuestion").value = button.dataset.question;
@@ -1050,7 +1074,7 @@ async function runAsk() {
     (data.reasoning ? "<div class='result-scalar'>reasoning: " + data.reasoning + "</div>" : "");
   resultEl.appendChild(header);
 
-  if (document.getElementById("askVoice").checked && data.answered) {
+  if (document.getElementById("askVoice")?.checked && data.answered) {
     // Speak only human-readable prose. Never send the structured result to
     // TTS: it contains opaque claim/contact/opportunity IDs that are useful in
     // the UI but distracting and unsafe to read aloud.
@@ -1064,7 +1088,17 @@ async function runAsk() {
     audioStatus.className = "result-scalar";
     audioStatus.textContent = "Preparing audio…";
     resultEl.appendChild(audioStatus);
-    fetch("/api/v1/tts", {
+    if (DEMO_BROWSER_TTS_ENABLED && "speechSynthesis" in window) {
+      // Public demo fallback: use the browser's local voice, so the preview
+      // remains useful without exposing a paid cloud-TTS credential.
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(audioText);
+      utterance.onstart = () => { audioStatus.textContent = "Reading answer aloud in this browser..."; };
+      utterance.onend = () => { audioStatus.textContent = "Audio playback complete."; };
+      utterance.onerror = () => { audioStatus.textContent = "Browser audio could not start; text answer remains available."; };
+      window.speechSynthesis.speak(utterance);
+    } else {
+      fetch("/api/v1/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Workspace-Id": workspaceId, "X-Api-Key": apiKey },
       body: JSON.stringify({ text: audioText }),
@@ -1138,7 +1172,8 @@ async function runAsk() {
         hint.textContent = "Audio ready — press Play if autoplay is blocked by the browser.";
         player.insertAdjacentElement("afterend", hint);
       });
-    }).catch((error) => { audioStatus.textContent = "Audio unavailable; text answer remains available. " + error; });
+      }).catch((error) => { audioStatus.textContent = "Audio unavailable; text answer remains available. " + error; });
+    }
   }
 
   for (const a of data.ambiguities || []) {
@@ -1149,25 +1184,28 @@ async function runAsk() {
   }
 
   if (data.narrative) {
+    const narrativeWrap = document.createElement("section");
+    narrativeWrap.id = "narrativeSummary";
     const narrDiv = document.createElement("div");
     narrDiv.className = "result-key";
     narrDiv.textContent = "Narrative";
-    resultEl.appendChild(narrDiv);
+    narrativeWrap.appendChild(narrDiv);
     const p = document.createElement("p");
     p.textContent = data.narrative.text;
-    resultEl.appendChild(p);
+    narrativeWrap.appendChild(p);
     for (const c of data.narrative.citations || []) {
       const cDiv = document.createElement("div");
       cDiv.className = "citation";
       cDiv.textContent = "[" + c.claim_id + "] " + c.excerpt;
-      resultEl.appendChild(cDiv);
+      narrativeWrap.appendChild(cDiv);
     }
     for (const u of data.narrative.uncited_sentences || []) {
       const uDiv = document.createElement("div");
       uDiv.className = "uncited";
       uDiv.textContent = "(uncited) " + u;
-      resultEl.appendChild(uDiv);
+      narrativeWrap.appendChild(uDiv);
     }
+    resultEl.appendChild(narrativeWrap);
   }
 
   if (data.result) {

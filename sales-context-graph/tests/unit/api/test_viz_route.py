@@ -33,6 +33,9 @@ async def test_viz_page_includes_ask_and_alerts_tabs() -> None:
     assert "/api/v1/ask" in text
     assert "/api/v1/digest" in text
     assert "/api/v1/qa/intents" in text
+    assert "Include narrative summary (next Ask)" in text
+    assert 'id = "narrativeSummary"' in text
+    assert 'window.speechSynthesis.speak(utterance);\n    } else {' in text
 
 
 async def test_viz_page_includes_review_console() -> None:
@@ -64,6 +67,8 @@ async def test_public_demo_prefills_read_only_review_and_workflow_inputs(monkeyp
     assert f'id="reviewOpportunityId" value="{viz._DEMO_OPPORTUNITY_ID}"' in resp.text
     assert f'id="reviewerId" value="{viz._DEMO_REVIEWER_ID}"' in resp.text
     assert f'id="workflowSellerId" value="{viz._DEMO_SELLER_ID}"' in resp.text
+    assert 'id="askVoiceControl"' in resp.text
+    assert "const DEMO_BROWSER_TTS_ENABLED = true;" in resp.text
     get_settings.cache_clear()
 
 

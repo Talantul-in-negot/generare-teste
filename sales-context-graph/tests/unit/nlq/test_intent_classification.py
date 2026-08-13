@@ -62,6 +62,7 @@ def test_prompt_lists_only_classifier_visible_intents():
     prompt = build_intent_prompt("what objections?", now_iso=_NOW)
     assert "account-objections:" in prompt
     assert "opportunity-conflicts:" not in prompt  # hidden alias
+    assert "Never force an unrelated question into a sales intent" in prompt
 
 
 def test_prompt_enforces_a_size_limit():

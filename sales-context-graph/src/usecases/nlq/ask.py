@@ -22,6 +22,7 @@ which is exactly where a real UI has them.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 
@@ -41,6 +42,15 @@ from src.nlq.models import (
 )
 from src.nlq.prompt import build_intent_prompt
 from src.usecases.nlq.dispatch import IntentDispatcher
+
+# A closed intent catalog is useful only if the classifier may decline to
+# dispatch. Below this score a "closest" intent is a guess, not a grounded
+# answer; return a helpful refusal rather than querying unrelated deal data.
+MIN_DISPATCH_CONFIDENCE = 0.50
+_OUT_OF_SCOPE_HELP = (
+    "I can help with sales-context questions about a deal: objections, stakeholders, "
+    "content recommendations, risks, and recent changes."
+)
 
 
 @dataclass(frozen=True)
@@ -97,6 +107,17 @@ class AskUseCase:
             IntentClassification,
             label="intent_classification",
         )
+        if classification.confidence < MIN_DISPATCH_CONFIDENCE:
+            refusal = AskResult(
+                question=question,
+                intent_id=None,
+                confidence=classification.confidence,
+                reasoning=classification.reasoning,
+                ambiguities=[Ambiguity(reason=_out_of_scope_reason(question))],
+                requires_human_review=False,
+            )
+            await cache_result(workspace_id, cache_key, refusal.model_dump_json())
+            return refusal
         spec = get_intent(classification.intent_id)
 
         params, entities, ambiguities = await self._resolve_params(
@@ -256,6 +277,14 @@ def _with_param(ambiguity: Ambiguity | None, param_name: str) -> Ambiguity:
     if ambiguity is None:
         return Ambiguity(param=param_name, reason="could not resolve this parameter")
     return ambiguity.model_copy(update={"param": param_name})
+
+
+def _out_of_scope_reason(question: str) -> str:
+    """Keep a small deterministic courtesy answer for identity questions;
+    other low-confidence questions receive a concise catalog boundary."""
+    if re.search(r"\b(your name|who are you|what are you)\b", question, re.IGNORECASE):
+        return f"{_OUT_OF_SCOPE_HELP} I do not have a personal name."
+    return _OUT_OF_SCOPE_HELP
 
 
 def _jsonable(value):

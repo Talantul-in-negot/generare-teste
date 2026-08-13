@@ -54,7 +54,8 @@ def build_intent_prompt(question: str, *, now_iso: str) -> str:
         "Report every company or person name the question mentions in entity_mentions, "
         "using the surface form as written — do not normalize, expand, or correct spelling. "
         "If the question names no entity, return an empty list. "
-        "If no intent is a good fit, still pick the closest one and report a low confidence.\n\n"
+        "If no intent is a good fit, pick the closest one but set confidence below 0.50. "
+        "Never force an unrelated question into a sales intent.\n\n"
         f"<question>\n{question}\n</question>\n\n"
         f"Return only a JSON object of exactly this shape:\n{_SCHEMA}"
     )

@@ -174,6 +174,24 @@ async def test_question_naming_no_company_refuses(executor):
     assert result.ambiguities[0].reason == "the question names no account or deal"
 
 
+async def test_out_of_scope_low_confidence_question_refuses_without_dispatch(executor):
+    """A personal/chat question must not be force-fit to the nearest intent
+    and accidentally return a deal briefing or unrelated claims."""
+    workspace_id = f"ws-ask-out-of-scope-{uuid4().hex[:8]}"
+    await _seed_vw_deal(executor, workspace_id)
+
+    result = await _usecase(executor, _stub_chat_fn(
+        intent_id="call-briefing", entity_mentions=[], confidence=0.05,
+        reasoning="The question is unrelated to the supported catalog.",
+    )).ask(workspace_id, "what is your name?", context=AskContext(subject_id="spk_1"))
+
+    assert result.answered is False
+    assert result.intent_id is None
+    assert result.result is None
+    assert result.citations == []
+    assert "do not have a personal name" in result.ambiguities[0].reason
+
+
 async def test_account_with_two_open_deals_asks_which_one(executor):
     workspace_id = f"ws-ask-multi-{uuid4().hex[:8]}"
     await _seed_vw_deal(executor, workspace_id, extra_opportunity=True)
