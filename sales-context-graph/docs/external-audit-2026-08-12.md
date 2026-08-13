@@ -56,7 +56,7 @@ accuracy/hygiene items.
 | 1 — relational evidence can't rescue weak lexical | **Fixed** — Stage A4 alias matching built and wired (see Remediation) |
 | 2 — semantic signal degrades headroom | **Fixed** — `DEFAULT_LEXICAL_WEIGHT` 0.97 → 1.0 |
 | 3 — `ruff check` not clean | **Fixed** — re-verified clean; `make lint`'s `scripts/` blind spot noted |
-| 4 — repo absorbed into monorepo | Open — requires a call only the owner can make |
+| 4 — repo absorbed into monorepo | **Closed** — decided to keep it in the monorepo |
 | 5 — sensitivity sweep results | **Fixed** — 2/14 → 14/14 auto-link, 4 → 0 distractor wins |
 
 ---
@@ -347,40 +347,27 @@ Decide deliberately rather than by default:
 Minor: an empty stray directory `loadtest;C` sat at the repository root,
 apparently from a mistyped command. **Removed.**
 
-### Status — extraction prepared, publishing deliberately left undone
+### Status — resolved: staying inside the monorepo, by explicit decision
 
-A clean split branch now exists locally:
+An extraction was prepared and verified twice (`git subtree split`, most
+recently 96 commits, byte-identical tree to `main:sales-context-graph`,
+zero unrelated commits — confirmed via `git diff` against the monorepo
+copy). It was not published: no GitHub repo was created under the owner's
+account without an explicit go-ahead, per this document's own standing
+rule for that kind of action.
 
-```
-git branch sales-context-graph-standalone   # 94 commits, files at repo root
-```
+**Decision, made explicitly rather than by default: keep
+`sales-context-graph/` inside `Generative-AI` permanently.** Single-remote
+convenience outweighs clean lineage for this project at this stage. The
+prepared split branch was deleted (`git branch -D
+sales-context-graph-standalone`) rather than left stale — if this is
+revisited later, redo the split fresh rather than push a branch that may
+have drifted from `main`.
 
-Verified: 94 commits (of the monorepo's 379), tree rooted correctly (no
-`sales-context-graph/` prefix), **zero unrelated commits** — none of the
-`Citim-impreuna` Bible-app history that motivated this finding. Creating the
-branch is non-destructive and reversible (`git branch -D` undoes it); `main`
-and the working tree were untouched.
-
-**Three steps are deliberately not done, because they are decisions rather
-than mechanics:**
-
-1. **Creating the GitHub repository.** Requires choosing a name and a
-   visibility (public/private) under the owner's account. Publishing under
-   someone's identity is not a step to take on inference.
-2. **Pushing the branch.** Follows from (1).
-3. **Removing `sales-context-graph/` from the monorepo.** Deleting the only
-   copy in the tracked tree is destructive, and keeping both during a
-   transition is a legitimate choice.
-
-When those calls are made:
-
-```bash
-# after creating the empty remote repo yourself
-git push <new-remote> sales-context-graph-standalone:main
-```
-
-Then decide separately whether the monorepo copy is deleted, kept as a
-mirror, or converted to a submodule.
+This finding is closed. Reopen only if the repository is to be published or
+shared externally, at which point the unrelated-commit-history concern
+(`Citim-impreuna`, etc.) becomes live again and re-extraction is the fix —
+mechanically identical to what was done here, just re-run at that time.
 
 ---
 
