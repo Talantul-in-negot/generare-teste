@@ -32,6 +32,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # matches scripts/run_ragas.py's convention
 
+from src.resolution.alias_derivation import derive_aliases  # noqa: E402
+from src.resolution.alias_derivation import normalize as alias_normalize  # noqa: E402
 from src.resolution.policy import PolicyThresholds, decide  # noqa: E402
 from src.resolution.scoring import (  # noqa: E402
     RELATIONAL_SIGNAL_BONUS,
@@ -117,7 +119,43 @@ async def main() -> int:
     print(header)
     print("-" * len(header))
 
+    alias_resolved: list[str] = []
+    alias_ambiguous: list[str] = []
+
     for t in TRIPLES:
+        # Stage A4 is checked first, exactly as src/resolution/pipeline.py does
+        # it: a stored-alias exact match short-circuits to AUTO_LINKED without
+        # ever reaching the probabilistic scorer. Simulated here against the
+        # same derive_aliases() that CrmRepository.upsert_account writes, so
+        # this sweep measures the real pipeline's behaviour rather than the
+        # scorer in isolation.
+        mention_norm = alias_normalize(t.mention)
+        matches = [
+            label for label, name in (("true", t.true_candidate), ("distractor", t.distractor))
+            if name and mention_norm in derive_aliases(name)
+        ]
+        if len(matches) == 1:
+            winner = matches[0]
+            matched_name = t.true_candidate if winner == "true" else t.distractor
+            # Provenance matters more than the headline number: a rule that
+            # generalizes to unseen company names is evidence; a curated seed
+            # entry is only evidence that the file contains what was put in it.
+            derived_only = alias_normalize(t.mention) in derive_aliases(matched_name, include_seeds=False)
+            provenance = "derived" if derived_only else "seeded"
+            decisions_at_max["AUTO_LINKED"] += 1
+            alias_resolved.append((provenance, f"{t.mention} -> {matched_name}"))
+            marker = "" if winner == "true" else "  [ALIAS RESOLVED TO DISTRACTOR]"
+            print(f"{t.category:<13} {t.mention:<14} {t.true_candidate:<32} "
+                  f"{'--':>6} {'--':>8} {'A4':>8}  AUTO_LINKED ({provenance} alias){marker}")
+            rows.append({
+                "category": t.category, "mention": t.mention, "true_candidate": t.true_candidate,
+                "distractor": t.distractor, "note": t.note, "resolved_by": "stage_a4_alias",
+                "alias_provenance": provenance, "alias_matched_entity": winner,
+            })
+            continue
+        if len(matches) > 1:
+            alias_ambiguous.append(t.mention)
+
         semantic = _cosine(embeddings[t.mention], embeddings[t.true_candidate])
 
         # Distractor participates in ranking (and therefore in the margin the
@@ -172,7 +210,24 @@ async def main() -> int:
           f"PENDING_REVIEW={decisions_at_max['PENDING_REVIEW']}/{total}  "
           f"UNRESOLVED={decisions_at_max['UNRESOLVED']}/{total}")
 
-    leaks = [r for r in rows if r["by_signal_count"][MAX_SIGNALS]["top1_is_true"] is False]
+    if alias_resolved:
+        derived = [line for prov, line in alias_resolved if prov == "derived"]
+        seeded = [line for prov, line in alias_resolved if prov == "seeded"]
+        print(f"\nResolved at Stage A4 (stored alias, no scoring needed): {len(alias_resolved)}")
+        print(f"  via general derivation rules ({len(derived)}) -- these generalize to unseen names:")
+        for line in derived:
+            print(f"    {line}")
+        if seeded:
+            print(f"  via curated config/alias_seeds.yml ({len(seeded)}) -- NOT evidence of")
+            print("  generalization; the seed file was authored knowing these cases:")
+            for line in seeded:
+                print(f"    {line}")
+    if alias_ambiguous:
+        print(f"\nAlias matched >1 entity -> correctly refused to link, sent to review: "
+              f"{', '.join(alias_ambiguous)}")
+
+    leaks = [r for r in rows if "by_signal_count" in r
+             and r["by_signal_count"][MAX_SIGNALS]["top1_is_true"] is False]
     if leaks:
         print(f"\nWARNING: distractor outranked the true candidate in {len(leaks)} case(s): "
               + ", ".join(r["mention"] for r in leaks))

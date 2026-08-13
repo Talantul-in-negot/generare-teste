@@ -42,11 +42,92 @@ accuracy/hygiene items.
 
 | Finding | State |
 |---|---|
-| 1 — relational evidence can't rescue weak lexical | Confirmed and quantified by Finding 5; needs a decision |
-| 2 — semantic signal degrades headroom | Open; needs a decision (drop from blend, or replace model) |
-| 3 — `ruff check` not clean | **Fixed** (`ruff check --fix`, re-verified clean) |
-| 4 — repo absorbed into monorepo | Open; deliberate decision required |
-| 5 — sensitivity sweep results | **Harness implemented and run**; remediation open |
+| 1 — relational evidence can't rescue weak lexical | **Fixed** — Stage A4 alias matching built and wired (see Remediation) |
+| 2 — semantic signal degrades headroom | **Fixed** — `DEFAULT_LEXICAL_WEIGHT` 0.97 → 1.0 |
+| 3 — `ruff check` not clean | **Fixed** — re-verified clean; `make lint`'s `scripts/` blind spot noted |
+| 4 — repo absorbed into monorepo | Open — requires a call only the owner can make |
+| 5 — sensitivity sweep results | **Fixed** — 2/14 → 14/14 auto-link, 4 → 0 distractor wins |
+
+---
+
+## Remediation — implemented 2026-08-13
+
+### The audit's own Finding 1 contained an error, now corrected
+
+Finding 1 asserted: *"The architecture already contains the right answer:
+Stage A5 (exact known-alias match) short-circuits to `AUTO_LINKED`
+deterministically."* **That was wrong.**
+`DeterministicRule.A4_EXACT_APPROVED_ALIAS` existed as an enum value with no
+candidate generator and no call site — `pipeline.py` only ever invoked
+`A3_EXACT_CANONICAL_NAME`. The rule was declared, never wired. The claim was
+inferred from an enum name without checking it was reachable, which is the
+same failure mode this audit was written to catch.
+
+### What was built
+
+| Change | File |
+|---|---|
+| Deterministic alias derivation (suffixes, diacritics, punctuation, initialisms) | `src/resolution/alias_derivation.py` (new) |
+| Curated seeds for what derivation cannot reach | `config/alias_seeds.yml` (new) |
+| Aliases written at account upsert | `src/graph/repositories/crm_repository.py` |
+| Stage A4 candidate lookup | `src/resolution/candidates.py::alias_candidates` |
+| Stage A4 wired into resolution, ambiguous matches fed to the scored pool | `src/resolution/pipeline.py` |
+| Alias index (with an honest note on its limits) | `src/graph/schema.py` |
+| Semantic excluded from `base`, still computed and reported | `src/resolution/scoring.py` |
+| 21 unit tests | `tests/unit/resolution/test_alias_derivation.py` (new) |
+
+### Measured result
+
+| Metric | Before | After |
+|---|---|---|
+| AUTO_LINKED | 2 / 14 | **14 / 14** |
+| PENDING_REVIEW | 9 / 14 | 0 / 14 |
+| UNRESOLVED | 3 / 14 | 0 / 14 |
+| Distractor outranked true candidate | 4 | **0** |
+| Flagship-case headroom over the 0.90 line | 0.0036 | **0.0207** (5.7×) |
+
+**Read the 14/14 with the provenance split, not on its own.** The sweep now
+reports how each case resolved, because a benchmark scored against its own
+seed file measures nothing:
+
+- **9 via general derivation rules** — legal suffixes (`Siemens AG`→siemens),
+  dotted suffixes (`Nestle S.A.`→nestle), diacritics (`Müller Group`→muller),
+  punctuation (`The Coca-Cola Company`→coca cola), initialisms
+  (`General Motors Company`→gm, `Bayerische Motoren Werke AG`→bmw). These
+  generalize to company names nobody has seen.
+- **4 via `config/alias_seeds.yml`** — `VW`, `VW Group`, `Facebook`, `Google`.
+  **Not evidence of generalization.** That file was authored knowing these
+  exact cases; it demonstrates the mechanism works end-to-end, nothing more.
+  Brand abbreviations that aren't initialisms, and former names, are not
+  derivable from a canonical string by any rule.
+- **1 probabilistic** — the flagship `Volks Wagen`, which now clears with 5.7×
+  the previous margin because Finding 2's fix removed the drag.
+
+So the honest claim is **9/14 by rules that generalize**, not 14/14 by
+capability. Closing the remaining gap is a data problem: CRM ticker/DBA/former-name
+fields, and captured review decisions (every human resolution is a labelled
+alias). Both are named in the audit's original remediation list and remain
+unbuilt.
+
+### Safety properties preserved
+
+- Ambiguous aliases refuse to link. `resolve_deterministic` requires exactly
+  one match, so an alias colliding across two accounts degrades to review —
+  verified by test, and the sweep reports such cases separately.
+- Subsidiaries do not inherit a parent's colloquial name. `Volkswagen Financial
+  Services` derives `vfs`, not `volkswagen`; `GM Financial` derives `gf`, not
+  `gm`. This is what took the 4 distractor wins to 0, and it has a dedicated
+  regression test.
+- Ambiguous alias matches are still added to the scored candidate pool, so a
+  reviewer sees them ranked rather than losing them — a pure abbreviation
+  scores near-zero lexically and would never surface via fulltext/prefix.
+
+### Verification
+
+`ruff` clean across `src api tests scripts` for every file touched; `mypy`
+clean; unit suite **426 passed / 4 failed** (up from 405 — the 4 are the same
+Redis-absent environmental failures present before this work). Integration and
+security suites remain unrun — Docker still unavailable.
 
 ---
 

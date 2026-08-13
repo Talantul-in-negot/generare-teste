@@ -16,6 +16,7 @@ from src.domain.assertion import ResolutionDecision
 from src.domain.conversation import Mention
 from src.domain.enums import ResolutionStatus
 from src.embedding.provider import EmbeddingProvider
+from src.resolution.alias_derivation import normalize as alias_normalize
 from src.resolution.candidates import Candidate, CandidateGenerator, union_candidates
 from src.resolution.deterministic import DeterministicRule, resolve_deterministic
 from src.resolution.policy import PolicyThresholds, decide, decide_deterministic
@@ -79,6 +80,21 @@ async def resolve_mention(
         DeterministicRule.A3_EXACT_CANONICAL_NAME, [c.entity_id for c in exact_matches]
     )
 
+    # Stage A4 — stored-alias exact match, tried only when the canonical name
+    # didn't match. This is what carries real-world coverage: the probabilistic
+    # scorer below only rescues near-miss spellings of an already-close name
+    # (2/14 on a realistic variant sweep), so abbreviations, legal suffixes and
+    # former names resolve here or not at all. See
+    # docs/external-audit-2026-08-12.md Findings 1 and 5.
+    alias_matches: list[Candidate] = []
+    if deterministic is None:
+        alias_matches = await candidate_generator.alias_candidates(
+            workspace_id, entity_type, alias_normalize(mention.surface_text)
+        )
+        deterministic = resolve_deterministic(
+            DeterministicRule.A4_EXACT_APPROVED_ALIAS, [c.entity_id for c in alias_matches]
+        )
+
     if deterministic is not None:
         status = decide_deterministic(deterministic.entity_id)
         RESOLUTION_DECISIONS_TOTAL.labels(status=status.value.lower()).inc()
@@ -92,8 +108,14 @@ async def resolve_mention(
     pool = await candidate_generator.name_candidates(
         workspace_id, entity_type, mention.surface_text, limit=max(candidate_cap * 4, 200)
     )
+    # alias_matches is included even though Stage A4 declined to link on it:
+    # it declines only when the alias is *ambiguous* (matched >1 entity), and
+    # those entities are exactly the ones a reviewer needs to see ranked. They
+    # would otherwise be dropped, since a pure abbreviation like "GM" scores
+    # near-zero lexically against "General Motors Company" and would never
+    # surface through the fulltext/prefix pool.
     candidates: list[Candidate] = union_candidates(
-        exact_matches, pool, cap=candidate_cap, mention_surface=mention.normalized_surface
+        exact_matches, alias_matches, pool, cap=candidate_cap, mention_surface=mention.normalized_surface
     )
     CANDIDATE_GENERATION_DURATION_SECONDS.observe(time.monotonic() - _candidate_gen_started)
 

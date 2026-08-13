@@ -59,6 +59,30 @@ class CandidateGenerator:
             for r in rows
         ]
 
+    async def alias_candidates(self, workspace_id: str, entity_type: str, normalized_surface: str) -> list[Candidate]:
+        """Stage A4 — entities carrying `normalized_surface` as a stored alias.
+
+        Aliases are written at upsert time by CrmRepository (derived via
+        src/resolution/alias_derivation.py), so this is an exact list-membership
+        test, not a per-candidate string transformation. Returning more than one
+        candidate is meaningful: resolve_deterministic() refuses to link an
+        ambiguous alias, which is the intended degradation to human review.
+        """
+        if not normalized_surface.strip():
+            return []
+        id_field = _ID_FIELD[entity_type]
+        match = scoped_match(entity_type, "n")
+        rows = await self._executor.tenant_query(
+            f"MATCH {match} WHERE $alias IN n.aliases "
+            f"RETURN n.{id_field} AS entity_id, n.name AS name",
+            workspace_id=workspace_id, alias=normalized_surface,
+        )
+        return [
+            Candidate(entity_id=r["entity_id"], entity_type=entity_type, name=r["name"],
+                      sources=frozenset({"alias"}))
+            for r in rows
+        ]
+
     async def all_names_in_workspace(self, workspace_id: str, entity_type: str) -> list[Candidate]:
         id_field = _ID_FIELD[entity_type]
         match = scoped_match(entity_type, "n")

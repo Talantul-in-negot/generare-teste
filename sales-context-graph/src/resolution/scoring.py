@@ -57,23 +57,34 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return max(0.0, min(1.0, dot))
 
 
-# lexical_weight=0.97 is a measured calibration, not a guess. With a real
-# embedding provider now wired (src/embedding/sentence_transformer_provider.py,
-# all-MiniLM-L6-v2), cosine similarity for short company-name fragments came
-# back *low in absolute terms* and only weakly separating:
+# lexical_weight=1.0 — semantic is computed and reported, but excluded from
+# the blended score. This replaced 0.97, and the reason is measured, not
+# stylistic (docs/external-audit-2026-08-12.md, Finding 2).
+#
+# With all-MiniLM-L6-v2, cosine similarity for short company-name fragments is
+# both low in absolute terms and weakly separating:
 #   semantic("volks wagen", "volkswagen group")               = 0.1718
 #   semantic("volks wagen", "volkswagen financial services")  = 0.1262
-# compare to the same pair's lexical scores (0.7407 / 0.5000 — see
-# policy.py's calibration comment). General-purpose sentence embeddings are
-# tuned for topical/semantic sentence similarity, not short proper-noun
-# identity matching — a 0.6/0.4 blend would drag the true match's base score
-# from 0.7407 down to ~0.51, well below base_threshold, using a signal that
-# is measurably the *weaker* one for this task. lexical_weight=0.97 keeps
-# semantic as a small, real, always-computed corroborating signal (never
-# None, never silently dropped from the response) without letting a noisier
-# signal override a stronger one. Revisit if a domain-tuned or larger
-# embedding model is ever substituted for all-MiniLM-L6-v2.
-DEFAULT_LEXICAL_WEIGHT = 0.97
+# against lexical scores of 0.7407 / 0.5000 for the same pairs. General-purpose
+# sentence embeddings are tuned for topical sentence similarity, not short
+# proper-noun identity.
+#
+# Because semantic is always far *below* lexical for this task, blending it at
+# any weight drags the true match's base score down. Measured on the flagship
+# fixture:
+#   lexical only        base 0.7407 -> final 0.9207 (headroom 0.0207 over 0.90)
+#   with semantic @ 3%  base 0.7236 -> final 0.9036 (headroom 0.0036)
+# i.e. a signal already known to be the weaker one consumed ~6x the safety
+# margin. Meanwhile its maximum influence on *ranking between two candidates*
+# is ~0.03 * (0.1718-0.1262) ~= 0.0014, against min_margin=0.08 — it could
+# never flip a decision. Pure cost, negative benefit.
+#
+# semantic is still computed, still carried on ScoredCandidate, and still
+# returned in the API response as a corroborating diagnostic — it is only
+# excluded from `base`. Restore a fractional weight here if a domain-tuned
+# embedding model (one that actually scores VW~Volkswagen highly) replaces
+# all-MiniLM-L6-v2; re-run scripts/resolution_sensitivity.py before doing so.
+DEFAULT_LEXICAL_WEIGHT = 1.0
 
 
 def blend(lexical: float, semantic: float | None, *, lexical_weight: float = DEFAULT_LEXICAL_WEIGHT) -> float:

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from src.domain.crm import Account, Contact, Lead, Opportunity, OpportunityStageChange
 from src.graph.execution import GraphExecutor, scoped_match
+from src.resolution.alias_derivation import derive_aliases
 
 _STAGE_CHANGE_RETURN = (
     "chg.opportunity_id AS opportunity_id, chg.workspace_id AS workspace_id, "
@@ -47,6 +48,13 @@ class CrmRepository:
 
     async def upsert_account(self, account: Account) -> None:
         match = scoped_match("Account", "a", account_id="account_id")
+        # Aliases are derived at write time, not looked up at query time, so
+        # Stage A4 stays a single indexed exact-match rather than an
+        # every-candidate string transformation. Recomputed on every upsert,
+        # so a renamed account picks up the new forms (and drops the old
+        # derived ones) without a migration. See
+        # docs/external-audit-2026-08-12.md Findings 1 and 5 for why this
+        # exists at all.
         await self._executor.tenant_query(
             f"""
             MERGE {match}
@@ -54,6 +62,7 @@ class CrmRepository:
             SET a.source_record_id = $source_record_id,
                 a.name = $name,
                 a.domain = $domain,
+                a.aliases = $aliases,
                 a.merged_into_account_id = $merged_into_account_id,
                 a.updated_at = datetime()
             """,
@@ -62,6 +71,7 @@ class CrmRepository:
             source_record_id=account.source_record_id,
             name=account.name,
             domain=account.domain,
+            aliases=sorted(derive_aliases(account.name)),
             merged_into_account_id=account.merged_into_account_id,
         )
 

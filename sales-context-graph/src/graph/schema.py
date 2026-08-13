@@ -24,6 +24,16 @@ INDEX_STATEMENTS: list[str] = [
     # (workspace_id, canonical_name) — candidate-generation prefix lookups (P4).
     "CREATE INDEX account_workspace_name IF NOT EXISTS FOR (n:Account) ON (n.workspace_id, n.name)",
     "CREATE INDEX contact_workspace_name IF NOT EXISTS FOR (n:Contact) ON (n.workspace_id, n.name)",
+    # Stage A4 alias lookup (`WHERE $alias IN n.aliases`). Neo4j range indexes
+    # store a list property as a single composite value, so this index does NOT
+    # accelerate the IN-list membership predicate — the workspace_id leading
+    # column is what keeps that scan bounded to one tenant's accounts. Declared
+    # anyway because it makes the (workspace_id, aliases) access path explicit,
+    # and because a future move to a relationship-modelled :Alias node (or
+    # Neo4j gaining list-element indexing) should replace this line rather than
+    # discover the need for it. Revisit if a workspace's account count makes
+    # the per-tenant scan measurable.
+    "CREATE INDEX account_workspace_aliases IF NOT EXISTS FOR (n:Account) ON (n.workspace_id, n.aliases)",
     # (workspace_id, normalized_email) — Contact repository denormalizes the
     # Pydantic-computed normalized_email onto the node at write time (P4/P2).
     "CREATE INDEX contact_workspace_normalized_email IF NOT EXISTS FOR (n:Contact) ON (n.workspace_id, n.normalized_email)",
