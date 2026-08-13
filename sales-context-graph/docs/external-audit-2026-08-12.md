@@ -5,16 +5,27 @@ verify claims against code and execution rather than reading documentation
 back. Everything below was reproduced on this machine unless explicitly
 marked unverified.
 
-Scope caveat, stated up front: **the integration, security, and evaluation
-suites were not run** — Docker Desktop would not start during this session
-(`docker ps` failed against `npipe:////./pipe/dockerDesktopLinuxEngine`,
-zero Docker processes, and launching it did not bring the daemon up). So the
-README's "560 passed / 0 failed" claim is **unchecked here, not disproven**.
-`mypy` was slow (~15 min on this machine) rather than stuck — it completed
-after the initial pass and confirmed **"Success: no issues found in 163
-source files,"** so the mypy-clean claim is verified. The `ruff`-clean claim
-is not (see Finding 3). What follows rests on the unit suite, static
-analysis, direct source reading, and direct execution of the resolver.
+**Update, same day, later session:** Docker came up. The integration,
+security, and eval suites that were the one open scope caveat below have now
+run for real, against live Neo4j + Redis: `pytest tests/ -q` → **613 passed, 8
+skipped, 0 failed** (the 8 skips are `test_kafka_transport.py` /
+`test_qdrant_backend.py` correctly detecting their optional profile services
+weren't started — not silent gaps). That includes
+`test_vector_candidates_tenant_isolation.py` (Verified §1 below) executing
+against a real database rather than being read as source. Count is higher
+than the README's "560" because the alias-resolution remediation below added
+21 tests; this is a full re-run, not the original snapshot. `mypy` clean (163
+files) and `ruff` clean (post-fix) both already confirmed pre-Docker. Nothing
+in this document rests on an unverified claim anymore.
+
+Original scope caveat, preserved for the record: **the integration, security,
+and evaluation suites were not run** — Docker Desktop would not start during
+the initial audit session (`docker ps` failed against
+`npipe:////./pipe/dockerDesktopLinuxEngine`, zero Docker processes, launching
+it did not bring the daemon up). So the README's "560 passed / 0 failed"
+claim was unchecked at that point, not disproven. What followed rested on the
+unit suite, static analysis, direct source reading, and direct execution of
+the resolver — now superseded by the full run above.
 
 ---
 
@@ -125,9 +136,12 @@ unbuilt.
 ### Verification
 
 `ruff` clean across `src api tests scripts` for every file touched; `mypy`
-clean; unit suite **426 passed / 4 failed** (up from 405 — the 4 are the same
-Redis-absent environmental failures present before this work). Integration and
-security suites remain unrun — Docker still unavailable.
+clean; unit suite **426 passed / 4 failed** at the time this section was
+written (the 4 were Redis-absent environmental failures, not caused by this
+change). **Superseded by the full run once Docker was available** (see the
+update at the top of this document): `pytest tests/ -q` → 613 passed, 8
+skipped, 0 failed, Redis included — the alias-resolution and semantic-blend
+changes hold under the integration and security suites too, not just unit.
 
 ---
 
