@@ -142,14 +142,14 @@ class CounterfactualAnalyzer:
         rows = await self._neo4j.run(
             """
             MATCH (e:Entity)
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND NOT e.quarantined = true
             WITH count(e) AS entity_count
             OPTIONAL MATCH ()-[r:RELATES_TO]->()
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
             WITH entity_count, count(r) AS edge_count
             OPTIONAL MATCH (c:Conflict {status: 'open'})
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
             RETURN entity_count, edge_count, count(c) AS open_conflicts
             """,
             tenant=tenant,
@@ -182,7 +182,7 @@ class CounterfactualAnalyzer:
             MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
             WHERE r.source_doc_ids IS NOT NULL
               AND $doc_id IN r.source_doc_ids
-              AND ($tenant = 'default' OR r.tenant = $tenant)
+              AND (r.tenant = $tenant)
             RETURN s.name         AS src,
                    s.type         AS src_type,
                    t.name         AS tgt,
@@ -200,7 +200,7 @@ class CounterfactualAnalyzer:
         rows = await self._neo4j.run(
             """
             MATCH (c:Conflict {status: 'open'})
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND c.sources CONTAINS $doc_id
             RETURN c.id            AS conflict_id,
                    c.conflict_type AS conflict_type,
@@ -242,7 +242,7 @@ class CounterfactualAnalyzer:
             """
             MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
             WHERE r.source_type = 'inferred'
-              AND ($tenant = 'default' OR r.tenant = $tenant)
+              AND (r.tenant = $tenant)
               AND r.inferred_by IS NOT NULL
             RETURN s.name AS src, t.name AS tgt, r.relation AS relation,
                    r.inferred_by AS rule, r.confidence AS confidence

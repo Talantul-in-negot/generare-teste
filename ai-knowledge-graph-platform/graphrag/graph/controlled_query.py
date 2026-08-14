@@ -33,6 +33,10 @@ _TYPE_QUERY = re.compile(
     r"^(?:show|list)\s+(?:all\s+)?(?P<type>[A-Za-z][A-Za-z0-9_ ]*?)(?:\s+entities)?\??$",
     re.IGNORECASE,
 )
+_EVIDENCE_GAP_QUERY = re.compile(
+    r"^(?:which|what)\s+suppliers?\s+(?:lack|are missing)\s+(?:verified\s+)?emissions\s+evidence\??$",
+    re.IGNORECASE,
+)
 
 
 class ControlledQueryError(ValueError):
@@ -64,6 +68,18 @@ ORDER BY name ASC
 LIMIT $limit
 """
 
+_EVIDENCE_GAP_CYPHER = """
+MATCH (supplier:Entity {tenant: $tenant, type: 'SUPPLIER'})
+WHERE NOT EXISTS {
+    MATCH (supplier)-[:RELATES_TO {relation: 'REPORTED'}]->(:Entity {tenant: $tenant, type: 'EMISSIONS_RECORD'})
+          -[:RELATES_TO {relation: 'HAS_EVIDENCE'}]->(:Entity {tenant: $tenant, type: 'EVIDENCE'})
+}
+OPTIONAL MATCH (supplier)-[:RELATES_TO {relation: 'SUPPLIES'}]->(material:Entity {tenant: $tenant, type: 'MATERIAL'})
+RETURN supplier.name AS supplier, collect(DISTINCT material.name) AS materials
+ORDER BY supplier ASC
+LIMIT $limit
+"""
+
 
 def plan_controlled_query(question: str, *, tenant: str, limit: int = 25) -> ControlledQueryPlan:
     """Translate a supported fact question into an immutable query template."""
@@ -73,6 +89,13 @@ def plan_controlled_query(question: str, *, tenant: str, limit: int = 25) -> Con
     if not normalized or len(normalized) > _MAX_QUESTION_LENGTH:
         raise ControlledQueryError("question must contain 1 to 500 characters")
     bounded_limit = max(1, min(int(limit), _MAX_LIMIT))
+
+    if _EVIDENCE_GAP_QUERY.fullmatch(normalized):
+        return ControlledQueryPlan(
+            intent="suppliers_missing_emissions_evidence",
+            cypher=_EVIDENCE_GAP_CYPHER,
+            params={"tenant": tenant, "limit": bounded_limit},
+        )
 
     match = _VERB_QUERY.fullmatch(normalized)
     if match:

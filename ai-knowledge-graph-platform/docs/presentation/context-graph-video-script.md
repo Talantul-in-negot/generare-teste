@@ -5,7 +5,9 @@
 > **Audience:** engineering, product, governance, and AI architecture stakeholders
 > **Source:** live `HybridRetriever.retrieve_and_answer()` execution on tenant `marketing`
 
-This movie is generated from `docs/presentation/context_graph_movie_trace.json`. The
+This movie is generated from `docs/presentation/context_graph_movie_trace.json`, which is
+**not source-controlled** — generate it with `python scripts/capture_context_graph_demo.py`
+against a live stack before rendering. The
 trace is created by the live retrieval path with a stable query ID, a second
 identical request proves the governed Redis answer cache, then the trace is
 loaded back through `ContextGraphRepository` using the tenant-scoped API shape.

@@ -9,9 +9,9 @@ This document catalogs every metric the platform measures, where it's recorded, 
 | Layer | Storage | Granularity | API | Status |
 |---|---|---|---|---|
 | Query-level KPIs | SQLite by default; optional TimescaleDB via `KPI_BACKEND=timescale` | Per query | `GET /kpis/summary`, `/kpis/timeseries` | **Active** |
-| Graph health | Neo4j (`GraphHealthSnapshot` nodes) | Per snapshot (24h default) | `GET /kg/health/snapshot` | Implemented, needs Neo4j running |
+| Graph health | Neo4j (`GraphHealthSnapshot` nodes) | Per snapshot (24h default) | `GET /kg/snapshots` | Implemented, needs Neo4j running |
 | Confidence calibration | Neo4j (`CalibrationSample` nodes) | Per model version | Internal (no public API) | Implemented, needs Neo4j running |
-| GNN scoring | In-flight (retrieval results) | Per chunk | Returned in `/search` response | Active |
+| GNN scoring | In-flight (retrieval results) | Per chunk | Returned in the `POST /query` response | Active |
 
 ---
 
@@ -280,7 +280,7 @@ coherence = 0.5 + 0.5 * Q  # normalized to [0, 1]
 
 **Via API (requires auth):**
 ```bash
-GET /kg/health/snapshot
+GET /kg/snapshots
 # Returns the latest snapshot with all metrics
 ```
 
@@ -317,7 +317,7 @@ is non-deterministic at temperature=0; every fresh `--wipe --commit` of the same
 on three different runs, two of them on the *same day*, 2026-06-07 — see
 `tasks/lessons.md` A96/A98). Use this block to learn **how to read** a graph-health
 report — contradiction rate, orphan rate, inferred-edge breakdown — then re-run
-the live queries in `docs/archive/job-search/hiring-and-presentation-strategy.md` Part 6 for
+the live queries below for
 whatever the actual current numbers are before presenting.
 
 The contradiction rate (48.26 /1k, *as measured on 2026-06-04 — will differ today*)
@@ -406,7 +406,7 @@ brier = svc.get_brier_score("llama-3.3-70b")
 ### What they measure
 Performance of each retrieval stage in the five-stage retrieval pipeline; LLM synthesis is measured separately.
 
-### Metrics returned in `/search` response
+### Metrics returned in the `POST /query` response
 
 ```json
 {

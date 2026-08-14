@@ -44,6 +44,8 @@ from dataclasses import dataclass
 
 import structlog
 
+from graphrag.core.tenancy import require_tenant
+
 log = structlog.get_logger(__name__)
 
 
@@ -146,6 +148,7 @@ class ForwardChainingEngine:
 
         Returns a summary of edges derived per rule.
         """
+        require_tenant(tenant)
         total_derived: dict[str, int] = {}
         for iteration in range(max_iterations):
             new_in_iteration = 0
@@ -185,6 +188,7 @@ class ForwardChainingEngine:
 
         More efficient than full-graph run for post-ingestion triggers.
         """
+        require_tenant(tenant)
         # Identify affected entities
         rows = await self._neo4j.run(
             """
@@ -239,7 +243,7 @@ class ForwardChainingEngine:
         path_tenant_filter = (
             "AND ALL(n IN nodes(path) WHERE n.tenant = $tenant) "
             "AND ALL(r IN relationships(path) WHERE r.tenant = $tenant)"
-        ) if tenant else ""
+        )
 
         rows = await self._neo4j.run(
             f"""
@@ -286,7 +290,7 @@ class ForwardChainingEngine:
             "AND a.tenant = $tenant "
             "AND b.tenant = $tenant "
             "AND r.tenant = $tenant"
-        ) if tenant else ""
+        )
 
         rows = await self._neo4j.run(
             f"""
@@ -327,7 +331,7 @@ class ForwardChainingEngine:
             "AND a.tenant = $tenant "
             "AND b.tenant = $tenant "
             "AND r.tenant = $tenant"
-        ) if tenant else ""
+        )
 
         rows = await self._neo4j.run(
             f"""
@@ -378,7 +382,7 @@ class ForwardChainingEngine:
             "AND c.tenant = $tenant "
             "AND r1.tenant = $tenant "
             "AND r2.tenant = $tenant"
-        ) if tenant else ""
+        )
 
         rows = await self._neo4j.run(
             f"""

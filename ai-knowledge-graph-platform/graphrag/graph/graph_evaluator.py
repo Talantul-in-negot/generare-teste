@@ -67,7 +67,7 @@ class GraphEvaluator:
             """
             MATCH (e:Entity)
             WHERE coalesce(e.quarantined, false) = false
-              AND ($tenant = 'default' OR e.tenant = $tenant)
+              AND (e.tenant = $tenant)
             OPTIONAL MATCH (e)<-[:ALIAS_OF]-(a:Alias)
             WITH e, count(a) AS alias_count
             RETURN count(e)                                          AS total_entities,
@@ -104,7 +104,7 @@ class GraphEvaluator:
         rows = await self._neo4j.run(
             """
             MATCH ()-[r:RELATES_TO]->()
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
             RETURN count(r)                                             AS total_edges,
                    avg(r.confidence)                                    AS avg_confidence,
                    count(CASE WHEN r.confidence >= 0.7 THEN 1 END)     AS high_conf,
@@ -142,13 +142,13 @@ class GraphEvaluator:
         rows = await self._neo4j.run(
             """
             MATCH ()-[r:RELATES_TO]->()
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
             WITH count(r) AS total_edges
             OPTIONAL MATCH (c:Conflict {status: 'open'})
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
             WITH total_edges, count(c) AS open_conflicts
             OPTIONAL MATCH (cr:Conflict {status: 'resolved_manual'})
-            WHERE ($tenant = 'default' OR cr.tenant = $tenant)
+            WHERE (cr.tenant = $tenant)
             RETURN total_edges, open_conflicts, count(cr) AS resolved_conflicts
             """,
             tenant=tenant,
@@ -171,12 +171,12 @@ class GraphEvaluator:
             """
             MATCH (e:Entity)
             WHERE coalesce(e.quarantined, false) = false
-              AND ($tenant = 'default' OR e.tenant = $tenant)
+              AND (e.tenant = $tenant)
             WITH count(e) AS total
             MATCH (e2:Entity)
             WHERE NOT (e2)<-[:MENTIONS]-(:Chunk)
               AND coalesce(e2.quarantined, false) = false
-              AND ($tenant = 'default' OR e2.tenant = $tenant)
+              AND (e2.tenant = $tenant)
             RETURN total, count(e2) AS orphans
             """,
             tenant=tenant,
@@ -189,19 +189,25 @@ class GraphEvaluator:
         prev_rows = await self._neo4j.run(
             """
             MATCH (h:GraphHealthSnapshot)
-            WHERE ($tenant = 'default' OR h.tenant = $tenant)
+            WHERE (h.tenant = $tenant)
             RETURN h.orphan_count AS prev_orphans
             ORDER BY h.recorded_at DESC
             LIMIT 1
             """,
             tenant=tenant,
         )
-        prev_orphans = prev_rows[0]["prev_orphans"] if prev_rows else orphans
+        prev_orphans = prev_rows[0].get("prev_orphans") if prev_rows else orphans
+        # `is None`, not falsy: a previous snapshot of 0 orphans is a healthy
+        # baseline, and `prev_orphans or orphans` would collapse it to the
+        # current count — reporting zero drift in exactly the clean-baseline
+        # case this function exists to alarm on.
+        if prev_orphans is None:
+            prev_orphans = orphans
 
         return {
             "orphan_count":    orphans,
             "orphan_rate":     round(orphans / total, 4),
-            "orphan_delta":    orphans - (prev_orphans or orphans),
+            "orphan_delta":    orphans - prev_orphans,
         }
 
     async def merge_split_error_proxy(self, tenant: str = "default") -> dict:
@@ -214,7 +220,7 @@ class GraphEvaluator:
         rows = await self._neo4j.run(
             """
             MATCH (e:Entity)
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
             OPTIONAL MATCH (e)<-[:ALIAS_OF]-(a:Alias)
             WITH e, count(a) AS alias_count
             RETURN count(CASE WHEN alias_count >= 5 THEN 1 END) AS over_merge_candidates,
@@ -234,11 +240,11 @@ class GraphEvaluator:
         rows = await self._neo4j.run(
             """
             MATCH (e:Entity)-[:MEMBER_OF]->(c:Community)
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
             WITH c, collect(e.name) AS members
             MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
             WHERE s.name IN members
-              AND ($tenant = 'default' OR r.tenant = $tenant)
+              AND (r.tenant = $tenant)
             WITH c, members,
                  count(CASE WHEN t.name IN members THEN 1 END) AS intra_edges,
                  count(r) AS total_edges
@@ -283,9 +289,9 @@ class GraphEvaluator:
         rows = await self._neo4j.run(
             """
             MATCH (e:Entity)-[:MEMBER_OF]->(c:Community)
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
             OPTIONAL MATCH (e)-[r:RELATES_TO]->(t:Entity)
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
             RETURN e.name AS source, c.id AS community_id, c.level AS community_level,
                    collect(DISTINCT t.name) AS targets
             """,
@@ -417,7 +423,7 @@ class GraphEvaluator:
         return await self._neo4j.run(
             """
             MATCH (h:GraphHealthSnapshot)
-            WHERE ($tenant = 'default' OR h.tenant = $tenant)
+            WHERE (h.tenant = $tenant)
             RETURN h.tenant              AS tenant,
                    h.alias_coverage      AS alias_coverage,
                    h.high_conf_rate      AS high_conf_rate,

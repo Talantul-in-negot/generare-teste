@@ -195,11 +195,26 @@ class SessionStore:
             try:
                 raw_list = await self._redis.lrange(self._key(session_id), 0, -1)
                 turns: deque[SessionTurn] = deque(maxlen=self._max_turns)
+                dropped = 0
                 for raw in raw_list:
                     try:
                         turns.append(SessionTurn(**json.loads(raw)))
                     except Exception:
-                        pass   # skip corrupted entries
+                        dropped += 1
+                # A silently-dropped turn produces a *gap-containing* history
+                # that the caller cannot distinguish from a genuinely shorter
+                # conversation, so multi-turn answers become wrong rather than
+                # failed. A SessionTurn schema change would blank out session
+                # context platform-wide with no error signal at all — hence
+                # the explicit count and log line.
+                if dropped:
+                    log.warning(
+                        "session_store.turns_undeserializable",
+                        session_id=session_id,
+                        dropped=dropped,
+                        kept=len(turns),
+                        hint="SessionTurn schema change or corrupted Redis entries",
+                    )
                 return turns
             except Exception as exc:
                 if required:

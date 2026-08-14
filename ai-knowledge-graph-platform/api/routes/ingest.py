@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 from api.limiter import INGEST_LIMIT, limiter
 from graphrag.core.models import Document
 from graphrag.messaging.publishers import publish_document
@@ -16,7 +16,6 @@ class IngestRequest(BaseModel):
     text: str
     priority: str = "normal"
     metadata: dict = {}
-    tenant: str = "default"
     source_id: str | None = None
 
 
@@ -28,7 +27,7 @@ class IngestResponse(BaseModel):
 
 @router.post("", response_model=IngestResponse, dependencies=[Depends(require_scope("write"))])
 @limiter.limit(INGEST_LIMIT)
-async def ingest_document(request: Request, body: IngestRequest):
+async def ingest_document(request: Request, body: IngestRequest, tenant: str = Depends(get_tenant)):
     """Publish a document to the ingestion queue.
 
     Rate-limited to prevent LLM quota exhaustion and Neo4j write overload.
@@ -39,7 +38,7 @@ async def ingest_document(request: Request, body: IngestRequest):
         source_path=body.filename,
         raw_text=body.text,
         metadata=body.metadata,
-        tenant=body.tenant,
+        tenant=tenant,
         source_id=body.source_id,
     )
     try:

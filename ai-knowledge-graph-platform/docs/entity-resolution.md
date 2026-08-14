@@ -45,6 +45,24 @@ Extracted entity name (raw LLM output)
 
 ---
 
+## Reproducible Synthetic Supply-Chain Check
+
+`scripts/benchmark_sustainability_entity_resolution.py` exercises the actual
+`AliasRegistry.resolve` path against seven clearly synthetic cases: five
+automatic matches, one ambiguous supplier name routed to review/quarantine, and
+one new supplier. It reports disposition counts plus automatic-match precision
+and recall. This is a regression benchmark for threshold behavior, not a claim
+about accuracy on production supplier data. Run it with:
+
+```powershell
+python scripts/benchmark_sustainability_entity_resolution.py
+```
+
+The current fixture baseline is 7/7 expected dispositions: 5 `matched`, 1
+`quarantined`, and 1 `new`.
+
+---
+
 ## Stage 1: Exact / Normalized Match
 
 The alias registry maintains an in-memory hash map:

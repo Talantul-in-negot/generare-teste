@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+import pytest
+
 from graphrag.graph.contradiction_detector import ContradictionDetector
 
 
@@ -47,13 +49,26 @@ class TestGetOpenConflictsForEntities:
         assert kwargs["names"] == ["Apple", "SpaceX"]
         assert kwargs["tenant"] == "acme"
 
-    async def test_no_tenant_omits_tenant_filter(self):
+    async def test_falsy_tenant_raises_instead_of_reading_every_tenant(self):
+        """A missing tenant must fail loudly, not silently drop the filter.
+
+        This previously asserted the opposite — that tenant=None omitted the
+        `c.tenant` predicate — which is precisely the cross-tenant read the
+        guard now prevents.
+        """
         detector, neo4j = _detector(run_return=[])
-        await detector.get_open_conflicts_for_entities(["Apple"], tenant=None)
+        for missing in (None, "", "   "):
+            with pytest.raises(ValueError, match="tenant is required"):
+                await detector.get_open_conflicts_for_entities(["Apple"], tenant=missing)
+        neo4j.run.assert_not_called()
+
+    async def test_tenant_is_always_bound_into_the_query(self):
+        detector, neo4j = _detector(run_return=[])
+        await detector.get_open_conflicts_for_entities(["Apple"], tenant="acme")
         cypher = neo4j.run.call_args[0][0]
         kwargs = neo4j.run.call_args[1]
-        assert "c.tenant" not in cypher
-        assert "tenant" not in kwargs
+        assert "c.tenant = $tenant" in cypher
+        assert kwargs["tenant"] == "acme"
 
     async def test_no_open_conflicts_returns_empty_list(self):
         detector, neo4j = _detector(run_return=[])

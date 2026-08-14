@@ -33,7 +33,7 @@ _DEFAULT_EXCLUSIVE_PAIRS = [
 _DEFAULT_FUNCTIONAL_RELATIONS = ["CEO_OF", "FOUNDED_BY", "MANUFACTURES"]
 
 
-def _ontology_lists(tenant: str | None) -> tuple[list[tuple[str, str]], list[str]]:
+def _ontology_lists(tenant: str) -> tuple[list[tuple[str, str]], list[str]]:
     """Return (exclusive_state_pairs, functional_relations) for a tenant.
 
     The per-domain ontologies (config/ontologies/*.yml) each define
@@ -92,7 +92,7 @@ class _ConflictStrategies:
     async def _record_corroboration(
         self,
         doc_id: str | None,
-        tenant: str | None,
+        tenant: str,
         scan_limit: int,
     ) -> int:
         """
@@ -124,13 +124,11 @@ class _ConflictStrategies:
 
         Returns the number of edges updated.
         """
-        tenant_filter = "AND s.tenant = $tenant AND t.tenant = $tenant" if tenant else ""
+        tenant_filter = "AND s.tenant = $tenant AND t.tenant = $tenant"
         doc_filter    = "AND $doc_id IN r.source_doc_ids" if doc_id else ""
         limit_clause  = f"LIMIT {scan_limit}" if scan_limit > 0 else ""
 
-        params: dict = {}
-        if tenant:
-            params["tenant"] = tenant
+        params: dict = {"tenant": tenant}
         if doc_id:
             params["doc_id"] = doc_id
 
@@ -185,7 +183,7 @@ class _ConflictStrategies:
     async def _detect_directional_reversals(
         self,
         doc_id: str | None,
-        tenant: str | None,
+        tenant: str,
         scan_limit: int,
     ) -> list[dict]:
         """
@@ -197,11 +195,9 @@ class _ConflictStrategies:
         and B-RELATED_TO->A are just two entities co-mentioned in both
         directions — not a directional claim that can be "reversed".
         """
-        tenant_filter = "AND a.tenant = $tenant AND b.tenant = $tenant" if tenant else ""
+        tenant_filter = "AND a.tenant = $tenant AND b.tenant = $tenant"
         limit_clause  = f"LIMIT {scan_limit}" if scan_limit > 0 else ""
-        params: dict = {}
-        if tenant:
-            params["tenant"] = tenant
+        params: dict = {"tenant": tenant}
 
         rows = await self._neo4j.run(
             f"""
@@ -268,7 +264,7 @@ class _ConflictStrategies:
     async def _detect_exclusive_states(
         self,
         doc_id: str | None,
-        tenant: str | None,
+        tenant: str,
         scan_limit: int,
     ) -> list[dict]:
         """
@@ -280,14 +276,12 @@ class _ConflictStrategies:
         """
         exclusive_pairs, _ = _ontology_lists(tenant)
 
-        tenant_filter = "AND e.tenant = $tenant" if tenant else ""
+        tenant_filter = "AND e.tenant = $tenant"
         limit_clause  = f"LIMIT {scan_limit}" if scan_limit > 0 else ""
 
         created: list[dict] = []
         for rel_a, rel_b in exclusive_pairs:
-            params: dict = {"rel_a": rel_a, "rel_b": rel_b}
-            if tenant:
-                params["tenant"] = tenant
+            params: dict = {"rel_a": rel_a, "rel_b": rel_b, "tenant": tenant}
 
             rows = await self._neo4j.run(
                 f"""
@@ -350,7 +344,7 @@ class _ConflictStrategies:
     async def _detect_functional_violations(
         self,
         doc_id: str | None,
-        tenant: str | None,
+        tenant: str,
         scan_limit: int,
     ) -> list[dict]:
         """
@@ -361,14 +355,12 @@ class _ConflictStrategies:
         ontology (``functional_relations``) — see _ontology_lists().
         """
         _, functional_relations = _ontology_lists(tenant)
-        tenant_filter = "AND s.tenant = $tenant" if tenant else ""
+        tenant_filter = "AND s.tenant = $tenant"
         limit_clause  = f"LIMIT {scan_limit}" if scan_limit > 0 else ""
 
         created: list[dict] = []
         for rel in functional_relations:
-            params: dict = {"rel": rel}
-            if tenant:
-                params["tenant"] = tenant
+            params: dict = {"rel": rel, "tenant": tenant}
 
             rows = await self._neo4j.run(
                 f"""
@@ -430,7 +422,7 @@ class _ConflictStrategies:
     async def _detect_positive_negative_pairs(
         self,
         doc_id: str | None,
-        tenant: str | None,
+        tenant: str,
         scan_limit: int,
     ) -> list[dict]:
         """
@@ -438,15 +430,13 @@ class _ConflictStrategies:
         coexist for the same (src, relation, tgt) — an explicit contradiction
         between a positive and a negative knowledge assertion.
         """
-        tenant_filter = "AND s.tenant = $tenant AND t.tenant = $tenant" if tenant else ""
+        tenant_filter = "AND s.tenant = $tenant AND t.tenant = $tenant"
         doc_filter    = (
             "AND ($doc_id IN pos.source_doc_ids OR $doc_id IN neg.source_doc_ids)"
             if doc_id else ""
         )
         limit_clause  = f"LIMIT {scan_limit}" if scan_limit > 0 else ""
-        params: dict  = {}
-        if tenant:
-            params["tenant"] = tenant
+        params: dict = {"tenant": tenant}
         if doc_id:
             params["doc_id"] = doc_id
 

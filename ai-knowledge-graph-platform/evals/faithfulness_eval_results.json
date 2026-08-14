@@ -1,375 +1,268 @@
 {
-  "run_at": "2026-06-10T09:24:41.593812+00:00",
-  "faithfulness_answerable": 0.9402,
+  "run_at": "2026-08-14T05:25:54.149550+00:00",
+  "faithfulness_answerable": 0.0,
   "baseline": 0.84,
-  "delta": 0.1002,
-  "n_scored": 23,
-  "n_refusals": 16,
-  "n_errors": 0,
-  "n_total": 39,
+  "delta": -0.84,
+  "n_scored": 0,
+  "n_refusals": 0,
+  "n_errors": 34,
+  "n_total": 34,
   "by_type": {
     "single_hop": {
-      "faithfulness": 1.0,
-      "scored": 8,
+      "faithfulness": 0.0,
+      "scored": 0,
       "refusals": 0
     },
     "multi_hop": {
-      "faithfulness": 0.875,
-      "scored": 3,
-      "refusals": 3
+      "faithfulness": 0.0,
+      "scored": 0,
+      "refusals": 0
     },
-    "contradiction": {
-      "faithfulness": 1.0,
-      "scored": 2,
+    "temporal": {
+      "faithfulness": 0.0,
+      "scored": 0,
+      "refusals": 0
+    },
+    "inference": {
+      "faithfulness": 0.0,
+      "scored": 0,
       "refusals": 0
     },
     "authority_chain": {
-      "faithfulness": 1.0,
-      "scored": 2,
-      "refusals": 1
-    },
-    "inference": {
-      "faithfulness": 1.0,
-      "scored": 1,
-      "refusals": 1
+      "faithfulness": 0.0,
+      "scored": 0,
+      "refusals": 0
     },
     "negative": {
-      "faithfulness": 1.0,
-      "scored": 1,
-      "refusals": 2
-    },
-    "temporal": {
-      "faithfulness": 1.0,
-      "scored": 2,
-      "refusals": 1
+      "faithfulness": 0.0,
+      "scored": 0,
+      "refusals": 0
     },
     "precision": {
       "faithfulness": 0.0,
-      "scored": 1,
-      "refusals": 1
+      "scored": 0,
+      "refusals": 0
     },
     "calibration": {
       "faithfulness": 0.0,
       "scored": 0,
-      "refusals": 2
-    },
-    "agentic": {
-      "faithfulness": 1.0,
-      "scored": 1,
-      "refusals": 1
-    },
-    "contextual": {
-      "faithfulness": 1.0,
-      "scored": 2,
       "refusals": 0
     },
-    "architecture": {
+    "agentic": {
       "faithfulness": 0.0,
       "scored": 0,
-      "refusals": 2
+      "refusals": 0
     },
-    "domain": {
+    "contextual": {
       "faithfulness": 0.0,
       "scored": 0,
-      "refusals": 2
+      "refusals": 0
     }
   },
   "questions": [
     {
       "id": "SH-01",
       "type": "single_hop",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "AD 2024-01-02 supersedes AD-2022.",
-      "latency": 30.2
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "SH-02",
       "type": "single_hop",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "AD 2020-05-11 is fully superseded by this AD.",
-      "latency": 14.8
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "SH-03",
       "type": "single_hop",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "The Federal Aviation Administration (FAA) mandated FAA-AD-2024-01-02.",
-      "latency": 15.0
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "SH-04",
       "type": "single_hop",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "FAA AD 2024-01-02 applies to the Boeing 737 MAX aircraft family, specifically including the 737-9 model.",
-      "latency": 16.5
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "SH-05",
       "type": "single_hop",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "The Boeing 737 MAX is manufactured by Boeing.",
-      "latency": 23.4
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "SH-06",
       "type": "single_hop",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "The Boeing 737 MAX is equipped with the CFM LEAP-1B engine.",
-      "latency": 15.3
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "SH-07",
       "type": "single_hop",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "MCAS Software v2.0 is the current, mandated version that supersedes v1.0. It is required by the effective regulation FAA AD 2024-01-02, which replaces all earlier directives that governed previous versions. The key technical advancement in v2.0 is the AOA Sensor Fusion Enhancement, which uses a Kalman-filter-based sensor fusion algorithm.",
-      "latency": 17.9
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "SH-08",
       "type": "single_hop",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "Southwest Airlines, United Airlines, American Airlines, Ryanair, and Air Canada operate Boeing 737 MAX aircraft.",
-      "latency": 59.8
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "MH-01",
       "type": "multi_hop",
-      "status": "scored",
-      "faithfulness": 0.75,
-      "answer": "FAA AD 2024-01-02 supersedes AD 2022-03-07 and AD 2020-05-11. AD 2022-03-07 partially superseded AD 2020-05-11. AD 2020-05-11 superseded AD 2020-05-11.",
-      "latency": 23.0
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "MH-02",
       "type": "multi_hop",
-      "status": "refusal",
-      "answer": "The context does not contain information about FAA AD 2024-01-02 requiring a maintenance procedure for the engine. The context only states that FAA AD 2024-01-02 requires MCAS v2.0 software installation.",
-      "latency": 14.8
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "MH-03",
       "type": "multi_hop",
-      "status": "refusal",
-      "answer": "The context does not specify which airlines are affected by the MCAS software requirements.",
-      "latency": 14.6
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "MH-04",
       "type": "multi_hop",
-      "status": "refusal",
-      "answer": "The context does not contain information describing a regulatory path from the FAA to a maintenance crew for the CFM LEAP-1B engine. It only notes that Boeing holds FAA Production Approval and Design Approval Holder status under 14 CFR Parts 21, 25, and 39, and lists various FAA Airworthiness Directives applicable to the 737 MAX. No details about communication or delegation to maintenance crews are provided.",
-      "latency": 16.9
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "MH-05",
       "type": "multi_hop",
-      "status": "scored",
-      "faithfulness": 0.875,
-      "answer": "The compliance process was governed by FAA AD 2020-05-11, which mandated requirements for the aircraft's return to service. For Southwest Airlines' Boeing 737 MAX 8 fleet, compliance actions included installation of MCAS v2.0 as specified in Boeing Service Bulletin SB 737-31-1944, Rev 2, superseding MCAS v1.7.3. The work also involved activation of the AOA Disagree alert system, performed by SR Technics Zurich. The aircraft returned to revenue service on March 11, 2021.",
-      "latency": 23.4
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "MH-06",
       "type": "multi_hop",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "The 2022 directive replaced the 2020 directive and has since been superseded by the 2024 directive. For current operators, the 2022 directive is no longer the effective regulation. They must comply with the latest 2024 directive, which mandates updated software requirements that supersede the earlier software mandated by the 2022 directive.",
-      "latency": 20.3
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "CON-01",
-      "type": "contradiction",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "FAA AD 2020-05-11: COMPLIANT \u2014 all 87 aircraft (pre-service compliance Nov 2020). All original compliance requirements met and maintained.",
-      "latency": 67.2
+      "type": "temporal",
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "CON-02",
-      "type": "contradiction",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "The 737 MAX airworthiness status is governed by FAA Airworthiness Directives under 14 CFR Part 39. Operators of Boeing 737-8 and 737-9 aircraft are legally required to comply with all applicable ADs, and non-compliance results in the aircraft being considered unairworthy for operation under FAA jurisdiction.",
-      "latency": 21.0
+      "type": "inference",
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "AUT-01",
       "type": "authority_chain",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "FAA AD 2024-01-02 (effective February 15, 2024).",
-      "latency": 18.2
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "AUT-02",
       "type": "authority_chain",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "No. AD 2020-05-11 is a previous airworthiness directive that is superseded.",
-      "latency": 19.8
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "AUT-03",
       "type": "authority_chain",
-      "status": "refusal",
-      "answer": "The context does not contain information about an effective regulatory hierarchy for Boeing 737 MAX engine inspections. It only lists references including an FAA Emergency Order of Airworthiness from March 13, 2019, and 14 CFR Part 39 \u2014 Airworthiness Directives, but does not specify any current governing standard or directive for engine inspections.",
-      "latency": 23.1
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "INF-01",
       "type": "inference",
-      "status": "refusal",
-      "answer": "No. The context does not contain any information about FAA-AD-2024-01-02. The context only states that AD 2020-05-11 is superseded by AD 2022-03-07.",
-      "latency": 22.2
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "INF-02",
       "type": "inference",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "Yes, if Southwest Airlines operates the Boeing 737 MAX, they are subject to FAA AD 2024-01-02. The context confirms that this Airworthiness Directive is the current regulatory requirement for the Boeing 737 MAX aircraft family, and that Southwest Airlines is a key operator of this aircraft type.",
-      "latency": 17.5
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "NEG-01",
       "type": "negative",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "The context does not mention FAA-AD-2024-01-02. Therefore, it cannot be determined whether it applies to the Airbus A320neo.",
-      "latency": 55.9
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "NEG-02",
       "type": "negative",
-      "status": "refusal",
-      "answer": "No. The context states that the Boeing 737 MAX is a Boeing product and that its sole engine option is the CFM International LEAP-1B. There is no information indicating that Airbus manufactures the Boeing 737 MAX.",
-      "latency": 16.2
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "NEG-03",
       "type": "negative",
-      "status": "refusal",
-      "answer": "The context does not contain enough information to answer. The corpus references the Dynamic Regulatory System as a repository for airworthiness directives but does not state whether a specific FAA airworthiness directive governing Airbus aircraft is included in this corpus.",
-      "latency": 15.6
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "TMP-01",
       "type": "temporal",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "The earliest FAA airworthiness directive issued in this corpus is AD 2020-05-11, which became effective on May 27, 2020.",
-      "latency": 64.9
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "TMP-02",
       "type": "temporal",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "MCAS Software Version 2.0 (MCAS v2.0) is the current version. It is mandated by FAA AD 2024-01-02 and installed per Boeing Service Bulletin SB 737-31-1944, upgrading from the previous MCAS v1.7.3.",
-      "latency": 16.4
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "TMP-03",
       "type": "temporal",
-      "status": "refusal",
-      "answer": "The context does not contain information about FAA airworthiness directives specifically for the 737 MAX engine mount. It only mentions FAA AD 2020-05-11, FAA AD 2022-03-07, and FAA AD 2024-01-02, but these are not stated to be related to the engine mount.",
-      "latency": 16.0
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "PRE-01",
       "type": "precision",
-      "status": "refusal",
-      "answer": "The context does not contain the exact document ID of the 2022 FAA airworthiness directive. It only references \"FAA AD 2022-03-07\" as a title.",
-      "latency": 20.2
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "PRE-02",
       "type": "precision",
-      "status": "scored",
-      "faithfulness": 0.0,
-      "answer": "AD 2024-01-02.",
-      "latency": 17.2
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "CAL-01",
       "type": "calibration",
-      "status": "refusal",
-      "answer": "No. The context shows that all 87 aircraft in the MAX 8 fleet are compliant with FAA AD 2020-05-11 and FAA AD 2022-03-07, and all currently have MCAS v1.7.3 installed. There is no information indicating any conflicting compliance status for a specific aircraft.",
-      "latency": 11.7
-    },
-    {
-      "id": "CAL-02",
-      "type": "calibration",
-      "status": "refusal",
-      "answer": "The context does not contain information about how to assess confidence in a conclusion drawn from a single internal document. Therefore, it is not possible to answer this question based solely on the provided context.",
-      "latency": 100.1
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "AGT-01",
       "type": "agentic",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "The FAA issued an Emergency Order of Airworthiness on March 13, 2019, grounding all 737-8 and 737-9 aircraft. The FAA then issued AD 2020-05-11 in May 2020, establishing return-to-service requirements. The context does not provide a specific regulatory path from the FAA to a maintenance crew servicing the CFM LEAP-1B engine.",
-      "latency": 14.2
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "AGT-02",
       "type": "agentic",
-      "status": "refusal",
-      "answer": "The context does not contain any information about Southwest Airlines or its 737 MAX fleet. It only states that FAA AD 2024-01-02 requires MCAS Software v2.0 installation. No compliance chain or airline-specific details are provided.",
-      "latency": 14.0
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "CTX-01",
       "type": "contextual",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "14 CFR Part 39 governs the process by which the FAA addresses unsafe conditions in aircraft, aircraft engines, propellers, and appliances through the issuance of Airworthiness Directives. The specific directive that references this part is \u00a7 39.11 of the Code of Federal Regulations, which mandates operator compliance with these directives.",
-      "latency": 14.6
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     },
     {
       "id": "CTX-02",
       "type": "contextual",
-      "status": "scored",
-      "faithfulness": 1.0,
-      "answer": "The EASA directive covers the Airbus A320neo family, specifically the A320-200N and A321-271N models.",
-      "latency": 51.5
-    },
-    {
-      "id": "ARC-01",
-      "type": "architecture",
-      "status": "refusal",
-      "answer": "The context does not contain any information about retrieval stages used by a platform to answer questions.",
-      "latency": 12.3
-    },
-    {
-      "id": "ARC-02",
-      "type": "architecture",
-      "status": "refusal",
-      "answer": "The context does not contain any information about the role of the IRCoT agentic retriever.",
-      "latency": 11.2
-    },
-    {
-      "id": "DOM-01",
-      "type": "domain",
-      "status": "refusal",
-      "answer": "The context does not contain any information about whether an aerospace regulatory ontology is hard-coded or configurable.",
-      "latency": 11.9
-    },
-    {
-      "id": "DOM-02",
-      "type": "domain",
-      "status": "refusal",
-      "answer": "The context does not contain information about the authority level of an internal document compared to a regulatory one.",
-      "latency": 11.9
+      "status": "error",
+      "error": "[Errno 22] Invalid argument"
     }
   ]
 }

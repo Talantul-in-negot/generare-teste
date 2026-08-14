@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 from api.limiter import QUERY_LIMIT, limiter
 from graphrag.messaging.publishers import publish_query
 from graphrag.retrieval.result_store import ResultStoreUnavailable, get_result_store
@@ -22,7 +22,6 @@ class QueryRequest(BaseModel):
     question: str
     mode: str = "hybrid"       # local | global | hybrid
     ground_truth: str = ""
-    tenant: str = "default"
     session_id: str = ""
     valid_at: str | None = None
     transaction_at: str | None = None
@@ -41,7 +40,7 @@ class QueryResponse(BaseModel):
 
 @router.post("", response_model=QueryResponse, dependencies=[Depends(require_scope("read"))])
 @limiter.limit(QUERY_LIMIT)
-async def submit_query(request: Request, body: QueryRequest):
+async def submit_query(request: Request, body: QueryRequest, tenant: str = Depends(get_tenant)):
     """Submit a question to the async query pipeline.
 
     Rate-limited to prevent LLM quota exhaustion.
@@ -78,7 +77,7 @@ async def submit_query(request: Request, body: QueryRequest):
             question=body.question,
             mode=body.mode,
             ground_truth=body.ground_truth,
-            tenant=body.tenant,
+            tenant=tenant,
             session_id=body.session_id,
             valid_at=body.valid_at,
             transaction_at=body.transaction_at,

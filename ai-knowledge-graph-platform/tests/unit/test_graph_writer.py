@@ -386,6 +386,14 @@ class TestWriteRelations:
              patch.object(writer, "_ensure_registry", AsyncMock()):
             await writer.write_relations([rel], {}, doc_id="doc1")
 
+        # The test previously stopped at the call, so it could only fail if
+        # write_relations raised — it never checked that the unresolvable
+        # relation was actually skipped rather than written with null endpoints.
+        # The batch call still happens, but must carry no rows.
+        batched_rows = writer._neo4j.merge_relations_batch.call_args.args[0]
+        assert batched_rows == [], f"unresolvable relation was written: {batched_rows}"
+        writer._neo4j.merge_relation.assert_not_called()
+
 
 class TestMaybeRecomputePagerank:
     """_maybe_recompute_pagerank — the PageRank trigger hook added 2026-07-25."""
@@ -453,5 +461,4 @@ class TestMaybeRecomputePagerank:
 
         mock_computer.compute_and_persist.assert_not_called()
         assert report["recomputed"] is False
-
-        writer._neo4j.merge_relation.assert_not_called()
+        assert report["reason"] == "up_to_date"

@@ -64,12 +64,19 @@ class TestAddRule:
         engine.add_rule(InferenceRule(name="test", rule_type="symmetry", relation="X"))
         assert len(engine._rules) == initial + 1
 
-    def test_added_rule_is_applied_on_run(self, engine, neo4j_mock):
-        """add_rule wires the rule into the next run() call."""
+    async def test_added_rule_is_applied_on_run(self, engine, neo4j_mock):
+        """add_rule wires the rule into the next run() call.
+
+        This previously had no assertions at all — its body was two comments —
+        so it passed unconditionally and proved nothing.
+        """
         engine.add_rule(InferenceRule(name="sym", rule_type="symmetry", relation="REL"))
         neo4j_mock.run = AsyncMock(return_value=[])
-        # run() should not raise even with a real rule and empty DB response
-        # (tested below in TestRun)
+
+        report = await engine.run(tenant="acme")
+
+        assert any(r.name == "sym" for r in engine._rules)
+        assert "sym" in str(report) or report["rules_applied"] >= 1
 
 
 # ── run() — fixpoint and report structure ─────────────────────────────────────

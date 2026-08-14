@@ -98,24 +98,32 @@ class TestTenantIsolation:
 
     @pytest.mark.asyncio
     async def test_entity_merge_passes_tenant_to_neo4j(self, neo4j_mock, make_entity):
-        """merge_entity Cypher must include tenant in the MERGE key."""
-        from graphrag.graph.neo4j_client import Neo4jClient
+        """merge_entity Cypher must include tenant in the MERGE key.
 
-        client = MagicMock(spec=Neo4jClient)
-        client.run = AsyncMock(return_value=[])
+        The previous version of this test never called merge_entity and never
+        looked at any Cypher: it built a mock, did `NC.__new__(NC)`, and then
+        asserted `entity.model_dump()["tenant"] == "acme_corp"` — i.e. that a
+        Pydantic model round-trips a field it was constructed with. It could
+        not have failed if merge_entity dropped the tenant entirely, which is
+        the exact regression the docstring claims to guard.
+        """
+        from graphrag.graph.neo4j_client import Neo4jClient as NC
+
+        nc = NC.__new__(NC)
+        nc.run = AsyncMock(return_value=[])
 
         entity = make_entity(tenant="acme_corp")
-        # Directly test the Cypher via the real method's call signature
-        # We patch at the module level and check the params dict
-        with patch.object(client, "run", new=AsyncMock(return_value=[])) as mock_run:
-            from graphrag.graph.neo4j_client import Neo4jClient as NC
-            # Instantiate real client but override _driver
-            nc = NC.__new__(NC)
-            nc._session = client.run  # proxy
-            nc.run = client.run
+        await NC.merge_entity.__get__(nc, NC)(entity, tenant="acme_corp")
 
-            entity_dict = entity.model_dump()
-            assert entity_dict["tenant"] == "acme_corp"
+        cypher = str(nc.run.call_args[0][0])
+        params = nc.run.call_args.kwargs
+
+        # tenant must be part of the MERGE key, not merely set afterwards:
+        # an ON CREATE SET would let two tenants collide on (name, type).
+        merge_clause = cypher[cypher.upper().index("MERGE"):]
+        merge_key = merge_clause[:merge_clause.index("}") + 1]
+        assert "tenant" in merge_key, f"tenant missing from MERGE key: {merge_key}"
+        assert params.get("tenant") == "acme_corp"
 
 
 # ── 2. Ontology enforcement ────────────────────────────────────────────────────
@@ -432,4 +440,11 @@ class TestQuarantineExclusion:
             await nc.vector_search_chunks([0.1] * 3072, top_k=5, tenant="default")
 
             cypher = str(mock_run.call_args[0][0])
-            assert "quarantined" in cypher.lower() or "NOT" in cypher
+            # `or "NOT" in cypher` made this pass on any Cypher containing the
+            # word NOT, regardless of whether quarantined chunks were filtered.
+            assert "quarantined" in cypher.lower()
+            # And the tenant filter must be a plain equality — the
+            # `$tenant = 'default' OR ...` wildcard that used to be here made
+            # tenant "default" read every tenant's chunks.
+            assert "c.tenant = $tenant" in cypher
+            assert "'default'" not in cypher

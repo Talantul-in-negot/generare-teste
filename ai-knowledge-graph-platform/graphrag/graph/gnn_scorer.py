@@ -99,8 +99,6 @@ def _gat_layer(A: np.ndarray, H: np.ndarray) -> np.ndarray:
 
     Nodes with no edges fall back to their own embedding (self-loop).
     """
-    N = H.shape[0]
-
     # L2-normalise for cosine similarity
     norms = np.linalg.norm(H, axis=1, keepdims=True) + 1e-8
     H_hat = H / norms                         # (N, D)

@@ -23,7 +23,12 @@ from graphrag.retrieval.session_store import SessionContextUnavailable
 def _make_client() -> TestClient:
     app = FastAPI()
     app.include_router(query_routes.router, prefix="/query")
-    app.dependency_overrides[get_current_user] = lambda: {"scope": "read", "sub": "test"}
+    # The token must carry a tenant: routes now take tenant from the signed
+    # claim (get_tenant) rather than the request body, and a tenantless token
+    # is rejected with 403 before the handler runs.
+    app.dependency_overrides[get_current_user] = lambda: {
+        "scope": "read", "sub": "test", "tenant": "test-tenant",
+    }
 
     # The real app sets request.state.correlation_id via middleware
     # (api/main.py); stand in with a fixed value so submit_query's use of it

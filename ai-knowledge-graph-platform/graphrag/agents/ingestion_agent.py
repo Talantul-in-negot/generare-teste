@@ -35,14 +35,6 @@ class IngestionAgent(BaseGraphRAGAgent):
             "load → chunk → embed → extract → write."
         )
 
-    def _tools(self) -> list:
-        try:
-            from google.adk.tools import FunctionTool
-            from graphrag.agents.tools.neo4j_tools import search_graph
-            return [FunctionTool(search_graph)]
-        except ImportError:
-            return []
-
     async def run(self, message: IngestMessage) -> dict:
         """Full ingestion pipeline: document → chunks → entities → Neo4j."""
         extracted = await self.extract(message)

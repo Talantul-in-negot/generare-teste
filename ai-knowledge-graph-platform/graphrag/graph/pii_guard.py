@@ -1,4 +1,4 @@
-"""PII guard — detection, tagging, and redaction of personally identifiable information.
+r"""PII guard — detection, tagging, and redaction of personally identifiable information.
 
 Problem solved
 --------------
@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Iterator
 
 import structlog
 
@@ -182,8 +181,14 @@ class PIIGuard:
             name=entity_name,
             type=entity_type,
             tenant=tenant,
+            # desc_pii was computed above and then discarded, so an entity
+            # of a non-PII type was always recorded as "description_pii" even
+            # when its description contained none — a misleading audit reason
+            # on exactly the records a GDPR review reads.
             reason=reason or (
-                "entity_type_pii" if is_pii_type else "description_pii"
+                "entity_type_pii" if is_pii_type
+                else "description_pii" if desc_pii
+                else "manual_tag"
             ),
         )
         log.info(
@@ -290,7 +295,7 @@ class PIIGuard:
         return await self._neo4j.run(
             """
             MATCH (e:Entity {pii_sensitive: true})
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
             RETURN e.name         AS name,
                    e.type         AS type,
                    e.pii_reason   AS reason,

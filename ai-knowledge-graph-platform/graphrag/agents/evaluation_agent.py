@@ -34,14 +34,6 @@ class EvaluationAgent(BaseGraphRAGAgent):
             "context_recall) and log all KPIs to the business matrix store."
         )
 
-    def _tools(self) -> list:
-        try:
-            from google.adk.tools import FunctionTool
-            from graphrag.agents.tools.evaluation_tools import score_answer, log_kpi
-            return [FunctionTool(score_answer), FunctionTool(log_kpi)]
-        except ImportError:
-            return []
-
     async def run(self, job: EvalJob) -> EvalResult:
         log.info("evaluation_agent.start", job_id=job.job_id)
 

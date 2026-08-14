@@ -208,7 +208,7 @@ class NegativeKnowledgeService:
 
     async def find_positive_negative_conflicts(
         self,
-        tenant: str | None = None,
+        tenant: str = "default",
         scan_limit: int = 200,
     ) -> list[dict]:
         """
@@ -221,11 +221,9 @@ class NegativeKnowledgeService:
         Returns list of conflict descriptors — each has enough information to
         create a Conflict node via ContradictionDetector.
         """
-        tenant_filter = "AND s.tenant = $tenant AND t.tenant = $tenant" if tenant else ""
+        tenant_filter = "AND s.tenant = $tenant AND t.tenant = $tenant"
         limit_clause  = f"LIMIT {scan_limit}" if scan_limit > 0 else ""
-        params: dict  = {}
-        if tenant:
-            params["tenant"] = tenant
+        params: dict = {"tenant": tenant}
 
         rows = await self._neo4j.run(
             f"""

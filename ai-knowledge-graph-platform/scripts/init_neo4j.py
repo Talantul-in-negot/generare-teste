@@ -21,7 +21,7 @@ async def main():
         for stmt in statements:
             # Strip comment lines (a fragment may start with a comment
             # followed by the actual DDL statement on the next line)
-            lines = [l for l in stmt.splitlines() if not l.strip().startswith("--")]
+            lines = [ln for ln in stmt.splitlines() if not ln.strip().startswith("--")]
             stmt = "\n".join(lines).strip()
             if not stmt:
                 continue

@@ -16,7 +16,6 @@ class ConfidenceTransitionRequest(BaseModel):
     tgt_name: str
     tgt_type: str
     target_state: str
-    tenant: str = "default"
     changed_by: str = "api"
     reason: str = ""
 

@@ -41,11 +41,23 @@ import pytest
 # ── Skip guard ─────────────────────────────────────────────────────────────────
 
 def _docker_available() -> bool:
+    """Probe the Docker daemon, reporting the reason on failure.
+
+    A bare `except Exception: return False` made a missing package, a stopped
+    daemon, a permissions error and a socket timeout indistinguishable — and
+    this is the only tier that runs real Cypher, so losing it silently turned
+    the suite green while removing all real coverage.
+    """
     try:
         import docker
+    except ImportError:
+        print("e2e: docker SDK not installed")
+        return False
+    try:
         docker.from_env().ping()
         return True
-    except Exception:
+    except Exception as exc:
+        print(f"e2e: Docker daemon unreachable ({type(exc).__name__}: {exc})")
         return False
 
 
@@ -67,31 +79,42 @@ _SKIP_REASON = "Docker or testcontainers-python not available"
 class TestNeo4jClientE2E:
     """Live Neo4j container — schema init, entity round-trip, retry."""
 
+    # Pin the password explicitly. Neo4jContainer resolves its password as
+    # `password or os.environ.get("NEO4J_PASSWORD", "password")`, so a developer
+    # who has sourced the project .env (NEO4J_PASSWORD=graphrag_dev) got a
+    # container on one password while these tests connected with another —
+    # an auth ERROR rather than a clean skip.
+    NEO4J_TEST_PASSWORD = "e2e-test-password"
+
     @pytest.fixture(scope="class")
     def neo4j_container(self):
         from testcontainers.community.neo4j import Neo4jContainer
-        with Neo4jContainer("neo4j:5") as c:
+        with Neo4jContainer("neo4j:5", password=self.NEO4J_TEST_PASSWORD) as c:
             yield c
 
     @pytest.fixture(scope="class")
     def neo4j_url(self, neo4j_container):
         return neo4j_container.get_connection_url()
 
-    async def test_run_simple_query(self, neo4j_url):
+    @pytest.fixture(scope="class")
+    def neo4j_auth(self):
+        return ("neo4j", self.NEO4J_TEST_PASSWORD)
+
+    async def test_run_simple_query(self, neo4j_url, neo4j_auth):
         """Basic round-trip: RETURN 1 AS n == 1."""
         from neo4j import AsyncGraphDatabase
-        driver = AsyncGraphDatabase.driver(neo4j_url, auth=("neo4j", "password"))
+        driver = AsyncGraphDatabase.driver(neo4j_url, auth=neo4j_auth)
         async with driver.session() as session:
             result = await session.run("RETURN 1 AS n")
             row = await result.single()
             assert row["n"] == 1
         await driver.close()
 
-    async def test_merge_and_match_entity(self, neo4j_url):
+    async def test_merge_and_match_entity(self, neo4j_url, neo4j_auth):
         """MERGE an entity node, MATCH it back — data persists within the session."""
         from neo4j import AsyncGraphDatabase
         tenant = f"e2e-{uuid.uuid4().hex[:8]}"
-        driver = AsyncGraphDatabase.driver(neo4j_url, auth=("neo4j", "password"))
+        driver = AsyncGraphDatabase.driver(neo4j_url, auth=neo4j_auth)
         async with driver.session() as session:
             await session.run(
                 "MERGE (e:Entity {name: $n, type: $t, tenant: $tenant})",

@@ -6,6 +6,8 @@ import asyncio
 import time
 from collections.abc import Awaitable, Callable
 
+from graphrag.ops.exercises import recovery_check, security_matrix
+
 
 async def run_load_exercise(
     operation: Callable[[dict], Awaitable[object]],
@@ -40,17 +42,12 @@ async def run_load_exercise(
 
 
 def run_security_exercise(cases: list[dict]) -> dict:
-    """Validate tenant isolation and restricted/destructive tool decisions."""
-    failures = []
-    for case in cases:
-        if case.get("expected_tenant") != case.get("observed_tenant"):
-            failures.append({"name": case.get("name", "unknown"), "reason": "tenant_isolation"})
-        if case.get("restricted") and case.get("allowed"):
-            failures.append({"name": case.get("name", "unknown"), "reason": "restricted_tool_allowed"})
-        if case.get("destructive") and not case.get("approval_required"):
-            failures.append({"name": case.get("name", "unknown"), "reason": "missing_approval_gate"})
-    return {"total": len(cases), "passed": len(cases) - len(failures),
-            "failed": len(failures), "failures": failures}
+    """Validate tenant isolation and restricted/destructive tool decisions.
+
+    Delegates to ``graphrag.ops.exercises.security_matrix`` — the two had
+    drifted as separate copies of the same rules.
+    """
+    return security_matrix(cases)
 
 
 async def run_backup_recovery_exercise(
@@ -60,8 +57,9 @@ async def run_backup_recovery_exercise(
     """Execute backup/restore callbacks and compare their content digests."""
     backup_digest = await backup()
     restored_digest = await restore(backup_digest)
+    result = recovery_check(backup_digest, restored_digest)
     return {
-        "backup_digest": backup_digest,
-        "restored_digest": restored_digest,
-        "match": bool(backup_digest) and backup_digest == restored_digest,
+        "backup_digest":   result["backup_hash"],
+        "restored_digest": result["restored_hash"],
+        "match":           result["match"],
     }

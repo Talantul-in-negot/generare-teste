@@ -357,7 +357,7 @@ A structured representation of entities and the relationships between them, stor
 (Boeing 737-800)    -[MANUFACTURED_BY]-> (Boeing)
 ```
 
-**In this project:** Stored in Neo4j. Entity nodes with typed relations. 39 modules in `graphrag/graph/` operate on the graph.
+**In this project:** Stored in Neo4j. Entity nodes with typed relations. 51 modules in `graphrag/graph/` operate on the graph.
 
 ---
 
@@ -644,14 +644,14 @@ retain these links and their model/output digest.
 ### GraphHealthSnapshot
 A point-in-time record of all graph quality metrics — entity resolution quality, relation precision, contradiction rate, orphan rate, community coherence. Persisted as a node in Neo4j for trend tracking.
 
-**In this project:** `graphrag/graph/graph_evaluator.py: persist_snapshot()`. Queried via `GET /kg/health/snapshot`.
+**In this project:** `graphrag/graph/graph_evaluator.py: persist_snapshot()`. Queried via `GET /kg/snapshots`.
 
 ---
 
 ### Conflict node
 A Neo4j node `(:Conflict)` created when the contradiction detector finds a contradiction. Stores the type, involved entities, source documents, and resolution status.
 
-**In this project:** Created by `graphrag/graph/contradiction_detector.py`. Viewed via `GET /kg/conflicts`.
+**In this project:** Created by `graphrag/graph/contradiction_detector.py`. Viewed via `GET /corrections/conflicts`.
 
 ---
 
@@ -680,12 +680,12 @@ Beyond RAGAS, the platform tracks:
 | `answer_relevancy` | RAGAS | `GET /kpis/summary` |
 | `context_precision` | RAGAS | `GET /kpis/summary` |
 | `context_recall` | RAGAS | `GET /kpis/summary` |
-| `entity_resolution_quality` | GraphEvaluator | `GET /kg/health/snapshot` |
-| `relation_precision` | GraphEvaluator | `GET /kg/health/snapshot` |
-| `contradiction_rate` | GraphEvaluator | `GET /kg/health/snapshot` |
-| `orphan_growth_rate` | GraphEvaluator | `GET /kg/health/snapshot` |
-| `merge_split_error_proxy` | GraphEvaluator | `GET /kg/health/snapshot` |
-| `community_coherence` | GraphEvaluator | `GET /kg/health/snapshot` |
+| `entity_resolution_quality` | GraphEvaluator | `GET /kg/snapshots` |
+| `relation_precision` | GraphEvaluator | `GET /kg/snapshots` |
+| `contradiction_rate` | GraphEvaluator | `GET /kg/snapshots` |
+| `orphan_growth_rate` | GraphEvaluator | `GET /kg/snapshots` |
+| `merge_split_error_proxy` | GraphEvaluator | `GET /kg/snapshots` |
+| `community_coherence` | GraphEvaluator | `GET /kg/snapshots` |
 | `brier_score` | CalibrationService | `graphrag/graph/confidence_calibration.py` |
 | `confidence_distribution` | CalibrationService | Calibration curve (isotonic bins) |
 | `gnn_score` | GNNScorer | Per-chunk in retrieval results |

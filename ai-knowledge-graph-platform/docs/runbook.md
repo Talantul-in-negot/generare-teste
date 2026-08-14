@@ -156,7 +156,7 @@ Common causes:
 
 ```bash
 # Check current health snapshot
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/kg/health/snapshot
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/kg/snapshots
 
 # View alert history
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/kg/health/alerts
@@ -166,7 +166,7 @@ Alert thresholds in `config/settings.yml` → `business_matrix.alert_thresholds`
 
 | Metric | Default threshold | Meaning |
 |---|---|---|
-| `latency_p95_ms` | 3000ms | p95 query latency ceiling |
+| `latency_p95_ms` | 30000ms | p95 query latency ceiling — raised from 3000 to sit above the measured 26.4s baseline, so it fires on regressions rather than continuously |
 | `faithfulness` | 0.8 | RAGAS faithfulness floor |
 | `context_recall` | 0.6 | RAGAS recall floor |
 | `contradiction_rate` | 0.05 | conflicts per 1k edges |
@@ -273,23 +273,31 @@ output digest with every transformation so derived evidence can be audited.
 
 ### Full graph backup (NDJSON)
 
+`kg_backup.py` takes a **required subcommand** — `backup`, `restore` or `list`.
+Every command in this section previously omitted it and died at argparse before
+doing anything; `--s3-bucket`, `--s3-prefix` and `--dry-run` never existed. S3 is
+addressed through the output path, not separate flags. Verify with
+`python scripts/kg_backup.py --help`.
+
 ```bash
-# Backup to local directory
-python scripts/kg_backup.py --tenant default --output backups/$(date +%Y%m%d)/
+# Backup to a local directory
+python scripts/kg_backup.py backup --tenant default --output backups/$(date +%Y%m%d)/
 
 # Backup to S3
-python scripts/kg_backup.py --tenant default --s3-bucket my-bucket --s3-prefix graphrag/
+python scripts/kg_backup.py backup --tenant default --output s3://my-bucket/graphrag/
 
-# Dry-run (count nodes/edges without writing)
-python scripts/kg_backup.py --dry-run
+# List existing backups (local path or s3:// prefix)
+python scripts/kg_backup.py list --output backups/
 ```
 
 Output: three NDJSON files per tenant — `nodes.ndjson`, `edges.ndjson`, `chunks.ndjson`.
 
+Or via make: `make backup TENANT=default` / `make backup-s3 TENANT=default S3_BUCKET=my-bucket`.
+
 ### Restore
 
 ```bash
-python scripts/kg_backup.py --restore --input backups/20260531/
+python scripts/kg_backup.py restore --input backups/20260531/ --tenant default
 ```
 
 ⚠️ Restore does **not** wipe existing data — it merges (idempotent). To wipe and restore:
@@ -441,5 +449,5 @@ User reports: "I submitted a query and it never completed"
 | Worker logs | stdout / container logs |
 | ADRs | `docs/adr/` |
 | Lessons log | `tasks/lessons.md` |
-| Graph health metrics | `GET /kg/health/snapshot` |
+| Graph health metrics | `GET /kg/snapshots` |
 | Alert history | `GET /kg/health/alerts` |

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.graph.source_catalog import (
     SourceCatalogRepository,
@@ -21,12 +21,12 @@ async def upsert_source(source: SourceSystem):
 
 
 @router.get("/sources", dependencies=[Depends(require_scope("read"))])
-async def list_sources(tenant: str = "default"):
+async def list_sources(tenant: str = Depends(get_tenant)):
     return await SourceCatalogRepository(get_neo4j()).list_sources(tenant)
 
 
 @router.get("/sources/{source_id}", dependencies=[Depends(require_scope("read"))])
-async def get_source(source_id: str, tenant: str = "default"):
+async def get_source(source_id: str, tenant: str = Depends(get_tenant)):
     result = await SourceCatalogRepository(get_neo4j()).get_source(source_id, tenant)
     if not result:
         raise HTTPException(status_code=404, detail="Source not found")

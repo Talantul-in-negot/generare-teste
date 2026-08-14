@@ -42,8 +42,8 @@ log = structlog.get_logger(__name__)
 
 
 class GraphWriter:
-    def __init__(self, changed_by: str = "ingestion_worker"):
-        self._neo4j                  = get_neo4j()
+    def __init__(self, changed_by: str = "ingestion_worker", *, neo4j_client=None):
+        self._neo4j                  = neo4j_client or get_neo4j()
         self._audit                  = AuditTrail(self._neo4j)
         self._validator              = IngestionValidator(self._neo4j)
         self._cycle_detector         = CycleDetector(self._neo4j)
@@ -56,6 +56,11 @@ class GraphWriter:
         self._ontology_loaded_tenants: set[str] = set()
         self._ontology_tenant        = "default"
         self._cfg                    = get_settings()
+
+    @property
+    def neo4j_client(self):
+        """Underlying client for cohesive source-catalog integrations and tests."""
+        return self._neo4j
 
     async def begin_corpus_update(self, tenant: str) -> None:
         await self._neo4j.begin_corpus_update(tenant, reason="ingestion")
@@ -145,6 +150,7 @@ class GraphWriter:
             operation="create",
             new_values={"filename": doc.filename, "authority_level": doc.authority_level},
             changed_by=self._changed_by,
+            tenant=doc.tenant,
         )
         log.info("graph_writer.document_merged", doc_id=doc.id)
         return doc.id
@@ -320,7 +326,7 @@ class GraphWriter:
         get_embedding_cache().invalidate(tenant, [(e.name, e.type) for e in to_merge])
 
         await self._neo4j.merge_mentions_batch(chunk.id, to_mention, tenant=tenant)
-        await self._audit.log_entities_batch(to_audit)
+        await self._audit.log_entities_batch(to_audit, tenant=tenant)
 
         # Flag possible name collisions: same (name, type, tenant) MERGE key
         # matched an existing node whose embedding is semantically distant
@@ -456,7 +462,7 @@ class GraphWriter:
             })
 
         await self._neo4j.merge_relations_batch(to_merge_rows, tenant=tenant)
-        await self._audit.log_relations_batch(to_audit_rows)
+        await self._audit.log_relations_batch(to_audit_rows, tenant=tenant)
 
         log.info("graph_writer.relations_merged", count=merged_count, tenant=tenant)
 

@@ -26,7 +26,7 @@ The graph is not a RAG index. It is a formally modeled knowledge base:
 | **OWL-RL reasoning** | `OWLRLReasoner` (owlrl) materialises subClassOf chains, symmetric/inverse properties; `is_consistent()` detects owl:Nothing entailments |
 | **SPARQL bridge** | `SPARQLBridge.from_turtle()` + `POST /kg/sparql` — SPARQL 1.1 SELECT in-process over any Turtle export; pre-built queries for entity relations, subclass hierarchy, confidence summary |
 | **Link prediction** | `LinkPredictor` wraps trained `TransXTrainer` (TransE): `predict_tail(h,r,?)`, `predict_relation(h,?,t)`, `find_missing_links()` via Neo4j vector ANN; `POST /kg/predict-links` |
-| **Domain ontologies** | Config-driven domain overlays (see `config/ontologies/aerospace_regulatory.yml`) — extend type hierarchy and relation schema without code changes; `generate_synthetic_ontology.py` benchmarks at 500 types, 170k relations/sec |
+| **Domain ontologies** | Config-driven domain overlays (see `config/ontologies/aerospace_regulatory.yml`) — extend type hierarchy and relation schema without code changes; `generate_synthetic_ontology.py` generates large synthetic ontologies for load testing (no benchmark figure is committed — do not quote one) |
 
 **Further reading:**
 - [`docs/roadmap.md`](docs/roadmap.md) — current implementation status, Context Graph evaluation gate, and scaling path
@@ -38,8 +38,7 @@ The graph is not a RAG index. It is a formally modeled knowledge base:
 - [`docs/runbook.md`](docs/runbook.md) — operations: startup order, common failures, backup/restore, schema migration
 - [`docs/graphrag-terminology.md`](docs/graphrag-terminology.md) — every GraphRAG term defined, with examples and file references
 - [`docs/performance-metrics-inventory.md`](docs/performance-metrics-inventory.md) — all 16 metrics (KPI events, graph health, calibration, retrieval stages); storage, access, interpretation, pitch guidance
-- Supporting interview and presentation material is archived under [`docs/archive/supporting/`](docs/archive/supporting/).
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — ADR process, PR checklist, coding standards, how to add features
+- [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) — ADR process, PR checklist, coding standards, how to add features
 - [`docs/adr/0001-property-graph-over-triple-store.md`](docs/adr/0001-property-graph-over-triple-store.md) — Why Neo4j over RDF triple stores
 - [`docs/adr/0002-forward-chaining-over-backward-chaining.md`](docs/adr/0002-forward-chaining-over-backward-chaining.md) — Why materialised inference over query-time reasoning
 - [`docs/adr/0003-bayesian-confidence-accumulation.md`](docs/adr/0003-bayesian-confidence-accumulation.md) — Why `1−(1−c₁)(1−c₂)` over last-write-wins
@@ -49,8 +48,7 @@ The graph is not a RAG index. It is a formally modeled knowledge base:
 - [`docs/adr/0007-capability-gated-neo4j-vector-search.md`](docs/adr/0007-capability-gated-neo4j-vector-search.md) — Neo4j 2026 `SEARCH` with a 5.20 compatibility fallback
 - [`docs/adr/0008-adaptive-retrieval-routing.md`](docs/adr/0008-adaptive-retrieval-routing.md) — Measured tenant-scoped retrieval route selection
 - [`docs/adr/ADR-Context-Graph-Decision-Trace.md`](docs/adr/ADR-Context-Graph-Decision-Trace.md) — Bounded Context Graph ownership, trace integrity, and privacy rules
-- Interview and role-specific material is archived under [`docs/archive/job-search/`](docs/archive/job-search/).
-- [`evals/golden_set.json`](evals/golden_set.json) — 40-question golden eval set; run with `scripts/run_golden_eval.py`
+- [`evals/golden_set.json`](evals/golden_set.json) — 34-question golden eval set (v2.2); run with `scripts/run_golden_eval.py`
 
 **Live demo (no services required):**
 ```bash
@@ -185,7 +183,7 @@ local live Neo4j; production traffic and production-scale tuning remain open.
 | **Tenant isolation** | All entities, edges, conflicts, communities, and health snapshots are scoped by `(name, type, tenant)` |
 | **Graph integrity guards** | Self-loop removal, cycle detection, quarantine, ingestion validation, dirty-flag propagation after every write |
 | **Manual correction API** | `/corrections` endpoints: entity split, quarantine/release, edge reject/override, conflict resolution |
-| **Agent tool safety** | `ToolPolicy` gate: allowlist, per-tool risk levels (low/medium/high/restricted), scope enforcement, arg validation, cross-tenant guard, dry-run mode, timeout, structured audit log; 49 guardrail tests |
+| **Agent tool safety** | `ToolPolicy` gate: allowlist, per-tool risk levels (low/medium/high/restricted), scope enforcement, arg validation, cross-tenant guard, dry-run mode, timeout, structured audit log; 34 guardrail tests. Dispatched over HTTP at `POST /agent/tool`, so the gate applies to real calls rather than tests alone. |
 | **Governed answer cache** | Redis-backed SHA-256 cache inside `HybridRetriever`; keys include tenant, normalized question, corpus revision, retrieval configuration, model route, prompt, and ontology versions. A hit skips retrieval/LLM work and points to the original Context Graph trace. Every retrieval-visible mutation, including ingestion, corrections, ontology migrations, graph re-ranking, communities, and GNN calibration, uses `KGCorpusState.active_updates` and publishes a new revision on completion. |
 | **Redis alias registry** | `AliasRegistry.load()` pushes alias table to Redis hash (`graphrag:aliases:{tenant}`, 24h TTL); parallel workers warm from Redis without full Neo4j scan; `load_alias_registry()` is Redis-first |
 | **Wikidata entity linking** | Optional post-ingestion step (`WIKIDATA_LINKING=1`); grounds high-confidence entities to canonical QIDs; rate-limited to 20 entities/document |
@@ -275,18 +273,24 @@ The cross-encoder scores text similarity. It doesn't know that *Falcon 9* and *S
 ai-knowledge-graph-platform/
 ├── api/
 │   ├── main.py                      # FastAPI app, lifespan hook, middleware, routes
-│   ├── limiter.py                   # slowapi rate-limiter singleton (20/min ingest, 60/min query)
+│   ├── limiter.py                   # slowapi rate-limiter (20/min ingest, 60/min query, 10/min auth)
 │   ├── auth/
-│   │   ├── dependencies.py          # get_current_user, require_scope (unconditional)
+│   │   ├── dependencies.py          # get_current_user, get_tenant (token-scoped), require_scope
 │   │   ├── google.py                # Google OAuth 2.0 Authorization Code flow
 │   │   └── jwt.py                   # HS256 JWT creation & validation
 │   └── routes/
 │       ├── auth.py                  # /auth/login, /callback, /token, /clients (Redis-backed M2M)
 │       ├── ingest.py                # POST /ingest  (rate-limited)
 │       ├── query.py                 # POST /query, GET /query/{id}  (rate-limited; Redis result store)
-│       ├── evaluation.py            # GET /evaluation/summary
+│       ├── evaluation.py            # GET /evaluation/summary  (require_scope("read"))
 │       ├── kpis.py                  # GET /kpis/summary, /kpis/timeseries
-│       └── corrections.py           # entity split · quarantine · edge override · conflict resolve
+│       ├── agent.py                 # POST /agent/tool — ToolPolicy-gated tool dispatch
+│       ├── corrections.py           # entity split · quarantine · edge override · conflict resolve
+│       ├── context_graph.py         # Bounded Context Graph decision traces
+│       ├── demo.py                  # Public demo pages
+│       └── kg/                      # 11 routers: knowledge, health, compliance, calibration,
+│                                    #   community, confidence, embeddings, feedback, inference,
+│                                    #   pagerank, review_queue, sources
 │
 ├── graphrag/
 │   ├── agents/
@@ -347,13 +351,21 @@ ai-knowledge-graph-platform/
 │   ├── evaluation_worker.py         # Consumes graphrag.eval queue; graceful SIGTERM shutdown
 │   └── combined_worker.py           # Runs ingestion + query consumers on one machine (co-location mode)
 │
-├── scripts/
+├── scripts/                         # 73 CLI tools — ingestion, evaluation, benchmarks, migrations
+│   ├── ingest_corpus.py             # Full real-pipeline corpus ingestion
 │   ├── init_neo4j.py                # Idempotent schema initializer (run once after docker up)
+│   ├── run_golden_eval.py           # Golden-set faithfulness evaluation
 │   └── community_rebuild.py         # CLI: rebuild communities per tenant with staleness check
 │
-├── tests/
-│   └── integration/
-│       └── test_safety_paths.py     # Tenant isolation · ontology · contradiction · quarantine · community
+├── tests/                           # 812 tests across four tiers
+│   ├── unit/                        # 71 files — in-process, fully mocked I/O
+│   ├── integration/                 # AsyncMock-based; no live services (see note below)
+│   ├── load/                        # Concurrency shape, AsyncMock-backed
+│   └── e2e/                         # The only tier with a live Neo4j + Redis (testcontainers)
+│
+├── evals/                           # Golden sets + committed benchmark result files
+├── mcp_server/                      # MCP tool server (hybrid retrieval, entity lookup)
+├── deploy/ · infra/ · fly/          # Kubernetes manifests, Terraform, Fly.io config
 │
 ├── config/
 │   ├── settings.yml                 # All pipeline tuning (see Configuration section)
@@ -367,8 +379,11 @@ ai-knowledge-graph-platform/
 │
 ├── docker-compose.yml
 ├── Dockerfile                       # Multi-stage build; non-root user; HEALTHCHECK
-├── requirements.txt                 # Direct dependencies
+├── requirements.txt                 # Direct dependencies — source of truth
+├── requirements-dev.txt             # pytest, pytest-asyncio, ruff, pip-tools
 ├── requirements.lock                # Fully-pinned lock file (regenerate: make lock)
+├── requirements/                    # Per-image subsets for Docker (see requirements/README.md)
+├── LICENSE                          # MIT
 └── .env                             # Secrets (never commit)
 ```
 
@@ -383,7 +398,7 @@ Full end-to-end test completed 2026-03-21 (updated 2026-05-31 with Groq integrat
 | Infrastructure | Neo4j + RabbitMQ + Redis; optional TimescaleDB | ✅ Core stack healthy; TimescaleDB deployment-specific |
 | API | FastAPI + OAuth + lifespan hook | ✅ Running on :8000 |
 | Ingestion | doc → chunk → embed (OpenAI text-embedding-3-large 3072d) → extract (DeepSeek default; Groq opt-in dev override) → graph | ✅ |
-| Schema | Vector indexes + BM25 fulltext indexes (6 total, all ONLINE) | ✅ |
+| Schema | Vector indexes + BM25 fulltext indexes (7 total — 4 vector, 3 fulltext — all ONLINE) | ✅ |
 | Graph counts | 1 doc · 1 chunk · 5 entities · 4 relations | ✅ |
 | Hybrid search | BM25=10 + vector=10 → fused=10 chunks | ✅ |
 | Cross-encoder reranker | ms-marco-MiniLM-L-6-v2, top_score=9.30 | ✅ |
@@ -401,7 +416,6 @@ Full end-to-end test completed 2026-03-21 (updated 2026-05-31 with Groq integrat
 
 - Python 3.11
 - Docker Desktop
-- Google AI Studio API key → https://aistudio.google.com/app/apikey
 - Google OAuth credentials → https://console.cloud.google.com/apis/credentials
 
 ### 2. Clone & install
@@ -423,7 +437,9 @@ OPENAI_API_KEY=sk-...
 # as an opt-in text-generation override via LLM_INGEST_PROVIDER=groq
 # Get key at: https://console.groq.com/keys
 GROQ_API_KEY=gsk_...
+# Two Groq models by design (ADR 0006): the 70B synthesises, the 8B routes.
 GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_FAST_MODEL=llama-3.1-8b-instant
 
 # DeepSeek — primary text generation (get_llm() default)
 DEEPSEEK_API_KEY=sk-...
@@ -460,6 +476,16 @@ ENV=development
 ```bash
 docker compose -f compose.dev.yaml up   # full stack: Neo4j + RabbitMQ + Redis + API + workers + dashboards
 ```
+
+**Pick one compose file — the two full stacks collide.** `compose.dev.yaml` and
+`docker-compose.yml` both bind 7474, 7687, 5672, 15672, 6379, 8000 and 8050, so
+running them together fails on port binding.
+
+| File | Use it for |
+|------|------------|
+| `compose.dev.yaml` | **Default for local development.** One command, full stack, `dev_*` containers. This is what the rest of this README assumes. |
+| `docker-compose.yml` | Production-shaped definition — pinned project name, named volumes holding the ingested tenant data, `graphrag_*` containers. `make services-up` uses this one. |
+| `compose.neo4j-modern.yaml` | Not a stack — a small override layered on `docker-compose.yml` (below). |
 
 For a fresh Neo4j 2026.06 deployment with in-index tenant filtering, use the
 separate-volume override. It does not mount the existing 5.20 data volume:
@@ -597,14 +623,14 @@ Invoke-RestMethod -Uri "http://localhost:8000/query/$($q.query_id)" -Method GET 
 
 ```powershell
 # Split an over-merged entity
-Invoke-RestMethod -Uri http://localhost:8000/corrections/split -Method POST -Headers $h `
+Invoke-RestMethod -Uri http://localhost:8000/corrections/entity/split -Method POST -Headers $h `
   -Body '{"entity_name":"Apple","entity_type":"ORG","tenant":"default"}'
 
 # List open contradiction conflicts
 Invoke-RestMethod -Uri http://localhost:8000/corrections/conflicts -Method GET -Headers $h
 
 # Resolve a conflict
-Invoke-RestMethod -Uri http://localhost:8000/corrections/conflict-resolve -Method POST -Headers $h `
+Invoke-RestMethod -Uri http://localhost:8000/corrections/conflict/resolve -Method POST -Headers $h `
   -Body '{"conflict_id":"...","resolution":"manual_override"}'
 ```
 
@@ -792,7 +818,17 @@ Every ingestion batch runs the following checks automatically:
 
 | Metric | Measured | Target |
 |--------|----------|--------|
-| `faithfulness` | **0.940** (full 39-question golden set, 23 scored / 16 refusals)¹ | ≥ 0.85 ✓ |
+| `faithfulness` | **0.940** — measured against golden set **v2.1 (39 questions)**, 23 scored / 16 refusals¹ | ≥ 0.85 ✓ |
+
+> ⚠ **This number predates the current golden set and must be re-measured before it is quoted.**
+> `evals/golden_set.json` is now **v2.2 (34 questions)**. v2.2 retired CON-01 and CON-02 —
+> its own changelog records that *"CON-02 asked the model to invent a conflict"* and that the
+> aerospace corpus contains no genuine cross-document contradiction — and removed the
+> mis-scoped architecture/domain meta-questions. Both retired contradiction questions scored
+> a perfect 1.0 in the run above, so the 0.940 includes credit from questions since deleted
+> as invalid. Re-run with `python scripts/run_golden_eval.py --tenant aerospace` and replace
+> this row. `docs/performance-metrics-inventory.md` independently reports 0.937 answerable /
+> 0.842 overall from a different run; treat both as historical until re-measured.
 
 ¹ *Correct refusals (when the corpus genuinely lacks the answer — including 2 questions that ask about the system's own architecture, which the aerospace corpus has no information on) score 0 in RAGAS and are excluded from the scored denominator. A system that declines rather than invents is the desired behaviour. `answer_relevancy`/`context_precision`/`context_recall` figures below are from an earlier 10-question subset and have not been re-measured on the full set — do not cite them as current.*
 
@@ -804,11 +840,25 @@ Every ingestion batch runs the following checks automatically:
 
 ### Latency — reported per retrieval mode (A73: never combine)
 
-| Mode | Avg | p95 | Notes |
-|------|-----|-----|-------|
-| Hybrid retrieval + synthesis | 1,734 ms | **2,162 ms ✓** | 91% of queries |
-| Agentic (IRCoT) | 2,842 ms | **3,442 ms** | 9% of queries — by design |
-| Combined | 1,842 ms | 2,719 ms | Inflated by mode mix |
+Measured across 44 automotive and aerospace queries — `HybridRetriever`, live Neo4j,
+live LLM, no shortcuts (`docs/roadmap.md`, "Current performance baseline"):
+
+| Metric | Measured |
+|--------|----------|
+| p50 | **13.2 s** |
+| p95 | **26.4 s** |
+| mean | **15.2 s** |
+
+This is slow, and honestly so. The cost is round-trip count, not a single bottleneck:
+query rewrite → embed → local retrieval → optional map/reduce → final synthesis, most of
+it still sequential. Three root-caused fixes cut p95 from 45.9 s to 26.4 s in one session
+(`docs/performance-metrics-inventory.md`). CPU reranking alone accounts for a measured
++2,072 ms mean / +2,424 ms p95 — this deployment has no GPU (`docs/roadmap.md`, SPLADE
+section). The `latency_p95_ms` alert threshold is set to 30,000 ms to match.
+
+> An earlier version of this table claimed **2,162 ms p95** for hybrid retrieval. That
+> figure is stale — `docs/performance-metrics-inventory.md` carries an explicit
+> *"Do not cite 2.2s p95"* note — and has been replaced with the measured numbers above.
 
 ### Graph Health (12-doc aerospace corpus · real LLM-extracted data · 2026-06-10)
 
@@ -828,13 +878,43 @@ presenting — never quote these from memory of a prior run.**
 | **Open conflicts** | **4** detected | — | — |
 | Contradiction density | **9.48 /1k edges** | < 0.85 /1k | < 2.0 |
 | Community coherence | 58 Leiden communities (rebuilt 2026-06-10 with supersession-aware summaries; coherence % not re-measured this run) | > 0.65 | > 0.50 |
-| Brier score (calibration) | **0.809** (48 cumulative live samples, verdict "under-confident") | < 0.20 | < 0.25 ✗ |
+| Brier score (calibration) | **0.809** (48 cumulative live samples, verdict "under-confident") — *no results file is committed for this figure; regenerate with `GET /kg/calibration/summary` before quoting* | < 0.20 | < 0.25 ✗ |
 
 Evaluation is sampled at **20%** of queries automatically. View results:
 
 - `GET /evaluation/summary`
 - `GET /kpis/summary`
 - **http://localhost:8050/dashboard/**
+
+---
+
+## Testing — what the suite does and does not cover
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/unit/        # 794 tests, ~90s, no services required
+pytest tests/e2e/         # live Neo4j + Redis via testcontainers (needs Docker)
+make smoke-test           # unit tests + mock demo + API import check
+```
+
+**812 tests across four tiers, ~56% line coverage of `graphrag/`.** Being precise about
+what that means, because the tier names oversell it:
+
+| Tier | Count | What it actually exercises |
+|------|-------|----------------------------|
+| `tests/unit/` | 794 | In-process logic with all I/O mocked. Strong where the logic is deterministic: `core/models`, `core/retry`, `core/provider_health`, `graph/owl_reasoner`, `graph/sparql_bridge`, `graph/review_queue`, `graph/corpus_revision` are at 100%; `graph/inference_engine` 96%, `retrieval/context_builder` 89%. |
+| `tests/integration/` | 34 | **Also AsyncMock** — the file docstrings say so outright. These are unit tests in a different folder, not integration tests. |
+| `tests/load/` | 5 | Concurrency *shape* against AsyncMock, not throughput. Not a performance benchmark. |
+| `tests/e2e/` | 5 | The only tier that runs real Cypher against a real Neo4j and a real Redis. Now runs in CI, which asserts it did not silently skip. |
+
+Known weak spots, stated rather than hidden: the I/O boundary is thin. `ingestion/chunker`
+(19%), `retrieval/bm25_search` (24%), `messaging/rabbitmq_client` (21%),
+`graph/community_builder` (12%) and `retrieval/agentic_retriever` (31%) are the parts a
+reviewer should assume are least protected. Most Cypher is asserted as *strings* —
+substring checks that catch an accidental edit to the query text but not a query that is
+syntactically valid and semantically wrong. `tests/unit/test_tenant_isolation.py` closes
+that gap for the tenant-scoping invariants specifically, which is where it had already
+cost us real bugs.
 
 ---
 
@@ -852,7 +932,7 @@ standalone Flask server 404s on Dash static assets.
 | Tab | What it shows |
 |-----|---------------|
 | **Graph Health** | KPI tiles + **4 radial gauges** (entity resolution, relation confidence, community coherence, orphan rate) + branded contradiction-rate trend + recent alerts. |
-| **Conflicts** | Themed table of open Conflict nodes. Select a row + resolution type to call `POST /corrections/resolve-conflict`. |
+| **Conflicts** | Themed table of open Conflict nodes. Select a row + resolution type to call `POST /corrections/conflict/resolve`. |
 | **Communities** | Change-fraction + changed-entities tiles, "Rebuild Affected Communities" action, version-history table. |
 | **GDPR & PII** | Erasure audit log + "Forget Entity · GDPR Article 17" form (`POST /kg/gdpr/forget-entity`). |
 | **Calibration** | Brier-score rating tile + trend + isotonic calibration curve. |
@@ -921,4 +1001,4 @@ GRAPHRAG_DASHBOARD_DEMO=1 uvicorn api.main:app --port 8001   # → http://localh
 
 ## License
 
-MIT
+MIT — see [`LICENSE`](LICENSE).

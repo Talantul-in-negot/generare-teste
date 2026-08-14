@@ -1,4 +1,19 @@
-"""Abstract agent base with shared tool registration."""
+"""Abstract agent base.
+
+Historical note
+---------------
+This class used to build a ``google.adk.agents.Agent`` in ``__init__`` and
+register per-agent tool lists through an abstract ``_tools()`` hook. That
+scaffolding was dead at runtime: ``google-adk`` was never declared in any
+requirements file, so the import always failed, ``_build_agent()`` always
+returned ``None``, ``_tools()`` was never called, and the resulting
+``self._agent`` attribute was never read anywhere in the codebase.
+
+It has been removed rather than left as aspirational scaffolding. Tool
+dispatch is a real, tested code path: see :class:`graphrag.agents.tool_policy.ToolPolicy`,
+which is what actually gates tool execution (allowlist, scopes, argument
+validation, timeout, audit log) and is exposed over HTTP at ``POST /agent/tool``.
+"""
 
 from __future__ import annotations
 
@@ -11,29 +26,10 @@ log = structlog.get_logger(__name__)
 
 
 class BaseGraphRAGAgent(ABC):
-    """
-    Abstract agent base. Subclasses register tools via `_tools()` and implement `run()`.
-    """
+    """Abstract agent base. Subclasses implement `run()`."""
 
     def __init__(self, name: str):
         self.name = name
-        self._agent = self._build_agent()
-
-    def _build_agent(self):
-        try:
-            from google.adk.agents import Agent
-            from graphrag.core.config import get_settings
-
-            cfg = get_settings()
-            return Agent(
-                name=self.name,
-                model=self._model(),
-                tools=self._tools(),
-                instruction=self._instruction(),
-            )
-        except ImportError:
-            log.warning("agent_scaffold.not_installed — running in tool-only mode")
-            return None
 
     @abstractmethod
     def _model(self) -> str:
@@ -41,10 +37,6 @@ class BaseGraphRAGAgent(ABC):
 
         Actual API calls go through ``graphrag.core.llm_client.get_llm()``.
         """
-
-    @abstractmethod
-    def _tools(self) -> list:
-        """Return list of tool objects registered to this agent."""
 
     @abstractmethod
     def _instruction(self) -> str:

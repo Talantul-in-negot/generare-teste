@@ -126,7 +126,7 @@ class LinkPredictor:
             """
             CALL db.index.vector.queryNodes('entity_embeddings', $top_k, $qv)
             YIELD node AS e, score
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND NOT e.quarantined = true
             RETURN e.id        AS entity_id,
                    e.name      AS name,

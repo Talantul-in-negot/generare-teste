@@ -56,7 +56,6 @@ async def rebuild_tenant(
     from graphrag.graph.community_builder import CommunityBuilder
     from graphrag.graph.community_manager import CommunityManager
     from graphrag.graph.community_summarizer import CommunitySummarizer
-    from graphrag.graph.neo4j_client import Neo4jClient
 
     manager = CommunityManager(neo4j_client)
     stale_report = await manager.check_staleness(tenant=tenant)

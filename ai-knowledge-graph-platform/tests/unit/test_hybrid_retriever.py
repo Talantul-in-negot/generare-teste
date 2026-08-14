@@ -64,19 +64,31 @@ class TestConcurrency:
     async def test_local_and_global_search_run_concurrently(self) -> None:
         hr = _make_hybrid_retriever()
 
-        async def _delayed(*args, **kwargs):
-            await asyncio.sleep(0.05)
+        # Overlap is asserted structurally rather than by wall-clock: the old
+        # version slept 50ms per branch and asserted elapsed < 90ms, a 40ms
+        # margin that flakes on a loaded CI runner or under coverage
+        # instrumentation. Tracking concurrent occupancy proves the same
+        # property — both searches in flight at once — with no timing margin.
+        in_flight = 0
+        max_in_flight = 0
+
+        async def _tracked(*args, **kwargs):
+            nonlocal in_flight, max_in_flight
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+            await asyncio.sleep(0)   # yield so a concurrent peer can start
+            in_flight -= 1
             return {}
 
-        hr._local.search = AsyncMock(side_effect=_delayed)
-        hr._global.search = AsyncMock(side_effect=_delayed)
+        hr._local.search = AsyncMock(side_effect=_tracked)
+        hr._global.search = AsyncMock(side_effect=_tracked)
 
-        t0 = time.monotonic()
         await hr.retrieve_and_answer("question", mode="hybrid")
-        elapsed = time.monotonic() - t0
 
-        # Sequential would take >=0.10s; concurrent should land near 0.05s.
-        assert elapsed < 0.09, f"expected concurrent execution, took {elapsed:.3f}s"
+        assert max_in_flight == 2, (
+            f"local and global search ran sequentially "
+            f"(max concurrent occupancy was {max_in_flight}, expected 2)"
+        )
 
 
 class TestModeGating:

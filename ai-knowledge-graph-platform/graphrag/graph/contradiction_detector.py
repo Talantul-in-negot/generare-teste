@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import structlog
 
+from graphrag.core.tenancy import require_tenant
 from graphrag.graph.contradiction_strategies import _ConflictStrategies
 
 log = structlog.get_logger(__name__)
@@ -81,7 +82,7 @@ class ContradictionDetector(_ConflictStrategies):
     async def scan(
         self,
         doc_id: str | None = None,
-        tenant: str | None = None,
+        tenant: str = "default",
         scan_limit: int = 500,
     ) -> list[dict]:
         """
@@ -90,8 +91,9 @@ class ContradictionDetector(_ConflictStrategies):
         Parameters
         ----------
         doc_id : narrow the scan to a single recently-ingested document.
-        tenant : restrict detection to one tenant's subgraph.
-                 Pass None to scan all tenants (single-tenant deployments).
+        tenant : restrict detection to one tenant's subgraph. Required —
+                 passing a falsy value used to scan every tenant, which made
+                 an unscoped call silently cross-tenant instead of failing.
         scan_limit : max candidates per detection type. Use a large value
                      (or 0 for unlimited) for exhaustive maintenance scans.
 
@@ -108,6 +110,7 @@ class ContradictionDetector(_ConflictStrategies):
 
         Returns list of newly created conflict dicts.
         """
+        require_tenant(tenant)
         new_conflicts: list[dict] = []
 
         # Not a conflict strategy — records how many independent documents assert
@@ -123,7 +126,7 @@ class ContradictionDetector(_ConflictStrategies):
         log.info(
             "contradiction_detector.scan_done",
             doc_id=doc_id or "all",
-            tenant=tenant or "all",
+            tenant=tenant,
             new_conflicts=len(new_conflicts),
             corroborated_edges=corroborated,
         )
@@ -164,17 +167,14 @@ class ContradictionDetector(_ConflictStrategies):
     async def get_open_conflicts(
         self,
         limit: int = 50,
-        tenant: str | None = None,
+        tenant: str = "default",
     ) -> list[dict]:
-        """Return unresolved conflicts ordered by detection time, optionally tenant-filtered."""
-        tenant_filter = "AND c.tenant = $tenant" if tenant else ""
-        params: dict = {"limit": limit}
-        if tenant:
-            params["tenant"] = tenant
+        """Return unresolved conflicts for ``tenant``, ordered by detection time."""
+        require_tenant(tenant)
         return await self._neo4j.run(
-            f"""
-            MATCH (c:Conflict {{status: 'open'}})
-            WHERE true {tenant_filter}
+            """
+            MATCH (c:Conflict {status: 'open'})
+            WHERE c.tenant = $tenant
             RETURN c.id            AS conflict_id,
                    c.src           AS src,
                    c.tgt           AS tgt,
@@ -186,13 +186,14 @@ class ContradictionDetector(_ConflictStrategies):
             ORDER BY c.detected_at DESC
             LIMIT $limit
             """,
-            **params,
+            limit=limit,
+            tenant=tenant,
         )
 
     async def get_open_conflicts_for_entities(
         self,
         entity_names: list[str],
-        tenant: str | None = None,
+        tenant: str = "default",
     ) -> list[dict]:
         """Return open conflicts touching any of the given entity names.
 
@@ -204,14 +205,11 @@ class ContradictionDetector(_ConflictStrategies):
         """
         if not entity_names:
             return []
-        tenant_filter = "AND c.tenant = $tenant" if tenant else ""
-        params: dict = {"names": entity_names}
-        if tenant:
-            params["tenant"] = tenant
+        require_tenant(tenant)
         return await self._neo4j.run(
-            f"""
-            MATCH (c:Conflict {{status: 'open'}})
-            WHERE (c.src IN $names OR c.tgt IN $names) {tenant_filter}
+            """
+            MATCH (c:Conflict {status: 'open'})
+            WHERE (c.src IN $names OR c.tgt IN $names) AND c.tenant = $tenant
             RETURN c.id            AS conflict_id,
                    c.src           AS src,
                    c.tgt           AS tgt,
@@ -219,22 +217,20 @@ class ContradictionDetector(_ConflictStrategies):
                    c.conflict_type AS conflict_type,
                    c.sources       AS sources
             """,
-            **params,
+            names=entity_names,
+            tenant=tenant,
         )
 
-    async def conflict_rate(self, tenant: str | None = None) -> float:
+    async def conflict_rate(self, tenant: str = "default") -> float:
         """Ratio of open conflicts to total RELATES_TO edges — graph quality metric."""
-        tenant_edge_filter     = "WHERE r.tenant = $tenant" if tenant else ""
-        tenant_conflict_filter = "AND c.tenant = $tenant" if tenant else ""
-        params: dict = {}
-        if tenant:
-            params["tenant"] = tenant
+        require_tenant(tenant)
+        params: dict = {"tenant": tenant}
         rows = await self._neo4j.run(
-            f"""
-            MATCH ()-[r:RELATES_TO]->() {tenant_edge_filter}
+            """
+            MATCH ()-[r:RELATES_TO]->() WHERE r.tenant = $tenant
             WITH count(r) AS total_edges
-            MATCH (c:Conflict {{status: 'open'}})
-            WHERE true {tenant_conflict_filter}
+            MATCH (c:Conflict {status: 'open'})
+            WHERE c.tenant = $tenant
             WITH total_edges, count(c) AS conflicts
             RETURN CASE WHEN total_edges > 0
                         THEN toFloat(conflicts) / total_edges

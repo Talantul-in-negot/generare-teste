@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
 
 import structlog
 
@@ -292,12 +291,15 @@ class WikidataEntityLinker:
             if not results:
                 return None
 
-            # Filter by type heuristics (P31 instance of)
-            preferred_qids = set(TYPE_QIDS.get(entity_type, []))
+            # Type filtering is description-keyword based, not P31-based. A
+            # `preferred_qids = set(TYPE_QIDS.get(entity_type, []))` line used to
+            # sit here alongside a "Filter by type heuristics (P31 instance of)"
+            # comment, but nothing ever read it — wbsearchentities does not
+            # return P31 claims, so resolving instance-of would need a second
+            # wbgetentities call per candidate. TYPE_QIDS is still used to pick
+            # which entity types are worth linking at all (see :210).
             for item in results:
-                # Best effort: use the description as a type hint
                 desc = (item.get("description") or "").lower()
-                label = (item.get("label") or "").lower()
                 if entity_type == "PERSON" and any(
                     w in desc for w in ("person", "human", "politician", "businessman", "ceo")
                 ):

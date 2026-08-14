@@ -3,14 +3,16 @@
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from api.auth.dependencies import require_scope
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 
 from api.limiter import limiter
-from api.routes import auth, ingest, query, evaluation, kpis, corrections, kg_features, demo, context_graph
+from api.routes import agent, auth, ingest, query, evaluation, kpis, corrections, kg_features, demo, context_graph
 from graphrag.core.config import get_settings
 
 log = structlog.get_logger(__name__)
@@ -131,10 +133,12 @@ app.add_middleware(
 app.include_router(auth.router,       prefix="/auth",       tags=["Auth"])
 app.include_router(ingest.router,     prefix="/ingest",     tags=["Ingestion"])
 app.include_router(query.router,      prefix="/query",      tags=["Query"])
-app.include_router(evaluation.router,  prefix="/evaluation",  tags=["Evaluation"])
+app.include_router(evaluation.router,  prefix="/evaluation",  tags=["Evaluation"],
+                   dependencies=[Depends(require_scope("read"))])
 app.include_router(kpis.router,        prefix="/kpis",        tags=["KPIs"])
 app.include_router(corrections.router, prefix="/corrections", tags=["Corrections"])
 app.include_router(kg_features.router, prefix="/kg",          tags=["KG Features"])
+app.include_router(agent.router,       prefix="/agent",       tags=["Agent Tools"])
 app.include_router(demo.router)
 app.include_router(context_graph.router)
 

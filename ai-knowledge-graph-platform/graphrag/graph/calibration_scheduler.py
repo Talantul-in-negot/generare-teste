@@ -21,10 +21,10 @@ class GNNCalibrationScheduler:
         rows = await self._neo4j.run(
             """
             MATCH (d:Document)
-            WHERE ($tenant = 'default' OR d.tenant = $tenant)
+            WHERE (d.tenant = $tenant)
             WITH count(d) AS documents
             OPTIONAL MATCH (r:GNNCalibrationRun)
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
             RETURN documents, coalesce(max(r.document_count), 0) AS last_count
             """,
             tenant=tenant,

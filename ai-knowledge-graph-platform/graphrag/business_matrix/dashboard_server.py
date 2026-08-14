@@ -12,27 +12,33 @@ import asyncio
 import dash
 import plotly.graph_objects as go
 from dash import dcc, html, Input, Output
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.wsgi import WSGIMiddleware
+
+from api.auth.dependencies import require_scope
 
 from graphrag.business_matrix.kpi_tracker import KPITracker
 from graphrag.core.config import get_settings
 from graphrag.dashboard.utils import (
     BAD, CANVAS, FONT, GOOD, MUTED, NAV, NAV2, TEAL, TEAL2, WARN,
-    BRAND_TEMPLATE, card_panel, kpi_card, style_fig,
+    card_panel, kpi_card, style_fig,
 )
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
+# This is a second, standalone app served on :8050 (see __main__ below and the
+# published port in docker-compose.yml). It previously exposed the KPI endpoints
+# with no authentication at all, while the same data on the main app was gated
+# by require_scope("read"). The gate is applied here too.
 api = FastAPI(title="GraphRAG Business Matrix")
 
 
-@api.get("/kpis/summary")
+@api.get("/kpis/summary", dependencies=[Depends(require_scope("read"))])
 async def kpi_summary(window_days: int = 7):
     tracker = KPITracker()
     return await tracker.get_summary(window_days=window_days)
 
 
-@api.get("/kpis/timeseries")
+@api.get("/kpis/timeseries", dependencies=[Depends(require_scope("read"))])
 async def kpi_timeseries(metric: str = "latency_ms", window_days: int = 7):
     tracker = KPITracker()
     return await tracker.get_timeseries(metric=metric, window_days=window_days)
@@ -78,8 +84,8 @@ METRICS = list(METRIC_META)
 def _brand_header() -> html.Div:
     nodes = [html.Div(style={
         "position": "absolute", "width": f"{d}px", "height": f"{d}px",
-        "borderRadius": "50%", "background": c, "top": f"{t}px", "left": f"{l}px",
-    }) for d, c, t, l in [(11, TEAL2, 4, 2), (8, "#FFF", 22, 0), (9, TEAL, 24, 22), (7, TEAL2, 6, 24)]]
+        "borderRadius": "50%", "background": c, "top": f"{t}px", "left": f"{left}px",
+    }) for d, c, t, left in [(11, TEAL2, 4, 2), (8, "#FFF", 22, 0), (9, TEAL, 24, 22), (7, TEAL2, 6, 24)]]
     return html.Div([
         html.Div([
             html.Div(nodes, style={"position": "relative", "width": "36px",
@@ -123,9 +129,30 @@ dash_app.layout = html.Div([
 ], style={"fontFamily": FONT, "background": CANVAS, "minHeight": "100vh"})
 
 
+def _alert_thresholds() -> dict:
+    """Alert thresholds from config/settings.yml.
+
+    These were hardcoded at 3000/5000 ms while the configured
+    `business_matrix.alert_thresholds.latency_p95_ms` is 30000 — raised to sit
+    above the measured 26.4 s p95 baseline. The dashboard therefore painted p95
+    permanently red on a healthy system, which is how a status colour stops
+    meaning anything.
+    """
+    try:
+        return get_settings().business_matrix.get("alert_thresholds", {})
+    except Exception:  # noqa: BLE001 — the dashboard must render without config
+        return {}
+
+
 def _summary_cards(summary: dict) -> html.Div:
     q   = summary.get("total_queries", 0)
     win = summary.get("window_days", 7)
+
+    thresholds  = _alert_thresholds()
+    lat_ceiling = thresholds.get("latency_p95_ms", 30000)
+    fth_floor   = thresholds.get("faithfulness", 0.8)
+    rcl_floor   = thresholds.get("context_recall", 0.6)
+    lat_hint    = f"alert > {lat_ceiling:,.0f} ms"
 
     # Graceful empty state — neutral tiles, never alarming red, when no queries
     # fall inside the window. Colours activate only once real data flows in.
@@ -134,9 +161,9 @@ def _summary_cards(summary: dict) -> html.Div:
         cards = [
             kpi_card("Total queries", "0", accent=MUTED, hint=f"last {win} days"),
             kpi_card("Avg latency", dash, color=MUTED, accent=MUTED, hint="awaiting queries"),
-            kpi_card("p95 latency", dash, color=MUTED, accent=MUTED, hint="alert > 3000 ms"),
-            kpi_card("Faithfulness", dash, color=MUTED, accent=MUTED, hint="RAGAS · target ≥ 0.70"),
-            kpi_card("Context recall", dash, color=MUTED, accent=MUTED, hint="RAGAS · target ≥ 0.80"),
+            kpi_card("p95 latency", dash, color=MUTED, accent=MUTED, hint=lat_hint),
+            kpi_card("Faithfulness", dash, color=MUTED, accent=MUTED, hint=f"RAGAS · target ≥ {fth_floor}"),
+            kpi_card("Context recall", dash, color=MUTED, accent=MUTED, hint=f"RAGAS · target ≥ {rcl_floor}"),
         ]
         return html.Div(cards, style={"display": "flex", "flexWrap": "wrap", "gap": "2px"})
 
@@ -145,7 +172,10 @@ def _summary_cards(summary: dict) -> html.Div:
     fth = summary.get("avg_faithfulness", 0)
     rcl = summary.get("avg_context_recall", 0)
 
-    def lat_color(v): return GOOD if v < 3000 else WARN if v < 5000 else BAD
+    # Amber from 70% of the alert ceiling, red at or above it.
+    def lat_color(v):
+        return GOOD if v < lat_ceiling * 0.7 else WARN if v < lat_ceiling else BAD
+
     def sc_color(v):  return GOOD if v >= 0.75 else WARN if v >= 0.5 else BAD
 
     cards = [
@@ -153,11 +183,11 @@ def _summary_cards(summary: dict) -> html.Div:
         kpi_card("Avg latency", f"{avg:,.0f} ms", color=lat_color(avg),
                  accent=lat_color(avg), hint=f'p50 {summary.get("p50_latency_ms",0):,.0f} ms'),
         kpi_card("p95 latency", f"{p95:,.0f} ms", color=lat_color(p95),
-                 accent=lat_color(p95), hint="alert > 3000 ms"),
+                 accent=lat_color(p95), hint=lat_hint),
         kpi_card("Faithfulness", f"{fth:.3f}", color=sc_color(fth),
-                 accent=sc_color(fth), hint="RAGAS · target ≥ 0.70"),
+                 accent=sc_color(fth), hint=f"RAGAS · target ≥ {fth_floor}"),
         kpi_card("Context recall", f"{rcl:.3f}", color=sc_color(rcl),
-                 accent=sc_color(rcl), hint="RAGAS · target ≥ 0.80"),
+                 accent=sc_color(rcl), hint=f"RAGAS · target ≥ {rcl_floor}"),
     ]
     return html.Div(cards, style={"display": "flex", "flexWrap": "wrap", "gap": "2px"})
 

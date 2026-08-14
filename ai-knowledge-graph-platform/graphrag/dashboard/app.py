@@ -167,8 +167,8 @@ def _brand_mark() -> html.Div:
             *[html.Div(style={
                 "position": "absolute", "width": f"{d}px", "height": f"{d}px",
                 "borderRadius": "50%", "background": c,
-                "top": f"{t}px", "left": f"{l}px",
-            }) for d, c, t, l in [
+                "top": f"{t}px", "left": f"{left}px",
+            }) for d, c, t, left in [
                 (11, TEAL2, 4, 2), (8, "#FFFFFF", 22, 0),
                 (9, TEAL, 24, 22), (7, TEAL2, 6, 24),
             ]],

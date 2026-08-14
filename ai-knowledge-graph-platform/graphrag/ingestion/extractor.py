@@ -161,10 +161,25 @@ class Extractor:
         try:
             from graphrag.graph.ontology_registry import get_ontology_registry
             registry = get_ontology_registry(tenant=chunk.tenant)
-            if registry._loaded:
-                registry.validate_extraction(entities, relations)
+            if registry.is_loaded:
+                # validate_extraction mutates in place: unknown entity types are
+                # coerced to CONCEPT, relation names normalised to UPPER_SNAKE,
+                # and the deprecation migration map applied. Skipping it writes
+                # unnormalised, unmigrated entities into the graph — so the skip
+                # is logged rather than silent, and the drift report it returns
+                # is surfaced instead of discarded.
+                report = registry.validate_extraction(entities, relations)
+                if report and report.get("drift_detected"):
+                    log.warning("extractor.ontology_drift", chunk_id=chunk.id, **report)
+            else:
+                log.warning(
+                    "extractor.ontology_validation_skipped",
+                    chunk_id=chunk.id,
+                    tenant=chunk.tenant,
+                    hint="registry not loaded (cold start) — entities written unnormalised",
+                )
         except ImportError:
-            pass  # registry not yet available during cold-start — skip silently
+            log.warning("extractor.ontology_registry_unavailable", chunk_id=chunk.id)
 
         log.info(
             "extractor.done",

@@ -33,7 +33,6 @@ async def run_query(label: str, question: str):
         final  = c.get("final_score", None)
         rerank = c.get("rerank_score", None)
         score  = c.get("score", 0.0)
-        via    = c.get("via_entity", "")
 
         score_str = ""
         if rerank is not None:

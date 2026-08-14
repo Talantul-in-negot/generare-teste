@@ -21,7 +21,6 @@ import argparse
 import asyncio
 import sys
 import uuid
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 # Make the project root importable when running as a script
@@ -266,7 +265,7 @@ async def seed(tenant: str, commit: bool, wipe: bool) -> None:
     print(f"    {len(SEED_DOCUMENTS):3d} documents")
     print(f"    {len(SEED_ENTITIES):3d} entities")
     print(f"    {len(SEED_RELATIONS):3d} relations  +  {len(SEED_CONFLICTS)} conflict pairs")
-    print(f"    1 graph health snapshot  +  1 calibration snapshot")
+    print("    1 graph health snapshot  +  1 calibration snapshot")
     if not commit:
         print("\n  DRY RUN — pass --commit to write to Neo4j.")
     print("="*60 + "\n")

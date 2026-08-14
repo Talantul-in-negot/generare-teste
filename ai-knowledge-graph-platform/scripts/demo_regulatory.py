@@ -26,9 +26,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -47,7 +45,13 @@ try:
 except (AttributeError, ValueError):
     pass
 
+from typing import TYPE_CHECKING
+
 import structlog
+
+if TYPE_CHECKING:      # imports are function-local at runtime to keep startup light
+    from graphrag.graph.ontology_registry import OntologyRegistry
+    from graphrag.graph.type_taxonomy import TypeTaxonomy
 
 log = structlog.get_logger(__name__)
 
@@ -106,7 +110,6 @@ async def step1_load_ontology() -> dict:
         get_type_hierarchy_pairs,
         get_relation_rules,
         get_inference_rules,
-        build_inference_rules_from_ontology,
     )
 
     ontology = load_domain_ontology(ONTOLOGY_PATH)
@@ -179,6 +182,8 @@ async def step2_registry_with_domain(ontology: dict) -> "OntologyRegistry":
     unknown = _make_entity("Some Doc", "UNKNOWN_TYPE")
     report = registry.validate_extraction([entity, unknown], [])
     print(_ok(f"Unknown type 'UNKNOWN_TYPE' corrected to: '{unknown.type}'"))
+    print(_ok(f"Drift report: {report['unknown_types']} unknown type(s), "
+              f"drift_detected={report['drift_detected']}"))
 
     return registry
 
@@ -278,8 +283,8 @@ async def step4_inference(ontology: dict) -> None:
     print("    ┌─ SUPERSEDES [inferred] ──────────────────────────────────────┐")
     print("    │  FAA-AD-2024-01-02 → FAA-AD-2020-05-11  (confidence: 0.857) │")
     print("    └───────────────────────────────────────────────────────────────┘")
-    print(_ok(f"Current authority: FAA-AD-2024-01-02  "
-              f"(supersedes all earlier ADs on this component)"))
+    print(_ok("Current authority: FAA-AD-2024-01-02  "
+              "(supersedes all earlier ADs on this component)"))
 
 
 async def step5_contradiction() -> None:
@@ -296,22 +301,21 @@ async def step5_contradiction() -> None:
         "doc_b":   "ad-compliance-check-2024-03",
     }
 
-    # scan() calls: multi_source(1) + directional(1) + exclusive_state(4 pairs, 1 CREATE)
-    # + functional_violation(3 relations) + positive_negative(1) = 11 total
-    # exclusive_state pair 3 (IS_CERTIFIED vs IS_UNCERTIFIED) surfaces our conflict
-    neo4j.run = AsyncMock(side_effect=[
-        [],            # multi_source query → none
-        [],            # directional reversal query → none
-        [],            # exclusive_state pair 1: IS_ACTIVE vs IS_DEPRECATED → none
-        [],            # exclusive_state pair 2: IS_APPROVED vs IS_REJECTED → none
-        [conflict_row],# exclusive_state pair 3: IS_CERTIFIED vs IS_UNCERTIFIED → conflict!
-        [],            # CREATE Conflict node
-        [],            # exclusive_state pair 4: OPERATIONAL vs DECOMMISSIONED → none
-        [],            # functional_violation CEO_OF → none
-        [],            # functional_violation FOUNDED_BY → none
-        [],            # functional_violation MANUFACTURES → none
-        [],            # positive_negative pairs → none
-    ])
+    # Respond by *what is being asked*, not by call ordinal.
+    #
+    # This was a fixed 11-element side_effect list, one entry per expected
+    # query. scan() actually issues 17 — the aerospace domain ontology
+    # contributes 9 exclusive-state pairs and 5 functional relations on top of
+    # the generic defaults — so the mock ran out and the demo died with
+    # StopAsyncIteration. `make smoke-test` failed at step 2 for the same
+    # reason. Keying on the query's own parameters makes the mock independent
+    # of how many pairs the ontology happens to define.
+    async def _respond(cypher, **params):
+        if (params.get("rel_a"), params.get("rel_b")) == ("IS_AIRWORTHY", "IS_UNAIRWORTHY"):
+            return [conflict_row]
+        return []
+
+    neo4j.run = AsyncMock(side_effect=_respond)
 
     detector   = ContradictionDetector(neo4j)
     conflicts  = await detector.scan(tenant="aerospace")
@@ -358,16 +362,16 @@ async def run_demo() -> None:
         return
 
     ontology = await step1_load_ontology()
-    registry = await step2_registry_with_domain(ontology)
-    taxonomy = await step3_taxonomy(ontology)
+    await step2_registry_with_domain(ontology)
+    await step3_taxonomy(ontology)
     await step4_inference(ontology)
     await step5_contradiction()
     await step6_summary()
 
     print(f"\n{BOLD}{'=' * 60}{RESET}")
     print(f"{GREEN}{BOLD}  Demo complete.{RESET}")
-    print(f"  All steps ran against mocked Neo4j — no live services required.")
-    print(f"  Replace mocks with get_neo4j() for a live production demo.")
+    print("  All steps ran against mocked Neo4j — no live services required.")
+    print("  Replace mocks with get_neo4j() for a live production demo.")
     print(f"{BOLD}{'═' * 60}{RESET}\n")
 
 
@@ -506,7 +510,7 @@ async def run_live_demo() -> None:
     )
 
     if inferred:
-        print(_ok(f"Sample of inferred edges (confidence decayed from asserted sources):"))
+        print(_ok("Sample of inferred edges (confidence decayed from asserted sources):"))
         for row in inferred:
             print(f"  • {row['src']} —[{row['rel']}]→ {row['tgt']}  (confidence: {row['conf']:.3f})")
     else:

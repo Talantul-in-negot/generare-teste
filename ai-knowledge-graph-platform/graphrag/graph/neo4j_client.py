@@ -778,7 +778,7 @@ class Neo4jClient:
             CALL db.index.vector.queryNodes('chunk_embeddings', $fetch_k, $embedding)
             YIELD node AS c, score
             OPTIONAL MATCH (c)-[:PART_OF]->(d:Document)
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND ($valid_at IS NULL OR (
                   d IS NOT NULL
                   AND (d.valid_from IS NULL OR d.valid_from <= datetime($valid_at))
@@ -810,7 +810,7 @@ class Neo4jClient:
         matching against question text — see local_search's named-doc boost).
         """
         rows = await self.run(
-            "MATCH (d:Document) WHERE ($tenant = 'default' OR d.tenant = $tenant) "
+            "MATCH (d:Document) WHERE (d.tenant = $tenant) "
             "RETURN DISTINCT d.filename AS filename",
             tenant=tenant,
         )
@@ -831,7 +831,7 @@ class Neo4jClient:
             """
             MATCH (c:Chunk)-[:PART_OF]->(d:Document)
             WHERE c.id IN $chunk_ids
-              AND ($tenant = 'default' OR c.tenant = $tenant)
+              AND (c.tenant = $tenant)
             RETURN c.id AS chunk_id, d.filename AS filename
             """,
             chunk_ids=chunk_ids,
@@ -855,7 +855,7 @@ class Neo4jClient:
         rows = await self.run(
             """
             MATCH (c:Chunk)-[:PART_OF]->(d:Document {filename: $filename})
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND c.embedding IS NOT NULL
               AND ($valid_at IS NULL OR (
                   (d.valid_from IS NULL OR d.valid_from <= datetime($valid_at))
@@ -935,7 +935,7 @@ class Neo4jClient:
                   'community_summary_snapshot_embeddings', $fetch_k, $embedding
                 )
                 YIELD node AS c, score
-                WHERE ($tenant = 'default' OR c.tenant = $tenant)
+                WHERE (c.tenant = $tenant)
                   AND ($valid_at IS NULL OR c.valid_from IS NULL OR c.valid_from <= datetime($valid_at))
                   AND ($valid_at IS NULL OR c.valid_to IS NULL OR c.valid_to > datetime($valid_at))
                   AND ($transaction_at IS NULL OR c.transaction_from IS NULL
@@ -977,7 +977,7 @@ class Neo4jClient:
             """
             CALL db.index.vector.queryNodes('community_embeddings', $fetch_k, $embedding)
             YIELD node AS c, score
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND ($valid_at IS NULL OR (
                   c.valid_from IS NULL OR c.valid_from <= datetime($valid_at)
               ))
@@ -1023,10 +1023,8 @@ class Neo4jClient:
             UNWIND $chunk_ids AS cid
             MATCH (c:Chunk {{id: cid}})-[:MENTIONS]->(e:Entity)
             WHERE coalesce(e.quarantined, false) = false
-            OPTIONAL MATCH (e)-[r:RELATES_TO]-(neighbor:Entity)
-            OPTIONAL MATCH (src_doc:Document {{id: r.source_doc_id}})
+            OPTIONAL MATCH (e)-[r:RELATES_TO {{tenant: $tenant}}]-(neighbor:Entity {{tenant: $tenant}})
             WHERE coalesce(neighbor.quarantined, false) = false {temporal_filter} {transaction_filter}
-              AND ($tenant = 'default' OR r.source_doc_id IS NULL OR src_doc.tenant = $tenant)
             RETURN e.name AS entity, e.type AS type, e.description AS description,
                    collect(DISTINCT neighbor.name) AS neighbors
             """,
@@ -1078,12 +1076,11 @@ class Neo4jClient:
             "r.recorded_at IS NULL OR r.recorded_at <= datetime($transaction_at))"
             if transaction_at else ""
         )
+        # Unconditional: this was previously skipped entirely for tenant
+        # "default", which turned the multi-hop expansion into a
+        # read-every-tenant path traversal.
         tenant_filter = (
-            "AND ALL(r IN relationships(path) WHERE "
-            "r.source_doc_id IS NULL OR EXISTS { "
-            "MATCH (d:Document {id: r.source_doc_id}) "
-            "WHERE d.tenant = $tenant })"
-            if tenant != "default" else ""
+            "AND ALL(r IN relationships(path) WHERE r.tenant = $tenant)"
         )
         use_semantic = query_embedding is not None and semantic_weight > 0
         score_expr = (
@@ -1109,7 +1106,7 @@ class Neo4jClient:
                   AND ALL(n IN nodes(path) WHERE coalesce(n.quarantined, false) = false)
                 MATCH (neighbor_chunk:Chunk)-[:MENTIONS]->(neighbor)
                 WHERE NOT neighbor_chunk.id IN $chunk_ids
-                  AND ($tenant = 'default' OR neighbor_chunk.tenant = $tenant)
+                  AND (neighbor_chunk.tenant = $tenant)
                 RETURN DISTINCT
                     neighbor_chunk.id   AS chunk_id,
                     neighbor_chunk.text AS text,
@@ -1160,7 +1157,7 @@ class Neo4jClient:
             CALL db.index.fulltext.queryNodes('chunk_fulltext', $query)
             YIELD node AS c, score
             OPTIONAL MATCH (c)-[:PART_OF]->(d:Document)
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND ($valid_at IS NULL OR (
                   d IS NOT NULL
                   AND (d.valid_from IS NULL OR d.valid_from <= datetime($valid_at))
@@ -1204,7 +1201,7 @@ class Neo4jClient:
             WHERE coalesce(e.quarantined, false) = false
             OPTIONAL MATCH (c:Chunk)-[:MENTIONS]->(e)
             OPTIONAL MATCH (c)-[:PART_OF]->(d:Document)
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND ($valid_at IS NULL OR (
                   d IS NOT NULL
                   AND (d.valid_from IS NULL OR d.valid_from <= datetime($valid_at))
@@ -1259,7 +1256,7 @@ class Neo4jClient:
             """
             UNWIND $chunk_ids AS cid
             MATCH (c:Chunk {id: cid})-[:MENTIONS]->(e:Entity)
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND e.embedding IS NOT NULL AND size(e.embedding) > 0
               AND coalesce(e.quarantined, false) = false
             RETURN cid          AS chunk_id,
@@ -1417,7 +1414,7 @@ class Neo4jClient:
         return await self.run(
             """
             MATCH (c:Chunk)-[:MENTIONS]->(e:Entity)
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND coalesce(e.quarantined, false) = false
             RETURN DISTINCT e.id AS id, e.name AS name, e.type AS type
             """,
@@ -1427,11 +1424,9 @@ class Neo4jClient:
     async def get_all_relations(self, tenant: str = "default") -> list[dict]:
         return await self.run(
             """
-            MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
-            OPTIONAL MATCH (d:Document {id: r.source_doc_id})
+            MATCH (s:Entity)-[r:RELATES_TO {tenant: $tenant}]->(t:Entity)
             WHERE coalesce(s.quarantined, false) = false
               AND coalesce(t.quarantined, false) = false
-              AND ($tenant = 'default' OR r.source_doc_id IS NULL OR d.tenant = $tenant)
             RETURN s.id AS source_id, t.id AS target_id, r.relation AS relation,
                    coalesce(r.weight, r.confidence, 1.0) AS weight
             """,

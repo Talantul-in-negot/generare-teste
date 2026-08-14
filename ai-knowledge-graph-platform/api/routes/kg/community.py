@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.graph.corpus_revision import CorpusMutation
 
@@ -15,7 +15,6 @@ router = APIRouter()
 # ── Incremental Community Detection ──────────────────────────────────────────
 
 class IncrementalRebuildRequest(BaseModel):
-    tenant: str = "default"
     dry_run: bool = False
 
 
@@ -24,7 +23,7 @@ class IncrementalRebuildRequest(BaseModel):
     dependencies=[Depends(require_scope("read"))],
     summary="Show how many entities changed since the last community build",
 )
-async def incremental_community_summary(tenant: str = "default"):
+async def incremental_community_summary(tenant: str = Depends(get_tenant)):
     from graphrag.graph.incremental_community import IncrementalCommunityDetector
     detector = IncrementalCommunityDetector(get_neo4j())
     return await detector.community_change_summary(tenant=tenant)
@@ -35,17 +34,17 @@ async def incremental_community_summary(tenant: str = "default"):
     dependencies=[Depends(require_scope("write"))],
     summary="Rebuild only communities containing recently changed entities",
 )
-async def incremental_rebuild_affected(request: IncrementalRebuildRequest):
+async def incremental_rebuild_affected(request: IncrementalRebuildRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.incremental_community import IncrementalCommunityDetector
     neo4j = get_neo4j()
     detector = IncrementalCommunityDetector(neo4j)
     if request.dry_run:
         return await detector.rebuild_affected_communities(
-            tenant=request.tenant, dry_run=True,
+            tenant=tenant, dry_run=True,
         )
-    async with CorpusMutation(neo4j, request.tenant, "incremental_community_rebuild") as mutation:
+    async with CorpusMutation(neo4j, tenant, "incremental_community_rebuild") as mutation:
         result = await detector.rebuild_affected_communities(
-            tenant=request.tenant, dry_run=False, publish_revision=False,
+            tenant=tenant, dry_run=False, publish_revision=False,
         )
     result["corpus_revision"] = mutation.revision
     return result
@@ -56,7 +55,7 @@ async def incremental_rebuild_affected(request: IncrementalRebuildRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Manually record a community rebuild point (normally set automatically)",
 )
-async def record_rebuild_point(tenant: str = "default"):
+async def record_rebuild_point(tenant: str = Depends(get_tenant)):
     from graphrag.graph.incremental_community import IncrementalCommunityDetector
     detector = IncrementalCommunityDetector(get_neo4j())
     rp_id = await detector.record_rebuild_point(tenant=tenant)
@@ -70,7 +69,7 @@ async def record_rebuild_point(tenant: str = "default"):
     dependencies=[Depends(require_scope("read"))],
     summary="List community rebuild history with graph metrics",
 )
-async def community_history(tenant: str = "default", limit: int = 20):
+async def community_history(tenant: str = Depends(get_tenant), limit: int = 20):
     """
     Returns recent community rebuild snapshots from GraphSnapshot nodes,
     enriched with entity count, edge count, and community coherence.
@@ -141,7 +140,7 @@ async def community_history(tenant: str = "default", limit: int = 20):
     dependencies=[Depends(require_scope("write"))],
     summary="Build HDBSCAN semantic communities as a parallel signal to Leiden",
 )
-async def build_semantic_communities(tenant: str = "default"):
+async def build_semantic_communities(tenant: str = Depends(get_tenant)):
     from graphrag.graph.community_builder import CommunityBuilder
     neo4j = get_neo4j()
     builder = CommunityBuilder(tenant=tenant)

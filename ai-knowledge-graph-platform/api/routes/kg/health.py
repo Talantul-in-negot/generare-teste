@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 from graphrag.graph.neo4j_client import get_neo4j
 
 router = APIRouter()
@@ -15,7 +15,6 @@ router = APIRouter()
 
 class SnapshotCreateRequest(BaseModel):
     label: str
-    tenant: str = "default"
     include_health: bool = True
 
 
@@ -24,12 +23,12 @@ class SnapshotCreateRequest(BaseModel):
     dependencies=[Depends(require_scope("write"))],
     summary="Create a named graph snapshot checkpoint",
 )
-async def create_snapshot(request: SnapshotCreateRequest):
+async def create_snapshot(request: SnapshotCreateRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.graph_snapshots import GraphSnapshotService
     svc = GraphSnapshotService(get_neo4j())
     snap_id = await svc.create_snapshot(
         label=request.label,
-        tenant=request.tenant,
+        tenant=tenant,
         include_health=request.include_health,
     )
     return {"snap_id": snap_id, "label": request.label}
@@ -40,7 +39,7 @@ async def create_snapshot(request: SnapshotCreateRequest):
     dependencies=[Depends(require_scope("read"))],
     summary="List graph snapshots for a tenant",
 )
-async def list_snapshots(tenant: str = "default", limit: int = 50):
+async def list_snapshots(tenant: str = Depends(get_tenant), limit: int = 50):
     from graphrag.graph.graph_snapshots import GraphSnapshotService
     svc = GraphSnapshotService(get_neo4j())
     snapshots = await svc.list_snapshots(tenant=tenant, limit=limit)
@@ -52,7 +51,7 @@ async def list_snapshots(tenant: str = "default", limit: int = 50):
     dependencies=[Depends(require_scope("read"))],
     summary="Return stored metrics from a specific snapshot",
 )
-async def get_snapshot(snap_id: str, tenant: str = "default"):
+async def get_snapshot(snap_id: str, tenant: str = Depends(get_tenant)):
     from graphrag.graph.graph_snapshots import GraphSnapshotService
     svc = GraphSnapshotService(get_neo4j())
     result = await svc.restore_summary(snap_id=snap_id, tenant=tenant)
@@ -66,7 +65,7 @@ async def get_snapshot(snap_id: str, tenant: str = "default"):
     dependencies=[Depends(require_scope("read"))],
     summary="Compute statistical delta between two graph snapshots",
 )
-async def diff_snapshots(snap_id_a: str, snap_id_b: str, tenant: str = "default"):
+async def diff_snapshots(snap_id_a: str, snap_id_b: str, tenant: str = Depends(get_tenant)):
     from graphrag.graph.graph_snapshots import GraphSnapshotService
     svc = GraphSnapshotService(get_neo4j())
     return await svc.diff_snapshots(
@@ -80,7 +79,6 @@ async def diff_snapshots(snap_id_a: str, snap_id_b: str, tenant: str = "default"
 
 class CacheInvalidateRequest(BaseModel):
     entity_names: list[str]
-    tenant: str = "default"
 
 
 @router.post(
@@ -88,14 +86,14 @@ class CacheInvalidateRequest(BaseModel):
     dependencies=[Depends(require_scope("write"))],
     summary="Invalidate cached query results that used any of the given entities",
 )
-async def cache_invalidate(request: CacheInvalidateRequest):
+async def cache_invalidate(request: CacheInvalidateRequest, tenant: str = Depends(get_tenant)):
     from graphrag.retrieval.query_cache import get_query_cache
     cache = await get_query_cache()
     count = await cache.invalidate_for_entities(
         entity_names=request.entity_names,
-        tenant=request.tenant,
+        tenant=tenant,
     )
-    return {"invalidated": count, "tenant": request.tenant}
+    return {"invalidated": count, "tenant": tenant}
 
 
 @router.delete(

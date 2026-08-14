@@ -36,6 +36,7 @@ import structlog
 from graphrag.core.config import get_settings, resolve_tenant_config
 from graphrag.graph.corpus_revision import CorpusMutation
 from graphrag.graph.neo4j_client import get_neo4j
+from graphrag.graph.staleness import staleness_score as compute_staleness
 
 log = structlog.get_logger(__name__)
 
@@ -188,14 +189,10 @@ class PageRankComputer:
         )
         curr = curr_rows[0] if curr_rows else {"entities": 0, "edges": 0}
 
-        def _rel_change(old: int, new: int) -> float:
-            if old == 0:
-                return 1.0 if new > 0 else 0.0
-            return abs(new - old) / old
-
-        entity_drift = _rel_change(snap["entity_count"] or 0, curr["entities"] or 0)
-        edge_drift   = _rel_change(snap["edge_count"]   or 0, curr["edges"]    or 0)
-        staleness_score = round(0.4 * entity_drift + 0.6 * edge_drift, 4)
+        staleness_score, entity_drift, edge_drift = compute_staleness(
+            snap["entity_count"], snap["edge_count"],
+            curr["entities"], curr["edges"],
+        )
         threshold = self._cfg.get("pagerank_growth_threshold", DEFAULT_GROWTH_THRESHOLD)
 
         if staleness_score > threshold:

@@ -18,7 +18,8 @@ async def main():
         "MATCH (e:Entity {tenant:$t}) OPTIONAL MATCH (a:Alias {tenant:$t})-[:ALIAS_OF]->(e) "
         "WITH e, count(a) AS alias_count "
         "RETURN count(e) AS total, sum(CASE WHEN alias_count > 0 THEN 1 ELSE 0 END) AS with_aliases", t=T)
-    total_e = r[0]["total"]; with_aliases = r[0]["with_aliases"]
+    total_e = r[0]["total"]
+    with_aliases = r[0]["with_aliases"]
     alias_coverage = round(with_aliases / total_e * 100, 1) if total_e else 0
 
     r = await neo4j.run(
@@ -56,24 +57,24 @@ async def main():
     out.write(f"Edges               {edges}\n")
     out.write(f"  420 LLM-extracted -> {edges} after dedup + conflict filter.\n\n")
     out.write(f"Alias Coverage      {alias_coverage}%  ({with_aliases}/{total_e} entities have Alias nodes)\n")
-    out.write(f"  Entities with formal Alias nodes in Neo4j.\n")
-    out.write(f"  Low because dedup runs in-memory registry, Alias nodes rarely written.\n")
-    out.write(f"  NOT the same as 48% raw->canonical reduction rate.\n\n")
+    out.write("  Entities with formal Alias nodes in Neo4j.\n")
+    out.write("  Low because dedup runs in-memory registry, Alias nodes rarely written.\n")
+    out.write("  NOT the same as 48% raw->canonical reduction rate.\n\n")
     out.write(f"High-Conf Rate      {high_conf_rate}%\n")
     out.write(f"  Edges with confidence >= 0.75. All {edges} edges pass.\n")
-    out.write(f"  Confidence = LLM quality x document authority level.\n\n")
+    out.write("  Confidence = LLM quality x document authority level.\n\n")
     out.write(f"Contradiction /1k   {contradiction_rate}  ({conflicts} open conflicts)\n")
     out.write(f"  {conflicts} conflicts / {edges} edges x 1000.\n")
-    out.write(f"  RED because threshold >5.0=critical, calibrated for typical enterprise data.\n")
-    out.write(f"  In aerospace regs FAA/EASA/manufacturer contradictions are normal.\n")
-    out.write(f"  The system DETECTS them - that is the value, not a flaw.\n\n")
+    out.write("  RED because threshold >5.0=critical, calibrated for typical enterprise data.\n")
+    out.write("  In aerospace regs FAA/EASA/manufacturer contradictions are normal.\n")
+    out.write("  The system DETECTS them - that is the value, not a flaw.\n\n")
     out.write(f"Orphan Rate         {orphan_rate}%  ({orphans} isolated entities)\n")
-    out.write(f"  0% = every entity connects to at least one other. Fully connected.\n\n")
+    out.write("  0% = every entity connects to at least one other. Fully connected.\n\n")
     out.write(f"Community Coherence {coherence}%\n")
-    out.write(f"  Leiden algo quality score across 39 communities.\n")
-    out.write(f"  94% = edges mostly stay within their community cluster.\n\n")
+    out.write("  Leiden algo quality score across 39 communities.\n")
+    out.write("  94% = edges mostly stay within their community cluster.\n\n")
     out.write(f"Alias nodes in DB   {alias_nodes}\n")
-    out.write(f"  Explicit ALIAS_OF edges in Neo4j - explains the low 14.7% coverage.\n")
+    out.write("  Explicit ALIAS_OF edges in Neo4j - explains the low 14.7% coverage.\n")
     out.write("\n==============================================\n")
 
 asyncio.run(main())

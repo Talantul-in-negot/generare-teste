@@ -71,3 +71,14 @@ mcp>=1.2.0
 
 # ── Live E2E tests (Docker-backed Neo4j and Redis) ────────────────────────────
 testcontainers>=4.15.0
+
+# ── Entity resolution ─────────────────────────────────────────────────────────
+# Stage 2 (fuzzy / Levenshtein >= 85) of the alias-resolution pipeline.
+# alias_registry.py imports this behind a try/except that silently skips the
+# stage when it is absent, so an undeclared rapidfuzz meant a documented
+# pipeline stage was a no-op on every clean install.
+rapidfuzz>=3.9.0
+
+# ── Backup targets ────────────────────────────────────────────────────────────
+# scripts/kg_backup.py uses boto3 for `--output s3://...`.
+boto3>=1.34.0

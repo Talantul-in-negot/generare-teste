@@ -195,6 +195,16 @@ class OntologyRegistry:
             version=self._version_id,
         )
 
+    @property
+    def is_loaded(self) -> bool:
+        """True once load() has populated the type and relation vocabularies.
+
+        Public because callers legitimately need to know: the ingestion
+        extractor gates ontology validation on it and previously reached into
+        ``registry._loaded`` directly.
+        """
+        return self._loaded
+
     def validate_extraction(
         self,
         entities: list,
@@ -454,7 +464,7 @@ class OntologyRegistry:
         count_rows = await self._neo4j.run(
             """
             MATCH (e:Entity {type: $old_type})
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND NOT e.quarantined = true
             RETURN count(e) AS n
             """,
@@ -485,7 +495,7 @@ class OntologyRegistry:
         await self._neo4j.run(
             """
             MATCH (e:Entity {type: $old_type})
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
             SET e.type             = $new_type,
                 e.type_migrated_from = $old_type,
                 e.type_migrated_at  = datetime()
@@ -499,7 +509,7 @@ class OntologyRegistry:
         wl_rows = await self._neo4j.run(
             """
             MATCH (wl:WikidataLink {entity_type: $old_type})
-            WHERE ($tenant = 'default' OR wl.tenant = $tenant)
+            WHERE (wl.tenant = $tenant)
             SET wl.entity_type = $new_type
             RETURN count(wl) AS n
             """,
@@ -513,7 +523,7 @@ class OntologyRegistry:
         await self._neo4j.run(
             """
             MATCH ()-[r:RELATES_TO]->()
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
               AND r.src_type = $old_type
             SET r.src_type = $new_type
             """,
@@ -522,7 +532,7 @@ class OntologyRegistry:
         await self._neo4j.run(
             """
             MATCH ()-[r:RELATES_TO]->()
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
               AND r.tgt_type = $old_type
             SET r.tgt_type = $new_type
             """,
@@ -534,7 +544,7 @@ class OntologyRegistry:
             await self._neo4j.run(
                 f"""
                 MATCH (stmt:Statement)
-                WHERE ($tenant = 'default' OR stmt.tenant = $tenant)
+                WHERE (stmt.tenant = $tenant)
                   AND stmt.{field} = $old_type
                 SET stmt.{field} = $new_type
                 """,

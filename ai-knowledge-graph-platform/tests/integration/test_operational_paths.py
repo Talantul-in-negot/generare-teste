@@ -277,18 +277,37 @@ class TestTenantScopedContradiction:
         assert conflicts == []
 
     @pytest.mark.asyncio
-    async def test_scan_none_tenant_omits_tenant_param(self, neo4j_mock):
-        """scan(tenant=None) does not pass a tenant kwarg to any Neo4j call."""
+    async def test_scan_without_a_tenant_refuses_to_run(self, neo4j_mock):
+        """scan(tenant=None) must raise, not scan every tenant.
+
+        This previously asserted the inverse — that a None tenant produced
+        Neo4j calls with no tenant kwarg — which is exactly the cross-tenant
+        scan the guard now prevents. A falsy tenant dropped the filter instead
+        of failing, so an unscoped call silently read the whole graph.
+        """
         from graphrag.graph.contradiction_detector import ContradictionDetector
 
         neo4j_mock.run = AsyncMock(return_value=[])
         detector = ContradictionDetector(neo4j_mock)
-        await detector.scan(tenant=None)
 
+        with pytest.raises(ValueError, match="tenant is required"):
+            await detector.scan(tenant=None)
+
+        neo4j_mock.run.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_scan_binds_the_tenant_into_every_query(self, neo4j_mock):
+        from graphrag.graph.contradiction_detector import ContradictionDetector
+
+        neo4j_mock.run = AsyncMock(return_value=[])
+        detector = ContradictionDetector(neo4j_mock)
+        await detector.scan(tenant="acme")
+
+        assert neo4j_mock.run.call_args_list, "scan issued no queries"
         for call in neo4j_mock.run.call_args_list:
             kwargs = call.kwargs if hasattr(call, "kwargs") else call[1]
-            assert "tenant" not in kwargs, (
-                f"Expected no tenant kwarg but found one in: {call}"
+            assert kwargs.get("tenant") == "acme", (
+                f"query not scoped to the tenant: {call}"
             )
 
 

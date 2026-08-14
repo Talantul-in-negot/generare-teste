@@ -53,7 +53,7 @@ class DocumentAuthorityService:
         previous = await self._neo4j.run(
             """
             MATCH (d:Document {id: $doc_id})
-            WHERE ($tenant = 'default' OR d.tenant = $tenant)
+            WHERE (d.tenant = $tenant)
             RETURN d.authority_level AS authority_level
             """,
             doc_id=doc_id,
@@ -63,7 +63,7 @@ class DocumentAuthorityService:
         await self._neo4j.run(
             """
             MATCH (d:Document {id: $doc_id})
-            WHERE ($tenant = 'default' OR d.tenant = $tenant)
+            WHERE (d.tenant = $tenant)
             SET d.authority_level = $level,
                 d.authority_updated_at = datetime()
             """,

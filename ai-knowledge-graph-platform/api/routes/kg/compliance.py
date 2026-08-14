@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 from graphrag.graph.neo4j_client import get_neo4j
 
 router = APIRouter()
@@ -16,14 +16,12 @@ router = APIRouter()
 class ForgetEntityRequest(BaseModel):
     entity_name: str
     entity_type: str
-    tenant: str = "default"
     requested_by: str = "dpo"
     request_id: str = ""
 
 
 class ForgetDocumentRequest(BaseModel):
     doc_id: str
-    tenant: str = "default"
     requested_by: str = "dpo"
     request_id: str = ""
 
@@ -33,13 +31,13 @@ class ForgetDocumentRequest(BaseModel):
     dependencies=[Depends(require_scope("write"))],
     summary="Permanently erase all data for a named entity (GDPR right-to-be-forgotten)",
 )
-async def gdpr_forget_entity(request: ForgetEntityRequest):
+async def gdpr_forget_entity(request: ForgetEntityRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.gdpr import GDPRService
     svc = GDPRService(get_neo4j())
     return await svc.forget_entity(
         entity_name=request.entity_name,
         entity_type=request.entity_type,
-        tenant=request.tenant,
+        tenant=tenant,
         requested_by=request.requested_by,
         request_id=request.request_id,
     )
@@ -50,12 +48,12 @@ async def gdpr_forget_entity(request: ForgetEntityRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Erase all data exclusively sourced from a document (GDPR erasure)",
 )
-async def gdpr_forget_document(request: ForgetDocumentRequest):
+async def gdpr_forget_document(request: ForgetDocumentRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.gdpr import GDPRService
     svc = GDPRService(get_neo4j())
     return await svc.forget_document(
         doc_id=request.doc_id,
-        tenant=request.tenant,
+        tenant=tenant,
         requested_by=request.requested_by,
         request_id=request.request_id,
     )
@@ -66,7 +64,7 @@ async def gdpr_forget_document(request: ForgetDocumentRequest):
     dependencies=[Depends(require_scope("read"))],
     summary="Return the GDPR deletion audit log for a tenant",
 )
-async def gdpr_audit_log(tenant: str = "default", limit: int = 100):
+async def gdpr_audit_log(tenant: str = Depends(get_tenant), limit: int = 100):
     from graphrag.graph.gdpr import GDPRService
     svc = GDPRService(get_neo4j())
     return await svc.deletion_audit_log(tenant=tenant, limit=limit)
@@ -82,7 +80,6 @@ class PIIScanRequest(BaseModel):
 class PIITagRequest(BaseModel):
     entity_name: str
     entity_type: str
-    tenant: str = "default"
     reason: str = ""
 
 
@@ -125,13 +122,13 @@ async def pii_redact(request: PIIScanRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Mark an entity as PII-sensitive in Neo4j",
 )
-async def pii_tag_entity(request: PIITagRequest):
+async def pii_tag_entity(request: PIITagRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.pii_guard import PIIGuard
     guard = PIIGuard(get_neo4j())
     await guard.tag_entity_pii(
         entity_name=request.entity_name,
         entity_type=request.entity_type,
-        tenant=request.tenant,
+        tenant=tenant,
         reason=request.reason,
     )
     return {"status": "tagged"}
@@ -142,7 +139,7 @@ async def pii_tag_entity(request: PIITagRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Tag all PERSON entities in a tenant as PII-sensitive",
 )
-async def pii_auto_tag_persons(tenant: str = "default"):
+async def pii_auto_tag_persons(tenant: str = Depends(get_tenant)):
     from graphrag.graph.pii_guard import PIIGuard
     guard = PIIGuard(get_neo4j())
     count = await guard.auto_tag_persons(tenant=tenant)
@@ -154,7 +151,7 @@ async def pii_auto_tag_persons(tenant: str = "default"):
     dependencies=[Depends(require_scope("read"))],
     summary="Scan all chunks of a document for PII (diagnostic only — no mutations)",
 )
-async def pii_scan_document(doc_id: str, tenant: str = "default"):
+async def pii_scan_document(doc_id: str, tenant: str = Depends(get_tenant)):
     from graphrag.graph.pii_guard import PIIGuard
     guard = PIIGuard(get_neo4j())
     return await guard.scan_document(doc_id=doc_id, tenant=tenant)
@@ -165,7 +162,7 @@ async def pii_scan_document(doc_id: str, tenant: str = "default"):
     dependencies=[Depends(require_scope("read"))],
     summary="List all entities tagged as PII-sensitive",
 )
-async def pii_inventory(tenant: str = "default", limit: int = 100):
+async def pii_inventory(tenant: str = Depends(get_tenant), limit: int = 100):
     from graphrag.graph.pii_guard import PIIGuard
     guard = PIIGuard(get_neo4j())
     return await guard.list_pii_entities(tenant=tenant, limit=limit)

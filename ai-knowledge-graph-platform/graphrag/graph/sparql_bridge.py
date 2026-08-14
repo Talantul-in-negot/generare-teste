@@ -27,11 +27,46 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import re
+
 import structlog
 from rdflib import Graph, Namespace
 from rdflib.namespace import OWL, RDF, RDFS, XSD
 
 log = structlog.get_logger(__name__)
+
+# Read-only forms. Anything else (INSERT/DELETE/LOAD/CLEAR/DROP/CREATE/ADD/
+# MOVE/COPY) mutates the in-memory graph and has no business being reachable
+# from a read-scoped HTTP endpoint.
+_ALLOWED_FORMS = ("SELECT", "ASK", "CONSTRUCT", "DESCRIBE")
+
+# SERVICE is SPARQL 1.1 federation: rdflib will issue an outbound HTTP request
+# to whatever endpoint the query names. Left open, /kg/sparql is a server-side
+# request-forgery primitive against anything the API container can reach.
+_FORBIDDEN = ("SERVICE", "LOAD", "INSERT", "DELETE", "CLEAR", "DROP",
+              "CREATE", "ADD", "MOVE", "COPY")
+
+_COMMENT_RE = re.compile(r"#[^\n]*")
+_STRING_RE  = re.compile(r'"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'')
+
+
+def _reject_unsafe_sparql(sparql: str) -> None:
+    """Raise ValueError unless ``sparql`` is a read-only, non-federated query.
+
+    Comments and string literals are stripped first so a keyword appearing
+    inside them (e.g. a label containing the word "delete") does not trip the
+    check, and conversely so a forbidden keyword cannot be smuggled past it.
+    """
+    stripped = _STRING_RE.sub('""', _COMMENT_RE.sub("", sparql))
+    upper = stripped.upper()
+
+    if not any(re.search(rf"\b{form}\b", upper) for form in _ALLOWED_FORMS):
+        raise ValueError(
+            f"Only {', '.join(_ALLOWED_FORMS)} SPARQL queries are permitted"
+        )
+    for kw in _FORBIDDEN:
+        if re.search(rf"\b{kw}\b", upper):
+            raise ValueError(f"'{kw}' is not permitted in a read-only SPARQL query")
 
 # Mirror the namespaces defined in scripts/export_rdf.py
 BASE  = Namespace("https://graphrag.example.com/ontology#")
@@ -63,6 +98,8 @@ class SPARQLBridge:
 
     def __init__(self, graph: Graph) -> None:
         self._g = graph
+
+    # ── Query safety ───────────────────────────────────────────────────────────
 
     # ── Constructors ───────────────────────────────────────────────────────────
 
@@ -111,6 +148,8 @@ class SPARQLBridge:
         ValueError
             If the SPARQL is syntactically or semantically invalid.
         """
+        _reject_unsafe_sparql(sparql)
+
         ns = {**self._DEFAULT_NS, **(init_ns or {})}
         init_ns_rdflib = {
             k: Namespace(v) if isinstance(v, str) else v

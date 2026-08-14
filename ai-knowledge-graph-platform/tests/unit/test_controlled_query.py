@@ -34,6 +34,14 @@ def test_entity_type_question_normalizes_type_without_executable_query_input():
     assert "$entity_type" in plan.cypher
 
 
+def test_evidence_gap_question_uses_the_tenant_scoped_fixed_template():
+    plan = plan_controlled_query("Which suppliers lack verified emissions evidence?", tenant="sustainability")
+
+    assert plan.intent == "suppliers_missing_emissions_evidence"
+    assert plan.params == {"tenant": "sustainability", "limit": 25}
+    assert "HAS_EVIDENCE" in plan.cypher and "tenant: $tenant" in plan.cypher
+
+
 def test_unsupported_question_fails_explicitly():
     with pytest.raises(ControlledQueryError, match="Unsupported graph-fact"):
         plan_controlled_query("MATCH (n) DETACH DELETE n", tenant="sustainability")

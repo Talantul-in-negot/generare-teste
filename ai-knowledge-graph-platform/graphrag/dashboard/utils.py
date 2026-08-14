@@ -333,6 +333,6 @@ def err(msg: str) -> html.Div:
         html.Span(msg),
     ], style={
         "color": BAD, "padding": "14px 16px", "fontFamily": FONT,
-        "background": "#FCEBEB", "border": f"1px solid #F4C7C7",
+        "background": "#FCEBEB", "border": "1px solid #F4C7C7",
         "borderRadius": "10px", "margin": "10px 0", "fontSize": "13px",
     })

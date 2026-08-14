@@ -21,12 +21,10 @@ ingestion batch.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import structlog
 from dataclasses import dataclass
-from functools import lru_cache
 
 log = structlog.get_logger(__name__)
 
@@ -115,14 +113,27 @@ def _normalize_ro(text: str) -> str:
 
 
 async def _get_redis():
-    """Return an async Redis client or None if unavailable."""
+    """Return an async Redis client, or None if Redis is unavailable.
+
+    The failure is logged rather than swallowed: previously a Redis auth
+    failure, a DNS failure and "Redis is not configured here" were all
+    indistinguishable, so a misconfigured cache silently degraded every alias
+    lookup to the slower Neo4j path with no signal anywhere.
+    """
     try:
         import redis.asyncio as aioredis
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    except ImportError:
+        log.debug("alias_registry.redis_not_installed")
+        return None
+
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    try:
         client = aioredis.from_url(redis_url, decode_responses=True)
         await client.ping()
         return client
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — redis-py raises a wide family here
+        log.warning("alias_registry.redis_unavailable",
+                    error=str(exc)[:160], hint="falling back to Neo4j alias lookups")
         return None
 
 
@@ -441,15 +452,17 @@ async def load_alias_registry(neo4j_client=None, tenant: str = "default") -> Ali
                 registry._loaded = True
                 log.info("alias_registry.redis_warm_load", tenant=tenant,
                          entries=len(registry._exact))
-                await redis.aclose()
+                # No aclose() here — the finally block below owns the close.
+                # Closing in both places double-closed the client and relied on
+                # the finally's bare `except Exception: pass` to swallow it.
                 return registry
         except Exception as exc:
             log.warning("alias_registry.redis_load_failed", error=str(exc))
         finally:
             try:
                 await redis.aclose()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — close failure must not mask the result
+                log.debug("alias_registry.redis_close_failed", error=str(exc))
 
     # Redis miss or unavailable — load from Neo4j (also pushes to Redis)
     await registry.load()

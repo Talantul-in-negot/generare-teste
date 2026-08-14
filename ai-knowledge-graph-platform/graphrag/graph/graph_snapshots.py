@@ -236,7 +236,7 @@ class GraphSnapshotService:
         return await self._neo4j.run(
             """
             MATCH (s:GraphSnapshot)
-            WHERE ($tenant = 'default' OR s.tenant = $tenant)
+            WHERE (s.tenant = $tenant)
             RETURN s.id              AS id,
                    s.label           AS label,
                    s.tenant          AS tenant,
@@ -273,7 +273,7 @@ class GraphSnapshotService:
         rows = await self._neo4j.run(
             """
             MATCH (s:GraphSnapshot {id: $snap_id})
-            WHERE ($tenant = 'default' OR s.tenant = $tenant)
+            WHERE (s.tenant = $tenant)
             RETURN s {.*} AS props
             """,
             snap_id=snap_id,
@@ -304,7 +304,7 @@ class GraphSnapshotService:
         rows = await self._neo4j.run(
             """
             MATCH (a:GraphSnapshot {id: $id_a}), (b:GraphSnapshot {id: $id_b})
-            WHERE ($tenant = 'default' OR (a.tenant = $tenant AND b.tenant = $tenant))
+            WHERE a.tenant = $tenant AND b.tenant = $tenant
             RETURN a.entity_count      AS a_entities,   b.entity_count      AS b_entities,
                    a.edge_count        AS a_edges,       b.edge_count        AS b_edges,
                    a.conflict_count    AS a_conflicts,   b.conflict_count    AS b_conflicts,
@@ -351,24 +351,24 @@ class GraphSnapshotService:
         rows = await self._neo4j.run(
             """
             MATCH (e:Entity)
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND coalesce(e.quarantined, false) = false
             WITH count(e) AS entity_count
             OPTIONAL MATCH ()-[r:RELATES_TO]->()
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
             WITH entity_count, count(r) AS edge_count, avg(r.confidence) AS avg_conf
             OPTIONAL MATCH ()-[nr:NEGATIVE_RELATES_TO]->()
-            WHERE ($tenant = 'default' OR nr.tenant = $tenant)
+            WHERE (nr.tenant = $tenant)
             WITH entity_count, edge_count, avg_conf, count(nr) AS neg_count
             OPTIONAL MATCH (c:Conflict {status: 'open'})
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
             WITH entity_count, edge_count, avg_conf, neg_count, count(c) AS conflict_count
             OPTIONAL MATCH (cm:Community)
-            WHERE ($tenant = 'default' OR cm.tenant = $tenant)
+            WHERE (cm.tenant = $tenant)
             WITH entity_count, edge_count, avg_conf, neg_count, conflict_count,
                  count(cm) AS community_count
             OPTIONAL MATCH (orphan:Entity)
-            WHERE ($tenant = 'default' OR orphan.tenant = $tenant)
+            WHERE (orphan.tenant = $tenant)
               AND coalesce(orphan.quarantined, false) = false
               AND NOT (orphan)<-[:MENTIONS]-(:Chunk)
             RETURN entity_count, edge_count, avg_conf, neg_count,

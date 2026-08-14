@@ -18,7 +18,6 @@ task; health.stop() is called in the finally block.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from aiohttp import web
 

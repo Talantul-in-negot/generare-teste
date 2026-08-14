@@ -27,6 +27,8 @@ from uuid import uuid4
 
 import structlog
 
+from graphrag.graph.staleness import staleness_score as compute_staleness
+
 log = structlog.get_logger(__name__)
 
 DEFAULT_STALENESS_THRESHOLD = 0.15   # 15% graph change triggers rebuild
@@ -64,12 +66,10 @@ class CommunityManager:
         stats_rows = await self._neo4j.run(
             """
             MATCH (c:Chunk)-[:MENTIONS]->(e:Entity)
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND NOT e.quarantined = true
             WITH count(DISTINCT e) AS entity_count
-            MATCH ()-[r:RELATES_TO]->()
-            OPTIONAL MATCH (d:Document {id: r.source_doc_id})
-            WHERE $tenant = 'default' OR r.source_doc_id IS NULL OR d.tenant = $tenant
+            MATCH ()-[r:RELATES_TO {tenant: $tenant}]->()
             WITH entity_count, count(r) AS edge_count
             MATCH (c:Community)
             WHERE c.tenant = $tenant
@@ -149,12 +149,10 @@ class CommunityManager:
         curr_rows = await self._neo4j.run(
             """
             MATCH (c:Chunk)-[:MENTIONS]->(e:Entity)
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND NOT e.quarantined = true
             WITH count(DISTINCT e) AS entities
-            MATCH ()-[r:RELATES_TO]->()
-            OPTIONAL MATCH (d:Document {id: r.source_doc_id})
-            WHERE $tenant = 'default' OR r.source_doc_id IS NULL OR d.tenant = $tenant
+            MATCH ()-[r:RELATES_TO {tenant: $tenant}]->()
             RETURN entities, count(r) AS edges
             """,
             tenant=tenant,
@@ -164,17 +162,11 @@ class CommunityManager:
 
         curr = curr_rows[0]
 
-        def _rel_change(old: int, new: int) -> float:
-            if old == 0:
-                return 1.0 if new > 0 else 0.0
-            return abs(new - old) / old
-
-        entity_drift = _rel_change(snap["entity_count"] or 0, curr["entities"] or 0)
-        edge_drift   = _rel_change(snap["edge_count"]   or 0, curr["edges"]    or 0)
-
-        # Weighted average: edges matter more for community structure
-        staleness_score = round(0.4 * entity_drift + 0.6 * edge_drift, 4)
-        should_rebuild  = staleness_score > self._threshold
+        staleness_score, entity_drift, edge_drift = compute_staleness(
+            snap["entity_count"], snap["edge_count"],
+            curr["entities"], curr["edges"],
+        )
+        should_rebuild = staleness_score > self._threshold
 
         result = {
             "staleness_score": staleness_score,

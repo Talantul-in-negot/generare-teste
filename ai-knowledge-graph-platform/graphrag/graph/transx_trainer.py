@@ -229,7 +229,7 @@ class TransXTrainer:
             "entities":          len(entity_embs),
             "epochs":            epochs,
             "final_loss":        round(epoch_losses[-1], 5) if epoch_losses else 0,
-            "loss_curve":        [round(l, 5) for l in epoch_losses[::max(1, epochs // 20)]],
+            "loss_curve":        [round(loss, 5) for loss in epoch_losses[::max(1, epochs // 20)]],
             "relations_updated": stored,
         }
         log.info("transx_train.complete", **summary)

@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import os
 import signal
 import sys
 
@@ -16,12 +17,22 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="repla
 import structlog
 
 from graphrag.messaging.consumers import EvaluationConsumer
+from graphrag.workers.health_server import HealthServer
 
 log = structlog.get_logger(__name__)
+
+# compose.dev.yaml publishes 8083 for this worker and sets WORKER_HEALTH_PORT,
+# but nothing ever bound the port — unlike ingestion_worker (8081) and
+# query_worker (8082), this entry point never started a HealthServer, so any
+# orchestrator readiness probe against it failed permanently.
+HEALTH_PORT = int(os.getenv("WORKER_HEALTH_PORT", "8083"))
 
 
 async def main():
     log.info("evaluation_worker.starting")
+    health = HealthServer(port=HEALTH_PORT, worker_name="evaluation_worker")
+    await health.start()
+
     consumer = EvaluationConsumer()
     task = asyncio.create_task(consumer.start())
 

@@ -131,7 +131,7 @@ def _splade_rerank(query: str, candidates: list[dict]) -> tuple[list[dict], floa
     if not candidates:
         return candidates, 0.0
     t0 = time.perf_counter()
-    torch = _get_splade()[2]
+    _get_splade()   # warm the model before timing
     query_vec = _splade_encode([query])           # (1, vocab)
     doc_vecs = _splade_encode([c["text"] for c in candidates])  # (n, vocab)
     scores = (doc_vecs @ query_vec.T).squeeze(-1)  # (n,)

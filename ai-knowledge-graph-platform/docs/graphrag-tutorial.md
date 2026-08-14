@@ -8,7 +8,7 @@ integration, ETL pipelines, cloud).
 Cross-references: [graphrag-terminology.md](graphrag-terminology.md) (A–Z
 glossary), [cypher-patterns.md](cypher-patterns.md) (query cookbook),
 [knowledge-graph-architecture.md](knowledge-graph-architecture.md) (data
-model). Role-specific interview material is archived under [archive/job-search](archive/job-search).
+model).
 
 ---
 
@@ -26,8 +26,8 @@ of facts across documents that never mention each other.
 (Boeing 737-800)    -[MANUFACTURED_BY]-> (Boeing)
 ```
 
-**In this project:** stored in Neo4j, 39 modules in `graphrag/graph/`.
-Automotive tenant: 3,013 entities, 9,364 edges from 14 IATF documents.
+**In this project:** stored in Neo4j, 51 modules in `graphrag/graph/`.
+Automotive tenant: 3,013 entities, 9,364 edges from 30 IATF documents.
 
 ### 1.2 Why GraphRAG over standard RAG?
 
@@ -441,9 +441,11 @@ distinction is why the retired `multi_source` strategy was wrong (A135).
 
 - **RAGAS** (`graphrag/evaluation/ragas_evaluator.py`): faithfulness,
   answer relevancy, context precision/recall — LLM-as-judge on a 20% query
-  sample. Automotive golden set: **0.950 faithfulness, 10/10 deterministic
-  gates**. Aerospace: ~0.87.
-- **Golden datasets** (`data/eval_golden/`): 10 questions per tenant across
+  sample. No committed results file backs a per-tenant faithfulness figure
+  for the automotive tenant — `evals/` holds aerospace faithfulness plus the
+  hop-ranking, MMR and SPLADE benchmarks only. Re-run
+  `scripts/run_golden_eval.py --tenant automotive` before quoting a number.
+- **Golden datasets** (`data/eval_golden/`): 9–10 questions per tenant across
   single-hop / multi-hop / contradiction / negative types, each with
   `expected_citations`, `required_answer_terms`, `forbidden_terms` — a
   deterministic gate independent of the LLM judge. Known-failing edge
@@ -465,7 +467,7 @@ distinction is why the retired `multi_source` strategy was wrong (A135).
 
 - **FastAPI** (`api/main.py`): `/query` (async — publishes to RabbitMQ,
   poll for result), `/graph/entities/{id}/provenance`, `/kg/conflicts`,
-  `/kg/health/snapshot`, `/kpis/*`, `/demo` (interactive UI with
+  `/kg/snapshots`, `/kpis/*`, `/demo` (interactive UI with
   chain-of-thought trace steps).
 - **Workers**: consume the queue, run the five-stage retrieval pipeline, perform the separate LLM synthesis step, and write results to Redis.
 - Clean separation: API never touches Neo4j for queries — everything goes
@@ -577,22 +579,3 @@ private networking, persistent volumes, and per-service scaling on Fly.io —
 the same Docker images run on Cloud Run/GCE unchanged; the concepts (VPC,
 volumes, service discovery, secrets) map one-to-one."
 
----
-
-## Part 10 — JD Compliance Matrix
-
-| JD line | Evidence in this project |
-|---|---|
-| Cypher expertise | 39 graph modules, patterns cookbook, batched UNWIND writes, PROFILE-verified indexes |
-| Neo4j | core store: graph + vector + full-text in one engine, multi-tenant |
-| Python | entire platform (~30k LOC, 380 tests) |
-| Graph data modeling | property-graph schema, ontology-validated, bitemporal, multi-tenant |
-| PageRank | GDS `gds.pageRank.stream`, live: `POST/GET /kg/pagerank/*` + `scripts/pagerank_compute.py` (§4.1) |
-| Community detection | multi-resolution Leiden + LLM summaries, coherence tracked (§4.2) |
-| ML integration | GNN re-scoring, TransE, embeddings, RAGAS LLM-judge, cross-encoder (§6) |
-| ETL pipelines | 8-step async ingestion with DLQs, checkpointing, batching (§5) |
-| Clean APIs | FastAPI + async worker split, provenance/conflict/health endpoints (§8) |
-| Cloud (GCP/AWS) | Fly.io production deploy; one-to-one GCP mapping (§9) |
-
-Gaps to state honestly: no hands-on GCP console time (concepts transfer,
-services table above).

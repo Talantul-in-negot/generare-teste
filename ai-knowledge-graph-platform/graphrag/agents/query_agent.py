@@ -27,19 +27,6 @@ class QueryAgent(BaseGraphRAGAgent):
             "well-cited, grounded answer. Prefer hybrid search unless the user specifies local or global."
         )
 
-    def _tools(self) -> list:
-        try:
-            from google.adk.tools import FunctionTool
-            from graphrag.agents.tools.retrieval_tools import local_search, global_search
-            from graphrag.agents.tools.neo4j_tools import get_neighbors
-            return [
-                FunctionTool(local_search),
-                FunctionTool(global_search),
-                FunctionTool(get_neighbors),
-            ]
-        except ImportError:
-            return []
-
     async def run(self, message: QueryMessage) -> QueryResult:
         log.info(
             "query_agent.start",

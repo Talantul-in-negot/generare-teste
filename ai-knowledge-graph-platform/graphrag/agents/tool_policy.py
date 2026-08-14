@@ -40,7 +40,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Awaitable
+from typing import Any, Callable
 
 import structlog
 
@@ -267,9 +267,9 @@ class ToolPolicy:
             if arg_name == "tenant" and value:
                 tenant_scopes = [s for s in self._scopes if s.startswith("tenant:")]
                 if not tenant_scopes:
-                    return (f"no tenant scope granted — tools that accept a "
-                            f"'tenant' argument require an explicit "
-                            f"tenant:<name> scope")
+                    return ("no tenant scope granted — tools that accept a "
+                            "'tenant' argument require an explicit "
+                            "tenant:<name> scope")
                 allowed_tenants = [s.split(":", 1)[1] for s in tenant_scopes]
                 if value not in allowed_tenants:
                     return (f"cross-tenant access denied: caller tenant(s) "
@@ -301,7 +301,6 @@ class ToolPolicy:
 
         # Stub implementations for high-risk tools (real impl in agent tools modules)
         async def _ingest_document(doc_url: str, tenant: str, doc_type: str = "regulatory") -> dict:
-            from graphrag.graph.neo4j_client import get_neo4j
             return {"status": "queued", "doc_url": doc_url, "tenant": tenant}
 
         async def _quarantine_entity(entity_name: str, entity_type: str, tenant: str,

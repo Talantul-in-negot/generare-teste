@@ -42,7 +42,7 @@ CONTRADICTION_PAIRS = {
 
 async def extract_doc(path: Path, extractor) -> tuple[list, list, dict]:
     """Returns (entities, relations, id_to_name_map)."""
-    from graphrag.core.models import Chunk, Document
+    from graphrag.core.models import Document
     from graphrag.ingestion.chunker import chunk_document
 
     text = path.read_text(encoding="utf-8")
@@ -164,7 +164,7 @@ async def main(doc_filter: str | None = None) -> int:
         print("    (none detected — may need lower confidence threshold)")
 
     # ── Per-doc breakdown ──────────────────────────────────────────────────────
-    print(f"\n  Per-document entity counts:")
+    print("\n  Per-document entity counts:")
     for fname, cnt in sorted(entity_counts.items(), key=lambda x: -x[1]):
         print(f"    {fname:50s} {cnt}")
 

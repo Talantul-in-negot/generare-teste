@@ -302,7 +302,7 @@ class GDPRService:
         return await self._neo4j.run(
             """
             MATCH (a:DeletionAudit)
-            WHERE ($tenant = 'default' OR a.tenant = $tenant)
+            WHERE (a.tenant = $tenant)
             RETURN a.id             AS audit_id,
                    a.subject_name   AS subject_name,
                    a.subject_type   AS subject_type,

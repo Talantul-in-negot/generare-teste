@@ -19,7 +19,13 @@ from uuid import NAMESPACE_URL, uuid5
 from pydantic import BaseModel, Field, model_validator
 
 from graphrag.core.models import Chunk, Document, Entity, Relation, SourceType
-from graphrag.graph.source_catalog import SourceEnvelope, SourceKind, SourceMapping, SourceSystem
+from graphrag.graph.source_catalog import (
+    SourceCatalogRepository,
+    SourceEnvelope,
+    SourceKind,
+    SourceMapping,
+    SourceSystem,
+)
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -111,6 +117,10 @@ class SQLiteSourceConnector:
     def __init__(self, path: str | Path):
         self.path = Path(path)
 
+    @property
+    def uri(self) -> str:
+        return str(self.path.resolve())
+
     async def records(
         self, source: SourceSystem, mapping: SourceMapping, *, cursor: str = ""
     ):
@@ -156,6 +166,13 @@ class PostgreSQLSourceConnector:
             raise ValueError("PostgreSQL URL must use postgresql+asyncpg:// or postgresql://")
         self.url = url
         self._engine = None
+
+    @property
+    def uri(self) -> str:
+        """Safe source identity; credentials never enter a persisted KGSource."""
+        from sqlalchemy.engine import make_url
+
+        return str(make_url(self.url).render_as_string(hide_password=True))
 
     def _get_engine(self):
         if self._engine is None:
@@ -293,11 +310,26 @@ class RelationalGraphIngestor:
         if not conforms:
             raise ValueError("relational mapping rejected by SHACL: " + shacl_report)
 
+        # A Document.source_id is a real foreign-key-like graph contract: make
+        # the source and immutable mapping version durable before the document
+        # write so `INGESTED_FROM` can be formed atomically by merge_document.
+        catalog = SourceCatalogRepository(self.graph_writer.neo4j_client)
+        await catalog.upsert_source(SourceSystem(
+            id=mapping.source_id,
+            tenant=mapping.tenant,
+            name=mapping.source_id,
+            kind=SourceKind.DATABASE,
+            uri=self.connector.uri,
+            owner="relational-ingestion",
+            classification="synthetic" if mapping.tenant == "sustainability" else "internal",
+        ))
+        await catalog.add_mapping(mapping.as_source_mapping())
+
         raw = json.dumps(payload, sort_keys=True, default=str)
         document = Document(
             id=str(uuid5(NAMESPACE_URL, f"relational-document:{mapping.source_id}:{mapping.version}")),
             filename=f"relational://{mapping.source_id}/{mapping.version}",
-            source_path=str(self.connector.path),
+            source_path=self.connector.uri,
             raw_text=raw,
             tenant=mapping.tenant,
             source_id=mapping.source_id,

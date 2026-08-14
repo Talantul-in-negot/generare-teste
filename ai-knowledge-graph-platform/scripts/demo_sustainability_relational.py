@@ -11,7 +11,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.ingestion.graph_writer import GraphWriter
 from graphrag.ingestion.relational import (
     EntityTableMapping,
@@ -57,7 +56,7 @@ async def main(path: Path) -> None:
         ],
         ontology_version="synthetic-sustainability-supply-chain@1.0.0",
     )
-    ingestor = RelationalGraphIngestor(SQLiteSourceConnector(path), GraphWriter(get_neo4j(), changed_by="local-demo"))
+    ingestor = RelationalGraphIngestor(SQLiteSourceConnector(path), GraphWriter(changed_by="local-demo"))
     report = await ingestor.ingest(mapping)
     print(f"Ingested {report.entity_rows} relational rows and {report.relation_rows} relation rows for tenant {report.tenant}.")
     print("Provenance: local SQLite source; mapping and ontology versions are stored on the source document.")

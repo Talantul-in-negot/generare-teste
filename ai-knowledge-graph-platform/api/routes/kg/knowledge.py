@@ -6,7 +6,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 from graphrag.graph.corpus_revision import CorpusMutation
 from graphrag.graph.neo4j_client import get_neo4j
 
@@ -21,7 +21,6 @@ class NegativeAssertRequest(BaseModel):
     relation: str
     tgt_name: str
     tgt_type: str
-    tenant: str = "default"
     doc_id: str = ""
     confidence: float = 1.0
     valid_from: str | None = None
@@ -34,7 +33,6 @@ class NegativeRetractRequest(BaseModel):
     relation: str
     tgt_name: str
     tgt_type: str
-    tenant: str = "default"
 
 
 @router.post(
@@ -42,7 +40,7 @@ class NegativeRetractRequest(BaseModel):
     dependencies=[Depends(require_scope("write"))],
     summary="Assert that a relation does NOT hold between two entities",
 )
-async def assert_negative(request: NegativeAssertRequest):
+async def assert_negative(request: NegativeAssertRequest, tenant: str = Depends(get_tenant)):
     """
     Create a NEGATIVE_RELATES_TO edge asserting the relation is absent.
     Triggers a warning if a positive RELATES_TO edge also exists (conflict).
@@ -50,14 +48,14 @@ async def assert_negative(request: NegativeAssertRequest):
     from graphrag.graph.negative_knowledge import NegativeKnowledgeService
     neo4j = get_neo4j()
     svc = NegativeKnowledgeService(neo4j)
-    async with CorpusMutation(neo4j, request.tenant, "negative_assertion") as mutation:
+    async with CorpusMutation(neo4j, tenant, "negative_assertion") as mutation:
         neg_id = await svc.assert_negative(
             src_name=request.src_name,
             src_type=request.src_type,
             relation=request.relation,
             tgt_name=request.tgt_name,
             tgt_type=request.tgt_type,
-            tenant=request.tenant,
+            tenant=tenant,
             doc_id=request.doc_id,
             confidence=request.confidence,
             valid_from=request.valid_from,
@@ -71,18 +69,18 @@ async def assert_negative(request: NegativeAssertRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Retract a negative assertion (remove NEGATIVE_RELATES_TO edge)",
 )
-async def retract_negative(request: NegativeRetractRequest):
+async def retract_negative(request: NegativeRetractRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.negative_knowledge import NegativeKnowledgeService
     neo4j = get_neo4j()
     svc = NegativeKnowledgeService(neo4j)
-    async with CorpusMutation(neo4j, request.tenant, "negative_retraction") as mutation:
+    async with CorpusMutation(neo4j, tenant, "negative_retraction") as mutation:
         deleted = await svc.retract_negative(
             src_name=request.src_name,
             src_type=request.src_type,
             relation=request.relation,
             tgt_name=request.tgt_name,
             tgt_type=request.tgt_type,
-            tenant=request.tenant,
+            tenant=tenant,
         )
     if not deleted:
         raise HTTPException(status_code=404, detail="Negative assertion not found")
@@ -94,7 +92,7 @@ async def retract_negative(request: NegativeRetractRequest):
     dependencies=[Depends(require_scope("read"))],
     summary="Find triples with both positive and negative assertions",
 )
-async def negative_conflicts(tenant: str | None = None, scan_limit: int = 200):
+async def negative_conflicts(tenant: str = Depends(get_tenant), scan_limit: int = 200):
     from graphrag.graph.negative_knowledge import NegativeKnowledgeService
     svc = NegativeKnowledgeService(get_neo4j())
     return await svc.find_positive_negative_conflicts(tenant=tenant, scan_limit=scan_limit)
@@ -105,7 +103,7 @@ async def negative_conflicts(tenant: str | None = None, scan_limit: int = 200):
     dependencies=[Depends(require_scope("read"))],
     summary="List all NEGATIVE_RELATES_TO edges for a tenant",
 )
-async def list_negatives(tenant: str = "default", limit: int = 100):
+async def list_negatives(tenant: str = Depends(get_tenant), limit: int = 100):
     from graphrag.graph.negative_knowledge import NegativeKnowledgeService
     svc = NegativeKnowledgeService(get_neo4j())
     return await svc.list_all_negatives(tenant=tenant, limit=limit)
@@ -167,7 +165,7 @@ async def taxonomy_schema():
     dependencies=[Depends(require_scope("read"))],
     summary="Fetch entities by type with subtype expansion",
 )
-async def entities_by_type(type_name: str, tenant: str = "default",
+async def entities_by_type(type_name: str, tenant: str = Depends(get_tenant),
                             include_subtypes: bool = True, limit: int = 100):
     from graphrag.graph.type_taxonomy import get_type_taxonomy
     tax = get_type_taxonomy(get_neo4j())
@@ -187,7 +185,7 @@ async def entities_by_type(type_name: str, tenant: str = "default",
 async def bitemporal_entities(
     valid_time: str,
     transaction_time: str,
-    tenant: str = "default",
+    tenant: str = Depends(get_tenant),
     limit: int = 500,
 ):
     from graphrag.graph.bitemporal import BitemporalStore
@@ -203,7 +201,7 @@ async def bitemporal_entities(
 async def bitemporal_edges(
     valid_time: str,
     transaction_time: str,
-    tenant: str = "default",
+    tenant: str = Depends(get_tenant),
     limit: int = 1000,
 ):
     from graphrag.graph.bitemporal import BitemporalStore
@@ -219,7 +217,7 @@ async def bitemporal_edges(
 async def bitemporal_diff(
     tt_from: str,
     tt_to: str,
-    tenant: str = "default",
+    tenant: str = Depends(get_tenant),
 ):
     from graphrag.graph.bitemporal import BitemporalStore
     store = BitemporalStore(get_neo4j())
@@ -231,7 +229,7 @@ async def bitemporal_diff(
     dependencies=[Depends(require_scope("read"))],
     summary="High-level graph state at (valid_time, transaction_time)",
 )
-async def bitemporal_report(valid_time: str, transaction_time: str, tenant: str = "default"):
+async def bitemporal_report(valid_time: str, transaction_time: str, tenant: str = Depends(get_tenant)):
     from graphrag.graph.bitemporal import BitemporalStore
     store = BitemporalStore(get_neo4j())
     return await store.time_travel_report(valid_time, transaction_time, tenant)
@@ -245,14 +243,12 @@ class ReifyRequest(BaseModel):
     relation: str
     tgt_name: str
     tgt_type: str
-    tenant: str = "default"
 
 
 class StatementMetaRequest(BaseModel):
     stmt_id: str
     key: str
     value: str
-    tenant: str = "default"
 
 
 class StatementEndorseRequest(BaseModel):
@@ -261,14 +257,12 @@ class StatementEndorseRequest(BaseModel):
     endorser_type: str = "Document"
     confidence: float = 1.0
     note: str = ""
-    tenant: str = "default"
 
 
 class StatementContradictRequest(BaseModel):
     stmt_a_id: str
     stmt_b_id: str
     reason: str = ""
-    tenant: str = "default"
 
 
 @router.post(
@@ -276,18 +270,18 @@ class StatementContradictRequest(BaseModel):
     dependencies=[Depends(require_scope("write"))],
     summary="Create a Statement node from an existing RELATES_TO edge",
 )
-async def reify_relation(request: ReifyRequest):
+async def reify_relation(request: ReifyRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.reification import ReificationService
     neo4j = get_neo4j()
     svc = ReificationService(neo4j)
-    async with CorpusMutation(neo4j, request.tenant, "statement_reification") as mutation:
+    async with CorpusMutation(neo4j, tenant, "statement_reification") as mutation:
         stmt_id = await svc.reify_relation(
             src_name=request.src_name,
             src_type=request.src_type,
             relation=request.relation,
             tgt_name=request.tgt_name,
             tgt_type=request.tgt_type,
-            tenant=request.tenant,
+            tenant=tenant,
         )
     return {"stmt_id": stmt_id, "corpus_revision": mutation.revision}
 
@@ -297,14 +291,14 @@ async def reify_relation(request: ReifyRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Attach a key/value annotation to a Statement node",
 )
-async def add_statement_meta(request: StatementMetaRequest):
+async def add_statement_meta(request: StatementMetaRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.reification import ReificationService
     neo4j = get_neo4j()
     svc = ReificationService(neo4j)
-    async with CorpusMutation(neo4j, request.tenant, "statement_metadata") as mutation:
+    async with CorpusMutation(neo4j, tenant, "statement_metadata") as mutation:
         await svc.add_meta(
             stmt_id=request.stmt_id, key=request.key, value=request.value,
-            tenant=request.tenant,
+            tenant=tenant,
         )
     return {"status": "ok", "corpus_revision": mutation.revision}
 
@@ -314,18 +308,18 @@ async def add_statement_meta(request: StatementMetaRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Add an ENDORSED_BY link to a Statement",
 )
-async def endorse_statement(request: StatementEndorseRequest):
+async def endorse_statement(request: StatementEndorseRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.reification import ReificationService
     neo4j = get_neo4j()
     svc = ReificationService(neo4j)
-    async with CorpusMutation(neo4j, request.tenant, "statement_endorsement") as mutation:
+    async with CorpusMutation(neo4j, tenant, "statement_endorsement") as mutation:
         await svc.endorse(
             stmt_id=request.stmt_id,
             endorser_id=request.endorser_id,
             endorser_type=request.endorser_type,
             confidence=request.confidence,
             note=request.note,
-            tenant=request.tenant,
+            tenant=tenant,
         )
     return {"status": "endorsed", "corpus_revision": mutation.revision}
 
@@ -335,16 +329,16 @@ async def endorse_statement(request: StatementEndorseRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Assert that Statement A contradicts Statement B",
 )
-async def contradict_statements(request: StatementContradictRequest):
+async def contradict_statements(request: StatementContradictRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.reification import ReificationService
     neo4j = get_neo4j()
     svc = ReificationService(neo4j)
-    async with CorpusMutation(neo4j, request.tenant, "statement_contradiction") as mutation:
+    async with CorpusMutation(neo4j, tenant, "statement_contradiction") as mutation:
         await svc.contradict(
             stmt_a_id=request.stmt_a_id,
             stmt_b_id=request.stmt_b_id,
             reason=request.reason,
-            tenant=request.tenant,
+            tenant=tenant,
         )
     return {"status": "contradiction_asserted", "corpus_revision": mutation.revision}
 
@@ -357,7 +351,7 @@ async def contradict_statements(request: StatementContradictRequest):
 async def get_statements(
     entity_name: str,
     entity_type: str,
-    tenant: str = "default",
+    tenant: str = Depends(get_tenant),
     role: str = "subject",
 ):
     from graphrag.graph.reification import ReificationService
@@ -375,7 +369,7 @@ async def get_statements(
 async def validate_entity_schema(
     entity_name: str,
     entity_type: str,
-    tenant: str = "default",
+    tenant: str = Depends(get_tenant),
 ):
     from graphrag.graph.property_schema import PropertySchemaValidator
     v = PropertySchemaValidator(get_neo4j())
@@ -387,7 +381,7 @@ async def validate_entity_schema(
     dependencies=[Depends(require_scope("read"))],
     summary="Validate all entities in a document against property cardinality rules",
 )
-async def validate_document_schema(doc_id: str, tenant: str = "default"):
+async def validate_document_schema(doc_id: str, tenant: str = Depends(get_tenant)):
     from graphrag.graph.property_schema import PropertySchemaValidator
     v = PropertySchemaValidator(get_neo4j())
     return await v.validate_document(doc_id, tenant)
@@ -400,7 +394,7 @@ async def validate_document_schema(doc_id: str, tenant: str = "default"):
 )
 async def detect_property_conflicts(
     entity_type: str,
-    tenant: str = "default",
+    tenant: str = Depends(get_tenant),
     limit: int = 100,
 ):
     from graphrag.graph.property_schema import PropertySchemaValidator
@@ -416,7 +410,7 @@ async def detect_property_conflicts(
     summary="Summarise property cardinality violations across all monitored entity types",
 )
 async def property_violations_summary(
-    tenant: str = "default",
+    tenant: str = Depends(get_tenant),
     limit: int = 50,
 ):
     """
@@ -451,12 +445,10 @@ async def property_violations_summary(
 class WikidataLinkRequest(BaseModel):
     entity_name: str
     entity_type: str
-    tenant: str = "default"
     force: bool = False
 
 
 class WikidataBatchRequest(BaseModel):
-    tenant: str = "default"
     limit: int = 100
     entity_types: list[str] | None = None
 
@@ -466,13 +458,13 @@ class WikidataBatchRequest(BaseModel):
     dependencies=[Depends(require_scope("write"))],
     summary="Look up the Wikidata QID for a single entity and cache the result",
 )
-async def link_entity_wikidata(request: WikidataLinkRequest):
+async def link_entity_wikidata(request: WikidataLinkRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.entity_linker import WikidataEntityLinker
     linker = WikidataEntityLinker(get_neo4j())
     result = await linker.link_entity(
         entity_name=request.entity_name,
         entity_type=request.entity_type,
-        tenant=request.tenant,
+        tenant=tenant,
         force=request.force,
     )
     if result is None:
@@ -485,15 +477,15 @@ async def link_entity_wikidata(request: WikidataLinkRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Batch-link all unlinked entities for a tenant",
 )
-async def link_all_entities(request: WikidataBatchRequest):
+async def link_all_entities(request: WikidataBatchRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.entity_linker import WikidataEntityLinker
     linker = WikidataEntityLinker(get_neo4j())
     count = await linker.link_all_unlinked(
-        tenant=request.tenant,
+        tenant=tenant,
         limit=request.limit,
         entity_types=request.entity_types,
     )
-    return {"linked": count, "tenant": request.tenant}
+    return {"linked": count, "tenant": tenant}
 
 
 @router.get(
@@ -501,7 +493,7 @@ async def link_all_entities(request: WikidataBatchRequest):
     dependencies=[Depends(require_scope("read"))],
     summary="List all Wikidata-linked entities for a tenant",
 )
-async def list_linked_entities(tenant: str = "default", limit: int = 100):
+async def list_linked_entities(tenant: str = Depends(get_tenant), limit: int = 100):
     from graphrag.graph.entity_linker import WikidataEntityLinker
     linker = WikidataEntityLinker(get_neo4j())
     return await linker.list_linked(tenant=tenant, limit=limit)
@@ -512,7 +504,6 @@ async def list_linked_entities(tenant: str = "default", limit: int = 100):
 class AttachMediaRequest(BaseModel):
     entity_name: str
     entity_type: str
-    tenant: str = "default"
     modality: str = "image"
     media_url: str = ""
     caption: str = ""
@@ -529,13 +520,13 @@ class SetEmbeddingRequest(BaseModel):
     dependencies=[Depends(require_scope("write"))],
     summary="Attach a media reference (image, audio, video) to an entity",
 )
-async def attach_media(request: AttachMediaRequest):
+async def attach_media(request: AttachMediaRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.multimodal import MultiModalEntityService
     svc = MultiModalEntityService(get_neo4j())
     attachment_id = await svc.attach_media(
         entity_name=request.entity_name,
         entity_type=request.entity_type,
-        tenant=request.tenant,
+        tenant=tenant,
         modality=request.modality,
         media_url=request.media_url,
         caption=request.caption,
@@ -552,7 +543,7 @@ async def attach_media(request: AttachMediaRequest):
 async def get_entity_media(
     entity_name: str,
     entity_type: str,
-    tenant: str = "default",
+    tenant: str = Depends(get_tenant),
 ):
     from graphrag.graph.multimodal import MultiModalEntityService
     svc = MultiModalEntityService(get_neo4j())
@@ -580,7 +571,7 @@ async def set_media_embedding(request: SetEmbeddingRequest):
     summary="List MediaAttachments that have no embedding yet",
 )
 async def list_unembedded_media(
-    tenant: str = "default",
+    tenant: str = Depends(get_tenant),
     modality: str | None = None,
     limit: int = 100,
 ):
@@ -594,7 +585,9 @@ async def list_unembedded_media(
 class SPARQLRequest(BaseModel):
     query: str
     namespaces: dict[str, str] = {}
-    export_path: str = "exports/graph_export.ttl"
+    # export_path was client-supplied and flowed straight into Path(...) and
+    # rdflib's parser, so any caller could name an arbitrary filesystem path.
+    # The export location is server configuration, not request data.
 
 
 @router.post(
@@ -603,16 +596,19 @@ class SPARQLRequest(BaseModel):
     summary="Execute a SPARQL 1.1 SELECT query against the exported Turtle graph",
 )
 async def sparql_query(request: SPARQLRequest):
-    """Run a SPARQL SELECT query against the last RDF export.
+    """Run a read-only SPARQL query against the last RDF export.
 
-    The export is produced by ``scripts/export_rdf.py``.  If no export
-    exists at ``export_path``, returns a 404 with a hint to run the script.
+    The export is produced by ``scripts/export_rdf.py``. Its location is
+    server configuration (``GRAPHRAG_RDF_EXPORT_PATH``, default
+    ``exports/graph_export.ttl``), never a request field. If no export
+    exists there, returns a 404 with a hint to run the script.
     """
+    import os
     from pathlib import Path
 
     from graphrag.graph.sparql_bridge import SPARQLBridge
 
-    path = Path(request.export_path)
+    path = Path(os.getenv("GRAPHRAG_RDF_EXPORT_PATH", "exports/graph_export.ttl"))
     if not path.exists():
         raise HTTPException(
             status_code=404,
@@ -633,7 +629,6 @@ class LinkPredictionRequest(BaseModel):
     head_id: str
     relation: str
     top_k: int = 10
-    tenant: str = "default"
 
 
 @router.post(
@@ -641,7 +636,7 @@ class LinkPredictionRequest(BaseModel):
     dependencies=[Depends(require_scope("read"))],
     summary="Predict candidate tail entities using trained TransE embeddings",
 )
-async def predict_links(request: LinkPredictionRequest):
+async def predict_links(request: LinkPredictionRequest, tenant: str = Depends(get_tenant)):
     """Rank candidate tail entities for (head, relation, ?).
 
     Requires a trained ``TransXTrainer`` — call ``POST /kg/train-embeddings``
@@ -656,7 +651,7 @@ async def predict_links(request: LinkPredictionRequest):
     svc   = EdgeEmbeddingService(neo4j)
 
     # Load persisted relation embeddings into the shared dict
-    await svc.load_relation_embeddings(tenant=request.tenant)
+    await svc.load_relation_embeddings(tenant=tenant)
 
     trainer   = TransXTrainer(neo4j, rel_emb=svc._rel_emb, embed_dim=svc._embed_dim)
     predictor = LinkPredictor(neo4j, trainer)
@@ -666,7 +661,7 @@ async def predict_links(request: LinkPredictionRequest):
             head_id=request.head_id,
             relation=request.relation,
             top_k=request.top_k,
-            tenant=request.tenant,
+            tenant=tenant,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -680,14 +675,12 @@ async def predict_links(request: LinkPredictionRequest):
 class EntityTypeRenameRequest(BaseModel):
     old_type: str
     new_type: str
-    tenant: str = "default"
     dry_run: bool = False
 
 
 class OntologyMigrationRequest(BaseModel):
     current: dict
     target: dict
-    tenant: str = "default"
     apply: bool = False
 
 
@@ -696,7 +689,7 @@ class OntologyMigrationRequest(BaseModel):
     dependencies=[Depends(require_scope("write"))],
     summary="Plan or apply a versioned ontology migration",
 )
-async def ontology_migration(request: OntologyMigrationRequest):
+async def ontology_migration(request: OntologyMigrationRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.ontology_migration import plan_migration
     from graphrag.graph.ontology_registry import get_ontology_registry
     from graphrag.graph.corpus_revision import CorpusMutation
@@ -708,8 +701,8 @@ async def ontology_migration(request: OntologyMigrationRequest):
         if not report.compatible:
             raise HTTPException(status_code=409, detail="ontology migration has unmapped removals")
         neo4j = get_neo4j()
-        registry = get_ontology_registry(neo4j_client=neo4j, tenant=request.tenant)
-        async with CorpusMutation(neo4j, request.tenant, "ontology_relation_migration") as mutation:
+        registry = get_ontology_registry(neo4j_client=neo4j, tenant=tenant)
+        async with CorpusMutation(neo4j, tenant, "ontology_relation_migration") as mutation:
             result.update(await registry.apply_ontology_migration(request.current, request.target))
         result["corpus_revision"] = mutation.revision
         result["applied"] = True
@@ -721,20 +714,20 @@ async def ontology_migration(request: OntologyMigrationRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Cascade-rename an entity type (entities, edges, WikidataLinks, Statements)",
 )
-async def rename_entity_type(request: EntityTypeRenameRequest):
+async def rename_entity_type(request: EntityTypeRenameRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.ontology_registry import get_ontology_registry
     from graphrag.graph.corpus_revision import CorpusMutation
     neo4j = get_neo4j()
-    registry = get_ontology_registry(neo4j_client=neo4j, tenant=request.tenant)
+    registry = get_ontology_registry(neo4j_client=neo4j, tenant=tenant)
     if request.dry_run:
         return await registry.rename_entity_type(
             old_type=request.old_type, new_type=request.new_type,
-            tenant=request.tenant, dry_run=True,
+            tenant=tenant, dry_run=True,
         )
-    async with CorpusMutation(neo4j, request.tenant, "ontology_entity_type_rename") as mutation:
+    async with CorpusMutation(neo4j, tenant, "ontology_entity_type_rename") as mutation:
         result = await registry.rename_entity_type(
             old_type=request.old_type, new_type=request.new_type,
-            tenant=request.tenant, dry_run=False,
+            tenant=tenant, dry_run=False,
         )
     result["corpus_revision"] = mutation.revision
     return result

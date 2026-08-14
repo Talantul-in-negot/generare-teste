@@ -54,11 +54,12 @@ class AuditTrail:
         new_values: dict[str, Any] | None = None,
         changed_by: str = "system",
         source_doc_id: str = "",
+        tenant: str = "default",
     ) -> None:
         try:
             await self._neo4j.run(
                 """
-                MATCH (e:Entity {name: $name, type: $type})
+                MATCH (e:Entity {name: $name, type: $type, tenant: $tenant})
                 WITH e LIMIT 1
                 CREATE (e)-[:HAS_CHANGE]->(cl:ChangeLog {
                     id:           $log_id,
@@ -69,7 +70,8 @@ class AuditTrail:
                     changed_at:   datetime(),
                     old_values:   $old_values,
                     new_values:   $new_values,
-                    source_doc_id: $source_doc_id
+                    source_doc_id: $source_doc_id,
+                    tenant:       $tenant
                 })
                 """,
                 name=entity_name,
@@ -80,16 +82,22 @@ class AuditTrail:
                 old_values=str(old_values or {}),
                 new_values=str(new_values or {}),
                 source_doc_id=source_doc_id,
+                tenant=tenant,
             )
         except Exception as exc:
             log.warning("audit_trail.entity_log_failed",
                         entity=entity_name, operation=operation, error=str(exc)[:120])
 
-    async def log_entities_batch(self, rows: list[dict]) -> None:
+    async def log_entities_batch(self, rows: list[dict], tenant: str = "default") -> None:
         """Batched equivalent of log_entity_change() — one round-trip for the
         whole batch. Each row needs: name, type, operation, old_values,
         new_values, changed_by, source_doc_id (old_values/new_values already
         stringified, matching log_entity_change()'s str(...) conversion).
+
+        ``tenant`` must be the same tenant the entities were merged under.
+        Without it the ``MATCH ... LIMIT 1`` can bind another tenant's node
+        with the same (name, type) and attach this tenant's change record
+        to it — a silent cross-tenant corruption of the compliance trail.
         """
         if not rows:
             return
@@ -99,7 +107,7 @@ class AuditTrail:
                 UNWIND $rows AS row
                 CALL {
                     WITH row
-                    MATCH (e:Entity {name: row.name, type: row.type})
+                    MATCH (e:Entity {name: row.name, type: row.type, tenant: $tenant})
                     WITH e, row LIMIT 1
                     CREATE (e)-[:HAS_CHANGE]->(cl:ChangeLog {
                         id:            row.log_id,
@@ -110,19 +118,24 @@ class AuditTrail:
                         changed_at:   datetime(),
                         old_values:   row.old_values,
                         new_values:   row.new_values,
-                        source_doc_id: row.source_doc_id
+                        source_doc_id: row.source_doc_id,
+                        tenant:       $tenant
                     })
                 }
                 """,
                 rows=rows,
+                tenant=tenant,
             )
         except Exception as exc:
             log.warning("audit_trail.entities_batch_failed", count=len(rows), error=str(exc)[:120])
 
-    async def log_relations_batch(self, rows: list[dict]) -> None:
+    async def log_relations_batch(self, rows: list[dict], tenant: str = "default") -> None:
         """Batched equivalent of log_relation_change() — one round-trip for
         the whole batch. Each row needs: src, tgt, relation, operation,
         old_values, new_values, changed_by, source_doc_id.
+
+        ``tenant`` scopes the MATCH, for the same reason as
+        :meth:`log_entities_batch`.
         """
         if not rows:
             return
@@ -132,7 +145,9 @@ class AuditTrail:
                 UNWIND $rows AS row
                 CALL {
                     WITH row
-                    MATCH (s:Entity {name: row.src})-[r:RELATES_TO {relation: row.relation}]->(t:Entity {name: row.tgt})
+                    MATCH (s:Entity {name: row.src, tenant: $tenant})
+                        -[r:RELATES_TO {relation: row.relation, tenant: $tenant}]->
+                        (t:Entity {name: row.tgt, tenant: $tenant})
                     WITH r, row LIMIT 1
                     CREATE (cl:ChangeLog {
                         id:            row.log_id,
@@ -143,11 +158,13 @@ class AuditTrail:
                         changed_at:    datetime(),
                         old_values:    row.old_values,
                         new_values:    row.new_values,
-                        source_doc_id: row.source_doc_id
+                        source_doc_id: row.source_doc_id,
+                        tenant:        $tenant
                     })
                 }
                 """,
                 rows=rows,
+                tenant=tenant,
             )
         except Exception as exc:
             log.warning("audit_trail.relations_batch_failed", count=len(rows), error=str(exc)[:120])
@@ -206,11 +223,12 @@ class AuditTrail:
         old_values: dict[str, Any] | None = None,
         new_values: dict[str, Any] | None = None,
         changed_by: str = "system",
+        tenant: str = "default",
     ) -> None:
         try:
             await self._neo4j.run(
                 """
-                MATCH (d:Document {id: $doc_id})
+                MATCH (d:Document {id: $doc_id, tenant: $tenant})
                 WITH d LIMIT 1
                 CREATE (d)-[:HAS_CHANGE]->(cl:ChangeLog {
                     id:           $log_id,
@@ -221,7 +239,8 @@ class AuditTrail:
                     changed_at:   datetime(),
                     old_values:   $old_values,
                     new_values:   $new_values,
-                    source_doc_id: $doc_id
+                    source_doc_id: $doc_id,
+                    tenant:       $tenant
                 })
                 """,
                 doc_id=doc_id,
@@ -230,6 +249,7 @@ class AuditTrail:
                 changed_by=changed_by,
                 old_values=str(old_values or {}),
                 new_values=str(new_values or {}),
+                tenant=tenant,
             )
         except Exception as exc:
             log.warning("audit_trail.document_log_failed",
@@ -240,11 +260,17 @@ class AuditTrail:
         entity_name: str,
         entity_type: str,
         limit: int = 20,
+        tenant: str = "default",
     ) -> list[dict]:
-        """Return the N most recent changes for an entity."""
+        """Return the N most recent changes for an entity, scoped to ``tenant``.
+
+        Unscoped, this returned the merged history of every tenant's entity
+        sharing the same (name, type) — see :meth:`log_entities_batch`.
+        """
         return await self._neo4j.run(
             """
-            MATCH (e:Entity {name: $name, type: $type})-[:HAS_CHANGE]->(cl:ChangeLog)
+            MATCH (e:Entity {name: $name, type: $type, tenant: $tenant})
+                  -[:HAS_CHANGE]->(cl:ChangeLog)
             RETURN cl.operation     AS operation,
                    cl.changed_by   AS changed_by,
                    cl.changed_at   AS changed_at,
@@ -257,4 +283,5 @@ class AuditTrail:
             name=entity_name,
             type=entity_type,
             limit=limit,
+            tenant=tenant,
         )

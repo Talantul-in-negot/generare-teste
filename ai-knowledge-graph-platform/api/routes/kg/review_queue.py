@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 from graphrag.graph.review_queue import ReviewQueueService
 
 router = APIRouter()
@@ -15,7 +15,7 @@ router = APIRouter()
     dependencies=[Depends(require_scope("read"))],
     summary="List pending alias review items",
 )
-async def list_review_queue(tenant: str = "default", limit: int = 50):
+async def list_review_queue(tenant: str = Depends(get_tenant), limit: int = 50):
     return {"items": await ReviewQueueService().list_pending(tenant, limit)}
 
 
@@ -24,7 +24,7 @@ async def list_review_queue(tenant: str = "default", limit: int = 50):
     dependencies=[Depends(require_scope("read"))],
     summary="List all alias review items (any status)",
 )
-async def list_review_queue_all(tenant: str = "default", limit: int = 100):
+async def list_review_queue_all(tenant: str = Depends(get_tenant), limit: int = 100):
     return {"items": await ReviewQueueService().list_all(tenant, limit)}
 
 
@@ -34,7 +34,7 @@ async def list_review_queue_all(tenant: str = "default", limit: int = 100):
     summary="Approve merge: register raw_name as alias of candidate",
 )
 async def approve_review_item(
-    item_id: str, tenant: str = "default", reviewed_by: str = "human"
+    item_id: str, tenant: str = Depends(get_tenant), reviewed_by: str = "human"
 ):
     return await ReviewQueueService().approve(item_id, reviewed_by, tenant)
 
@@ -45,6 +45,6 @@ async def approve_review_item(
     summary="Reject merge: keep entities separate",
 )
 async def reject_review_item(
-    item_id: str, tenant: str = "default", reviewed_by: str = "human"
+    item_id: str, tenant: str = Depends(get_tenant), reviewed_by: str = "human"
 ):
     return await ReviewQueueService().reject(item_id, reviewed_by, tenant)

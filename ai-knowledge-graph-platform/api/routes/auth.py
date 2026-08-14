@@ -25,7 +25,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from api.auth.dependencies import get_current_user
+from api.auth.dependencies import get_current_user, get_tenant, require_scope
+from api.limiter import AUTH_LIMIT, limiter
+from graphrag.core.config import get_settings
 from api.auth.google import build_authorization_url, exchange_code_for_userinfo  # pop_state removed (was dead code)
 from api.auth.jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
 
@@ -118,6 +120,7 @@ async def dev_login(response: Response, next: str = "/docs"):
         "picture": "",
         "type": "browser",
         "scope": "read write",
+        "tenant": get_settings().default_tenant,
     })
     secure = _cookie_secure()
     redirect_to = _safe_next(next)
@@ -149,6 +152,7 @@ async def dev_token():
         "picture": "",
         "type": "m2m",
         "scope": "read write",
+        "tenant": get_settings().default_tenant,
     })
     return {"access_token": token, "token_type": "bearer",
             "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60}
@@ -184,6 +188,7 @@ async def callback(request: Request, code: str, state: str):
         "picture": userinfo.get("picture", ""),
         "type":    "browser",
         "scope":   "read write",
+        "tenant":  get_settings().default_tenant,
     })
 
     next_url  = request.session.pop("next", "/docs")
@@ -223,31 +228,51 @@ class M2MRegisterResponse(BaseModel):
     client_secret: str   # shown ONCE — store it securely
     client_name: str
     scopes: list[str]
+    tenant: str
     note: str = "Save client_secret now — it will not be shown again."
 
 
 @router.post(
     "/clients",
     response_model=M2MRegisterResponse,
-    summary="Register an M2M client (requires browser session)",
+    summary="Register an M2M client (requires an authenticated write-scoped session)",
 )
 async def register_client(
     req: M2MRegisterRequest,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_scope("write")),
+    tenant: str = Depends(get_tenant),
 ):
+    """Register an M2M client.
+
+    The new client can never exceed the registering caller: its scopes are
+    intersected with the caller's own, and it inherits the caller's tenant.
+    Previously this depended on ``get_current_user`` alone and stored
+    ``req.scopes`` verbatim, so a read-only user could mint themselves a
+    write-scoped client — a self-service privilege escalation.
+    """
+    caller_scopes = set(user.get("scope", "").split())
+    granted = sorted(set(req.scopes) & caller_scopes)
+    if not granted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"None of the requested scopes {req.scopes} are held by the caller",
+        )
+
     client_id     = "graphrag_" + secrets.token_urlsafe(16)
     client_secret = secrets.token_urlsafe(40)
     _client_set(client_id, {
         "client_name":  req.client_name,
-        "scopes":       req.scopes,
+        "scopes":       granted,
         "secret_hash":  hashlib.sha256(client_secret.encode()).hexdigest(),
         "owner":        user.get("email", user.get("sub")),
+        "tenant":       tenant,
     })
     return M2MRegisterResponse(
         client_id=client_id,
         client_secret=client_secret,
         client_name=req.client_name,
-        scopes=req.scopes,
+        scopes=granted,
+        tenant=tenant,
     )
 
 
@@ -270,7 +295,8 @@ class TokenResponse(BaseModel):
     response_model=TokenResponse,
     summary="Issue Bearer JWT for M2M access (client_credentials)",
 )
-async def token(req: TokenRequest):
+@limiter.limit(AUTH_LIMIT)
+async def token(request: Request, req: TokenRequest):
     if req.grant_type != "client_credentials":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -296,6 +322,10 @@ async def token(req: TokenRequest):
         "client_name": client["client_name"],
         "scope":       " ".join(sorted(granted)),
         "type":        "m2m",
+        # Clients registered before tenant binding existed have no stored
+        # tenant; fall back to the deployment default rather than issuing a
+        # tenantless token that get_tenant would reject with a 403.
+        "tenant":      client.get("tenant") or get_settings().default_tenant,
     })
     return TokenResponse(
         access_token=access_token,

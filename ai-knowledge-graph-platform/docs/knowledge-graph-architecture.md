@@ -397,14 +397,25 @@ read-only local PostgreSQL/TimescaleDB-compatible SQLAlchemy URL. Both source
 adapters pass an in-memory SHACL candidate-batch gate before the first Neo4j
 write; violations cannot leave a partial relational import behind.
 
+The reproducible PostgreSQL vertical slice is
+`scripts/demo_sustainability_e2e.py`. Given an explicitly supplied local
+SQLAlchemy/asyncpg URL, `--seed` creates only named synthetic demo tables,
+imports them to Neo4j, and asks the MCP-backed controlled question `Which
+suppliers lack verified emissions evidence?`. The fixed query template returns
+only tenant-scoped suppliers that have no `REPORTED` emissions record linked to
+`HAS_EVIDENCE`. The Docker-backed integration test
+`tests/e2e/test_relational_postgres_neo4j.py` independently verifies this
+PostgreSQL-to-Neo4j-to-MCP path with isolated containers.
+
 This is not yet an RML/R2RML engine, an OBDA federation layer, or a live
 GLEIF/Copernicus connector.
 
 ### Controlled agent graph facts
 
 The MCP server exposes `query_graph_facts_tool` for a narrow class of direct
-graph facts, such as `What does Northwind Components supply?` and `List
-suppliers`. It is a deterministic intent parser, not arbitrary LLM-to-Cypher:
+graph facts, such as `What does Northwind Components supply?`, `List
+suppliers`, and `Which suppliers lack verified emissions evidence?`. It is a
+deterministic intent parser, not arbitrary LLM-to-Cypher:
 only fixed, read-only Cypher templates are executable; values are parameters;
 every template has a tenant predicate and a maximum result limit of 100.
 Unsupported questions are returned to normal cited GraphRAG retrieval.

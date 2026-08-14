@@ -12,5 +12,7 @@
 - `adr/` — architecture decisions, including the Context Graph decision trace,
   capability-gated Neo4j vector search, and adaptive retrieval routing
 
-Interview, presentation, and historical scorecard material is retained under
-`archive/` and is not part of the canonical implementation documentation.
+Interview, outreach, and role-specific material is deliberately **not** kept in
+this repository — it was removed on 2026-08-13 (it had been committed under
+`archive/job-search/` and linked from the README, which meant anyone sent the
+repo also received the outreach tracker and JD mappings).

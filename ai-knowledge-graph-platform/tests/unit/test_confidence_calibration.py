@@ -67,9 +67,22 @@ class TestAddBatch:
         assert len(set(ids)) == 3   # all unique
 
     async def test_optional_fields_default_correctly(self, svc, neo4j_mock):
+        """Omitted optional keys must reach Cypher as their documented defaults.
+
+        This previously asserted nothing — the body was a single comment
+        claiming defaults were checked, while the actual parameters bound into
+        the query went unexamined.
+        """
         neo4j_mock.run = AsyncMock(return_value=[])
         await svc.add_batch([{"predicted_confidence": 0.5, "actual_outcome": 0.0}])
-        # Should not raise; optional keys should have defaults
+
+        params = neo4j_mock.run.call_args.kwargs
+        assert params["relation"] == ""
+        assert params["source_doc_id"] == ""
+        assert params["prompt_version"] == ""
+        assert params["verified_by"] == "batch"
+        assert params["predicted"] == 0.5
+        assert params["actual"] == 0.0
 
 
 # ── brier_score ────────────────────────────────────────────────────────────────

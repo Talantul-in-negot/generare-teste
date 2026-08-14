@@ -112,16 +112,10 @@ class IngestionValidator:
 
     async def _check_orphan_entities(self, doc_id: str | None) -> list[dict]:
         """Entities with no MENTIONS link to any chunk."""
-        scope = "WHERE c.document_id = $doc_id" if doc_id else ""
-        params = {"doc_id": doc_id} if doc_id else {}
-        query = f"""
-            MATCH (e:Entity)
-            WHERE NOT (e)<-[:MENTIONS]-(:Chunk)
-            {scope.replace('WHERE', 'AND') if scope else ''}
-            RETURN e.name AS entity, e.type AS type
-            LIMIT 100
-        """
-        # For scoped check: find entities from this doc's chunks only
+        # The scoped and unscoped cases need structurally different queries, so
+        # both are written out below. An earlier f-string `query` was built here
+        # from a `scope`/`params` pair and then never executed — dead scaffolding
+        # that read as if it were the query actually being run.
         if doc_id:
             rows = await self._neo4j.run(
                 """

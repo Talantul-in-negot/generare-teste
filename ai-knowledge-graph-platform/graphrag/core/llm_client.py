@@ -48,6 +48,7 @@ from typing import Any
 
 import structlog
 
+from graphrag.core.llm_utils import safe_response_text
 from graphrag.core.provider_health import is_healthy, record_result
 
 log = structlog.get_logger(__name__)
@@ -246,7 +247,11 @@ class GeminiLLM(BaseLLM):
                         config=config,
                     ),
                 )
-                return response.text or ""
+                # safe_response_text() rather than `response.text or ""`:
+                # both survive a None text, but the helper also strips and
+                # logs the blocked/no-candidates case instead of silently
+                # returning an empty answer that looks like a real one.
+                return safe_response_text(response)
 
             except (ClientError, ServerError) as exc:
                 status = getattr(exc, 'status_code', 0) or 0

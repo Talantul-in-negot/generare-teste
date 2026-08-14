@@ -120,7 +120,7 @@ async def main():
     print(f"  Refusals (correct, excluded): {refusals}/{len(questions)}")
     if errors:
         print(f"  Errors: {errors}")
-    print(f"\n  By question type:")
+    print("\n  By question type:")
     for qtype, rows in sorted(by_type.items()):
         type_scores = [r["faithfulness"] for r in rows if r.get("status") == "scored"]
         type_refusals = sum(1 for r in rows if r.get("status") == "refusal")

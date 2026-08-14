@@ -227,7 +227,7 @@ class TypeTaxonomy:
             """
             UNWIND $types AS t
             MATCH (e:Entity {type: t})
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND NOT e.quarantined = true
             RETURN DISTINCT e.name        AS name,
                             e.type        AS type,

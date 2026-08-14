@@ -9,6 +9,9 @@ results/kpi_snapshots/kpis.db
 results/ragas_reports/
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 infra/terraform/.terraform/
 infra/terraform/*.tfstate
 infra/terraform/*.tfstate.*
@@ -18,5 +21,28 @@ infra/terraform/terraform.tfvars
 eval_data/*.json
 eval_data/*.jsonl
 eval_data/*.npy
+
+# Diagnostic and scratch output. Five of these were committed at the repo root
+# (diag_out.txt, diag_con02*.txt, con02_query.txt) — the first thing visible on
+# the GitHub landing page.
+diag_*.txt
+*.log
+*.out
+
+# Backup output — `make backup` writes ./backup by default
+backup/
+*.ndjson
+
+# RDF exports
+exports/
+
+# Node (docs/presentation has a package.json)
+node_modules/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
 
 # Dependency lock is committed — regenerate with: make lock

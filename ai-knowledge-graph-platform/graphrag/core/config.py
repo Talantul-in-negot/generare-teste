@@ -12,6 +12,13 @@ from pydantic_settings import BaseSettings
 
 ROOT = Path(__file__).resolve().parents[2]  # repo root
 
+# Only these environments may run with development defaults. The secrets check
+# in Settings is deliberately an allow-list rather than `env == "production"`:
+# keyed on production alone, an unset or misspelled ENV ("prod", "Production ",
+# "") silently fell through to the default HS256 signing key, which is written
+# in plaintext in this file and would let anyone forge a valid token.
+DEV_ENVS = ("development", "dev", "test", "testing", "local")
+
 
 def _load_yaml() -> dict:
     path = ROOT / "config" / "settings.yml"
@@ -115,6 +122,12 @@ class Settings(BaseSettings):
     google_oauth_client_secret: str = ""
     cors_origins: list[str] = ["http://localhost:8000", "http://localhost:8050"]
 
+    # Tenant stamped into every JWT issued by the browser/dev flows. Requests
+    # are scoped to the tenant in their token — never to a tenant supplied in
+    # the request body — so this is the only place a browser session's tenant
+    # is decided. M2M clients pick their tenant at registration time.
+    default_tenant: str = "default"
+
     # ── App ─────────────────────────────────────────────────────────────────────
     log_level: str = "INFO"
     env: str = "development"
@@ -126,8 +139,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_production_secrets(self) -> "Settings":
-        """Fail fast if production is running with insecure defaults."""
-        if self.env.lower() == "production":
+        """Fail fast if a non-development environment has insecure defaults."""
+        env = self.env.strip().lower()
+        if env not in DEV_ENVS:
             if self.jwt_secret_key == "change-me-in-production":
                 raise ValueError(
                     "jwt_secret_key must be set to a strong random secret in production. "
@@ -196,6 +210,17 @@ class Settings(BaseSettings):
     @property
     def context_graph(self) -> dict:
         return self._yaml.get("context_graph", {})
+
+    @property
+    def maintenance(self) -> dict:
+        """Maintenance thresholds from settings.yml.
+
+        This accessor did not exist, which made the whole ``maintenance:``
+        block in config/settings.yml structurally unreachable — editing
+        ``orphan_flag_enabled`` or ``stale_edge_days`` there had no effect,
+        because scripts/maintenance.py hardcoded its own copies of the values.
+        """
+        return self._yaml.get("maintenance", {})
 
 
 @lru_cache(maxsize=1)

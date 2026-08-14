@@ -101,7 +101,7 @@ class EmbeddingRegistry:
         rows = await self._neo4j.run(
             """
             MATCH (e:Entity)
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND e.embedding IS NOT NULL AND size(e.embedding) > 0
             RETURN coalesce(e.embedding_model,   'unknown') AS model,
                    coalesce(e.embedding_version, 'unknown') AS version,
@@ -207,7 +207,7 @@ class EmbeddingRegistry:
         rows = await self._neo4j.run(
             f"""
             MATCH (e:Entity)
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND e.embedding IS NOT NULL
               AND (
                   coalesce(e.embedding_model,   '') <> $model
@@ -254,7 +254,7 @@ class EmbeddingRegistry:
             rows = await self._neo4j.run(
                 """
                 MATCH (e:Entity)
-                WHERE ($tenant = 'default' OR e.tenant = $tenant)
+                WHERE (e.tenant = $tenant)
                   AND e.embedding_stale = true
                 RETURN e.name AS name, e.type AS type,
                        e.description AS description, e.tenant AS tenant

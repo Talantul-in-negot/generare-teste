@@ -83,7 +83,7 @@ class RetrievalFeedbackService:
         return await self._neo4j.run(
             """
             MATCH (f:RetrievalFeedback)
-            WHERE ($tenant = 'default' OR f.tenant = $tenant)
+            WHERE (f.tenant = $tenant)
             RETURN f.citation_id AS citation_id, f.interaction AS interaction,
                    count(*) AS count, avg(f.relevance) AS mean_relevance
             ORDER BY count DESC

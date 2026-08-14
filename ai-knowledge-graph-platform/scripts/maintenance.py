@@ -30,16 +30,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import structlog
 
+from graphrag.core.config import get_settings
 from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.graph.cycle_detector import CycleDetector
-from graphrag.graph.ingestion_validator import IngestionValidator
 from graphrag.graph.propagation import PropagationService
 
 log = structlog.get_logger(__name__)
 
-# Thresholds for maintenance actions
-STALE_EDGE_DAYS        = 365   # edges older than this with conf < 0.3 are pruned
-LOW_CONF_PRUNE_THRESH  = 0.2   # edges below this confidence are candidates for removal
+# Thresholds for maintenance actions.
+#
+# Sourced from config/settings.yml `maintenance:` rather than hardcoded. The
+# two were previously duplicated — identical values in both places — and the
+# YAML block had no accessor on Settings at all, so editing settings.yml did
+# nothing and these constants silently won.
+_MAINT = get_settings().maintenance
+
+STALE_EDGE_DAYS        = _MAINT.get("stale_edge_days", 365)
+LOW_CONF_PRUNE_THRESH  = _MAINT.get("low_conf_prune_threshold", 0.2)
+ORPHAN_FLAG_ENABLED    = _MAINT.get("orphan_flag_enabled", True)
+CYCLE_CHECK_ENABLED    = _MAINT.get("cycle_check_enabled", True)
 ORPHAN_AGE_DAYS        = 30    # orphan nodes older than this are safe to flag
 
 
@@ -160,13 +169,15 @@ async def main():
     if args.mode in ("stale", "full"):
         results.update(await run_stale_cleanup(neo4j))
 
-    if args.mode in ("orphans", "full"):
+    # The `full` sweep honours the settings.yml toggles; an explicit
+    # `--mode orphans`/`--mode cycles` still runs on request.
+    if args.mode == "orphans" or (args.mode == "full" and ORPHAN_FLAG_ENABLED):
         results.update(await run_orphan_cleanup(neo4j))
 
     if args.mode in ("dirty", "full"):
         results.update(await run_dirty_recompute(neo4j))
 
-    if args.mode in ("cycles", "full"):
+    if args.mode == "cycles" or (args.mode == "full" and CYCLE_CHECK_ENABLED):
         results.update(await run_cycle_check(neo4j))
 
     if args.mode in ("report", "full"):

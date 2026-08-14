@@ -42,7 +42,6 @@ actual = 1.0 or 0.0.  Over time the calibration curve converges to reality.
 
 from __future__ import annotations
 
-import math
 from uuid import uuid4
 
 import structlog
@@ -190,7 +189,7 @@ class CalibrationService:
         rows = await self._neo4j.run(
             f"""
             MATCH (s:CalibrationSample)
-            WHERE ($tenant = 'default' OR s.tenant = $tenant)
+            WHERE (s.tenant = $tenant)
               {version_filter}
               {relation_filter}
             RETURN avg(s.error_sq) AS brier, count(s) AS n
@@ -220,7 +219,7 @@ class CalibrationService:
         rows = await self._neo4j.run(
             """
             MATCH (s:CalibrationSample)
-            WHERE ($tenant = 'default' OR s.tenant = $tenant)
+            WHERE (s.tenant = $tenant)
             RETURN s.predicted_confidence AS predicted,
                    s.actual_outcome       AS actual
             """,
@@ -314,7 +313,20 @@ class CalibrationService:
         """
         curve = await self.calibration_curve(tenant)
         for bin_data in curve:
-            if bin_data["bin_start"] <= raw_confidence < bin_data["bin_end"]:
+            # The final bin must be closed on the right. calibration_curve()
+            # bins inclusively (`min(int(p / bin_width), bins - 1)`), so a raw
+            # confidence of exactly 1.0 contributes to the last bucket's
+            # statistics; a half-open `<` here would leave it unable to look
+            # that bucket up and silently return the value uncorrected —
+            # and 1.0 is both the extractor's clamp ceiling and the value most
+            # in need of over-confidence correction.
+            is_last = bin_data is curve[-1]
+            in_bin = (
+                bin_data["bin_start"] <= raw_confidence <= bin_data["bin_end"]
+                if is_last
+                else bin_data["bin_start"] <= raw_confidence < bin_data["bin_end"]
+            )
+            if in_bin:
                 if bin_data["n"] > 0:
                     return round(bin_data["mean_actual"], 4)
                 break
@@ -380,7 +392,7 @@ class CalibrationService:
         return await self._neo4j.run(
             """
             MATCH (cs:CalibrationSnapshot)
-            WHERE ($tenant = 'default' OR cs.tenant = $tenant)
+            WHERE (cs.tenant = $tenant)
             RETURN cs.label               AS label,
                    cs.brier_score         AS brier_score,
                    cs.sample_count        AS sample_count,

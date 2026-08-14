@@ -25,7 +25,6 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 import structlog
-import yaml
 
 from graphrag.core.config import get_settings
 from graphrag.graph.gnn_scorer import GNNScorer

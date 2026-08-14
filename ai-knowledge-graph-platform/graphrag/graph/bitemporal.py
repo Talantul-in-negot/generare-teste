@@ -101,7 +101,7 @@ class BitemporalStore:
         return await self._neo4j.run(
             """
             MATCH (e:Entity)
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND NOT e.quarantined = true
               // Valid-time filter (treat NULL as always valid)
               AND (e.valid_from IS NULL OR e.valid_from <= $vt)
@@ -136,7 +136,7 @@ class BitemporalStore:
         return await self._neo4j.run(
             """
             MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
               AND (r.valid_from  IS NULL OR r.valid_from  <= $vt)
               AND (r.valid_to    IS NULL OR r.valid_to    >  $vt)
               AND (r.recorded_at IS NULL OR r.recorded_at <= $tt)
@@ -173,7 +173,7 @@ class BitemporalStore:
         return await self._neo4j.run(
             """
             MATCH (s:Entity)-[:SUBJECT_OF]->(stmt:Statement)-[:OBJECT_OF]->(t:Entity)
-            WHERE ($tenant = 'default' OR stmt.tenant = $tenant)
+            WHERE (stmt.tenant = $tenant)
               AND (stmt.valid_from IS NULL OR stmt.valid_from <= $vt)
               AND (stmt.valid_to   IS NULL OR stmt.valid_to   >  $vt)
               AND (stmt.recorded_at IS NULL OR stmt.recorded_at <= $tt)
@@ -203,12 +203,12 @@ class BitemporalStore:
         return await self._neo4j.run(
             """
             MATCH (d:Document)
-            WHERE ($tenant = 'default' OR d.tenant = $tenant)
+            WHERE (d.tenant = $tenant)
               AND (d.valid_from IS NULL OR d.valid_from <= $vt)
               AND (d.valid_to   IS NULL OR d.valid_to   >  $vt)
               AND (d.recorded_at IS NULL OR d.recorded_at <= $tt)
             OPTIONAL MATCH (c:AuthorityChange {document_id: d.id})
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
               AND (c.recorded_at IS NULL OR c.recorded_at <= $tt)
             WITH d, c ORDER BY c.recorded_at DESC
             WITH d, collect(c)[0] AS c
@@ -232,8 +232,7 @@ class BitemporalStore:
         return await self._neo4j.run(
             """
             MATCH (newer:Document)-[r:SUPERSEDES]->(older:Document)
-            WHERE ($tenant = 'default'
-                   OR coalesce(r.tenant, newer.tenant, older.tenant) = $tenant)
+            WHERE coalesce(r.tenant, newer.tenant, older.tenant) = $tenant
               AND (r.recorded_at IS NULL OR r.recorded_at <= $tt)
             RETURN newer.id AS newer_document_id,
                    older.id AS older_document_id,
@@ -261,7 +260,7 @@ class BitemporalStore:
         new_entities = await self._neo4j.run(
             """
             MATCH (e:Entity)
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND e.recorded_at IS NOT NULL
               AND e.recorded_at >  $tt_from
               AND e.recorded_at <= $tt_to
@@ -275,7 +274,7 @@ class BitemporalStore:
         new_edges = await self._neo4j.run(
             """
             MATCH ()-[r:RELATES_TO]->()
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
               AND r.recorded_at IS NOT NULL
               AND r.recorded_at >  $tt_from
               AND r.recorded_at <= $tt_to
@@ -288,12 +287,12 @@ class BitemporalStore:
         total = await self._neo4j.run(
             """
             MATCH (e:Entity)
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
               AND (e.recorded_at IS NULL OR e.recorded_at <= $tt_to)
               AND NOT e.quarantined = true
             WITH count(e) AS entity_count
             MATCH ()-[r:RELATES_TO]->()
-            WHERE ($tenant = 'default' OR r.tenant = $tenant)
+            WHERE (r.tenant = $tenant)
               AND (r.recorded_at IS NULL OR r.recorded_at <= $tt_to)
             RETURN entity_count, count(r) AS edge_count
             """,
@@ -329,9 +328,13 @@ class BitemporalStore:
             MATCH (cl:ChangeLog)
             WHERE cl.target_label = 'Entity'
               AND cl.target_id    = $name
-              AND ($tenant = 'default' OR EXISTS {
-                  MATCH (e:Entity {name: $name, type: $type, tenant: $tenant})
-              })
+              // ChangeLog nodes written before audit_trail stamped a tenant
+              // have cl.tenant IS NULL; fall back to proving the entity exists
+              // in this tenant rather than dropping that history entirely.
+              AND (cl.tenant = $tenant
+                   OR (cl.tenant IS NULL AND EXISTS {
+                       MATCH (e:Entity {name: $name, type: $type, tenant: $tenant})
+                   }))
             RETURN cl.operation   AS operation,
                    cl.changed_at  AS changed_at,
                    cl.changed_by  AS changed_by,

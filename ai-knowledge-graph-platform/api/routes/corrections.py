@@ -18,7 +18,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.graph.entity_splitter import EntitySplitter
 from graphrag.graph.quarantine import QuarantineService
@@ -35,7 +35,6 @@ class EntitySplitRequest(BaseModel):
     entity_type: str
     doc_group_a: list[str]   # doc IDs for Entity_A
     doc_group_b: list[str]   # doc IDs for Entity_B
-    tenant: str = "default"
     reviewed_by: str = "admin"
 
 
@@ -45,7 +44,6 @@ class QuarantineRequest(BaseModel):
     reason: str
     flagged_by: str = "admin"
     propagate_depth: int = 0   # 0 = single entity only, >0 = subgraph
-    tenant: str = "default"
 
 
 class ReleaseRequest(BaseModel):
@@ -53,7 +51,6 @@ class ReleaseRequest(BaseModel):
     entity_type: str
     released_by: str
     note: str = ""
-    tenant: str = "default"
 
 
 class EdgeRejectRequest(BaseModel):
@@ -61,7 +58,6 @@ class EdgeRejectRequest(BaseModel):
     tgt_entity: str
     relation: str
     rejected_by: str = "admin"
-    tenant: str = "default"
 
 
 class EdgeOverrideRequest(BaseModel):
@@ -71,7 +67,6 @@ class EdgeOverrideRequest(BaseModel):
     confidence: float = 1.0
     override_by: str = "admin"
     note: str = ""
-    tenant: str = "default"
 
 
 class ConflictResolveRequest(BaseModel):
@@ -79,7 +74,6 @@ class ConflictResolveRequest(BaseModel):
     resolution: str             # "resolved_manual" | "false_positive"
     winner_doc_id: str = ""
     resolved_by: str = "admin"
-    tenant: str = "default"
 
 
 # ── Entity corrections ─────────────────────────────────────────────────────────
@@ -89,7 +83,7 @@ class ConflictResolveRequest(BaseModel):
     dependencies=[Depends(require_scope("write"))],
     summary="Split an over-merged entity into two separate nodes",
 )
-async def split_entity(request: EntitySplitRequest):
+async def split_entity(request: EntitySplitRequest, tenant: str = Depends(get_tenant)):
     """
     Splits entity_name into Entity_A (backed by doc_group_a) and
     Entity_B (backed by doc_group_b). Redistributes MENTIONS and
@@ -100,13 +94,13 @@ async def split_entity(request: EntitySplitRequest):
 
     neo4j = get_neo4j()
     splitter = EntitySplitter(neo4j)
-    async with CorpusMutation(neo4j, request.tenant, "manual_entity_split") as mutation:
+    async with CorpusMutation(neo4j, tenant, "manual_entity_split") as mutation:
         result = await splitter.split_entity(
             entity_name=request.entity_name,
             entity_type=request.entity_type,
             doc_group_a=request.doc_group_a,
             doc_group_b=request.doc_group_b,
-            tenant=request.tenant,
+            tenant=tenant,
             split_by=request.reviewed_by,
         )
     if "error" in result:
@@ -120,28 +114,28 @@ async def split_entity(request: EntitySplitRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Quarantine a suspicious entity (excludes it from retrieval)",
 )
-async def quarantine_entity(request: QuarantineRequest):
+async def quarantine_entity(request: QuarantineRequest, tenant: str = Depends(get_tenant)):
     neo4j = get_neo4j()
     svc = QuarantineService(neo4j)
     if request.propagate_depth > 0:
-        async with CorpusMutation(neo4j, request.tenant, "manual_quarantine_subgraph") as mutation:
+        async with CorpusMutation(neo4j, tenant, "manual_quarantine_subgraph") as mutation:
             count = await svc.quarantine_subgraph_from(
                 seed_entity_name=request.entity_name,
                 seed_entity_type=request.entity_type,
                 reason=request.reason,
                 flagged_by=request.flagged_by,
                 depth=request.propagate_depth,
-                tenant=request.tenant,
+                tenant=tenant,
             )
         return {"quarantined_count": count, "mode": "subgraph", "corpus_revision": mutation.revision}
     else:
-        async with CorpusMutation(neo4j, request.tenant, "manual_quarantine") as mutation:
+        async with CorpusMutation(neo4j, tenant, "manual_quarantine") as mutation:
             await svc.quarantine_entity(
                 entity_name=request.entity_name,
                 entity_type=request.entity_type,
                 reason=request.reason,
                 flagged_by=request.flagged_by,
-                tenant=request.tenant,
+                tenant=tenant,
             )
         return {"quarantined_count": 1, "mode": "single", "corpus_revision": mutation.revision}
 
@@ -151,16 +145,16 @@ async def quarantine_entity(request: QuarantineRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Release a quarantined entity back into active retrieval",
 )
-async def release_entity(request: ReleaseRequest):
+async def release_entity(request: ReleaseRequest, tenant: str = Depends(get_tenant)):
     neo4j = get_neo4j()
     svc = QuarantineService(neo4j)
-    async with CorpusMutation(neo4j, request.tenant, "manual_quarantine_release") as mutation:
+    async with CorpusMutation(neo4j, tenant, "manual_quarantine_release") as mutation:
         await svc.release(
             entity_name=request.entity_name,
             entity_type=request.entity_type,
             released_by=request.released_by,
             note=request.note,
-            tenant=request.tenant,
+            tenant=tenant,
         )
     return {"status": "released", "entity": request.entity_name, "corpus_revision": mutation.revision}
 
@@ -172,12 +166,12 @@ async def release_entity(request: ReleaseRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Delete a specific RELATES_TO edge",
 )
-async def reject_edge(request: EdgeRejectRequest):
+async def reject_edge(request: EdgeRejectRequest, tenant: str = Depends(get_tenant)):
     """
     Deletes the specified edge and logs the deletion to AuditTrail.
     """
     neo4j = get_neo4j()
-    async with CorpusMutation(neo4j, request.tenant, "manual_edge_reject") as mutation:
+    async with CorpusMutation(neo4j, tenant, "manual_edge_reject") as mutation:
         rows = await neo4j.run(
             """
             MATCH (s:Entity {name: $src, tenant: $tenant})-[r:RELATES_TO {relation: $rel, tenant: $tenant}]->(t:Entity {name: $tgt, tenant: $tenant})
@@ -191,7 +185,7 @@ async def reject_edge(request: EdgeRejectRequest):
             src=request.src_entity,
             tgt=request.tgt_entity,
             rel=request.relation,
-            tenant=request.tenant,
+            tenant=tenant,
         )
     deleted = rows[0]["deleted"] if rows else 0
     if not deleted:
@@ -210,7 +204,7 @@ async def reject_edge(request: EdgeRejectRequest):
         operation="delete",
         old_values={"confidence": rows[0].get("confidence"), "source_doc_id": rows[0].get("source_doc_id")},
         changed_by=request.rejected_by,
-        tenant=request.tenant,
+        tenant=tenant,
     )
     return {"status": "deleted", "edges_removed": deleted, "corpus_revision": mutation.revision}
 
@@ -220,14 +214,14 @@ async def reject_edge(request: EdgeRejectRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Create a MANUAL source_type override edge",
 )
-async def override_edge(request: EdgeOverrideRequest):
+async def override_edge(request: EdgeOverrideRequest, tenant: str = Depends(get_tenant)):
     """
     Creates or updates a RELATES_TO edge with source_type=manual and
     high confidence, overriding any LLM-extracted version.
     """
     from datetime import datetime, timezone
     neo4j = get_neo4j()
-    async with CorpusMutation(neo4j, request.tenant, "manual_edge_override") as mutation:
+    async with CorpusMutation(neo4j, tenant, "manual_edge_override") as mutation:
         await neo4j.run(
             """
             MATCH (s:Entity {name: $src, tenant: $tenant})
@@ -246,7 +240,7 @@ async def override_edge(request: EdgeOverrideRequest):
             override_by=request.override_by,
             note=request.note,
             now=datetime.now(timezone.utc).isoformat(),
-            tenant=request.tenant,
+            tenant=tenant,
         )
     return {
         "status": "override_applied",
@@ -263,7 +257,7 @@ async def override_edge(request: EdgeOverrideRequest):
     dependencies=[Depends(require_scope("write"))],
     summary="Resolve a detected semantic contradiction",
 )
-async def resolve_conflict(request: ConflictResolveRequest):
+async def resolve_conflict(request: ConflictResolveRequest, tenant: str = Depends(get_tenant)):
     valid_resolutions = {"resolved_manual", "resolved_authority", "false_positive"}
     if request.resolution not in valid_resolutions:
         raise HTTPException(
@@ -272,13 +266,13 @@ async def resolve_conflict(request: ConflictResolveRequest):
         )
     neo4j = get_neo4j()
     detector = ContradictionDetector(neo4j)
-    async with CorpusMutation(neo4j, request.tenant, "manual_conflict_resolution") as mutation:
+    async with CorpusMutation(neo4j, tenant, "manual_conflict_resolution") as mutation:
         await detector.resolve(
             conflict_id=request.conflict_id,
             resolution=request.resolution,
             winner_doc_id=request.winner_doc_id,
             resolved_by=request.resolved_by,
-            tenant=request.tenant,
+            tenant=tenant,
         )
     return {"status": request.resolution, "conflict_id": request.conflict_id, "corpus_revision": mutation.revision}
 
@@ -290,7 +284,7 @@ async def resolve_conflict(request: ConflictResolveRequest):
     dependencies=[Depends(require_scope("read"))],
     summary="List open semantic contradictions awaiting review",
 )
-async def list_conflicts(limit: int = 50, tenant: str | None = None):
+async def list_conflicts(limit: int = 50, tenant: str = Depends(get_tenant)):
     neo4j = get_neo4j()
     detector = ContradictionDetector(neo4j)
     return await detector.get_open_conflicts(limit=limit, tenant=tenant)
@@ -301,7 +295,7 @@ async def list_conflicts(limit: int = 50, tenant: str | None = None):
     dependencies=[Depends(require_scope("read"))],
     summary="List currently quarantined entities",
 )
-async def list_quarantined(limit: int = 100, tenant: str = "default"):
+async def list_quarantined(limit: int = 100, tenant: str = Depends(get_tenant)):
     neo4j = get_neo4j()
     svc = QuarantineService(neo4j)
     return await svc.list_quarantined(limit=limit, tenant=tenant)
@@ -312,7 +306,7 @@ async def list_quarantined(limit: int = 100, tenant: str = "default"):
     dependencies=[Depends(require_scope("read"))],
     summary="List entities that are candidates for splitting (over-merged)",
 )
-async def list_over_merges(top_n: int = 20, tenant: str = "default"):
+async def list_over_merges(top_n: int = 20, tenant: str = Depends(get_tenant)):
     neo4j = get_neo4j()
     splitter = EntitySplitter(neo4j)
     return await splitter.detect_over_merges(top_n=top_n, tenant=tenant)

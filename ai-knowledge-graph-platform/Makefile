@@ -22,8 +22,8 @@ help:          ## Show this help
 install:       ## Install all Python dependencies
 	$(PIP) install -r requirements.txt
 
-install-dev:   ## Install + development extras (pytest, ruff, pip-tools)
-	$(PIP) install -r requirements.txt ruff pip-tools
+install-dev:   ## Install + development extras (pytest, pytest-asyncio, ruff, pip-tools)
+	$(PIP) install -r requirements-dev.txt
 
 lock:          ## Regenerate requirements.lock from requirements.txt (reproducible builds)
 	pip-compile requirements.txt --output-file requirements.lock --strip-extras
@@ -93,8 +93,19 @@ smoke-test:    ## End-to-end stack health check: unit tests + demo + API ping (n
 	$(PYTHON) -c "from api.main import app; print('API: ok')"
 	@echo "=== Smoke test passed ==="
 
-backup:        ## Export full graph to NDJSON (OUTPUT= optional, default ./backup)
-	$(PYTHON) scripts/kg_backup.py --output $(or $(OUTPUT),./backup)
+# kg_backup.py takes a required subcommand (backup | restore | list); both of
+# these targets previously omitted it and died at argparse, and backup-s3
+# passed a --s3-bucket flag that does not exist — S3 is addressed through the
+# output path.
+backup:        ## Export full graph to NDJSON (TENANT= required, OUTPUT= optional)
+	$(PYTHON) scripts/kg_backup.py backup --tenant $(TENANT) --output $(or $(OUTPUT),./backup)
 
-backup-s3:     ## Export graph to S3 (S3_BUCKET= required)
-	$(PYTHON) scripts/kg_backup.py --s3-bucket $(S3_BUCKET)
+backup-s3:     ## Export graph to S3 (TENANT= S3_BUCKET= required, S3_PREFIX= optional)
+	$(PYTHON) scripts/kg_backup.py backup --tenant $(TENANT) \
+	  --output s3://$(S3_BUCKET)/$(or $(S3_PREFIX),graphrag)
+
+restore:       ## Restore a graph from NDJSON (TENANT= INPUT= required)
+	$(PYTHON) scripts/kg_backup.py restore --tenant $(TENANT) --input $(INPUT)
+
+test-e2e:      ## Run live end-to-end tests (requires Docker for testcontainers)
+	$(PYTEST) tests/e2e/ -v

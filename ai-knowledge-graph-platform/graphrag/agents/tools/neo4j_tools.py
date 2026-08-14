@@ -23,7 +23,7 @@ def get_community(community_id: str, tenant: str = "default") -> dict | None:
         neo4j.run(
             """
             MATCH (c:Community {id: $id})
-            WHERE ($tenant = 'default' OR c.tenant = $tenant)
+            WHERE (c.tenant = $tenant)
             RETURN c.summary AS summary, c.level AS level
             """,
             id=community_id, tenant=tenant,
@@ -39,8 +39,8 @@ def get_neighbors(entity_name: str, tenant: str = "default") -> list[dict]:
         neo4j.run(
             """
             MATCH (e:Entity {name: $name})-[r:RELATES_TO]-(neighbor:Entity)
-            WHERE ($tenant = 'default' OR e.tenant = $tenant)
-              AND ($tenant = 'default' OR neighbor.tenant = $tenant)
+            WHERE (e.tenant = $tenant)
+              AND (neighbor.tenant = $tenant)
             RETURN neighbor.name AS name, neighbor.type AS type, r.relation AS relation
             LIMIT 20
             """,
