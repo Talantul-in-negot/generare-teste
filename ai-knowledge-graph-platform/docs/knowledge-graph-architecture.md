@@ -374,6 +374,28 @@ the provider-neutral `SourceConnector.records()` protocol and emit
 `SourceEnvelope` records; credentials remain in deployment secret stores.
 Cataloged documents link to their source through `INGESTED_FROM`.
 
+### Local relational-to-graph ingestion
+
+The repository includes a provider-neutral local reference path in
+`graphrag/ingestion/relational.py`. `SQLiteSourceConnector` reads a local
+read-only SQLite database, while `RelationalGraphMapping` declares which tables
+become tenant-scoped entities and relations. `RelationalGraphIngestor` validates
+required identifiers and relationship endpoints before writing anything, then
+reuses `GraphWriter` for ontology checks, entity resolution, audit logging and
+Neo4j persistence.
+
+Each import is represented by a deterministic relational source `Document` and
+`Chunk`. The source ID, mapping version and ontology version are retained as
+metadata, so imported facts remain attributable and repeatable. The local
+synthetic sustainability example is available through
+`scripts/demo_sustainability_relational.py`; it demonstrates supplier,
+material and facility data without claiming a live ERP, ESG provider or cloud
+deployment.
+
+This is a reusable foundation for later PostgreSQL/ERP adapters. It is not yet
+an RML/R2RML engine, an OBDA federation layer, or a live GLEIF/Copernicus
+connector.
+
 ### Correlation and telemetry
 
 FastAPI accepts or creates `X-Correlation-ID`, returns it to the caller, and

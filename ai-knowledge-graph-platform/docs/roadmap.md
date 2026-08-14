@@ -226,6 +226,7 @@ It should not yet be called a complete Context Graph for AI.
 | Domain eval harness (`graphrag/evaluation/domain_eval.py`) | **Implemented, wired to a script only** | Used by `scripts/validate_eval_datasets.py`; not part of the running application. |
 | Observability (`graphrag/observability/`) | **Implemented and wired** | Prometheus cost/latency and budget metrics are exposed at `/metrics`; HTTP/RabbitMQ/worker correlation is preserved, W3C trace context is propagated, and optional OTLP spans activate from environment configuration. |
 | Source catalog (`graphrag/graph/source_catalog.py`) | **Implemented and API-wired** | `/kg/sources` owns tenant-scoped sources and immutable mapping versions; connector implementations use a provider-neutral protocol and credentials are prohibited from persisted mappings. |
+| Local relational-to-KG ingestion (`graphrag/ingestion/relational.py`) | **Implemented locally** | Read-only SQLite connector, declarative entity/relation mappings, pre-write validation, deterministic source-document provenance, and a synthetic sustainability supply-chain demo. PostgreSQL/ERP adapters, RML/R2RML and OBDA federation remain future work. |
 | Ops exercises (`graphrag/ops/`, `scripts/run_production_exercises.py`) | **Implemented and executable** | Load, security, backup/restore digest, and cost exercises have a CLI and deterministic tests. Results still describe the environment in which the command was run; they are not evidence of customer-scale traffic. |
 
 ## Part I long-term scale path (3–12 months)
