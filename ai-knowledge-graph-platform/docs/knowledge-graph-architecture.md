@@ -392,9 +392,31 @@ synthetic sustainability example is available through
 material and facility data without claiming a live ERP, ESG provider or cloud
 deployment.
 
-This is a reusable foundation for later PostgreSQL/ERP adapters. It is not yet
-an RML/R2RML engine, an OBDA federation layer, or a live GLEIF/Copernicus
-connector.
+`PostgreSQLSourceConnector` supports the identical mapping contract through a
+read-only local PostgreSQL/TimescaleDB-compatible SQLAlchemy URL. Both source
+adapters pass an in-memory SHACL candidate-batch gate before the first Neo4j
+write; violations cannot leave a partial relational import behind.
+
+This is not yet an RML/R2RML engine, an OBDA federation layer, or a live
+GLEIF/Copernicus connector.
+
+### Controlled agent graph facts
+
+The MCP server exposes `query_graph_facts_tool` for a narrow class of direct
+graph facts, such as `What does Northwind Components supply?` and `List
+suppliers`. It is a deterministic intent parser, not arbitrary LLM-to-Cypher:
+only fixed, read-only Cypher templates are executable; values are parameters;
+every template has a tenant predicate and a maximum result limit of 100.
+Unsupported questions are returned to normal cited GraphRAG retrieval.
+
+### PROV-O interoperability
+
+The Turtle export now binds the standard `prov:` namespace. Entities and
+reified relationship assertions with a source document emit
+`prov:wasDerivedFrom` links to tenant-scoped source-artifact resources; relation
+assertions also export `prov:generatedAtTime` when extraction time is present.
+The existing annotation vocabulary remains available for platform-specific
+confidence and temporal fields.
 
 ### Correlation and telemetry
 

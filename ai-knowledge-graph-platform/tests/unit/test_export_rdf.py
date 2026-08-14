@@ -6,8 +6,6 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 # Allow importing from scripts/
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
@@ -17,6 +15,7 @@ from rdflib.namespace import XSD
 BASE  = Namespace("https://graphrag.example.com/ontology#")
 INST  = Namespace("https://graphrag.example.com/entity/")
 ANNOT = Namespace("https://graphrag.example.com/annotation#")
+PROV = Namespace("http://www.w3.org/ns/prov#")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -112,6 +111,11 @@ class TestGraphStructure:
         p_uri = _rel_uri("SUPERSEDES")
         assert (s_uri, p_uri, o_uri) in g
 
+    def test_prov_namespace_is_bound(self):
+        from export_rdf import _init_graph
+
+        assert str(dict(_init_graph().namespaces())["prov"]) == str(PROV)
+
 
 # ── Reified confidence (owl:Axiom) ────────────────────────────────────────────
 
@@ -126,7 +130,6 @@ class TestReifiedConfidence:
         assert len(axioms) == 1
 
     def test_axiom_has_confidence_annotation(self):
-        from rdflib import Literal
         g = _build_graph_with(edges=[{
             "sname": "FAA", "stype": "ORG",
             "tname": "AD-2024", "ttype": "CONCEPT",
@@ -153,7 +156,6 @@ class TestReifiedConfidence:
 class TestTurtleSerialisation:
     def test_round_trips_through_turtle(self, tmp_path):
         """Write to Turtle, re-parse: triple count must be preserved."""
-        from export_rdf import _entity_uri, _rel_uri
         g_out = _build_graph_with(
             entities=[
                 {"name": "SpaceX", "type": "ORG", "tenant": "t1"},
@@ -320,3 +322,23 @@ class TestExportProducesConformantGraph:
         conforms, report = SHACLValidator.from_turtle(output).validate()
         assert not conforms
         assert "confidence" in report.lower()
+
+    async def test_export_emits_prov_o_source_linkage(self, tmp_path: Path) -> None:
+        from export_rdf import _entity_uri, export
+
+        neo4j = _make_neo4j(
+            ent_rows=[
+                {"name": "Supplier One", "type": "SUPPLIER", "desc": None,
+                 "vf": None, "vt": None, "src_doc": "relational:supplier-db",
+                 "tenant": "sustainability"},
+            ],
+        )
+        output = tmp_path / "prov.ttl"
+        with patch("graphrag.graph.neo4j_client.get_neo4j", return_value=neo4j):
+            await export(tenant="sustainability", output=output, limit=1000)
+
+        graph = Graph().parse(output, format="turtle")
+        entity = _entity_uri("Supplier One", "SUPPLIER", "sustainability")
+        source = list(graph.objects(entity, PROV.wasDerivedFrom))
+        assert len(source) == 1
+        assert (source[0], RDF.type, PROV.Entity) in graph

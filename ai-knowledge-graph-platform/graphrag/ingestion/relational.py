@@ -100,6 +100,7 @@ class MappingValidationReport(BaseModel):
     entity_rows: int = 0
     relation_rows: int = 0
     errors: list[str] = Field(default_factory=list)
+    shacl_conforms: bool | None = None
 
 
 class SQLiteSourceConnector:
@@ -115,10 +116,9 @@ class SQLiteSourceConnector:
     ):
         spec = mapping.mapping
         tables = list(spec.get("entities", [])) + list(spec.get("relations", []))
-        loop = asyncio.get_running_loop()
         for table_spec in tables:
             table = _identifier(str(table_spec["table"]), "table")
-            rows = await loop.run_in_executor(None, self._read_table, table)
+            rows = await self.read_table(table)
             for index, row in enumerate(rows):
                 external_id = f"{table}:{row.get('id', index)}"
                 yield SourceEnvelope(
@@ -136,11 +136,67 @@ class SQLiteSourceConnector:
             conn.row_factory = sqlite3.Row
             return [dict(row) for row in conn.execute(f'SELECT * FROM "{table}"')]
 
+    async def read_table(self, table: str) -> list[dict[str, Any]]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._read_table, _identifier(table, "table"))
+
+
+class PostgreSQLSourceConnector:
+    """Read-only PostgreSQL adapter for the same local mapping contract.
+
+    It works with a local Docker PostgreSQL instance through a SQLAlchemy
+    async URL. Table names are identifier-validated; all values remain data,
+    never executable SQL supplied by a mapping or an agent.
+    """
+
+    kind = SourceKind.DATABASE
+
+    def __init__(self, url: str):
+        if not url.startswith(("postgresql+asyncpg://", "postgresql://")):
+            raise ValueError("PostgreSQL URL must use postgresql+asyncpg:// or postgresql://")
+        self.url = url
+        self._engine = None
+
+    def _get_engine(self):
+        if self._engine is None:
+            from sqlalchemy.ext.asyncio import create_async_engine
+            self._engine = create_async_engine(self.url, pool_pre_ping=True)
+        return self._engine
+
+    async def read_table(self, table: str) -> list[dict[str, Any]]:
+        from sqlalchemy import text
+
+        safe_table = _identifier(table, "table")
+        async with self._get_engine().connect() as connection:
+            result = await connection.execute(text(f'SELECT * FROM "{safe_table}"'))
+            return [dict(row) for row in result.mappings().all()]
+
+    async def records(
+        self, source: SourceSystem, mapping: SourceMapping, *, cursor: str = ""
+    ):
+        spec = mapping.mapping
+        tables = list(spec.get("entities", [])) + list(spec.get("relations", []))
+        for table_spec in tables:
+            table = _identifier(str(table_spec["table"]), "table")
+            for index, row in enumerate(await self.read_table(table)):
+                yield SourceEnvelope(
+                    external_id=f"{table}:{row.get('id', index)}",
+                    content=json.dumps(row, sort_keys=True, default=str),
+                    content_type="application/json",
+                    metadata={"table": table, "source_id": source.id},
+                    cursor=str(index + 1),
+                )
+
+    async def close(self) -> None:
+        if self._engine is not None:
+            await self._engine.dispose()
+            self._engine = None
+
 
 class RelationalGraphIngestor:
     """Validate and persist mapped relational rows through ``GraphWriter``."""
 
-    def __init__(self, connector: SQLiteSourceConnector, graph_writer):
+    def __init__(self, connector: SQLiteSourceConnector | PostgreSQLSourceConnector, graph_writer):
         self.connector = connector
         self.graph_writer = graph_writer
 
@@ -151,7 +207,7 @@ class RelationalGraphIngestor:
         relation_rows = 0
 
         for table_map in mapping.entities:
-            rows = self.connector._read_table(_identifier(table_map.table, "table"))
+            rows = await self.connector.read_table(table_map.table)
             entity_rows += len(rows)
             for row in rows:
                 key = row.get(table_map.id_column)
@@ -164,7 +220,7 @@ class RelationalGraphIngestor:
                     entity_keys.add((table_map.table, str(key)))
 
         for table_map in mapping.relations:
-            rows = self.connector._read_table(_identifier(table_map.table, "table"))
+            rows = await self.connector.read_table(table_map.table)
             relation_rows += len(rows)
             for row in rows:
                 if row.get(table_map.source_column) in (None, ""):
@@ -190,7 +246,7 @@ class RelationalGraphIngestor:
         by_source_key: dict[tuple[str, str], Entity] = {}
         payload: list[dict[str, Any]] = []
         for table_map in mapping.entities:
-            rows = self.connector._read_table(table_map.table)
+            rows = await self.connector.read_table(table_map.table)
             for row in rows:
                 source_key = str(row[table_map.id_column])
                 entity_id = str(uuid5(NAMESPACE_URL, f"{mapping.source_id}:{table_map.table}:{source_key}"))
@@ -210,7 +266,7 @@ class RelationalGraphIngestor:
 
         relations: list[Relation] = []
         for table_map in mapping.relations:
-            for row in self.connector._read_table(table_map.table):
+            for row in await self.connector.read_table(table_map.table):
                 source = by_source_key.get((table_map.source_table, str(row[table_map.source_column])))
                 target = by_source_key.get((table_map.target_table, str(row[table_map.target_column])))
                 if source is None or target is None:
@@ -227,6 +283,15 @@ class RelationalGraphIngestor:
                     valid_to=self._timestamp(row.get(table_map.valid_to_column)) if table_map.valid_to_column else None,
                     source_doc_id=f"relational:{mapping.source_id}",
                 ))
+
+        from graphrag.graph.shacl_validator import SHACLValidator
+
+        conforms, shacl_report = SHACLValidator.validate_relational_batch(
+            entities, relations, tenant=mapping.tenant,
+        )
+        report.shacl_conforms = conforms
+        if not conforms:
+            raise ValueError("relational mapping rejected by SHACL: " + shacl_report)
 
         raw = json.dumps(payload, sort_keys=True, default=str)
         document = Document(
@@ -267,5 +332,6 @@ class RelationalGraphIngestor:
 
 __all__ = [
     "EntityTableMapping", "RelationTableMapping", "RelationalGraphMapping",
-    "MappingValidationReport", "SQLiteSourceConnector", "RelationalGraphIngestor",
+    "MappingValidationReport", "SQLiteSourceConnector", "PostgreSQLSourceConnector",
+    "RelationalGraphIngestor",
 ]

@@ -50,6 +50,7 @@ log = structlog.get_logger(__name__)
 BASE  = Namespace("https://graphrag.example.com/ontology#")
 INST  = Namespace("https://graphrag.example.com/entity/")
 ANNOT = Namespace("https://graphrag.example.com/annotation#")
+PROV  = Namespace("http://www.w3.org/ns/prov#")
 
 
 def _entity_uri(name: str, etype: str, tenant: str) -> URIRef:
@@ -75,6 +76,24 @@ def _axiom_uri(s_name: str, rel: str, t_name: str) -> URIRef:
     return INST[f"axiom/{h}"]
 
 
+def _document_uri(source_doc_id: str, tenant: str) -> URIRef:
+    """Stable PROV-O source-artifact URI scoped to the owning tenant."""
+    import urllib.parse
+
+    return INST[
+        f"document/{urllib.parse.quote(tenant, safe='')}/"
+        f"{urllib.parse.quote(source_doc_id, safe='')}"
+    ]
+
+
+def _add_provenance_document(g: Graph, source_doc_id: str, tenant: str) -> URIRef:
+    uri = _document_uri(source_doc_id, tenant)
+    g.add((uri, RDF.type, PROV.Entity))
+    g.add((uri, RDFS.label, Literal(source_doc_id)))
+    g.add((uri, ANNOT.tenant, Literal(tenant)))
+    return uri
+
+
 # ── Graph builder ──────────────────────────────────────────────────────────────
 
 def _init_graph() -> Graph:
@@ -86,6 +105,7 @@ def _init_graph() -> Graph:
     g.bind("rdf",   RDF)
     g.bind("rdfs",  RDFS)
     g.bind("xsd",   XSD)
+    g.bind("prov",  PROV)
 
     # Ontology declaration
     ont = URIRef("https://graphrag.example.com/ontology")
@@ -158,6 +178,7 @@ async def export(tenant: str, output: Path, limit: int, infer: bool = False, val
         WHERE ($tenant = 'default' OR e.tenant = $tenant)
         RETURN e.name AS name, e.type AS type, e.description AS desc,
                e.valid_from AS vf, e.valid_to AS vt, e.tenant AS tenant
+               , e.source_doc_id AS src_doc
         LIMIT $limit
         """,
         tenant=tenant, limit=limit,
@@ -178,6 +199,8 @@ async def export(tenant: str, output: Path, limit: int, infer: bool = False, val
             g.add((uri, ANNOT.validFrom, Literal(str(row["vf"]))))
         if row.get("vt"):
             g.add((uri, ANNOT.validTo, Literal(str(row["vt"]))))
+        if row.get("src_doc"):
+            g.add((uri, PROV.wasDerivedFrom, _add_provenance_document(g, str(row["src_doc"]), t)))
 
     # ── Relations with reified confidence ─────────────────────────────────────
     edge_rows = await neo4j.run(
@@ -189,6 +212,7 @@ async def export(tenant: str, output: Path, limit: int, infer: bool = False, val
                r.relation AS rel,
                r.confidence AS conf,
                r.source_doc_id AS src_doc,
+               r.extracted_at AS extracted_at,
                r.tenant AS tenant
         LIMIT $limit
         """,
@@ -216,6 +240,9 @@ async def export(tenant: str, output: Path, limit: int, infer: bool = False, val
                 g.add((ax, ANNOT.confidence, Literal(round(float(conf), 4), datatype=XSD.float)))
             if sdoc:
                 g.add((ax, ANNOT.sourceDoc, Literal(sdoc)))
+                g.add((ax, PROV.wasDerivedFrom, _add_provenance_document(g, sdoc, t)))
+            if row.get("extracted_at"):
+                g.add((ax, PROV.generatedAtTime, Literal(str(row["extracted_at"]), datatype=XSD.dateTime)))
 
     # ── Negative relations ─────────────────────────────────────────────────────
     neg_rows = await neo4j.run(
@@ -225,6 +252,7 @@ async def export(tenant: str, output: Path, limit: int, infer: bool = False, val
         RETURN s.name AS sname, s.type AS stype,
                t.name AS tname, t.type AS ttype,
                r.relation AS rel, r.confidence AS conf,
+               r.source_doc_id AS src_doc,
                r.tenant AS tenant
         LIMIT $limit
         """,
@@ -248,6 +276,9 @@ async def export(tenant: str, output: Path, limit: int, infer: bool = False, val
             g.add((ax, OWL.annotatedTarget,   o_uri))
             g.add((ax, ANNOT.confidence,
                    Literal(round(float(row["conf"]), 4), datatype=XSD.float)))
+            if row.get("src_doc"):
+                g.add((ax, PROV.wasDerivedFrom,
+                       _add_provenance_document(g, str(row["src_doc"]), t)))
 
     # ── Optional OWL-RL closure ────────────────────────────────────────────────
     if infer:

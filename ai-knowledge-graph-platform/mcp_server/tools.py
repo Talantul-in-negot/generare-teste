@@ -10,6 +10,7 @@ from __future__ import annotations
 import structlog
 
 from graphrag.graph.alias_registry import AmbiguousMatch, load_alias_registry
+from graphrag.graph.controlled_query import ControlledQueryError, execute_controlled_query
 from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.retrieval.hybrid_retriever import HybridRetriever
 
@@ -71,3 +72,18 @@ async def lookup_entity(
         "importance_pagerank": pagerank.get(canonical_name),
         "relations": neighbors,
     }
+
+
+async def query_graph_facts(question: str, tenant: str = "default", limit: int = 25) -> dict:
+    """Run a supported natural-language graph fact query safely.
+
+    The implementation accepts no raw Cypher or SPARQL. It only executes a
+    fixed, parameterized and tenant-scoped query template selected by the
+    deterministic controlled-query planner.
+    """
+    try:
+        return await execute_controlled_query(
+            get_neo4j(), question, tenant=tenant, limit=limit,
+        )
+    except ControlledQueryError as exc:
+        return {"supported": False, "tenant": tenant, "message": str(exc)}

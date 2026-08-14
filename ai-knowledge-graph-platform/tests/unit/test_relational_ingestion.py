@@ -9,6 +9,7 @@ from graphrag.ingestion.relational import (
     RelationTableMapping,
     RelationalGraphIngestor,
     RelationalGraphMapping,
+    PostgreSQLSourceConnector,
     SQLiteSourceConnector,
 )
 
@@ -86,6 +87,20 @@ async def test_invalid_mapping_does_not_call_graph_writer(tmp_path):
         await ingestor.ingest(mapping)
 
 
+@pytest.mark.asyncio
+async def test_shacl_violation_prevents_all_graph_writes(tmp_path):
+    path = _db(tmp_path)
+    with sqlite3.connect(path) as db:
+        db.execute("UPDATE supplies SET confidence = 1.5")
+
+    class Writer:
+        async def write_document(self, _doc):
+            raise AssertionError("SHACL must reject before the first graph write")
+
+    with pytest.raises(ValueError, match="SHACL"):
+        await RelationalGraphIngestor(SQLiteSourceConnector(path), Writer()).ingest(_mapping())
+
+
 def test_mapping_digest_is_stable_and_secret_free():
     mapping = _mapping().as_source_mapping()
     assert mapping.config_digest == mapping.canonical_digest()
@@ -94,3 +109,24 @@ def test_mapping_digest_is_stable_and_secret_free():
             tenant="sustainability", source_id="supplier-db", version="1.0.0",
             mapping={"password": "should-not-be-here"},
         )
+
+
+def test_postgresql_connector_rejects_non_postgresql_urls():
+    with pytest.raises(ValueError, match="PostgreSQL URL"):
+        PostgreSQLSourceConnector("sqlite:///not-a-postgres.db")
+
+
+@pytest.mark.asyncio
+async def test_postgresql_connector_uses_the_same_row_contract(monkeypatch):
+    connector = PostgreSQLSourceConnector("postgresql+asyncpg://user:pass@localhost:5432/local")
+
+    async def rows(table):
+        return [{"id": "s1", "name": "Supplier One"}] if table == "suppliers" else []
+
+    monkeypatch.setattr(connector, "read_table", rows)
+    source = type("Source", (), {"id": "supplier-db"})()
+    mapping = _mapping().as_source_mapping()
+    rows_out = [row async for row in connector.records(source, mapping)]
+
+    assert rows_out[0].external_id == "suppliers:s1"
+    assert rows_out[0].metadata["source_id"] == "supplier-db"

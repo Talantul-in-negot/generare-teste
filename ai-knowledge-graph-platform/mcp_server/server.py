@@ -53,7 +53,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.retrieval.hybrid_retriever import HybridRetriever
 from graphrag.retrieval.reranker import _get_cross_encoder
-from mcp_server.tools import lookup_entity, query_knowledge_graph
+from mcp_server.tools import lookup_entity, query_graph_facts, query_knowledge_graph
 
 log = structlog.get_logger(__name__)
 
@@ -117,6 +117,21 @@ async def lookup_entity_tool(
     as_of: optional ISO date string to filter relations by temporal validity.
     """
     return await lookup_entity(name, tenant, as_of, limit)
+
+
+@mcp.tool()
+async def query_graph_facts_tool(
+    question: str,
+    tenant: str = "default",
+    limit: int = 25,
+) -> dict:
+    """Answer a bounded graph-fact question without accepting raw graph query text.
+
+    Supported examples: "What does Northwind Components supply?", "Show
+    relationships for Northwind Components", and "List suppliers". For
+    open-ended questions, use query_knowledge_graph_tool instead.
+    """
+    return await query_graph_facts(question, tenant=tenant, limit=limit)
 
 
 if __name__ == "__main__":

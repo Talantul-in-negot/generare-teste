@@ -35,7 +35,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import structlog
-from rdflib import Graph
+from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib.namespace import RDF, RDFS, XSD
 
 log = structlog.get_logger(__name__)
 
@@ -100,6 +101,31 @@ _SHAPES_TTL = """
     ] .
 """
 
+_INGESTION_SHAPES_TTL = """
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:<http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ing: <https://graphrag.example.com/ingestion#> .
+
+ing:MappedEntityShape a sh:NodeShape ;
+    sh:targetClass ing:MappedEntity ;
+    sh:property [ sh:path rdfs:label ; sh:minCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path ing:entityType ; sh:minCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path ing:tenant ; sh:minCount 1 ; sh:datatype xsd:string ] .
+
+ing:MappedRelationShape a sh:NodeShape ;
+    sh:targetClass ing:MappedRelation ;
+    sh:property [ sh:path ing:source ; sh:minCount 1 ; sh:class ing:MappedEntity ] ;
+    sh:property [ sh:path ing:target ; sh:minCount 1 ; sh:class ing:MappedEntity ] ;
+    sh:property [ sh:path ing:relation ; sh:minCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path ing:confidence ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:datatype xsd:float ; sh:minInclusive 0.0 ; sh:maxInclusive 1.0 ] ;
+    sh:property [ sh:path ing:tenant ; sh:minCount 1 ; sh:datatype xsd:string ] .
+"""
+
+_INGEST = Namespace("https://graphrag.example.com/ingestion#")
+
 
 class SHACLValidator:
     """Validate an rdflib Graph against the platform's SHACL shapes.
@@ -160,4 +186,65 @@ class SHACLValidator:
             abort_on_first=False,
         )
         log.info("shacl_validator.validated", conforms=conforms, triples=len(self._g))
+        return conforms, results_text
+
+    @staticmethod
+    def validate_relational_batch(
+        entities: list[object], relations: list[object], *, tenant: str,
+    ) -> tuple[bool, str]:
+        """Validate a candidate relational import before Neo4j writes.
+
+        The temporary RDF graph is intentionally small and uses dedicated
+        ingestion shapes: mapped entities require identity/type/tenant and
+        relations require valid endpoint nodes, relation name, confidence and
+        tenant. This complements the post-write export validation by making
+        SHACL a real mutation gate for the relational ingestion path.
+        """
+        try:
+            from pyshacl import validate  # type: ignore[import]
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "pyshacl is required for relational ingestion validation: "
+                "pip install pyshacl>=0.29.0"
+            ) from exc
+
+        graph = Graph()
+        entity_uris: dict[str, URIRef] = {}
+        for entity in entities:
+            entity_id = str(getattr(entity, "id", ""))
+            uri = URIRef(f"https://graphrag.example.com/ingestion/entity/{entity_id}")
+            entity_uris[entity_id] = uri
+            graph.add((uri, RDF.type, _INGEST.MappedEntity))
+            graph.add((uri, RDFS.label, Literal(str(getattr(entity, "name", "")))))
+            graph.add((uri, _INGEST.entityType, Literal(str(getattr(entity, "type", "")))))
+            graph.add((uri, _INGEST.tenant, Literal(str(getattr(entity, "tenant", "")))))
+
+        for relation in relations:
+            relation_id = str(getattr(relation, "id", ""))
+            uri = URIRef(f"https://graphrag.example.com/ingestion/relation/{relation_id}")
+            source_id = str(getattr(relation, "source_entity_id", ""))
+            target_id = str(getattr(relation, "target_entity_id", ""))
+            graph.add((uri, RDF.type, _INGEST.MappedRelation))
+            graph.add((uri, _INGEST.source, entity_uris.get(source_id, URIRef("urn:missing:source"))))
+            graph.add((uri, _INGEST.target, entity_uris.get(target_id, URIRef("urn:missing:target"))))
+            graph.add((uri, _INGEST.relation, Literal(str(getattr(relation, "relation", "")))))
+            graph.add((uri, _INGEST.confidence, Literal(float(getattr(relation, "confidence", -1)), datatype=XSD.float)))
+            graph.add((uri, _INGEST.tenant, Literal(tenant)))
+
+        shapes_graph = Graph().parse(data=_INGESTION_SHAPES_TTL, format="turtle")
+        conforms, _results_graph, results_text = validate(
+            graph,
+            shacl_graph=shapes_graph,
+            data_graph_format="turtle",
+            shacl_graph_format="turtle",
+            inference="none",
+            abort_on_first=False,
+        )
+        log.info(
+            "shacl_validator.relational_batch_validated",
+            conforms=conforms,
+            entities=len(entities),
+            relations=len(relations),
+            tenant=tenant,
+        )
         return conforms, results_text
