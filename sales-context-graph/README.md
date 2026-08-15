@@ -78,6 +78,13 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
 
 The repository has a broad unit/integration/security/evaluation suite with
 **560 tests collected**. The latest full local run
+
+The sales-domain extension adds typed, provider-neutral contracts and grounded
+next-action abstention in [`docs/sales-context-graph.md`](docs/sales-context-graph.md).
+High-risk CRM command patches are approval-gated and carry tenant, actor,
+idempotency, optimistic-version, dry-run and correlation fields. A live CRM
+write adapter and remote MCP transport remain explicitly pending external
+integration validation; no production outcomes are claimed.
 (`pytest tests/ -q -p no:unraisableexception`, against the Docker-Compose
 Neo4j/Redis stack) executed all 560 and finished **560 passed / 0 failed in
 324 seconds**, with `ruff check` and `mypy` (162 source files) both clean. Windows emits asyncio "Event loop is closed" noise at
