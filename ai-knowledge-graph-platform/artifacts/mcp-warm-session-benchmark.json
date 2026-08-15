@@ -1,0 +1,14 @@
+{
+  "report_schema_version": "mcp-warm-session-benchmark/v1",
+  "tenant": "local-evidence",
+  "requests": 1000,
+  "workers": 25,
+  "sessions_initialized": 25,
+  "failed": 0,
+  "elapsed_seconds": 33.76151890000256,
+  "throughput_rps": 29.619520465352174,
+  "p50_latency_ms": 628.9621500018256,
+  "p95_latency_ms": 3743.8598000007914,
+  "p99_latency_ms": 4038.8309999980265,
+  "claim_policy": "Authenticated local MCP calls after one session initialization per worker; not production capacity."
+}

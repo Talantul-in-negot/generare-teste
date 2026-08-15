@@ -21,6 +21,7 @@ def main() -> None:
     load = _read(artifacts / "mcp-graph-fact-load-matrix.json") if (artifacts / "mcp-graph-fact-load-matrix.json").exists() else _read(artifacts / "mcp-graph-fact-load.json")
     writes = _read(artifacts / "governed-write-evidence.json")
     failure = _read(artifacts / "local-failure-exercises.json") if (artifacts / "local-failure-exercises.json").exists() else None
+    warm = _read(artifacts / "mcp-warm-session-benchmark.json") if (artifacts / "mcp-warm-session-benchmark.json").exists() else None
     scenarios = load.get("scenarios", [load])
     lines = [
         "# Public Local Evaluation Report", "",
@@ -34,6 +35,7 @@ def main() -> None:
         f"| Empty-corpus baseline pass rate | {retrieval['baseline']['pass_rate']:.0%} | `data/evidence/graph-fact-golden.json` |",
         *[f"| MCP load ({item['total']} requests) | {item['passed']}/{item['total']} passed; {item['throughput_rps']:.2f} req/s; p95 {item['p95_latency_ms']:.2f} ms | `artifacts/mcp-graph-fact-load-matrix.json` |" for item in scenarios],
         *( [f"| Local failure-control matrix | {failure['passed']}/{failure['passed'] + failure['failed']} scenarios passed | `artifacts/local-failure-exercises.json` |"] if failure else [] ),
+        *( [f"| Warm MCP session load | {warm['requests']}/{warm['requests'] + warm['failed']} passed; {warm['throughput_rps']:.2f} req/s; p95 {warm['p95_latency_ms']:.2f} ms | `artifacts/mcp-warm-session-benchmark.json` |"] if warm else [] ),
         "", "## Governed operational write cases", "",
         "- Approval gate: " + writes["write_approval_requested"]["outcome"],
         "- Approved write: " + writes["write_executed"]["outcome"],

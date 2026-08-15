@@ -144,7 +144,7 @@ services:
     volumes:
       - .:/app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5

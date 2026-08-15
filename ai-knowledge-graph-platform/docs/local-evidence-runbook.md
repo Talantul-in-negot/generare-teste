@@ -36,6 +36,16 @@ each request/concurrency scenario. It
 includes a fresh MCP session initialization in each measured request, so it is a
 reproducible local service measurement rather than a production capacity claim.
 
+Measure the optimized warm-session path separately:
+
+```powershell
+python scripts/run_mcp_warm_session_benchmark.py --dev-token --tenant local-evidence --requests 1000 --concurrency 25 --output artifacts/mcp-warm-session-benchmark.json
+```
+
+This initializes one authenticated MCP session per worker and measures only
+subsequent tool calls. Keep cold and warm reports side by side; the difference
+is transport/session overhead, not an end-to-end application improvement.
+
 ## 3. Governed write evidence
 
 ```powershell
@@ -134,6 +144,16 @@ versions, tenant boundaries, approval bypass, compensation replay, and backup
 integrity. The Kubernetes commands validate rendered manifests and admission
 shape. See `docs/local-kubernetes-validation.md` for rollout and rollback steps;
 neither exercise is a production availability or incident-prevention claim.
+
+With Docker Compose running, exercise a real dependency restart and restore:
+
+```powershell
+python scripts/run_docker_failure_exercise.py --service redis --output artifacts/docker-redis-failure-exercise.json
+```
+
+The command stops only the selected local dependency and always attempts to
+start it again. It records container recovery, not application-level incident
+prevention.
 
 ## Public artifacts
 
