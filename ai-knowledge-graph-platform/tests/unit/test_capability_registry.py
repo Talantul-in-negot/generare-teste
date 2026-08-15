@@ -99,6 +99,17 @@ class TestDiscover:
         listing = registry.discover(_identity(scopes=frozenset({"biz:write"})))
         assert {item["capability_id"] for item in listing} == {"kg.write"}
 
+    async def test_platform_discovery_capability_returns_only_entitled_specs(self):
+        from mcp_server.capabilities import build_registry
+
+        registry = build_registry()
+        identity = _identity(scopes=frozenset({"read"}))
+        result = await registry.call("platform.capabilities.discover@1.0.0", {}, identity)
+        assert result["tenant"] == "aerospace"
+        ids = {item["capability_id"] for item in result["capabilities"]}
+        assert "biz.workorder.create" not in ids
+        assert "platform.capabilities.discover" in ids
+
 
 class TestContractSnapshot:
     def test_is_entitlement_independent_and_sorted(self):

@@ -110,5 +110,16 @@ class ContextBuilder:
         if synthesized:
             sections.append(f"Community knowledge:\n{synthesized}")
 
+        # Global-mode citations: community summaries carry no per-fact
+        # provenance, so this is the representative document set attached by
+        # GlobalSearch.search() (see Neo4jClient.get_community_source_documents),
+        # not a claim that every one of these documents grounds every sentence
+        # in the synthesized text — the same coarseness local search would have
+        # if it cited "the corpus" instead of a specific chunk. Still strictly
+        # better than the unconditional empty list every purely-global-mode
+        # answer previously returned regardless of how well-grounded it was.
+        for community in global_results.get("communities", []):
+            citations.extend(community.get("source_documents", []))
+
         context = "\n\n---\n\n".join(sections)
         return context, list(dict.fromkeys(citations))  # deduplicate preserving order

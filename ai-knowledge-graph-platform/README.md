@@ -47,7 +47,9 @@ The graph is not a RAG index. It is a formally modeled knowledge base:
 - [`docs/adr/0006-dual-llm-architecture.md`](docs/adr/0006-dual-llm-architecture.md) — Why Groq 8B routing + DeepSeek synthesis; historical latency benchmark is clearly labeled
 - [`docs/adr/0007-capability-gated-neo4j-vector-search.md`](docs/adr/0007-capability-gated-neo4j-vector-search.md) — Neo4j 2026 `SEARCH` with a 5.20 compatibility fallback
 - [`docs/adr/0008-adaptive-retrieval-routing.md`](docs/adr/0008-adaptive-retrieval-routing.md) — Measured tenant-scoped retrieval route selection
+- [`docs/adr/0009-agent-platform-trust-boundaries.md`](docs/adr/0009-agent-platform-trust-boundaries.md) — Agent identity, capability, write, and telemetry trust boundaries
 - [`docs/adr/ADR-Context-Graph-Decision-Trace.md`](docs/adr/ADR-Context-Graph-Decision-Trace.md) — Bounded Context Graph ownership, trace integrity, and privacy rules
+- [`docs/mcp-operations.md`](docs/mcp-operations.md) — authenticated Streamable HTTP MCP operations and deployment gate
 - [`evals/golden_set.json`](evals/golden_set.json) — 34-question golden eval set (v2.2); run with `scripts/run_golden_eval.py`
 
 **Live demo (no services required):**
@@ -818,19 +820,29 @@ Every ingestion batch runs the following checks automatically:
 
 | Metric | Measured | Target |
 |--------|----------|--------|
-| `faithfulness` | **0.940** — measured against golden set **v2.1 (39 questions)**, 23 scored / 16 refusals¹ | ≥ 0.85 ✓ |
+| `faithfulness` | **0.919** — measured against golden set **v2.2 (34 questions)**, 29 scored / 0 refusals / 5 unscorable¹ | ≥ 0.85 ✓ |
 
-> ⚠ **This number predates the current golden set and must be re-measured before it is quoted.**
-> `evals/golden_set.json` is now **v2.2 (34 questions)**. v2.2 retired CON-01 and CON-02 —
-> its own changelog records that *"CON-02 asked the model to invent a conflict"* and that the
-> aerospace corpus contains no genuine cross-document contradiction — and removed the
-> mis-scoped architecture/domain meta-questions. Both retired contradiction questions scored
-> a perfect 1.0 in the run above, so the 0.940 includes credit from questions since deleted
-> as invalid. Re-run with `python scripts/run_golden_eval.py --tenant aerospace` and replace
-> this row. `docs/performance-metrics-inventory.md` independently reports 0.937 answerable /
-> 0.842 overall from a different run; treat both as historical until re-measured.
+Measured 2026-08-14 with a fresh aerospace ingestion (459 entities, 640 edges) via
+`python scripts/run_faithfulness_eval.py`. This replaces an earlier 0.940 figure that was
+measured against golden set v2.1 (39 questions, including two contradiction questions since
+retired as invalid — see `evals/golden_set.json`'s changelog) — that number is no longer
+current and should not be cited.
 
-¹ *Correct refusals (when the corpus genuinely lacks the answer — including 2 questions that ask about the system's own architecture, which the aerospace corpus has no information on) score 0 in RAGAS and are excluded from the scored denominator. A system that declines rather than invents is the desired behaviour. `answer_relevancy`/`context_precision`/`context_recall` figures below are from an earlier 10-question subset and have not been re-measured on the full set — do not cite them as current.*
+By question type (n scored): single_hop 0.875 (8) · multi_hop 0.917 (4) · temporal 0.938 (4) ·
+inference 0.944 (3) · authority_chain 0.950 (2) · negative 0.833 (2) · precision 1.000 (2) ·
+calibration 0.900 (1) · agentic 0.929 (1) · contextual 1.000 (2).
+
+¹ *Two exclusion categories, both correctly excluded from the scored denominator rather than
+counted as failures. **Refusals**: the corpus genuinely lacks the answer (score 0 in RAGAS by
+construction) — a system that declines rather than invents is the desired behaviour; none
+occurred in this run. **Unscorable**: RAGAS's own claim-decomposition step found no verifiable
+statements to check, which happens on short/terse or yes-no answers — this is "metric not
+applicable," not a faithfulness violation. Averaging either category in would either
+underpenalize or misrepresent the model; `scripts/run_faithfulness_eval.py` filters both out of
+the aggregate explicitly. `answer_relevancy`/`context_precision`/`context_recall` below are from
+an earlier 10-question subset and are not re-measured here — `config/settings.yml` only enables
+the `faithfulness` RAGAS metric to conserve quota, so those three are not computed by this
+script at all currently.*
 
 | Metric (10-question subset, not re-verified on full set) | Measured |
 |--------|----------|

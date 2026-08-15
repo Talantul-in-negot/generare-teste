@@ -1,10 +1,10 @@
 """MCP server exposing the versioned GraphRAG capability registry.
 
-Identity is resolved once at process start from `GRAPHRAG_MCP_TOKEN`
-(`mcp_server/identity.py`), fail-closed: a missing, expired, or tenant-less
-token resolves to an anonymous identity rather than refusing to start. Every
-capability call is then denied with a structured result rather than the
-server crashing or the stdio connection dying.
+The local stdio transport resolves its identity from `GRAPHRAG_MCP_TOKEN`;
+the remote Streamable HTTP transport binds a verified bearer identity to each
+request. In both cases, a missing, expired, or tenant-less token resolves to
+an anonymous identity and every capability call is denied with a structured
+result rather than letting a process-global identity leak between callers.
 
 Each `@mcp.tool()` function below is a thin wrapper around
 `CapabilityRegistry.call()` -- the registry (`mcp_server/capabilities/`), not
@@ -33,15 +33,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from mcp.server.fastmcp import FastMCP
+# MCP stdio reserves stdout for JSON-RPC. Configure before importing any
+# GraphRAG module that may emit structlog events, otherwise a diagnostic line
+# can corrupt the client protocol stream. Remote MCP can safely use stderr too.
+import structlog
+structlog.configure(logger_factory=structlog.PrintLoggerFactory(file=sys.stderr))
 
-from mcp_server.capabilities import build_registry
-from mcp_server.identity import CallerIdentity
-from mcp_server.registry import DeniedCapabilityCall
+from mcp.server.fastmcp import FastMCP  # noqa: E402
+
+from mcp_server.capabilities import build_registry  # noqa: E402
+from mcp_server.identity import CallerIdentity  # noqa: E402
+from mcp_server.registry import DeniedCapabilityCall  # noqa: E402
+from graphrag.observability.correlation import current_correlation_id  # noqa: E402
 
 mcp = FastMCP("graphrag")
 _registry = build_registry()
-_identity = CallerIdentity.resolve()
 
 
 def _result_to_dict(result: object) -> dict:
@@ -56,6 +62,19 @@ def _result_to_dict(result: object) -> dict:
 
 
 @mcp.tool()
+async def discover_capabilities() -> dict:
+    """List versioned capabilities available to this authenticated caller.
+
+    Discovery is entitlement-filtered: unavailable write tools are omitted,
+    rather than advertised and then denied on invocation.
+    """
+    result = await _registry.call(
+        "platform.capabilities.discover@1.0.0", {}, CallerIdentity.current(),
+    )
+    return _result_to_dict(result)
+
+
+@mcp.tool()
 async def graph_stats(tenant: str = "aerospace") -> dict:
     """Return entity, edge, and community counts for a tenant's knowledge graph.
 
@@ -64,7 +83,7 @@ async def graph_stats(tenant: str = "aerospace") -> dict:
     now an assertion, not an authority: it must match the caller's
     identity-bound tenant, or the call is denied.
     """
-    result = await _registry.call("graph_stats", {"tenant": tenant}, _identity)
+    result = await _registry.call("graph_stats", {"tenant": tenant}, CallerIdentity.current())
     return _result_to_dict(result)
 
 
@@ -77,7 +96,68 @@ async def query_graph_facts(question: str, tenant: str = "aerospace", limit: int
     `kg.facts.query@1.0.0`.
     """
     result = await _registry.call(
-        "kg.facts.query", {"question": question, "tenant": tenant, "limit": limit}, _identity,
+        "kg.facts.query", {"question": question, "tenant": tenant, "limit": limit}, CallerIdentity.current(),
+    )
+    return _result_to_dict(result)
+
+
+@mcp.tool()
+async def query_knowledge_graph(
+    question: str,
+    tenant: str = "aerospace",
+    mode: str = "hybrid",
+    session_id: str = "",
+) -> dict:
+    """Return a grounded GraphRAG answer with citations.
+
+    Backed by ``kg.answer.query@1.0.0``.  Retrieval routing stays inside the
+    existing HybridRetriever; MCP supplies only authenticated, tenant-bound
+    invocation.
+    """
+    result = await _registry.call(
+        "kg.answer.query@1.0.0",
+        {"question": question, "tenant": tenant, "mode": mode, "session_id": session_id},
+        CallerIdentity.current(),
+    )
+    return _result_to_dict(result)
+
+
+@mcp.tool()
+async def lookup_entity(
+    name: str,
+    tenant: str = "aerospace",
+    as_of: str | None = None,
+    limit: int = 25,
+) -> dict:
+    """Resolve an entity and return tenant-scoped evidence and relations.
+
+    Backed by ``kg.entity.lookup@1.0.0``. Ambiguous entities are returned as
+    candidates; the tool never guesses a canonical identity.
+    """
+    result = await _registry.call(
+        "kg.entity.lookup@1.0.0",
+        {"name": name, "tenant": tenant, "as_of": as_of, "limit": limit},
+        CallerIdentity.current(),
+    )
+    return _result_to_dict(result)
+
+
+@mcp.tool()
+async def find_context_precedents(
+    policy_version_id: str,
+    tenant: str = "aerospace",
+    limit: int = 10,
+) -> dict:
+    """Find tenant-scoped, outcome-backed decision precedents for a policy.
+
+    Backed by ``cg.precedent.find@1.0.0``. Returned scores expose policy
+    compatibility, observed outcome state, and feedback tied to that outcome;
+    an agent cannot write or self-promote precedent data through this tool.
+    """
+    result = await _registry.call(
+        "cg.precedent.find@1.0.0",
+        {"policy_version_id": policy_version_id, "tenant": tenant, "limit": limit},
+        CallerIdentity.current(),
     )
     return _result_to_dict(result)
 
@@ -114,8 +194,9 @@ async def create_work_order(
             "title": title, "description": description, "assignee": assignee,
             "expected_version": expected_version, "dry_run": dry_run,
             "approval_id": approval_id, "command_id": command_id,
+            "correlation_id": current_correlation_id(),
         },
-        _identity,
+        CallerIdentity.current(),
     )
     return _result_to_dict(result)
 

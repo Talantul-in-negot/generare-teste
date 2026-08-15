@@ -1,6 +1,25 @@
 [
   {
     "arg_schema_keys": [
+      "limit",
+      "policy_version_id",
+      "tenant"
+    ],
+    "capability_id": "cg.precedent.find",
+    "deprecated": false,
+    "dry_run_ok": true,
+    "kind": "read",
+    "legacy_aliases": [],
+    "qualified_name": "cg.precedent.find@1.0.0",
+    "replacement": null,
+    "required_scopes": [],
+    "requires_approval": false,
+    "risk": "moderate",
+    "title": "Find outcome-backed Context Graph precedents",
+    "version": "1.0.0"
+  },
+  {
+    "arg_schema_keys": [
       "approval_id",
       "assignee",
       "command_id",
@@ -25,6 +44,46 @@
     "requires_approval": true,
     "risk": "moderate",
     "title": "Create a remediation work order from a compliance finding",
+    "version": "1.0.0"
+  },
+  {
+    "arg_schema_keys": [
+      "mode",
+      "question",
+      "session_id",
+      "tenant"
+    ],
+    "capability_id": "kg.answer.query",
+    "deprecated": false,
+    "dry_run_ok": true,
+    "kind": "read",
+    "legacy_aliases": [],
+    "qualified_name": "kg.answer.query@1.0.0",
+    "replacement": null,
+    "required_scopes": [],
+    "requires_approval": false,
+    "risk": "moderate",
+    "title": "Grounded hybrid GraphRAG answer with citations",
+    "version": "1.0.0"
+  },
+  {
+    "arg_schema_keys": [
+      "as_of",
+      "limit",
+      "name",
+      "tenant"
+    ],
+    "capability_id": "kg.entity.lookup",
+    "deprecated": false,
+    "dry_run_ok": true,
+    "kind": "read",
+    "legacy_aliases": [],
+    "qualified_name": "kg.entity.lookup@1.0.0",
+    "replacement": null,
+    "required_scopes": [],
+    "requires_approval": false,
+    "risk": "safe",
+    "title": "Resolve an entity and return tenant-scoped graph evidence",
     "version": "1.0.0"
   },
   {
@@ -63,6 +122,21 @@
     "requires_approval": false,
     "risk": "safe",
     "title": "Knowledge graph tenant statistics",
+    "version": "1.0.0"
+  },
+  {
+    "arg_schema_keys": [],
+    "capability_id": "platform.capabilities.discover",
+    "deprecated": false,
+    "dry_run_ok": true,
+    "kind": "read",
+    "legacy_aliases": [],
+    "qualified_name": "platform.capabilities.discover@1.0.0",
+    "replacement": null,
+    "required_scopes": [],
+    "requires_approval": false,
+    "risk": "safe",
+    "title": "Discover MCP capabilities available to the authenticated caller",
     "version": "1.0.0"
   }
 ]

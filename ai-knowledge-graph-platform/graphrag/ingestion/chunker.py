@@ -2,9 +2,16 @@
 
 Documents are split at section-heading boundaries first, then each section is
 kept whole when it fits in `chunk_size` (or sub-split with LangChain's
-RecursiveCharacterTextSplitter when it doesn't). A "heading" is either a
-markdown heading (lines starting with 1-6 `#`) or an all-caps numbered
-section header (e.g. "3. BUDGET & KPI TARGETS", "10. INDICATORI KPI").
+RecursiveCharacterTextSplitter when it doesn't). A "heading" is a markdown
+heading (lines starting with 1-6 `#`), an all-caps numbered section header
+(e.g. "3. BUDGET & KPI TARGETS", "10. INDICATORI KPI"), or a plain
+un-numbered all-caps title line (e.g. "CRITICAL FINDING", "REQUIRED
+ACTIONS:") — reports and regulatory documents routinely title sections this
+way with no leading number, and previously fell entirely to naive
+fixed-size splitting as a result. See CON-02 in evals/golden_set.json for a
+case this caused: a 512-char boundary landed exactly between a compliance
+status line and the reconciling sentence one paragraph below it, in a
+section-titled document with zero numbered headings.
 
 Why section-first rather than pure fixed-size splitting: a fixed-size splitter
 packs whatever fits into 512 chars, so it routinely glues the tail of one
@@ -31,12 +38,22 @@ import re
 from graphrag.core.config import get_settings
 from graphrag.core.models import Chunk, Document
 
-# A heading line is either a markdown heading (`#`..`######`) or an all-caps
-# numbered section header. The numbered branch requires the whole title after
-# the number to be upper-case (letters/digits/punctuation only) so it matches
-# "3. BUDGET & KPI TARGETS" but never a prose line like "3. This is a sentence."
+# A heading line is a markdown heading (`#`..`######`), an all-caps numbered
+# section header, or a plain all-caps title line. Each all-caps branch
+# requires the whole line to be upper-case (letters/digits/punctuation only)
+# so it matches "3. BUDGET & KPI TARGETS" / "CRITICAL FINDING" but never a
+# prose line like "3. This is a sentence." or "FAA has approved an AMOC."
+#
+# The un-numbered branch additionally requires the line to either have no
+# colon or end with one (`:?$`), which is what distinguishes a bare section
+# title ("REQUIRED ACTIONS:") from an all-caps metadata line with a value
+# after the colon ("MSN: 44567") — the latter must stay naive-split content,
+# not become a spurious one-line "section."
 _HEADING_RE = re.compile(
-    r"^(#{1,6}\s+.+|\d{1,2}\.\s+[A-Z][A-Z0-9 &/,'\"()-]{1,60})\s*$",
+    r"^(#{1,6}\s+.+"
+    r"|\d{1,2}\.\s+[A-Z][A-Z0-9 &/,'\"().-]{1,60}"
+    r"|[A-Z][A-Z0-9 &/,'\"()—-]{1,68}:?)"
+    r"\s*$",
     re.MULTILINE,
 )
 
@@ -56,6 +73,16 @@ def chunk_document(document: Document) -> list[Chunk]:
 
     cfg = get_settings().ingestion
     chunk_size = cfg.get("chunk_size", 512)
+    # A section only modestly over budget still gets force-split at whatever
+    # paragraph boundary falls closest to chunk_size — which is often the
+    # boundary between two paragraphs that belong together (a status line and
+    # the sentence qualifying it, a finding and its resolution). Letting a
+    # section run up to this soft cap before it gets split keeps such
+    # sections intact; only genuinely long sections still get recursively
+    # split. See CON-02 in evals/golden_set.json: a ~768-char section (1.5x
+    # chunk_size) was being split exactly between a compliance status line
+    # and the sentence immediately qualifying it.
+    soft_cap = chunk_size * cfg.get("section_soft_cap_multiplier", 1.6)
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=cfg.get("chunk_overlap", 64),
@@ -78,7 +105,7 @@ def chunk_document(document: Document) -> list[Chunk]:
         if not segment:
             continue
         heading = headings.get(bounds[i])
-        if len(segment) <= chunk_size:
+        if len(segment) <= soft_cap:
             texts.append(segment)
         else:
             # Section too large — sub-split and keep the heading on each piece.

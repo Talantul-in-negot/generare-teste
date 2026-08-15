@@ -5,9 +5,9 @@ wraps the already-hardened `graphrag.graph.controlled_query` planner --
 tenant-parameterized, accepts no raw Cypher or SPARQL from the caller, and
 already has unit coverage -- so admitting it costs no new attack surface.
 
-The other two orphaned tools in `tools.py` (`query_knowledge_graph`,
-`lookup_entity`) are intentionally left unregistered; see the comment left
-in that file for why.
+The remaining previously orphaned read tools (`query_knowledge_graph` and
+`lookup_entity`) were later admitted through their own versioned capability
+modules after their tenant and invocation contracts were covered by tests.
 """
 
 from __future__ import annotations

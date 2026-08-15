@@ -6,6 +6,7 @@ Results written to evals/faithfulness_eval_results.json.
 """
 import asyncio
 import json
+import math
 import sys
 import time
 from datetime import datetime, timezone
@@ -53,7 +54,7 @@ async def main():
     cal_svc = CalibrationService(neo4j)
     tenant = "aerospace"
 
-    scores, refusals, errors = [], 0, 0
+    scores, refusals, errors, unscorable = [], 0, 0, 0
     results = []
     cal_samples = 0
 
@@ -80,6 +81,24 @@ async def main():
                 q["id"], q["question"], res.answer, res.contexts, ""
             )
             f = er.faithfulness
+
+            # RAGAS returns NaN (not an exception) when its claim-decomposition
+            # step can't extract any verifiable statements from the answer —
+            # this happens routinely on short/terse or yes-no answers. NaN is a
+            # legitimate "metric not applicable" signal, not a faithfulness
+            # violation, so it must be excluded the same way a refusal is —
+            # previously it was appended straight into `scores` and silently
+            # poisoned the whole average via `sum()` (sum of anything with a
+            # NaN in it is NaN), and was also fed into the calibration sample
+            # below as an `actual_outcome`, corrupting the Brier-score dataset.
+            if isinstance(f, float) and math.isnan(f):
+                unscorable += 1
+                print(f"  [{q['id']:8s}] UNSCORABLE — RAGAS could not extract "
+                      f"claims to verify  ({elapsed:.1f}s)  {res.answer[:60]!r}")
+                results.append({"id": q["id"], "type": q["type"], "status": "unscorable",
+                                 "answer": res.answer, "latency": round(elapsed, 1)})
+                continue
+
             scores.append(f)
             # Append result before print — print errors (e.g. Windows encoding) must not discard score
             results.append({"id": q["id"], "type": q["type"], "status": "scored",
@@ -118,6 +137,8 @@ async def main():
     print(f"  Faithfulness ({len(scores)} answerable): {avg:.3f}")
     print(f"  Baseline: 0.840   Delta: {avg - 0.840:+.3f}")
     print(f"  Refusals (correct, excluded): {refusals}/{len(questions)}")
+    if unscorable:
+        print(f"  Unscorable (RAGAS NaN, excluded): {unscorable}/{len(questions)}")
     if errors:
         print(f"  Errors: {errors}")
     print("\n  By question type:")
@@ -138,6 +159,7 @@ async def main():
         "delta": round(avg - 0.840, 4),
         "n_scored": len(scores),
         "n_refusals": refusals,
+        "n_unscorable": unscorable,
         "n_errors": errors,
         "n_total": len(questions),
         "by_type": {

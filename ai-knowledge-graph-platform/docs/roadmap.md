@@ -16,6 +16,16 @@ move to a stronger level when the corresponding test or live exercise exists.
 
 ## Current State (Baseline)
 
+### Engineering workflow automation
+
+The repository now includes a local specification-to-implementation runner in
+`graphrag/engineering_workflows/`. It supports declarative task DAGs, an
+allowlisted skill registry, injectable specialist-agent handlers, lifecycle
+hooks, atomic persisted run state, bounded no-shell command execution, and an
+explicit approval gate before Git mutations. The CLI is executable through
+`scripts/run_engineering_workflow.py`; autonomous code generation and native
+Codex UI commands remain outside the repository boundary.
+
 ### What works today
 
 Status wording in this section is a capability baseline, not a hiring claim that

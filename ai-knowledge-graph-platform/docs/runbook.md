@@ -181,7 +181,10 @@ GET http://localhost:8000/metrics
 
 Instrumented via `prometheus-fastapi-instrumentator`. Covers HTTP request
 counts, latency histograms, and error rates per endpoint. Stage cost/latency
-metrics are emitted by `cost_attribution.py`. Set
+metrics are emitted by `cost_attribution.py`; MCP capability, deterministic
+skill-router, and evaluation-job counters are emitted by
+`agent_telemetry.py`. Tenant attribution stays in structured logs rather than
+metric labels to prevent cardinality-driven monitoring failures. Set
 `OTEL_EXPORTER_OTLP_ENDPOINT` to export API and worker spans; preserve
 `X-Correlation-ID` when opening an incident so HTTP, RabbitMQ, result-store,
 and Context Graph records can be joined without using it as a metric label.
@@ -245,8 +248,19 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 Replay, correction, approval, exception, action, outcome, feedback, precedent,
 redaction-marker, and proactive policy-expiry operations are available through
-the Context Graph API. Live retention and corpus-level ranking validation are
-still required before production use.
+the Context Graph API. Feedback that names an outcome is accepted only when
+that outcome was produced by an action of the same decision; precedent scores
+include observed outcome state and feedback tied through `ASSESSES`. Run
+`scripts/demo_context_graph_outcomes.py` for the audited vertical slice.
+
+## MCP gateway operations
+
+Remote MCP uses authenticated Streamable HTTP at `/mcp`; `/metrics` requires a
+Bearer token and `/health` is the only unauthenticated probe. The full local
+verification, Kubernetes exposure checklist, and incident playbook are in
+[`mcp-operations.md`](mcp-operations.md). Do not expose the internal service
+directly or turn the production NetworkPolicy example into a blanket egress
+allow rule.
 
 ### Optional TimescaleDB KPI backend
 

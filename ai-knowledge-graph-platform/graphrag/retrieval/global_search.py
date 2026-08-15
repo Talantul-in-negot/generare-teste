@@ -123,6 +123,21 @@ class GlobalSearch:
             )
             return {"communities": [], "synthesized_answer": ""}
 
+        # Attach a representative source-document set per community so
+        # citations survive into the final answer — see
+        # Neo4jClient.get_community_source_documents for why this exists.
+        community_ids = [c["community_id"] for c in communities if c.get("community_id")]
+        doc_map: dict[str, list[str]] = {}
+        if community_ids:
+            try:
+                doc_map = await self._neo4j.get_community_source_documents(
+                    community_ids, tenant=tenant,
+                )
+            except Exception as exc:  # noqa: BLE001 — citations are best-effort, never fatal
+                log.warning("global_search.source_documents_failed", error=str(exc)[:160])
+        for c in communities:
+            c["source_documents"] = doc_map.get(c.get("community_id"), [])
+
         # Warn if the top communities are connected-components fallbacks —
         # this signals graspologic is missing and global quality is degraded.
         fallback_communities = [

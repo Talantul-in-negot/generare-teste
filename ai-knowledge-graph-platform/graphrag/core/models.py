@@ -260,6 +260,11 @@ class EvalJob(BaseModel):
     job_id: str = Field(default_factory=lambda: str(uuid4()))
     query_result: QueryResult
     ground_truth: str = ""
+    # Kept defaulted for backwards-compatible consumption of already-queued
+    # messages. New publishers always supply the query's trusted tenant and
+    # correlation ID; neither is inferred from user-provided evaluation data.
+    tenant: str = "default"
+    correlation_id: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

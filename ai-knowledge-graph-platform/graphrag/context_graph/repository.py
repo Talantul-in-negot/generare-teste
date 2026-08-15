@@ -475,14 +475,22 @@ class ContextGraphRepository:
         rows = await self._neo4j.run(
             """
             MATCH (d:CGDecision {tenant: $tenant, id: $decision_id})
+            OPTIONAL MATCH (d)-[:RESULTED_IN]->(:CGAction {tenant: $tenant})
+                           -[:PRODUCED]->(o:CGOutcome {tenant: $tenant, id: $outcome_id})
+            WITH d, o
+            WHERE $outcome_id IS NULL OR o IS NOT NULL
             MERGE (f:CGFeedback {tenant: $tenant, id: $id}) ON CREATE SET f += $props
             MERGE (f)-[:EVALUATES]->(d)
+            FOREACH (_ IN CASE WHEN $outcome_id IS NULL THEN [] ELSE [1] END |
+              MERGE (f)-[:ASSESSES]->(o))
             RETURN f.id AS id
             """, tenant=feedback.tenant, decision_id=feedback.decision_id,
-            id=feedback.id, props=_props(feedback),
+            outcome_id=feedback.outcome_id, id=feedback.id, props=_props(feedback),
         )
         if not rows:
-            raise ContextGraphValidationError("feedback references a missing or cross-tenant decision")
+            raise ContextGraphValidationError(
+                "feedback references a missing/cross-tenant decision or an outcome outside that decision"
+            )
         return feedback.id
 
     async def replay_trace(self, decision_id: str, tenant: str, as_of: str) -> dict:
@@ -507,13 +515,17 @@ class ContextGraphRepository:
             OPTIONAL MATCH (d)-[:RESULTED_IN]->(a:CGAction {tenant: $tenant})
             OPTIONAL MATCH (a)-[:PRODUCED]->(o:CGOutcome {tenant: $tenant})
             OPTIONAL MATCH (f:CGFeedback {tenant: $tenant})-[:EVALUATES]->(d)
-            WITH d, p, current, count(DISTINCT o) AS outcomes,
-                 coalesce(avg(f.score), 0.5) AS feedback_score
-            WITH d, p,
+            OPTIONAL MATCH (f)-[:ASSESSES]->(assessed:CGOutcome {tenant: $tenant})
+            WITH d, p, current,
+                 max(CASE o.status WHEN 'observed' THEN 1.0 WHEN 'expected' THEN 0.5 ELSE 0.0 END) AS outcome_score,
+                 coalesce(avg(CASE WHEN assessed IS NULL THEN null ELSE f.score END), 0.5) AS feedback_score,
+                 count(DISTINCT assessed) AS assessed_outcomes
+            WITH d, p, outcome_score, feedback_score, assessed_outcomes,
                  (0.65 * CASE WHEN p.policy_id = current.policy_id THEN 1.0 ELSE 0.0 END
-                  + 0.20 * CASE WHEN outcomes > 0 THEN 1.0 ELSE 0.0 END
+                  + 0.20 * outcome_score
                   + 0.15 * feedback_score) AS score
-            RETURN d {.*} AS decision, p {.*} AS policy, score
+            RETURN d {.*} AS decision, p {.*} AS policy, score, outcome_score,
+                   feedback_score, assessed_outcomes
             ORDER BY score DESC, d.created_at DESC
             LIMIT $limit
             """, tenant=tenant, policy_version_id=policy_version_id, limit=limit,

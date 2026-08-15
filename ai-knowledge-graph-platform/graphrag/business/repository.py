@@ -164,14 +164,14 @@ class BusinessObjectRepository:
             WHERE f.object_version = $expected_version AND f.status IN $valid_sources
             WITH f, f.status AS from_state
             SET f.status = 'remediating', f.object_version = $to_version,
-                f.updated_at = datetime(), f.updated_by = $actor_id
+                f.updated_at = toString(datetime()), f.updated_by = $actor_id
             CREATE (t:BizTransition {
                 id: $event_id, tenant: $tenant, object_id: $finding_id,
                 object_type: 'ComplianceFinding',
                 from_state: from_state, to_state: 'remediating',
                 from_version: $expected_version, to_version: $to_version,
                 actor_id: $actor_id, actor_type: $actor_type,
-                reason_code: $reason_code, rationale: $rationale, recorded_at: datetime()
+                reason_code: $reason_code, rationale: $rationale, recorded_at: toString(datetime())
             })
             MERGE (f)-[:HAS_TRANSITION]->(t)
             MERGE (w:BizWorkOrder {tenant: $tenant, id: $wo_id})
@@ -270,13 +270,13 @@ class BusinessObjectRepository:
             WHERE n.object_version = $expected_version AND n.status IN $valid_sources
             WITH n, n.status AS from_state
             SET n.status = $to_state, n.object_version = $to_version,
-                n.updated_at = datetime(), n.updated_by = $actor_id
+                n.updated_at = toString(datetime()), n.updated_by = $actor_id
             CREATE (t:BizTransition {{
                 id: $event_id, tenant: $tenant, object_id: $id, object_type: $object_type,
                 from_state: from_state, to_state: $to_state,
                 from_version: $expected_version, to_version: $to_version,
                 actor_id: $actor_id, actor_type: $actor_type,
-                reason_code: $reason_code, rationale: $rationale, recorded_at: datetime()
+                reason_code: $reason_code, rationale: $rationale, recorded_at: toString(datetime())
             }})
             MERGE (n)-[:HAS_TRANSITION]->(t)
             RETURN n.object_version AS object_version, from_state
@@ -344,7 +344,7 @@ class BusinessObjectRepository:
             """
             MATCH (a:BizApproval {tenant: $tenant, id: $id})
             WHERE a.status = $requested
-            SET a.status = $target, a.approved_by = $approved_by, a.decided_at = datetime()
+            SET a.status = $target, a.approved_by = $approved_by, a.decided_at = toString(datetime())
             RETURN a {.*} AS approval
             """,
             tenant=tenant, id=approval_id, requested=ApprovalStatus.REQUESTED.value,

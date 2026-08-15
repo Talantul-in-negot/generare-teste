@@ -11,13 +11,23 @@ surface for an agent than a broken stdio connection or a Python traceback.
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
+from typing import Any
 
 from api.auth.jwt import decode_access_token
 
 # Env var an MCP client config supplies the caller's bearer token through,
 # e.g. `claude mcp add graphrag --env GRAPHRAG_MCP_TOKEN=<token> -- python mcp_server/server.py`.
 TOKEN_ENV_VAR = "GRAPHRAG_MCP_TOKEN"
+
+# Streamable HTTP sessions authenticate per request, while a stdio process is
+# deliberately bound to the token supplied by its launcher. This ContextVar
+# keeps both transports on the same capability path without sharing identity
+# between concurrent remote callers.
+_request_identity: ContextVar["CallerIdentity | None"] = ContextVar(
+    "mcp_request_identity", default=None,
+)
 
 
 @dataclass(frozen=True)
@@ -57,16 +67,27 @@ class CallerIdentity:
             claims = decode_access_token(token)
         except ValueError:
             return cls.anonymous()
-        subject = claims.get("sub") or ""
-        tenant = claims.get("tenant") or ""
-        if not subject or not tenant:
+        return cls.from_claims(claims)
+
+    @classmethod
+    def from_claims(cls, claims: dict[str, Any], *, tenant: str | None = None) -> "CallerIdentity":
+        """Build an identity from already-verified JWT claims.
+
+        FastAPI adapters already verify their bearer token. Reusing their
+        claims avoids a second decoder and keeps the trusted tenant explicit
+        at that adapter boundary.
+        """
+        subject = str(claims.get("sub") or "")
+        effective_tenant = tenant or str(claims.get("tenant") or "")
+        if not subject or not effective_tenant:
             return cls.anonymous()
-        scopes = frozenset(claims.get("scope", "").split())
+        raw_scopes = claims.get("scope", "")
+        scopes = frozenset(raw_scopes.split() if isinstance(raw_scopes, str) else raw_scopes or ())
         return cls(
             subject=subject,
-            tenant=tenant,
+            tenant=effective_tenant,
             scopes=scopes,
-            token_type=claims.get("type", ""),
+            token_type=str(claims.get("type") or ""),
             authenticated=True,
         )
 
@@ -74,3 +95,16 @@ class CallerIdentity:
     def resolve(cls) -> "CallerIdentity":
         """Resolve the process-wide caller identity from `GRAPHRAG_MCP_TOKEN`."""
         return cls.from_token(os.environ.get(TOKEN_ENV_VAR))
+
+    @classmethod
+    def current(cls) -> "CallerIdentity":
+        """Return a bound remote identity or the stdio process identity."""
+        return _request_identity.get() or cls.resolve()
+
+    @classmethod
+    def bind_request(cls, identity: "CallerIdentity") -> Token["CallerIdentity | None"]:
+        return _request_identity.set(identity)
+
+    @classmethod
+    def reset_request(cls, token: Token["CallerIdentity | None"]) -> None:
+        _request_identity.reset(token)

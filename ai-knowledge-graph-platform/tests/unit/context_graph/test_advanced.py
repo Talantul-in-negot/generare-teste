@@ -76,11 +76,25 @@ async def test_outcome_and_feedback_link_to_existing_graph_objects():
     repo = ContextGraphRepository(neo4j)
     action = CGAction(id="action-1", tenant="marketing", decision_id="decision-1", actor_id="agent", action_type="place", reason_code="selected")
     outcome = CGOutcome(id="outcome-1", tenant="marketing", action_id=action.id, outcome_type="delivery", status=OutcomeStatus.OBSERVED)
-    feedback = CGFeedback(id="feedback-1", tenant="marketing", decision_id="decision-1", actor_id="reviewer", score=1.0, reason_code="correct")
+    feedback = CGFeedback(id="feedback-1", tenant="marketing", decision_id="decision-1", outcome_id=outcome.id, actor_id="reviewer", score=1.0, reason_code="correct")
     assert await repo.record_action(action) == "action-1"
     assert await repo.record_outcome(outcome) == "outcome-1"
     assert await repo.record_feedback(feedback) == "feedback-1"
     assert neo4j.run.await_count == 3
+    query = neo4j.run.await_args.args[0]
+    assert "ASSESSES" in query
+    assert neo4j.run.await_args.kwargs["outcome_id"] == outcome.id
+
+
+async def test_feedback_refuses_an_outcome_not_produced_by_its_decision():
+    neo4j = MagicMock()
+    neo4j.run = AsyncMock(return_value=[])
+    feedback = CGFeedback(
+        id="feedback-2", tenant="marketing", decision_id="decision-1", outcome_id="foreign-outcome",
+        actor_id="reviewer", score=0.0, reason_code="wrong_outcome",
+    )
+    with pytest.raises(ContextGraphValidationError, match="outcome outside that decision"):
+        await ContextGraphRepository(neo4j).record_feedback(feedback)
 
 
 async def test_expiring_policy_recommendation_is_tenant_scoped():
@@ -102,6 +116,7 @@ async def test_precedent_query_returns_relevance_score_and_sorts_by_it():
     query = neo4j.run.await_args.args[0]
     assert "ORDER BY score DESC" in query
     assert "feedback_score" in query and "policy_id" in query
+    assert "ASSESSES" in query and "outcome_score" in query and "assessed_outcomes" in query
 
 
 async def test_effective_governance_enforces_approval_and_exception_expiry():

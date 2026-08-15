@@ -181,6 +181,21 @@ class TestCapabilityRegistryWiring:
         assert isinstance(result, DeniedCapabilityCall)
         assert result.reason == "unauthenticated"
 
+    async def test_context_precedent_capability_is_tenant_bound(self):
+        registry = build_registry()
+        neo4j = MagicMock()
+        neo4j.run = AsyncMock(return_value=[])
+        identity = CallerIdentity(
+            subject="agent-1", tenant="aerospace", scopes=frozenset({"read", "tenant:aerospace"}),
+            authenticated=True,
+        )
+        with patch("mcp_server.capabilities.context_precedent.get_neo4j", return_value=neo4j):
+            result = await registry.call(
+                "cg.precedent.find", {"policy_version_id": "policy-v3", "tenant": "aerospace"}, identity,
+            )
+        assert result == []
+        assert neo4j.run.await_args.kwargs["tenant"] == "aerospace"
+
 
 # ── Neo4jClient.get_relations_for_entity ────────────────────────────────────────
 

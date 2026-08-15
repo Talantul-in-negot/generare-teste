@@ -6,5 +6,6 @@ resources:
   - configmap.yaml
   - service-account.yaml
   - api.yaml
+  - mcp.yaml
   - workers.yaml
   - network-policy.yaml

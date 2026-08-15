@@ -66,3 +66,26 @@ class TestResolve:
     def test_resolve_anonymous_when_env_var_absent(self, monkeypatch):
         monkeypatch.delenv(TOKEN_ENV_VAR, raising=False)
         assert CallerIdentity.resolve().authenticated is False
+
+
+class TestRequestScopedIdentity:
+    def test_current_prefers_bound_remote_identity_and_resets(self, monkeypatch):
+        monkeypatch.delenv(TOKEN_ENV_VAR, raising=False)
+        identity = CallerIdentity(
+            subject="remote-agent", tenant="automotive", scopes=frozenset({"read"}),
+            authenticated=True,
+        )
+        token = CallerIdentity.bind_request(identity)
+        try:
+            assert CallerIdentity.current() is identity
+        finally:
+            CallerIdentity.reset_request(token)
+        assert CallerIdentity.current() == CallerIdentity.anonymous()
+
+    def test_from_claims_accepts_verified_scope_list(self):
+        identity = CallerIdentity.from_claims(
+            {"sub": "user-1", "scope": ["read", "biz:write"], "type": "browser"},
+            tenant="aerospace",
+        )
+        assert identity.authenticated is True
+        assert identity.scopes == frozenset({"read", "biz:write"})

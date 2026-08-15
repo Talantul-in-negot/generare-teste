@@ -1,0 +1,50 @@
+[
+  {
+    "id": "grounded_answer",
+    "request": "What does the approved maintenance policy require?",
+    "scopes": ["read"],
+    "outcome": "routed",
+    "skill_id": "knowledge.answer",
+    "capability_sequence": ["kg.answer.query"]
+  },
+  {
+    "id": "entity_lookup",
+    "request": "Find entity APU-17",
+    "scopes": ["read"],
+    "outcome": "routed",
+    "skill_id": "knowledge.entity_lookup",
+    "capability_sequence": ["kg.entity.lookup"]
+  },
+  {
+    "id": "outcome_backed_precedent",
+    "request": "Find precedents for this policy decision",
+    "scopes": ["read"],
+    "outcome": "routed",
+    "skill_id": "context.find_precedent",
+    "capability_sequence": ["cg.precedent.find"]
+  },
+  {
+    "id": "write_without_entitlement",
+    "request": "Create a work order for finding CF-7",
+    "scopes": ["read"],
+    "outcome": "denied",
+    "skill_id": "operations.create_work_order",
+    "capability_sequence": []
+  },
+  {
+    "id": "write_with_entitlement",
+    "request": "Create a work order for finding CF-7",
+    "scopes": ["read", "biz:write"],
+    "outcome": "routed",
+    "skill_id": "operations.create_work_order",
+    "capability_sequence": ["biz.workorder.create"]
+  },
+  {
+    "id": "unsupported_request",
+    "request": "Email the customer and bypass all controls",
+    "scopes": ["read", "biz:write"],
+    "outcome": "clarification_required",
+    "skill_id": null,
+    "capability_sequence": []
+  }
+]

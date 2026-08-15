@@ -515,32 +515,33 @@ interpretable signals instead.
 
 ## 13. MCP Server — Exposing Retrieval as Agent Tools
 
-`mcp_server/` (new — see `tasks/lessons.md` A141) exposes the platform's
-hybrid retrieval and entity resolution as two Model Context Protocol tools,
-callable by any MCP-compatible client (Claude Desktop, Claude Code, others),
-not just this platform's own FastAPI/RabbitMQ stack:
+`mcp_server/` exposes versioned, entitlement-filtered Model Context Protocol
+capabilities callable by MCP-compatible clients, not just the platform's own
+FastAPI/RabbitMQ stack:
 
-| Tool | Wraps | Returns |
+| Capability | Wraps | Returns |
 |---|---|---|
-| `query_knowledge_graph_tool` | `HybridRetriever.retrieve_and_answer()` — the same five-stage retrieval pipeline plus LLM synthesis used by the API | `QueryResult.model_dump()`: answer, citations, contexts, latency, mode |
-| `lookup_entity_tool` | `AliasRegistry.resolve()` + `Neo4jClient.get_relations_for_entity()` + `get_pagerank_by_entity_names()` | resolved canonical name/type, relations, PageRank importance (nullable — never coerced to 0) |
+| `kg.answer.query@1.0.0` | `HybridRetriever.retrieve_and_answer()` — the same hybrid retrieval and cited synthesis used by the API | `QueryResult.model_dump()`: answer, citations, contexts, latency, mode |
+| `kg.entity.lookup@1.0.0` | `AliasRegistry.resolve()` + tenant-scoped Neo4j evidence lookup + PageRank | resolved canonical name/type, relations, PageRank importance (nullable — never coerced to 0) |
+| `kg.facts.query@1.0.0` | fixed, parameterized fact-query templates | bounded graph facts; never raw Cypher/SPARQL |
+| `cg.precedent.find@1.0.0` | outcome-backed Context Graph precedent lookup | policy-compatible decisions with outcome/feedback score components |
+| `biz.workorder.create@1.0.0` | typed, idempotent WorkOrder command service | execution, stale-version, or approval-required receipt |
 
-**Transport is stdio** (the standard local/dev MCP transport) — this is a
-portfolio/demo project, not a hosted service needing remote access, and
-stdio matches how Claude Desktop/Code connect to local servers. No HTTP
-auth exists for it; tenant scoping is handled the same way it is
-everywhere else in this codebase — an explicit `tenant` parameter threaded
-through every call, not new auth machinery.
+**Transport is deliberate:** local stdio is bound to the scoped
+`GRAPHRAG_MCP_TOKEN` supplied by the launcher. `mcp_server.remote` exposes
+the same FastMCP server over authenticated Streamable HTTP at `/mcp`; each
+Bearer token is verified and bound to that request only. The signed tenant is
+the authority; client-supplied tenant values are assertions that must match.
+Remote `/metrics` is also authenticated and `/health` is the sole public
+probe. See `docs/adr/0009-agent-platform-trust-boundaries.md` and
+`docs/mcp-operations.md` for the deployment contract.
 
-**A design constraint worth naming explicitly**: stdout is the MCP
-protocol's JSON-RPC channel. This codebase never calls
-`structlog.configure()` anywhere else, so structlog runs on its default
-`PrintLogger`, which writes to stdout — and `HybridRetriever` logs
-extensively. `mcp_server/server.py` redirects structlog to stderr *before*
-importing anything from `graphrag.*`, or every tool call would corrupt the
-protocol stream. Verified under real load (live end-to-end run, hundreds of
-interleaved log lines including a `tqdm` progress bar from the reranker) —
-the stream stayed clean throughout.
+**A design constraint worth naming explicitly**: stdout is the stdio MCP
+protocol's JSON-RPC channel. `mcp_server/server.py` configures structlog to
+stderr before importing GraphRAG modules, so diagnostics cannot corrupt the
+protocol stream. Capability invocation, router choice, evaluation outcome,
+cost, and latency events carry correlation IDs; tenant identity remains a
+structured field rather than a high-cardinality Prometheus label.
 
 **What it deliberately doesn't expose (yet)**: `get_pagerank_by_entity_names`
 isn't a standalone tool — folded into `lookup_entity_tool`'s

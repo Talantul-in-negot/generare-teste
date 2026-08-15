@@ -109,6 +109,8 @@ class QueryConsumer:
                 eval_job = EvalJob(
                     query_result=result,
                     ground_truth=msg.ground_truth,
+                    tenant=msg.tenant,
+                    correlation_id=msg.correlation_id,
                 )
                 await publish_eval_job(eval_job)
 

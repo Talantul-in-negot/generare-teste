@@ -1,0 +1,35 @@
+# Production overlay example. Apply only after replacing the namespace labels
+# and egress destinations with the ones used by the target cluster. This
+# intentionally is not in the base kustomization: an incorrect DNS/Neo4j/IdP
+# CIDR would fail closed and take the platform offline.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: graphrag-mcp-production-boundaries
+  namespace: graphrag
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graphrag-mcp
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx # replace if different
+      ports:
+        - protocol: TCP
+          port: mcp
+  egress:
+    # Cluster DNS.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Replace with explicitly maintained NetworkPolicies / CIDRs for Neo4j,
+    # Redis, IdP/JWKS, OTLP, and any permitted retrieval provider.

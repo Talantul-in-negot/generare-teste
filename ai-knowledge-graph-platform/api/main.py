@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 
 from api.limiter import limiter
-from api.routes import agent, auth, ingest, query, evaluation, kpis, corrections, kg_features, demo, context_graph, business
+from api.routes import agent, auth, ingest, query, evaluation, kpis, corrections, kg_features, demo, context_graph, business, skills
 from graphrag.core.config import get_settings, is_dev_env
 
 log = structlog.get_logger(__name__)
@@ -154,6 +154,7 @@ app.include_router(kpis.router,        prefix="/kpis",        tags=["KPIs"])
 app.include_router(corrections.router, prefix="/corrections", tags=["Corrections"])
 app.include_router(kg_features.router, prefix="/kg",          tags=["KG Features"])
 app.include_router(agent.router,       prefix="/agent",       tags=["Agent Tools"])
+app.include_router(skills.router)
 app.include_router(demo.router)
 app.include_router(context_graph.router)
 app.include_router(business.router)
