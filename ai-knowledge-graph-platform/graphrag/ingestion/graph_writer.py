@@ -143,7 +143,7 @@ class GraphWriter:
         if doc.supersedes:
             from graphrag.graph.document_authority import DocumentAuthorityService
             svc = DocumentAuthorityService(self._neo4j)
-            await svc.register_supersession(doc.id, doc.supersedes)
+            await svc.register_supersession(doc.tenant, doc.id, doc.supersedes)
 
         await self._audit.log_document_change(
             doc_id=doc.id,
@@ -485,8 +485,8 @@ class GraphWriter:
         recompute on re-ingestion regardless of growth drift (see
         graphrag/graph/pagerank.py for why growth alone isn't sufficient).
         """
-        validation_report = await self._validator.validate(doc_id=doc_id)
-        await self._validator.remove_self_loops()
+        validation_report = await self._validator.validate(tenant=tenant, doc_id=doc_id)
+        await self._validator.remove_self_loops(tenant)
 
         # Cycle detection scans the WHOLE graph (no doc-scoping in
         # CycleDetector.detect()), so running it after every document during
@@ -496,7 +496,7 @@ class GraphWriter:
         # ingestion, run once at the end instead — see ingest_corpus.py).
         cycles: list = []
         if self._cfg.ingestion.get("detect_cycles_after_ingestion", True):
-            cycles = await self._cycle_detector.run()
+            cycles = await self._cycle_detector.run(tenant)
 
         # Auto-quarantine entities flagged as degree anomalies
         quarantined = await self._quarantine.auto_quarantine_anomalies(

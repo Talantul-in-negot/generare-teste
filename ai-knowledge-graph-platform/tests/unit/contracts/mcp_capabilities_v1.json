@@ -1,0 +1,68 @@
+[
+  {
+    "arg_schema_keys": [
+      "approval_id",
+      "assignee",
+      "command_id",
+      "correlation_id",
+      "description",
+      "dry_run",
+      "expected_version",
+      "originating_finding_id",
+      "reason_code",
+      "title"
+    ],
+    "capability_id": "biz.workorder.create",
+    "deprecated": false,
+    "dry_run_ok": true,
+    "kind": "write",
+    "legacy_aliases": [],
+    "qualified_name": "biz.workorder.create@1.0.0",
+    "replacement": null,
+    "required_scopes": [
+      "biz:write"
+    ],
+    "requires_approval": true,
+    "risk": "moderate",
+    "title": "Create a remediation work order from a compliance finding",
+    "version": "1.0.0"
+  },
+  {
+    "arg_schema_keys": [
+      "limit",
+      "question",
+      "tenant"
+    ],
+    "capability_id": "kg.facts.query",
+    "deprecated": false,
+    "dry_run_ok": true,
+    "kind": "read",
+    "legacy_aliases": [],
+    "qualified_name": "kg.facts.query@1.0.0",
+    "replacement": null,
+    "required_scopes": [],
+    "requires_approval": false,
+    "risk": "safe",
+    "title": "Controlled natural-language graph fact query",
+    "version": "1.0.0"
+  },
+  {
+    "arg_schema_keys": [
+      "tenant"
+    ],
+    "capability_id": "kg.graph.stats",
+    "deprecated": false,
+    "dry_run_ok": true,
+    "kind": "read",
+    "legacy_aliases": [
+      "graph_stats"
+    ],
+    "qualified_name": "kg.graph.stats@1.0.0",
+    "replacement": null,
+    "required_scopes": [],
+    "requires_approval": false,
+    "risk": "safe",
+    "title": "Knowledge graph tenant statistics",
+    "version": "1.0.0"
+  }
+]

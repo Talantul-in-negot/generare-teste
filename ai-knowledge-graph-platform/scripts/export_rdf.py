@@ -21,14 +21,18 @@ special characters that hand-rolled string concatenation cannot).
 
 Usage
 -----
-  python scripts/export_rdf.py
-  python scripts/export_rdf.py --tenant acme --output exports/graph.ttl
+  python scripts/export_rdf.py --tenant acme
+      # writes exports/acme/graph_export.ttl -- this is what POST /kg/sparql
+      # reads for a caller authenticated as tenant "acme"
+  python scripts/export_rdf.py --tenant acme --output custom/path.ttl
+      # explicit --output bypasses the per-tenant default entirely
   python scripts/export_rdf.py --tenant default --limit 10000
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import asyncio
 import sys
 from datetime import datetime, timezone
@@ -328,8 +332,14 @@ def main():
     )
     parser.add_argument("--tenant",  default="default",
                         help="Tenant to export (default: default)")
-    parser.add_argument("--output",  default="exports/graph_export.ttl",
-                        help="Output Turtle file path")
+    # No static default -- POST /kg/sparql reads exports/<tenant>/graph_export.ttl
+    # (GRAPHRAG_RDF_EXPORT_DIR overrides the "exports" root), so the default
+    # output path must be derived from --tenant, not shared across every
+    # tenant's export. A single shared file meant whichever tenant exported
+    # last silently became the data every tenant's SPARQL queries saw.
+    parser.add_argument("--output",  default=None,
+                        help="Output Turtle file path "
+                             "(default: <GRAPHRAG_RDF_EXPORT_DIR>/<tenant>/graph_export.ttl)")
     parser.add_argument("--limit",   type=int, default=50_000,
                         help="Max entities and edges per query (default: 50000)")
     parser.add_argument("--infer", action="store_true",
@@ -341,9 +351,15 @@ def main():
                              "confidence range)")
     args = parser.parse_args()
 
+    if args.output:
+        output = Path(args.output)
+    else:
+        export_dir = Path(os.getenv("GRAPHRAG_RDF_EXPORT_DIR", "exports"))
+        output = export_dir / args.tenant / "graph_export.ttl"
+
     asyncio.run(export(
         tenant=args.tenant,
-        output=Path(args.output),
+        output=output,
         limit=args.limit,
         infer=args.infer,
         validate=args.validate,

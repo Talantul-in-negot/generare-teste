@@ -85,6 +85,59 @@ class AuditEntry:
     ts:        float = field(default_factory=time.time)
 
 
+def validate_args(arg_schema: dict[str, dict], args: dict, caller_scopes: list[str]) -> str | None:
+    """Return an error string on invalid args, None on success.
+
+    Extracted from ``ToolPolicy._validate_args`` so the same argument
+    validation + cross-tenant guard can be reused by the MCP capability
+    registry (``mcp_server/registry.py``), not just the agent tool gate.
+    Behavior is unchanged from the original method — this is a pure
+    extraction, verified by the full ``test_tool_safety.py`` suite passing
+    unmodified.
+    """
+    for arg_name, rule in arg_schema.items():
+        value = args.get(arg_name)
+        # Required fields
+        if value is None and rule.get("required", False):
+            return f"required argument '{arg_name}' is missing"
+        if value is None:
+            continue
+        # Type check
+        expected_type = rule.get("type")
+        if expected_type and not isinstance(value, expected_type):
+            return (f"argument '{arg_name}' must be {expected_type.__name__}, "
+                    f"got {type(value).__name__}")
+        # Enum check
+        allowed = rule.get("allowed")
+        if allowed and value not in allowed:
+            return f"argument '{arg_name}' must be one of {allowed}, got {value!r}"
+        # Range checks
+        if "max" in rule and isinstance(value, (int, float)) and value > rule["max"]:
+            return f"argument '{arg_name}' exceeds maximum {rule['max']}"
+        if "min" in rule and isinstance(value, (int, float)) and value < rule["min"]:
+            return f"argument '{arg_name}' below minimum {rule['min']}"
+        # Tenant cross-access guard: any tool whose schema declares a
+        # 'tenant' argument lets the caller name a target tenant to
+        # write/erase — the caller must hold an explicit tenant:<name>
+        # scope for at least one tenant. No "unscoped = all tenants"
+        # tier for tools that can write or destroy data: without this,
+        # a caller granted write/admin scopes but no tenant: scope
+        # would be trusted on whatever tenant it claims in args, which
+        # is unsafe the moment that caller is an LLM agent rather than
+        # a human/ops process. See tasks/lessons.md A149.
+        if arg_name == "tenant" and value:
+            tenant_scopes = [s for s in caller_scopes if s.startswith("tenant:")]
+            if not tenant_scopes:
+                return ("no tenant scope granted — tools that accept a "
+                        "'tenant' argument require an explicit "
+                        "tenant:<name> scope")
+            allowed_tenants = [s.split(":", 1)[1] for s in tenant_scopes]
+            if value not in allowed_tenants:
+                return (f"cross-tenant access denied: caller tenant(s) "
+                        f"{allowed_tenants} cannot access tenant '{value}'")
+    return None
+
+
 # ── Core policy ───────────────────────────────────────────────────────────────
 
 class ToolPolicy:
@@ -234,47 +287,7 @@ class ToolPolicy:
 
     def _validate_args(self, spec: ToolSpec, args: dict) -> str | None:
         """Return an error string on invalid args, None on success."""
-        for arg_name, rule in spec.arg_schema.items():
-            value = args.get(arg_name)
-            # Required fields
-            if value is None and rule.get("required", False):
-                return f"required argument '{arg_name}' is missing"
-            if value is None:
-                continue
-            # Type check
-            expected_type = rule.get("type")
-            if expected_type and not isinstance(value, expected_type):
-                return (f"argument '{arg_name}' must be {expected_type.__name__}, "
-                        f"got {type(value).__name__}")
-            # Enum check
-            allowed = rule.get("allowed")
-            if allowed and value not in allowed:
-                return f"argument '{arg_name}' must be one of {allowed}, got {value!r}"
-            # Range checks
-            if "max" in rule and isinstance(value, (int, float)) and value > rule["max"]:
-                return f"argument '{arg_name}' exceeds maximum {rule['max']}"
-            if "min" in rule and isinstance(value, (int, float)) and value < rule["min"]:
-                return f"argument '{arg_name}' below minimum {rule['min']}"
-            # Tenant cross-access guard: any tool whose schema declares a
-            # 'tenant' argument lets the caller name a target tenant to
-            # write/erase — the caller must hold an explicit tenant:<name>
-            # scope for at least one tenant. No "unscoped = all tenants"
-            # tier for tools that can write or destroy data: without this,
-            # a caller granted write/admin scopes but no tenant: scope
-            # would be trusted on whatever tenant it claims in args, which
-            # is unsafe the moment that caller is an LLM agent rather than
-            # a human/ops process. See tasks/lessons.md A149.
-            if arg_name == "tenant" and value:
-                tenant_scopes = [s for s in self._scopes if s.startswith("tenant:")]
-                if not tenant_scopes:
-                    return ("no tenant scope granted — tools that accept a "
-                            "'tenant' argument require an explicit "
-                            "tenant:<name> scope")
-                allowed_tenants = [s.split(":", 1)[1] for s in tenant_scopes]
-                if value not in allowed_tenants:
-                    return (f"cross-tenant access denied: caller tenant(s) "
-                            f"{allowed_tenants} cannot access tenant '{value}'")
-        return None
+        return validate_args(spec.arg_schema, args, self._scopes)
 
     # ── Factory ────────────────────────────────────────────────────────────────
 

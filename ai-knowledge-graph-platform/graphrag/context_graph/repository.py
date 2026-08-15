@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime, timezone
-from typing import Any
 
 from graphrag.context_graph.models import (
     AgentRun, Case, CGEpisode, ContextManifest, Decision, DecisionOption,
@@ -13,19 +12,7 @@ from graphrag.context_graph.models import (
     CGAction, CGApproval, CGCorrection, CGExceptionGrant, CGFeedback, CGOutcome,
 )
 from graphrag.context_graph.validation import ContextGraphValidationError, validate_trace
-
-
-def _props(model: Any) -> dict[str, Any]:
-    props = model.model_dump(mode="json")
-    # Neo4j node properties cannot contain nested maps. Preserve structured
-    # values deterministically as JSON at the graph boundary.
-    return {
-        key: json.dumps(value, sort_keys=True, separators=(",", ":"))
-        if isinstance(value, dict) or (
-            isinstance(value, list) and any(isinstance(item, dict) for item in value)
-        ) else value
-        for key, value in props.items()
-    }
+from graphrag.core.graph_props import props as _props
 
 
 def _trace_hash(trace: DecisionTrace) -> str:

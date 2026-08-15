@@ -118,6 +118,9 @@ class Neo4jClient:
         from graphrag.context_graph.schema import CONTEXT_GRAPH_SCHEMA
         for statement in CONTEXT_GRAPH_SCHEMA:
             await self.run(statement)
+        from graphrag.business.schema import BUSINESS_SCHEMA
+        for statement in BUSINESS_SCHEMA:
+            await self.run(statement)
         await self.detect_capabilities()
         log.info("neo4j.schema_initialized")
 
@@ -838,6 +841,45 @@ class Neo4jClient:
             tenant=tenant,
         )
         return {r["chunk_id"]: r["filename"] for r in rows if r.get("filename")}
+
+    async def get_community_source_documents(
+        self, community_ids: list[str], tenant: str = "default", limit_per_community: int = 3
+    ) -> dict[str, list[str]]:
+        """Map community_id -> source document filenames (no extension) for a
+        set of communities, via Community <-[:MEMBER_OF]- Entity <-[:MENTIONS]-
+        Chunk -[:PART_OF]-> Document.
+
+        Global search answers from community *summaries*, which carry no
+        per-fact document provenance forward — so answers synthesized in
+        global mode previously returned zero citations, unconditionally,
+        regardless of answer quality (ContextBuilder.build() only reads
+        citations from local_results' chunks). This lets GlobalSearch attach
+        a representative document set per community so global-mode and
+        hybrid-mode answers built from community context can still be
+        attributed to real source documents.
+        """
+        if not community_ids:
+            return {}
+        rows = await self.run(
+            """
+            UNWIND $community_ids AS cid
+            MATCH (c:Community {id: cid, tenant: $tenant})
+                  <-[:MEMBER_OF]-(e:Entity {tenant: $tenant})
+                  <-[:MENTIONS]-(chunk:Chunk {tenant: $tenant})
+                  -[:PART_OF]->(d:Document)
+            WITH cid, d.filename AS filename, count(*) AS mentions
+            ORDER BY cid, mentions DESC
+            WITH cid, collect(filename)[0..$limit] AS filenames
+            RETURN cid AS community_id, filenames
+            """,
+            community_ids=community_ids,
+            tenant=tenant,
+            limit=limit_per_community,
+        )
+        return {
+            r["community_id"]: [f.replace(".txt", "") for f in (r.get("filenames") or []) if f]
+            for r in rows
+        }
 
     async def get_best_chunk_for_document(
         self,

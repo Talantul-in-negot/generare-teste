@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import structlog
 
+from graphrag.core.tenancy import require_tenant
+
 log = structlog.get_logger(__name__)
 
 MAX_CYCLE_LENGTH = 6   # max hops to check for cycles
@@ -39,20 +41,21 @@ class CycleDetector:
     def __init__(self, neo4j_client):
         self._neo4j = neo4j_client
 
-    async def detect(self, relation_types: list[str] | None = None) -> list[dict]:
+    async def detect(self, tenant: str, relation_types: list[str] | None = None) -> list[dict]:
         """
-        Find all cycles up to MAX_CYCLE_LENGTH hops.
+        Find all cycles up to MAX_CYCLE_LENGTH hops, within `tenant` only.
 
         Returns a list of cycle dicts, each with:
             - ``path``:   list of entity names forming the cycle
             - ``length``: number of edges in the cycle
             - ``types``:  relation types involved
         """
+        tenant = require_tenant(tenant)
         # Try APOC first (faster, native)
         apoc_available = await self._check_apoc()
         if apoc_available:
-            return await self._detect_apoc(relation_types)
-        return await self._detect_cypher(relation_types)
+            return await self._detect_apoc(tenant, relation_types)
+        return await self._detect_cypher(tenant, relation_types)
 
     async def _check_apoc(self) -> bool:
         try:
@@ -63,70 +66,79 @@ class CycleDetector:
         except Exception:
             return False
 
-    async def _detect_apoc(self, relation_types: list[str] | None) -> list[dict]:
+    async def _detect_apoc(self, tenant: str, relation_types: list[str] | None) -> list[dict]:
         rel_filter = "|".join(relation_types or ["RELATES_TO", "REQUIRES"])
+        # Was `MATCH (e:Entity)` -- unscoped, so cycle detection (and the
+        # has_cycle flag it drives) ran over every tenant's graph combined.
         rows = await self._neo4j.run(
             f"""
-            MATCH (e:Entity)
+            MATCH (e:Entity {{tenant: $tenant}})
             CALL apoc.algo.findCycles([e], {{relTypesAndDirections: '{rel_filter}>', maxDepth: {MAX_CYCLE_LENGTH}}})
             YIELD path
             RETURN [n IN nodes(path) | n.name] AS path,
                    length(path)                 AS length,
                    [r IN relationships(path) | type(r)] AS types
-            """
+            """,
+            tenant=tenant,
         )
         cycles = [dict(r) for r in rows]
         if cycles:
-            log.warning("cycle_detector.cycles_found", count=len(cycles), method="apoc")
+            log.warning("cycle_detector.cycles_found", count=len(cycles), method="apoc", tenant=tenant)
         else:
-            log.info("cycle_detector.no_cycles", method="apoc")
+            log.info("cycle_detector.no_cycles", method="apoc", tenant=tenant)
         return cycles
 
-    async def _detect_cypher(self, relation_types: list[str] | None) -> list[dict]:
+    async def _detect_cypher(self, tenant: str, relation_types: list[str] | None) -> list[dict]:
         """
         Pure-Cypher fallback: find paths where start == end within N hops.
         Less efficient but works without APOC.
         """
         rows = await self._neo4j.run(
             f"""
-            MATCH path = (e:Entity)-[:RELATES_TO*2..{MAX_CYCLE_LENGTH}]->(e)
+            MATCH path = (e:Entity {{tenant: $tenant}})-[:RELATES_TO*2..{MAX_CYCLE_LENGTH}]->(e)
             RETURN [n IN nodes(path) | n.name]     AS path,
                    length(path)                     AS length,
                    [r IN relationships(path) | type(r)] AS types
             LIMIT 100
-            """
+            """,
+            tenant=tenant,
         )
         cycles = [dict(r) for r in rows]
         if cycles:
-            log.warning("cycle_detector.cycles_found", count=len(cycles), method="cypher")
+            log.warning("cycle_detector.cycles_found", count=len(cycles), method="cypher", tenant=tenant)
         else:
-            log.info("cycle_detector.no_cycles", method="cypher")
+            log.info("cycle_detector.no_cycles", method="cypher", tenant=tenant)
         return cycles
 
-    async def flag_cycles(self, cycles: list[dict]) -> None:
+    async def flag_cycles(self, tenant: str, cycles: list[dict]) -> None:
         """
         Mark nodes involved in cycles with a `has_cycle = true` flag
         so downstream traversal can apply bounded depth automatically.
         """
+        tenant = require_tenant(tenant)
         if not cycles:
             return
         involved: set[str] = set()
         for cycle in cycles:
             involved.update(cycle.get("path", []))
 
+        # Was matched by name alone -- could flag/overwrite a same-named
+        # entity belonging to a different tenant.
         await self._neo4j.run(
             """
             UNWIND $names AS name
-            MATCH (e:Entity {name: name})
+            MATCH (e:Entity {name: name, tenant: $tenant})
             SET e.has_cycle = true, e.cycle_flagged_at = datetime()
             """,
             names=list(involved),
+            tenant=tenant,
         )
-        log.info("cycle_detector.nodes_flagged", count=len(involved))
+        log.info("cycle_detector.nodes_flagged", count=len(involved), tenant=tenant)
 
-    async def run(self) -> list[dict]:
+    async def run(self, tenant: str) -> list[dict]:
         """Detect cycles and flag affected nodes. Returns cycle list."""
-        cycles = await self.detect()
+        tenant = require_tenant(tenant)
+        cycles = await self.detect(tenant)
         if cycles:
-            await self.flag_cycles(cycles)
+            await self.flag_cycles(tenant, cycles)
         return cycles

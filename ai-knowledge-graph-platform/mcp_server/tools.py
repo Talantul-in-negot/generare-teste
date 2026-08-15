@@ -3,6 +3,15 @@
 Kept free of any ``mcp`` SDK import so these functions can be unit-tested
 with the same AsyncMock-over-``get_neo4j`` convention used elsewhere in the
 test suite, without the ``mcp`` package installed or a transport running.
+
+Only ``query_graph_facts`` is registered in the capability registry
+(``mcp_server/capabilities/facts_query.py``, as ``kg.facts.query@1.0.0``).
+``query_knowledge_graph`` and ``lookup_entity`` remain implemented here but
+unregistered: both accept an unchecked caller-supplied ``tenant`` with no
+capability-layer assertion behind them yet, and ``query_knowledge_graph``
+force-loads a cross-encoder on first use (~3s) — a poor fit for a fast,
+testable stdio server. Re-admitting them under the registry's tenant-
+assertion model is P1 scope.
 """
 
 from __future__ import annotations

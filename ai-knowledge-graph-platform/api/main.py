@@ -7,13 +7,14 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth.dependencies import require_scope
+from api.auth.default_auth import RequireAuthMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 
 from api.limiter import limiter
-from api.routes import agent, auth, ingest, query, evaluation, kpis, corrections, kg_features, demo, context_graph
-from graphrag.core.config import get_settings
+from api.routes import agent, auth, ingest, query, evaluation, kpis, corrections, kg_features, demo, context_graph, business
+from graphrag.core.config import get_settings, is_dev_env
 
 log = structlog.get_logger(__name__)
 
@@ -108,6 +109,14 @@ except ImportError:
                 hint="pip install prometheus-fastapi-instrumentator")
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
+# Order matters. Starlette's most-recently-added middleware is OUTERMOST
+# (runs first on the request, last on the response) -- see
+# api/auth/default_auth.py's module docstring for why RequireAuthMiddleware
+# must be added here, between SessionMiddleware and CORSMiddleware, and not
+# last: CORSMiddleware must stay outermost so it still handles preflight
+# OPTIONS requests and attaches CORS headers to 401 responses this
+# middleware produces, instead of a preflight hitting a 401 before
+# CORSMiddleware ever sees it.
 app.add_middleware(
     SessionMiddleware,
     # Use a dedicated session secret distinct from the JWT signing key so
@@ -117,8 +126,14 @@ app.add_middleware(
     session_cookie="graphrag_session",
     max_age=3600,
     same_site="lax",
-    https_only=(settings.env == "production"),   # enforce HTTPS in prod
+    # Was `settings.env == "production"` -- exact-match only, so any unset
+    # or misspelled prod env ("prod", "Production ", "") sent auth cookies
+    # over plain HTTP. Inverted to the same allow-list every other env check
+    # in this codebase now uses.
+    https_only=not is_dev_env(settings.env),
 )
+
+app.add_middleware(RequireAuthMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -141,6 +156,7 @@ app.include_router(kg_features.router, prefix="/kg",          tags=["KG Features
 app.include_router(agent.router,       prefix="/agent",       tags=["Agent Tools"])
 app.include_router(demo.router)
 app.include_router(context_graph.router)
+app.include_router(business.router)
 
 
 @app.get("/health", tags=["Health"])

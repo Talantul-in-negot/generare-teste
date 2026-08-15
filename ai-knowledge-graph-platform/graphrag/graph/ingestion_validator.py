@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import structlog
 
+from graphrag.core.tenancy import require_tenant
+
 log = structlog.get_logger(__name__)
 
 # Anomaly thresholds
@@ -55,7 +57,7 @@ class IngestionValidator:
     Usage::
 
         validator = IngestionValidator(neo4j_client)
-        report = await validator.validate(doc_id="doc_abc")
+        report = await validator.validate(tenant="acme", doc_id="doc_abc")
         if report["issues"]:
             log.warning("ingestion_issues", **report)
     """
@@ -63,21 +65,29 @@ class IngestionValidator:
     def __init__(self, neo4j_client):
         self._neo4j = neo4j_client
 
-    async def validate(self, doc_id: str | None = None) -> dict:
+    async def validate(self, tenant: str, doc_id: str | None = None) -> dict:
         """
-        Run all checks. If doc_id is given, scopes checks to that
-        document's entities only. Returns a structured report.
+        Run all checks within `tenant`. If doc_id is given, scopes checks
+        further to that document's entities only. Returns a structured report.
+
+        `tenant` was previously not a parameter anywhere in this module --
+        every check ran across the whole graph regardless of caller, so a
+        poisoning signal in one tenant's data could be reported (and, for
+        _check_degree_anomalies, computed) using every other tenant's graph
+        mixed in.
         """
+        tenant = require_tenant(tenant)
         issues: list[dict] = []
 
-        issues += await self._check_self_loops(doc_id)
-        issues += await self._check_orphan_entities(doc_id)
-        issues += await self._check_degree_anomalies(doc_id)
-        issues += await self._check_low_confidence_edges(doc_id)
-        issues += await self._check_relation_schema(doc_id)
+        issues += await self._check_self_loops(tenant, doc_id)
+        issues += await self._check_orphan_entities(tenant, doc_id)
+        issues += await self._check_degree_anomalies(tenant, doc_id)
+        issues += await self._check_low_confidence_edges(tenant, doc_id)
+        issues += await self._check_relation_schema(tenant, doc_id)
 
         report = {
             "doc_id": doc_id,
+            "tenant": tenant,
             "total_issues": len(issues),
             "issues": issues,
         }
@@ -86,31 +96,33 @@ class IngestionValidator:
             log.warning(
                 "ingestion_validator.issues_found",
                 doc_id=doc_id,
+                tenant=tenant,
                 count=len(issues),
                 types=list({i["type"] for i in issues}),
             )
         else:
-            log.info("ingestion_validator.clean", doc_id=doc_id)
+            log.info("ingestion_validator.clean", doc_id=doc_id, tenant=tenant)
 
         return report
 
     # ── Individual checks ──────────────────────────────────────────────────────
 
-    async def _check_self_loops(self, doc_id: str | None) -> list[dict]:
+    async def _check_self_loops(self, tenant: str, doc_id: str | None) -> list[dict]:
         """Entities that relate to themselves."""
         rows = await self._neo4j.run(
             """
-            MATCH (e:Entity)-[r:RELATES_TO]->(e)
+            MATCH (e:Entity {tenant: $tenant})-[r:RELATES_TO]->(e)
             RETURN e.name AS entity, r.relation AS relation
             LIMIT 50
-            """
+            """,
+            tenant=tenant,
         )
         return [
             {"type": "self_loop", "entity": r["entity"], "relation": r["relation"]}
             for r in rows
         ]
 
-    async def _check_orphan_entities(self, doc_id: str | None) -> list[dict]:
+    async def _check_orphan_entities(self, tenant: str, doc_id: str | None) -> list[dict]:
         """Entities with no MENTIONS link to any chunk."""
         # The scoped and unscoped cases need structurally different queries, so
         # both are written out below. An earlier f-string `query` was built here
@@ -119,7 +131,7 @@ class IngestionValidator:
         if doc_id:
             rows = await self._neo4j.run(
                 """
-                MATCH (c:Chunk {document_id: $doc_id})-[:MENTIONS]->(e:Entity)
+                MATCH (c:Chunk {document_id: $doc_id, tenant: $tenant})-[:MENTIONS]->(e:Entity {tenant: $tenant})
                 WHERE NOT EXISTS {
                     MATCH (e)<-[:MENTIONS]-(:Chunk)
                 }
@@ -127,26 +139,36 @@ class IngestionValidator:
                 LIMIT 100
                 """,
                 doc_id=doc_id,
+                tenant=tenant,
             )
         else:
             rows = await self._neo4j.run(
                 """
-                MATCH (e:Entity)
+                MATCH (e:Entity {tenant: $tenant})
                 WHERE NOT (e)<-[:MENTIONS]-(:Chunk)
                 RETURN e.name AS entity, e.type AS type
                 LIMIT 100
-                """
+                """,
+                tenant=tenant,
             )
         return [
             {"type": "orphan_entity", "entity": r["entity"], "entity_type": r["type"]}
             for r in rows
         ]
 
-    async def _check_degree_anomalies(self, doc_id: str | None) -> list[dict]:
-        """Entities with degree far above the graph mean (potential hallucinated hubs)."""
+    async def _check_degree_anomalies(self, tenant: str, doc_id: str | None) -> list[dict]:
+        """Entities with degree far above the graph mean (potential hallucinated hubs).
+
+        Was unscoped -- both the anomaly candidates AND the mean_degree
+        baseline they're compared against were computed across every
+        tenant's graph combined, so a small tenant sharing a deployment
+        with a much larger one could have its hub entities flagged (or its
+        real anomalies masked) by a baseline that has nothing to do with
+        its own graph.
+        """
         rows = await self._neo4j.run(
             """
-            MATCH (e:Entity)-[r:RELATES_TO]-()
+            MATCH (e:Entity {tenant: $tenant})-[r:RELATES_TO {tenant: $tenant}]-()
             WITH e.name AS entity, count(r) AS degree
             WITH collect({entity: entity, degree: degree}) AS all_nodes,
                  avg(toFloat(degree))                      AS mean_degree
@@ -156,6 +178,7 @@ class IngestionValidator:
             RETURN node.entity AS entity, node.degree AS degree, mean_degree
             LIMIT 20
             """,
+            tenant=tenant,
             multiplier=MAX_DEGREE_MULTIPLIER,
         )
         return [
@@ -168,18 +191,18 @@ class IngestionValidator:
             for r in rows
         ]
 
-    async def _check_low_confidence_edges(self, doc_id: str | None) -> list[dict]:
+    async def _check_low_confidence_edges(self, tenant: str, doc_id: str | None) -> list[dict]:
         """Edges with suspiciously low confidence that may be hallucinations."""
         scope_clause = (
             "AND r.source_doc_id = $doc_id" if doc_id else ""
         )
-        params: dict = {"threshold": MIN_CONFIDENCE}
+        params: dict = {"threshold": MIN_CONFIDENCE, "tenant": tenant}
         if doc_id:
             params["doc_id"] = doc_id
 
         rows = await self._neo4j.run(
             f"""
-            MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
+            MATCH (s:Entity {{tenant: $tenant}})-[r:RELATES_TO {{tenant: $tenant}}]->(t:Entity {{tenant: $tenant}})
             WHERE r.confidence < $threshold {scope_clause}
             RETURN s.name AS src, t.name AS tgt,
                    r.relation AS relation, r.confidence AS confidence
@@ -198,16 +221,16 @@ class IngestionValidator:
             for r in rows
         ]
 
-    async def _check_relation_schema(self, doc_id: str | None) -> list[dict]:
+    async def _check_relation_schema(self, tenant: str, doc_id: str | None) -> list[dict]:
         """Relations that violate the current ontology's allowed type pairs."""
         scope_clause = "AND r.source_doc_id = $doc_id" if doc_id else ""
-        params: dict = {}
+        params: dict = {"tenant": tenant}
         if doc_id:
             params["doc_id"] = doc_id
 
         rows = await self._neo4j.run(
             f"""
-            MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
+            MATCH (s:Entity {{tenant: $tenant}})-[r:RELATES_TO {{tenant: $tenant}}]->(t:Entity {{tenant: $tenant}})
             WHERE r.relation <> 'RELATED_TO' {scope_clause}
             RETURN s.name AS src, s.type AS src_type,
                    t.name AS tgt, t.type AS tgt_type,
@@ -232,16 +255,23 @@ class IngestionValidator:
                 )
         return issues
 
-    async def remove_self_loops(self) -> int:
-        """Delete self-referencing edges. Returns count removed."""
+    async def remove_self_loops(self, tenant: str) -> int:
+        """Delete self-referencing edges within `tenant` only.
+
+        Was unscoped -- every ingestion run's cleanup pass deleted
+        self-loop RELATES_TO edges across EVERY tenant's graph, not just
+        the one being ingested.
+        """
+        tenant = require_tenant(tenant)
         rows = await self._neo4j.run(
             """
-            MATCH (e:Entity)-[r:RELATES_TO]->(e)
+            MATCH (e:Entity {tenant: $tenant})-[r:RELATES_TO {tenant: $tenant}]->(e)
             DELETE r
             RETURN count(r) AS removed
-            """
+            """,
+            tenant=tenant,
         )
         removed = rows[0]["removed"] if rows else 0
         if removed:
-            log.warning("ingestion_validator.self_loops_removed", count=removed)
+            log.warning("ingestion_validator.self_loops_removed", count=removed, tenant=tenant)
         return removed

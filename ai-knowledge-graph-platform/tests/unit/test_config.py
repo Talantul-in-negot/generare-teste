@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from graphrag.core.config import Settings
+from graphrag.core.config import DEV_ENVS, Settings, is_dev_env
 
 
 def _settings_with_yaml(retrieval: dict) -> Settings:
@@ -128,3 +128,58 @@ class TestProductionSettings:
     def test_rejects_insecure_production_settings(self, override, message):
         with pytest.raises(ValidationError, match=message):
             self._production(**override)
+
+
+class TestEnvFailClosedOnUnset:
+    """A missing ENV must be treated as strictly as a real production
+    deployment, not silently fall into the dev allow-list.
+
+    Previously `env: str = "development"` meant an unset ENV var landed
+    inside DEV_ENVS and every insecure default below was permitted with no
+    named environment at all -- fail-open on missing config, not just
+    misspelled config. `_env_file=None` is used throughout so these tests
+    exercise the field default itself rather than whatever this machine's
+    local .env happens to contain.
+    """
+
+    def test_unset_env_raises_with_clear_message(self):
+        with pytest.raises(ValidationError, match="ENV is not set"):
+            Settings(_env_file=None, env="")
+
+    def test_unset_env_field_default_is_empty_not_development(self):
+        """Guards against silently reintroducing the old fail-open default."""
+        assert Settings.model_fields["env"].default == ""
+
+    def test_empty_string_not_in_dev_allowlist(self):
+        assert "" not in DEV_ENVS
+
+    @pytest.mark.parametrize("env_value", list(DEV_ENVS))
+    def test_every_dev_allowlist_value_permits_insecure_defaults(self, env_value):
+        s = Settings(_env_file=None, env=env_value)
+        assert s.jwt_secret_key == "change-me-in-production"  # unchanged default, no raise
+
+    def test_unnamed_non_dev_env_still_rejects_default_secret(self):
+        """A typo'd env ("prod" vs "production") must fail exactly like the
+        real thing -- this pins the existing allow-list check, not the new
+        empty-string case above."""
+        with pytest.raises(ValidationError, match="jwt_secret_key must be set"):
+            Settings(_env_file=None, env="prod")
+
+
+class TestIsDevEnv:
+    """Single source of truth for the dev/non-dev check, shared by
+    config.py's own validator and every route that used to do its own
+    exact-match `env == "development"` comparison independently."""
+
+    @pytest.mark.parametrize("env_value", list(DEV_ENVS))
+    def test_allowlisted_values_are_dev(self, env_value):
+        assert is_dev_env(env_value) is True
+
+    def test_case_and_whitespace_normalized(self):
+        assert is_dev_env("  Development  ") is True
+        assert is_dev_env("DEV") is True
+        assert is_dev_env("Test") is True
+
+    @pytest.mark.parametrize("env_value", ["production", "prod", "Production ", "", "staging"])
+    def test_non_dev_values_are_not_dev(self, env_value):
+        assert is_dev_env(env_value) is False

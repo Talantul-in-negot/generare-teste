@@ -6,7 +6,7 @@ import os
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
-from graphrag.core.config import get_settings
+from graphrag.core.config import get_settings, is_dev_env
 
 router = APIRouter()
 
@@ -446,7 +446,7 @@ renderSuggestions();
 @router.get("/demo/graph", response_class=HTMLResponse, include_in_schema=False)
 async def demo_graph(tenant: str = Query(default=None)):
     """Serves the knowledge graph HTML visualization for the given tenant."""
-    if get_settings().env != "development":
+    if not is_dev_env(get_settings().env):
         raise HTTPException(status_code=404, detail="Not found")
     if tenant is None:
         tenant = os.environ.get("GRAPHRAG_DEFAULT_TENANT", "automotive")
@@ -460,7 +460,7 @@ async def demo_graph(tenant: str = Query(default=None)):
 @router.get("/demo", response_class=HTMLResponse, include_in_schema=False)
 async def demo_ui(tenant: str = Query(default=None)):
     """Chat UI for live demos. Only available in development mode."""
-    if get_settings().env != "development":
+    if not is_dev_env(get_settings().env):
         raise HTTPException(status_code=404, detail="Not found")
     if tenant is None:
         tenant = os.environ.get("GRAPHRAG_DEFAULT_TENANT", "automotive")

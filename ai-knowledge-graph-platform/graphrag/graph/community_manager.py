@@ -191,13 +191,18 @@ class CommunityManager:
         snap = await self.snapshot(tenant=tenant)
         snap_id = snap.get("snapshot_id", "")
 
-        # Mark this snapshot as a rebuild milestone
+        # Mark this snapshot as a rebuild milestone. snap_id is already
+        # tenant-derived (from self.snapshot(tenant=tenant) above), but the
+        # match itself carried no tenant filter -- adding one for the same
+        # defense-in-depth reason as every other id-only match fixed in this
+        # pass, not because a collision is likely here.
         await self._neo4j.run(
             """
-            MATCH (s:CommunitySnapshot {id: $id})
+            MATCH (s:CommunitySnapshot {id: $id, tenant: $tenant})
             SET s.is_rebuild_milestone = true
             """,
             id=snap_id,
+            tenant=tenant,
         )
 
         log.info("community_manager.rebuild_recorded", snapshot_id=snap_id)

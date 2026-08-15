@@ -100,11 +100,16 @@ _STATIC_PFXS = ("/admin/_dash", "/admin/assets")
 def _require_auth():
     """Redirect unauthenticated browsers; fail closed in production."""
     if not ADMIN_TOKEN:
-        # No token configured: open in dev/test, but hard-deny in production.
+        # No token configured: open only in a recognized dev/test environment,
+        # hard-deny everywhere else. Previously this checked
+        # `env == "production"` exactly, so "" (unset), "prod", "Production "
+        # or any other non-exact-match value left the dashboard fully open --
+        # inverted to an allow-list so the default is deny, matching
+        # graphrag.core.config.DEV_ENVS.
         try:
-            from graphrag.core.config import get_settings
-            if get_settings().env == "production":
-                flask.abort(403)  # fail closed — never open-access in prod
+            from graphrag.core.config import get_settings, is_dev_env
+            if not is_dev_env(get_settings().env):
+                flask.abort(403)  # fail closed — never open-access outside a named dev env
         except Exception:  # noqa: BLE001 — config error must not expose dashboard
             flask.abort(403)
         return  # dev mode

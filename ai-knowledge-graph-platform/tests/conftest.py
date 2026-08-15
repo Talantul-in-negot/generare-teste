@@ -14,6 +14,16 @@ Usage::
 
 from __future__ import annotations
 
+import os
+
+# Must run before any graphrag.core.config import (directly or transitively) --
+# ENV defaults to "" (fail-closed, see config.py), and .env is gitignored so
+# CI has no ENV at all. Without this, the first get_settings() call anywhere
+# in the test suite raises ValueError("ENV is not set..."). setdefault() so a
+# real ENV in the environment (e.g. a developer testing prod-like config
+# locally) is never silently overridden.
+os.environ.setdefault("ENV", "test")
+
 from collections import deque
 from unittest.mock import AsyncMock, MagicMock
 

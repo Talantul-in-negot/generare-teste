@@ -214,7 +214,7 @@ class TestWriteDocumentReturnsCanonicalId:
             instance.register_supersession = AsyncMock()
             await writer.write_document(doc)
             instance.register_supersession.assert_awaited_once_with(
-                "canonical-id", ["old-doc-id"]
+                "aerospace", "canonical-id", ["old-doc-id"]
             )
 
 

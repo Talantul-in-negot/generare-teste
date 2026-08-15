@@ -269,7 +269,7 @@ async def reconcile_supersession(neo4j, tenant: str, supersession_map: dict[str,
         ]
         if not old_ids:
             continue
-        await svc.register_supersession(new_id, old_ids)
+        await svc.register_supersession(tenant, new_id, old_ids)
         applied += len(old_ids)
     return applied
 
@@ -493,7 +493,7 @@ async def ingest_all(
     print(f"\n[*] Checking for cycles on '{tenant}' tenant...")
     try:
         from graphrag.graph.cycle_detector import CycleDetector
-        _cycles = await CycleDetector(neo4j).run()
+        _cycles = await CycleDetector(neo4j).run(tenant)
         print(f"       Cycles found: {len(_cycles)}")
     except Exception as exc:
         log.warning("ingest_corpus.cycle_check_failed", error=str(exc))

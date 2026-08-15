@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth.dependencies import get_tenant, require_scope
@@ -18,6 +18,28 @@ from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.core.config import get_settings
 
 router = APIRouter(prefix="/context-graph", tags=["Context Graph P0"])
+
+
+def _assert_body_tenant(body_tenant: str, token_tenant: str) -> None:
+    """Reject a request body whose tenant disagrees with the caller's token.
+
+    Several routes below take a domain object (CGAction, CGOutcome, ...)
+    directly as the request body, and that object carries its own `tenant`
+    field (needed for validation, defaults, etc.) -- but tenant is an
+    *authorization* decision and must come from the signed token
+    (api/auth/dependencies.py::get_tenant), never from anything client-
+    supplied. Silently overwriting body.tenant with the token's tenant would
+    hide a real bug (or attack) behind an unremarkable-looking 200; reject
+    instead so a mismatch is visible.
+    """
+    if body_tenant != token_tenant:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Request tenant {body_tenant!r} does not match the "
+                f"authenticated tenant {token_tenant!r}"
+            ),
+        )
 
 
 def _proactive_service() -> ProactiveContextService:
@@ -41,7 +63,8 @@ async def validate_context_trace(request: TraceRequest):
 
 
 @router.post("/traces", dependencies=[Depends(require_scope("write"))])
-async def record_context_trace(request: TraceRequest):
+async def record_context_trace(request: TraceRequest, tenant: str = Depends(get_tenant)):
+    _assert_body_tenant(request.trace.case.tenant, tenant)
     decision_id = await ContextGraphRepository(get_neo4j()).record_trace(request.trace)
     return {"decision_id": decision_id, "tenant": request.trace.case.tenant,
             "schema_version": request.trace.case.schema_version}
@@ -76,29 +99,45 @@ class WPPTraceRequest(BaseModel):
 @router.post("/wpp/campaign-placement", dependencies=[Depends(require_scope("write"))])
 async def record_wpp_campaign_trace(request: WPPTraceRequest, tenant: str = Depends(get_tenant)):
     service = ContextGraphTraceService(ContextGraphRepository(get_neo4j()))
-    decision_id = await service.record_wpp_campaign_placement(**request.model_dump())
+    # Was **request.model_dump() alone -- WPPTraceRequest has no tenant
+    # field, and record_wpp_campaign_placement's own signature defaults
+    # tenant="marketing", so every call through this route silently recorded
+    # its trace under the literal tenant "marketing" regardless of which
+    # tenant the caller actually authenticated as. `tenant=tenant` overrides
+    # that default with the token-derived value; it must come after the
+    # dict-unpack so it wins if model_dump ever gains a tenant key.
+    decision_id = await service.record_wpp_campaign_placement(
+        **request.model_dump(), tenant=tenant,
+    )
     return {"decision_id": decision_id, "tenant": tenant,
             "scenario": "wpp_campaign_placement"}
 
 
 @router.post("/governance/events", dependencies=[Depends(require_scope("write"))])
-async def append_governance_event(event: CGApproval | CGExceptionGrant | CGCorrection):
+async def append_governance_event(
+    event: CGApproval | CGExceptionGrant | CGCorrection,
+    tenant: str = Depends(get_tenant),
+):
+    _assert_body_tenant(event.tenant, tenant)
     event_id = await ContextGraphRepository(get_neo4j()).append_governance_event(event)
     return {"event_id": event_id, "tenant": event.tenant}
 
 
 @router.post("/actions", dependencies=[Depends(require_scope("write"))])
-async def record_action(action: CGAction):
+async def record_action(action: CGAction, tenant: str = Depends(get_tenant)):
+    _assert_body_tenant(action.tenant, tenant)
     return {"action_id": await ContextGraphRepository(get_neo4j()).record_action(action)}
 
 
 @router.post("/outcomes", dependencies=[Depends(require_scope("write"))])
-async def record_outcome(outcome: CGOutcome):
+async def record_outcome(outcome: CGOutcome, tenant: str = Depends(get_tenant)):
+    _assert_body_tenant(outcome.tenant, tenant)
     return {"outcome_id": await ContextGraphRepository(get_neo4j()).record_outcome(outcome)}
 
 
 @router.post("/feedback", dependencies=[Depends(require_scope("write"))])
-async def record_feedback(feedback: CGFeedback):
+async def record_feedback(feedback: CGFeedback, tenant: str = Depends(get_tenant)):
+    _assert_body_tenant(feedback.tenant, tenant)
     return {"feedback_id": await ContextGraphRepository(get_neo4j()).record_feedback(feedback)}
 
 

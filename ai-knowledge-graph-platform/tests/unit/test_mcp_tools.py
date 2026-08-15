@@ -9,11 +9,13 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from graphrag.core.models import QueryResult
 from graphrag.graph.alias_registry import AmbiguousMatch
+from mcp_server.capabilities import build_registry
+from mcp_server.identity import CallerIdentity
+from mcp_server.registry import DeniedCapabilityCall
 from mcp_server.tools import lookup_entity, query_knowledge_graph
+from mcp_server.tools import query_graph_facts as query_graph_facts_impl
 
 
 # ── query_knowledge_graph ────────────────────────────────────────────────────
@@ -148,6 +150,36 @@ class TestLookupEntity:
             "AD-2024", "AIRWORTHINESS_DIRECTIVE",
             tenant="default", as_of="2026-06-01", limit=25,
         )
+
+
+# ── Capability registry wiring (kg.graph.stats, kg.facts.query) ────────────────
+
+class TestCapabilityRegistryWiring:
+    def test_graph_stats_registered_with_legacy_alias(self):
+        registry = build_registry()
+        spec = registry.resolve("graph_stats", CallerIdentity.anonymous())
+        assert spec.qualified_name == "kg.graph.stats@1.0.0"
+
+    def test_facts_query_registered_re_admitting_orphaned_tool(self):
+        registry = build_registry()
+        spec = registry.resolve("kg.facts.query@1.0.0", CallerIdentity.anonymous())
+        assert spec.fn is query_graph_facts_impl
+
+    async def test_graph_stats_denies_cross_tenant_caller(self):
+        registry = build_registry()
+        identity = CallerIdentity(
+            subject="agent-1", tenant="aerospace",
+            scopes=frozenset({"read"}), authenticated=True,
+        )
+        result = await registry.call("graph_stats", {"tenant": "other-tenant"}, identity)
+        assert isinstance(result, DeniedCapabilityCall)
+        assert result.reason == "tenant_mismatch"
+
+    async def test_graph_stats_denies_anonymous_caller(self):
+        registry = build_registry()
+        result = await registry.call("graph_stats", {}, CallerIdentity.anonymous())
+        assert isinstance(result, DeniedCapabilityCall)
+        assert result.reason == "unauthenticated"
 
 
 # ── Neo4jClient.get_relations_for_entity ────────────────────────────────────────

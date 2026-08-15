@@ -20,6 +20,20 @@ ROOT = Path(__file__).resolve().parents[2]  # repo root
 DEV_ENVS = ("development", "dev", "test", "testing", "local")
 
 
+def is_dev_env(env: str) -> bool:
+    """True if `env` (case/whitespace-normalized) is in the dev allow-list.
+
+    Single source of truth for the "am I in a development environment"
+    check, shared by config.py's own secret validation and every other
+    exact-match site (dashboard, demo routes, dev-only auth endpoints) that
+    previously each did `env == "development"` independently — an unnamed
+    or differently-spelled dev env would agree with none of them, and a
+    misspelled *production* env ("Production ", "prod") would agree with
+    all of them, both in the fail-open direction.
+    """
+    return env.strip().lower() in DEV_ENVS
+
+
 def _load_yaml() -> dict:
     path = ROOT / "config" / "settings.yml"
     with open(path, encoding="utf-8") as f:
@@ -130,7 +144,13 @@ class Settings(BaseSettings):
 
     # ── App ─────────────────────────────────────────────────────────────────────
     log_level: str = "INFO"
-    env: str = "development"
+    # Deliberately NOT "development". An unset ENV var previously defaulted
+    # into the dev allow-list, silently permitting every insecure default
+    # below (JWT secret, Neo4j password, dev CORS) in a deployment that never
+    # named its environment. "" is not in DEV_ENVS, so an unset ENV now falls
+    # through to the same strict validation as a real production deployment —
+    # fail closed on missing config, not just misspelled config.
+    env: str = ""
 
     # ── YAML config (loaded separately, merged at property access) ──────────────
     _yaml: dict = {}
@@ -142,6 +162,13 @@ class Settings(BaseSettings):
         """Fail fast if a non-development environment has insecure defaults."""
         env = self.env.strip().lower()
         if env not in DEV_ENVS:
+            if env == "":
+                raise ValueError(
+                    "ENV is not set. Set ENV=development (or dev/test/testing/local) "
+                    "for local work, or ENV=production for a real deployment. "
+                    "Refusing to start with development defaults in an unnamed "
+                    "environment."
+                )
             if self.jwt_secret_key == "change-me-in-production":
                 raise ValueError(
                     "jwt_secret_key must be set to a strong random secret in production. "

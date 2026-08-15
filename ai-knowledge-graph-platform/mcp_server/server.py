@@ -1,138 +1,124 @@
-"""MCP server entry point: exposes hybrid retrieval + entity lookup as MCP tools.
+"""MCP server exposing the versioned GraphRAG capability registry.
 
-Uses stdio transport — the standard local/dev transport, matching how
-Claude Desktop and Claude Code connect to local MCP servers.
+Identity is resolved once at process start from `GRAPHRAG_MCP_TOKEN`
+(`mcp_server/identity.py`), fail-closed: a missing, expired, or tenant-less
+token resolves to an anonymous identity rather than refusing to start. Every
+capability call is then denied with a structured result rather than the
+server crashing or the stdio connection dying.
 
-IMPORTANT — read before editing the top of this file:
-stdout is the MCP JSON-RPC protocol channel for a stdio server. This
-codebase never calls ``structlog.configure()`` anywhere (confirmed via
-repo-wide grep), so structlog runs on its default ``PrintLogger``, which
-writes to ``sys.stdout``. ``HybridRetriever`` and everything it calls log
-extensively. The structlog-to-stderr redirect below MUST happen before any
-``graphrag.*`` import, or every tool call will corrupt the protocol stream
-for any connected client — a silent, hard-to-diagnose failure if broken.
-``sys.stdout``/``sys.stdin`` are never touched here; the ``mcp`` SDK's
-stdio transport owns them for message framing.
+Each `@mcp.tool()` function below is a thin wrapper around
+`CapabilityRegistry.call()` -- the registry (`mcp_server/capabilities/`), not
+this file, is the source of truth for what is exposed, at what version,
+under what scopes. `graph_stats` and `query_graph_facts` are registered
+under their original bare name as a `legacy_alias`, so an existing MCP
+client registration needs no change.
+
+`create_work_order` is the one mutating tool. It requires `biz:write` (and,
+for CRITICAL/HIGH-severity findings or any agent-initiated command,
+`biz:approve` on a separate approval call before a retry succeeds) --
+`CallerIdentity.resolve()` fail-closes to anonymous for a token without
+those scopes, so an unscoped or missing `GRAPHRAG_MCP_TOKEN` denies every
+write attempt rather than executing one.
+
+Run:
+    python mcp_server/server.py
+
+Add to Claude Code as a stdio MCP server, e.g.:
+    claude mcp add graphrag --env GRAPHRAG_MCP_TOKEN=<token> -- python mcp_server/server.py
 """
-
 from __future__ import annotations
 
-import asyncio
-import io
 import sys
-
-import structlog
-
-structlog.configure(logger_factory=structlog.PrintLoggerFactory(file=sys.stderr))
-
-# Windows cp1252 fix — stderr only, mirrors workers/query_worker.py's
-# approach but never touches sys.stdout (unlike query_worker.py, which is
-# safe to do so since its stdout is just a log sink, not a protocol wire).
-if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-
-# When launched as `python mcp_server/server.py` (the natural way an MCP
-# client config like Claude Desktop's invokes it), Python puts this file's
-# own directory — mcp_server/ — on sys.path[0], not the repo root. That
-# breaks the `from mcp_server.tools import ...` absolute import below,
-# since the mcp_server *package* itself then isn't importable. Insert the
-# repo root explicitly so this file works the same way whether it's run
-# as a script, via `python -m mcp_server.server`, or from an installed
-# package.
 from pathlib import Path
 
-_repo_root = str(Path(__file__).resolve().parent.parent)
-if _repo_root not in sys.path:
-    sys.path.insert(0, _repo_root)
+sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from mcp.server.fastmcp import FastMCP
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp_server.capabilities import build_registry
+from mcp_server.identity import CallerIdentity
+from mcp_server.registry import DeniedCapabilityCall
 
-from graphrag.graph.neo4j_client import get_neo4j
-from graphrag.retrieval.hybrid_retriever import HybridRetriever
-from graphrag.retrieval.reranker import _get_cross_encoder
-from mcp_server.tools import lookup_entity, query_graph_facts, query_knowledge_graph
-
-log = structlog.get_logger(__name__)
+mcp = FastMCP("graphrag")
+_registry = build_registry()
+_identity = CallerIdentity.resolve()
 
 
-@asynccontextmanager
-async def _lifespan(server: FastMCP) -> AsyncIterator[dict]:
-    log.info("mcp_server.starting")
-    client = get_neo4j()
-    await client.run("RETURN 1")  # warm the pool, fail fast if Neo4j unreachable
-
-    # Warm the cross-encoder so the first real query doesn't pay the ~3s
-    # cold-load penalty (confirmed live: without this, reranker.loading ->
-    # reranker.done takes ~3s on every server's first query). Mirrors
-    # workers/query_worker.py's _warmup_reranker() — blocking model load,
-    # so it's dispatched to an executor rather than blocking the event loop.
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _get_cross_encoder)
-    log.info("mcp_server.reranker_warmed")
-
-    retriever = HybridRetriever()  # constructed once, reused across every tool call
-    log.info("mcp_server.ready")
-    try:
-        yield {"retriever": retriever}
-    finally:
-        log.info("mcp_server.shutdown")
-        await client.close()
-
-
-mcp = FastMCP("graphrag-knowledge-graph", lifespan=_lifespan)
+def _result_to_dict(result: object) -> dict:
+    if isinstance(result, DeniedCapabilityCall):
+        return {
+            "denied": True,
+            "capability": result.capability,
+            "reason": result.reason,
+            "detail": result.detail,
+        }
+    return result  # type: ignore[return-value]
 
 
 @mcp.tool()
-async def query_knowledge_graph_tool(
-    ctx: Context,
-    question: str,
-    mode: str = "hybrid",
-    tenant: str = "default",
-    session_id: str = "",
-) -> dict:
-    """Answer a natural-language question using hybrid (local+global)
-    retrieval over the ingested knowledge graph. Returns a grounded,
-    cited answer.
+async def graph_stats(tenant: str = "aerospace") -> dict:
+    """Return entity, edge, and community counts for a tenant's knowledge graph.
 
-    mode: "hybrid" (default), "local", or "global".
+    Read-only. Backed by capability `kg.graph.stats@1.0.0`. `tenant` is
+    accepted for wire compatibility with the original tool signature, but is
+    now an assertion, not an authority: it must match the caller's
+    identity-bound tenant, or the call is denied.
     """
-    retriever = ctx.request_context.lifespan_context["retriever"]
-    return await query_knowledge_graph(retriever, question, mode, tenant, session_id)
+    result = await _registry.call("graph_stats", {"tenant": tenant}, _identity)
+    return _result_to_dict(result)
 
 
 @mcp.tool()
-async def lookup_entity_tool(
-    name: str,
-    tenant: str = "default",
-    as_of: str | None = None,
-    limit: int = 25,
-) -> dict:
-    """Resolve an entity name (handles aliases, fuzzy matches, and
-    embedding-similarity near-matches) and return its known relations in
-    the graph, plus its PageRank-based importance score if computed.
+async def query_graph_facts(question: str, tenant: str = "aerospace", limit: int = 25) -> dict:
+    """Answer a supported natural-language graph fact question.
 
-    as_of: optional ISO date string to filter relations by temporal validity.
+    Read-only. Accepts no raw Cypher or SPARQL -- only a fixed set of
+    parameterized, tenant-scoped query templates. Backed by capability
+    `kg.facts.query@1.0.0`.
     """
-    return await lookup_entity(name, tenant, as_of, limit)
+    result = await _registry.call(
+        "kg.facts.query", {"question": question, "tenant": tenant, "limit": limit}, _identity,
+    )
+    return _result_to_dict(result)
 
 
 @mcp.tool()
-async def query_graph_facts_tool(
-    question: str,
-    tenant: str = "default",
-    limit: int = 25,
+async def create_work_order(
+    reason_code: str,
+    originating_finding_id: str,
+    title: str,
+    description: str = "",
+    assignee: str = "",
+    expected_version: int | None = None,
+    dry_run: bool = False,
+    approval_id: str | None = None,
+    command_id: str | None = None,
 ) -> dict:
-    """Answer a bounded graph-fact question without accepting raw graph query text.
+    """Create a remediation work order from a compliance finding.
 
-    Supported examples: "What does Northwind Components supply?", "Show
-    relationships for Northwind Components", and "List suppliers". For
-    open-ended questions, use query_knowledge_graph_tool instead.
+    Requires `biz:write`. Backed by capability `biz.workorder.create@1.0.0`.
+    CRITICAL/HIGH-severity findings (and any agent-initiated call) escalate
+    to human approval: the first call returns `outcome: "approval_required"`
+    with an `approval_id`; a human with `biz:approve` decides it out of
+    band (`POST /business/approvals/{approval_id}/decide`), and retrying
+    this call with the same arguments plus that `approval_id` executes it.
+    `expected_version` guards against a stale read of the finding -- pass
+    the version last observed for it; a mismatch returns
+    `outcome: "stale_version"` with the current version, and no write of
+    any kind occurs.
     """
-    return await query_graph_facts(question, tenant=tenant, limit=limit)
+    result = await _registry.call(
+        "biz.workorder.create@1.0.0",
+        {
+            "reason_code": reason_code, "originating_finding_id": originating_finding_id,
+            "title": title, "description": description, "assignee": assignee,
+            "expected_version": expected_version, "dry_run": dry_run,
+            "approval_id": approval_id, "command_id": command_id,
+        },
+        _identity,
+    )
+    return _result_to_dict(result)
 
 
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    mcp.run()

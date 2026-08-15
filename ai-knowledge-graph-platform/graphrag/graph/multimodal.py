@@ -41,6 +41,8 @@ from pydantic import BaseModel, Field
 
 import structlog
 
+from graphrag.core.tenancy import require_tenant
+
 log = structlog.get_logger(__name__)
 
 _VALID_MODALITIES = frozenset({"image", "audio", "video", "document"})
@@ -88,7 +90,7 @@ class MultiModalEntityService:
         )
 
         # Store a cross-modal embedding after computing it externally
-        await svc.set_embedding(attachment_id, clip_embedding_vector)
+        await svc.set_embedding("acme", attachment_id, clip_embedding_vector)
 
         # Retrieve all media for an entity
         media = await svc.get_modalities("Boeing 737", "PRODUCT", "acme")
@@ -292,6 +294,7 @@ class MultiModalEntityService:
 
     async def set_embedding(
         self,
+        tenant: str,
         attachment_id: str,
         embedding: list[float],
     ) -> None:
@@ -301,20 +304,27 @@ class MultiModalEntityService:
         Call this after computing the embedding externally (e.g. via CLIP for
         images, or a sentence transformer on the caption text).  Once stored,
         the attachment participates in ANN vector retrieval.
+
+        `tenant` required: attachment_id is a UUID (collision-safe), but
+        without a tenant check here a caller from any tenant who learns
+        another tenant's attachment_id (log line, error message, timing)
+        could silently overwrite that attachment's embedding.
         """
+        tenant = require_tenant(tenant)
         await self._neo4j.run(
             """
-            MATCH (m:MediaAttachment {id: $id})
+            MATCH (m:MediaAttachment {id: $id, tenant: $tenant})
             SET m.embedding        = $embedding,
                 m.embedding_dim    = $dim,
                 m.embedding_set_at = datetime()
             """,
             id=attachment_id,
+            tenant=tenant,
             embedding=embedding,
             dim=len(embedding),
         )
         log.info("multimodal.embedding_stored",
-                 attachment_id=attachment_id, dim=len(embedding))
+                 attachment_id=attachment_id, dim=len(embedding), tenant=tenant)
 
     async def get_unembedded(
         self,
@@ -351,15 +361,17 @@ class MultiModalEntityService:
 
     # ── Deletion ───────────────────────────────────────────────────────────────
 
-    async def delete_attachment(self, attachment_id: str) -> bool:
+    async def delete_attachment(self, tenant: str, attachment_id: str) -> bool:
         """Remove a MediaAttachment and its HAS_MEDIA edge."""
+        tenant = require_tenant(tenant)
         rows = await self._neo4j.run(
             """
-            MATCH (m:MediaAttachment {id: $id})
+            MATCH (m:MediaAttachment {id: $id, tenant: $tenant})
             DETACH DELETE m
             RETURN count(m) AS n
             """,
             id=attachment_id,
+            tenant=tenant,
         )
         deleted = rows[0].get("n", 0) if rows else 0
         return bool(deleted)

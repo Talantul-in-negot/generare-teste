@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import structlog
 
+from graphrag.core.tenancy import require_tenant
+
 log = structlog.get_logger(__name__)
 
 # Authority penalty applied to edge confidence when source doc is superseded
@@ -38,8 +40,8 @@ class DocumentAuthorityService:
     Usage::
 
         svc = DocumentAuthorityService(neo4j_client)
-        await svc.register_supersession("doc_v2_id", supersedes=["doc_v1_id"])
-        authority = await svc.get_authority("doc_id")
+        await svc.register_supersession("acme", "doc_v2_id", supersedes=["doc_v1_id"])
+        authority = await svc.get_authority("acme", "doc_id")
         conflicts = await svc.find_conflicts_for_entity("SpaceX", entity_type="ORG", tenant="default")
     """
 
@@ -89,17 +91,22 @@ class DocumentAuthorityService:
         log.info("doc_authority.set", doc_id=doc_id, level=level)
 
     async def register_supersession(
-        self, new_doc_id: str, supersedes: list[str]
+        self, tenant: str, new_doc_id: str, supersedes: list[str]
     ) -> None:
         """
         Record that new_doc_id supersedes the listed document IDs.
         Adds SUPERSEDES edges and marks old docs with `superseded_by`.
+
+        `tenant` was previously not a parameter at all -- both MATCHes
+        were id-only, so a caller could link/supersede documents across
+        tenant boundaries with no check whatsoever.
         """
+        tenant = require_tenant(tenant)
         for old_doc_id in supersedes:
             await self._neo4j.run(
                 """
-                MATCH (new:Document {id: $new_id})
-                MATCH (old:Document {id: $old_id})
+                MATCH (new:Document {id: $new_id, tenant: $tenant})
+                MATCH (old:Document {id: $old_id, tenant: $tenant})
                 MERGE (new)-[r:SUPERSEDES]->(old)
                 ON CREATE SET r.recorded_at = datetime()
                 SET old.superseded_by = $new_id,
@@ -107,19 +114,22 @@ class DocumentAuthorityService:
                 """,
                 new_id=new_doc_id,
                 old_id=old_doc_id,
+                tenant=tenant,
             )
         log.info(
             "doc_authority.supersession_registered",
             new_doc=new_doc_id,
             supersedes=supersedes,
+            tenant=tenant,
         )
 
-    async def get_authority(self, doc_id: str) -> dict:
+    async def get_authority(self, tenant: str, doc_id: str) -> dict:
         """Return authority metadata for a document."""
+        tenant = require_tenant(tenant)
         rows = await self._neo4j.run(
             """
-            MATCH (d:Document {id: $doc_id})
-            OPTIONAL MATCH (newer:Document)-[:SUPERSEDES]->(d)
+            MATCH (d:Document {id: $doc_id, tenant: $tenant})
+            OPTIONAL MATCH (newer:Document {tenant: $tenant})-[:SUPERSEDES]->(d)
             RETURN d.authority_level AS level,
                    d.superseded_by   AS superseded_by,
                    newer.id          AS superseded_by_id,
@@ -127,6 +137,7 @@ class DocumentAuthorityService:
                    d.valid_to        AS valid_to
             """,
             doc_id=doc_id,
+            tenant=tenant,
         )
         if not rows:
             return {"level": 4, "superseded": False}
@@ -221,7 +232,7 @@ class DocumentAuthorityService:
             )
         return conflicts
 
-    async def apply_authority_weights(self, edges: list[dict]) -> list[dict]:
+    async def apply_authority_weights(self, tenant: str, edges: list[dict]) -> list[dict]:
         """
         Adjust edge confidence based on source document authority.
         Called by GNNScorer before building the adjacency matrix.
@@ -232,7 +243,15 @@ class DocumentAuthorityService:
         - Internal procedure (3): confidence × 0.85
         - Informal (4): confidence × 0.70
         - Superseded: additional × 0.5 penalty
+
+        `tenant` required: this feeds retrieval ranking directly (called
+        from LocalSearch.search()), so an unscoped Document lookup here was
+        a cross-tenant *read* leak into every answer, not just a data
+        hygiene issue -- a doc_id collision (or a malicious/guessed id)
+        from another tenant could silently reweight this tenant's edges
+        using another tenant's authority/supersession metadata.
         """
+        tenant = require_tenant(tenant)
         AUTHORITY_MULTIPLIER = {1: 1.0, 2: 0.95, 3: 0.85, 4: 0.70}
 
         if not edges:
@@ -246,12 +265,13 @@ class DocumentAuthorityService:
         rows = await self._neo4j.run(
             """
             UNWIND $ids AS doc_id
-            MATCH (d:Document {id: doc_id})
+            MATCH (d:Document {id: doc_id, tenant: $tenant})
             RETURN d.id AS id,
                    coalesce(d.authority_level, 4) AS level,
                    d.superseded_by IS NOT NULL    AS superseded
             """,
             ids=doc_ids,
+            tenant=tenant,
         )
         doc_meta = {r["id"]: r for r in rows}
 

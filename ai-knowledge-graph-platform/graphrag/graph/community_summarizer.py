@@ -26,16 +26,23 @@ class CommunitySummarizer:
         # Fetch entity names for this community, plus document-supersession status
         # via each entity's source document — lets the summary identify the
         # current/effective regulation in a chain rather than the oldest one.
+        #
+        # Entity/Document ids are UUIDs (see core/models.py), so a cross-tenant
+        # collision on eid is not realistically reachable in practice; the
+        # tenant filter here is still added, matching every other id-keyed
+        # match fixed in this pass, so the query's own text doesn't read as
+        # an unscoped exception to the rule.
         entity_names = await self._neo4j.run(
             """
             UNWIND $ids AS eid
-            MATCH (e:Entity {id: eid})
-            OPTIONAL MATCH (d:Document {id: e.source_doc_id})
-            OPTIONAL MATCH (newer:Document)-[:SUPERSEDES]->(d)
+            MATCH (e:Entity {id: eid, tenant: $tenant})
+            OPTIONAL MATCH (d:Document {id: e.source_doc_id, tenant: $tenant})
+            OPTIONAL MATCH (newer:Document {tenant: $tenant})-[:SUPERSEDES]->(d)
             RETURN e.name AS name, e.type AS type, e.description AS description,
                    d.superseded_by AS superseded_by
             """,
             ids=community.member_entity_ids,
+            tenant=community.tenant,
         )
 
         def _format_entity(e: dict) -> str:

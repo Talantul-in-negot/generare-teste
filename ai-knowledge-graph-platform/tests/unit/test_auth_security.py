@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
-from fastapi import HTTPException
+from unittest.mock import patch
 
+import pytest
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+
+from api.auth.default_auth import RequireAuthMiddleware, _is_public
 from api.auth.dependencies import require_scope
+from api.auth.jwt import create_access_token
 from api.routes.auth import _safe_next
 
 
@@ -121,3 +126,132 @@ class TestCookieSecureLogic:
     def test_staging_env_means_secure_false(self):
         """Non-production envs must not set secure=True."""
         assert ("staging" == "production") is False
+
+
+# ── RequireAuthMiddleware — deny-by-default app floor ──────────────────────────
+
+def _middleware_client() -> TestClient:
+    """Minimal ASGI app with just RequireAuthMiddleware + a few dummy routes.
+
+    Mirrors test_query_routes.py's `_make_client` pattern rather than
+    spinning up the full api.main app, which needs live Neo4j/RabbitMQ/Redis
+    connections at import/lifespan time that this file has no business
+    depending on.
+    """
+    app = FastAPI()
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
+    @app.get("/kg/some-protected-thing")
+    async def protected():
+        return {"ok": True}
+
+    @app.get("/auth/dev-token")
+    async def dev_token_stub():
+        return {"ok": True}
+
+    @app.get("/admin/")
+    async def admin_stub():
+        return {"ok": True}
+
+    app.add_middleware(RequireAuthMiddleware)
+    return TestClient(app)
+
+
+class TestIsPublic:
+    """Unit-level coverage of the path-classification logic, independent of
+    the ASGI plumbing — this is what actually decides deny-vs-allow."""
+
+    def test_health_always_public(self):
+        assert _is_public("/health", dev=False) is True
+        assert _is_public("/health", dev=True) is True
+
+    def test_admin_prefix_always_public_to_this_middleware(self):
+        """/admin has its own auth mechanism (X-Admin-Token / session) --
+        this middleware must not double-gate it with an incompatible Bearer
+        requirement, which would make the Dash login page itself unreachable."""
+        assert _is_public("/admin", dev=False) is True
+        assert _is_public("/admin/", dev=False) is True
+        assert _is_public("/admin/gdpr", dev=False) is True
+
+    def test_admin_lookalike_path_not_treated_as_admin(self):
+        """A path merely starting with 'admin' (no slash boundary) must not
+        match the /admin prefix exemption."""
+        assert _is_public("/administration", dev=False) is False
+
+    def test_dev_only_route_public_in_dev(self):
+        assert _is_public("/auth/dev-token", dev=True) is True
+        assert _is_public("/demo", dev=True) is True
+
+    def test_dev_only_route_not_public_outside_dev(self):
+        assert _is_public("/auth/dev-token", dev=False) is False
+        assert _is_public("/demo", dev=False) is False
+
+    def test_protected_route_never_public(self):
+        assert _is_public("/kg/some-protected-thing", dev=True) is False
+        assert _is_public("/kg/some-protected-thing", dev=False) is False
+
+
+class TestRequireAuthMiddleware:
+    """End-to-end ASGI behavior via TestClient."""
+
+    def test_public_path_reachable_with_no_token(self):
+        client = _middleware_client()
+        resp = client.get("/health")
+        assert resp.status_code == 200
+
+    def test_protected_path_denied_with_no_token(self):
+        client = _middleware_client()
+        resp = client.get("/kg/some-protected-thing")
+        assert resp.status_code == 401
+        assert resp.headers.get("www-authenticate") == "Bearer"
+
+    def test_protected_path_denied_with_garbage_token(self):
+        client = _middleware_client()
+        resp = client.get(
+            "/kg/some-protected-thing",
+            headers={"Authorization": "Bearer not-a-real-jwt"},
+        )
+        assert resp.status_code == 401
+
+    def test_protected_path_allowed_with_valid_token(self):
+        client = _middleware_client()
+        token = create_access_token({"sub": "u1", "scope": "read", "tenant": "t1"})
+        resp = client.get(
+            "/kg/some-protected-thing",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+
+    def test_admin_path_reachable_with_no_bearer_token(self):
+        """/admin's own guard (not tested here) is the real gate; this
+        middleware must never block it before that guard even runs."""
+        client = _middleware_client()
+        resp = client.get("/admin/")
+        assert resp.status_code == 200
+
+    @patch("api.auth.default_auth.is_dev_env", return_value=True)
+    def test_dev_route_reachable_with_no_token_in_dev(self, _mock_dev):
+        client = _middleware_client()
+        resp = client.get("/auth/dev-token")
+        assert resp.status_code == 200
+
+    @patch("api.auth.default_auth.is_dev_env", return_value=False)
+    def test_dev_route_hidden_as_404_outside_dev(self, _mock_dev):
+        """Hidden (404), not merely denied (401/403) -- a caller outside dev
+        shouldn't be able to tell this route exists on the deployment."""
+        client = _middleware_client()
+        resp = client.get("/auth/dev-token")
+        assert resp.status_code == 404
+
+    def test_case_insensitive_bearer_scheme_accepted(self):
+        """RFC 6750 auth-scheme token is case-insensitive."""
+        client = _middleware_client()
+        token = create_access_token({"sub": "u1", "scope": "read", "tenant": "t1"})
+        resp = client.get(
+            "/kg/some-protected-thing",
+            headers={"Authorization": f"BEARER {token}"},
+        )
+        assert resp.status_code == 200

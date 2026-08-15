@@ -414,7 +414,7 @@ class LocalSearch:
             if self._use_authority_weights:
                 _t0 = time.monotonic()
                 entity_edges = await self._authority_svc.apply_authority_weights(
-                    entity_edges
+                    tenant, entity_edges
                 )
                 log.info(
                     "local_search.authority_weights.done",

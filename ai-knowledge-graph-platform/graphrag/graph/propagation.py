@@ -31,6 +31,8 @@ from __future__ import annotations
 
 import structlog
 
+from graphrag.core.tenancy import require_tenant
+
 log = structlog.get_logger(__name__)
 
 MAX_PROPAGATION_DEPTH = 10   # safety limit for ancestor traversal
@@ -43,8 +45,8 @@ class PropagationService:
     Usage::
 
         svc = PropagationService(neo4j_client)
-        await svc.mark_dirty("entity_or_block_name")
-        status = await svc.get_computed_status("Avionics System")
+        await svc.mark_dirty("acme", "entity_or_block_name")
+        status = await svc.get_computed_status("acme", "Avionics System")
     """
 
     def __init__(self, neo4j_client):
@@ -52,49 +54,56 @@ class PropagationService:
 
     # ── Dirty flag propagation ─────────────────────────────────────────────────
 
-    async def mark_dirty(self, entity_name: str) -> int:
+    async def mark_dirty(self, tenant: str, entity_name: str) -> int:
         """
-        Mark all ancestors of entity_name as dirty.
+        Mark all ancestors of entity_name as dirty, within `tenant` only.
         Returns the number of nodes flagged.
         """
+        tenant = require_tenant(tenant)
+        # This whole module previously had zero tenant references -- every
+        # query here matched by name alone, across every tenant's graph.
         rows = await self._neo4j.run(
             f"""
-            MATCH path = (ancestor:Entity)-[:RELATES_TO*1..{MAX_PROPAGATION_DEPTH}]
-                         ->(changed:Entity {{name: $name}})
+            MATCH path = (ancestor:Entity {{tenant: $tenant}})-[:RELATES_TO*1..{MAX_PROPAGATION_DEPTH}]
+                         ->(changed:Entity {{name: $name, tenant: $tenant}})
             WITH DISTINCT ancestor
             SET ancestor.status_dirty = true
             RETURN count(ancestor) AS flagged
             """,
             name=entity_name,
+            tenant=tenant,
         )
         flagged = rows[0]["flagged"] if rows else 0
-        log.info("propagation.dirty_flagged", entity=entity_name, ancestors=flagged)
+        log.info("propagation.dirty_flagged", entity=entity_name, ancestors=flagged, tenant=tenant)
         return flagged
 
-    async def clear_dirty(self, entity_name: str) -> None:
+    async def clear_dirty(self, tenant: str, entity_name: str) -> None:
         """Clear dirty flag after recomputation."""
+        tenant = require_tenant(tenant)
         await self._neo4j.run(
             """
-            MATCH (e:Entity {name: $name})
+            MATCH (e:Entity {name: $name, tenant: $tenant})
             SET e.status_dirty = false,
                 e.last_computed = datetime()
             """,
             name=entity_name,
+            tenant=tenant,
         )
 
     # ── Aggregate recomputation ────────────────────────────────────────────────
 
-    async def recompute_aggregates(self, entity_name: str) -> dict:
+    async def recompute_aggregates(self, tenant: str, entity_name: str) -> dict:
         """
         Recompute materialized aggregates for entity_name based on
-        the current status of all its descendants.
+        the current status of all its descendants, within `tenant` only.
 
         Returns the computed aggregate dict.
         """
+        tenant = require_tenant(tenant)
         rows = await self._neo4j.run(
             """
-            MATCH (root:Entity {name: $name})
-            OPTIONAL MATCH (root)-[:RELATES_TO*1..10]->(desc:Entity)
+            MATCH (root:Entity {name: $name, tenant: $tenant})
+            OPTIONAL MATCH (root)-[:RELATES_TO*1..10]->(desc:Entity {tenant: $tenant})
             WITH root,
                  count(desc)                                                    AS total,
                  count(CASE WHEN desc.own_status = 'missing'   THEN 1 END)     AS missing,
@@ -119,19 +128,21 @@ class PropagationService:
                    root.computed_status  AS computed_status
             """,
             name=entity_name,
+            tenant=tenant,
         )
         result = dict(rows[0]) if rows else {}
-        log.info("propagation.recomputed", entity=entity_name, **result)
+        log.info("propagation.recomputed", entity=entity_name, tenant=tenant, **result)
         return result
 
-    async def get_computed_status(self, entity_name: str) -> dict:
+    async def get_computed_status(self, tenant: str, entity_name: str) -> dict:
         """
         Return the aggregate status for entity_name.
         Recomputes lazily if dirty flag is set.
         """
+        tenant = require_tenant(tenant)
         rows = await self._neo4j.run(
             """
-            MATCH (e:Entity {name: $name})
+            MATCH (e:Entity {name: $name, tenant: $tenant})
             RETURN e.status_dirty     AS dirty,
                    e.computed_status  AS computed_status,
                    e.missing_count    AS missing_count,
@@ -140,13 +151,14 @@ class PropagationService:
                    e.last_computed    AS last_computed
             """,
             name=entity_name,
+            tenant=tenant,
         )
         if not rows:
             return {"computed_status": "unknown"}
 
         row = rows[0]
         if row.get("dirty") or row.get("computed_status") is None:
-            return await self.recompute_aggregates(entity_name)
+            return await self.recompute_aggregates(tenant, entity_name)
 
         return {
             "computed_status":  row.get("computed_status"),
@@ -156,64 +168,70 @@ class PropagationService:
             "last_computed":    row.get("last_computed"),
         }
 
-    async def batch_recompute_dirty(self, limit: int = 100) -> int:
+    async def batch_recompute_dirty(self, tenant: str, limit: int = 100) -> int:
         """
-        Recompute all currently dirty nodes in a batch.
+        Recompute all currently dirty nodes in a batch, within `tenant` only.
         Returns number of nodes recomputed.
         Intended for background jobs or post-ingestion cleanup.
         """
+        tenant = require_tenant(tenant)
         dirty_rows = await self._neo4j.run(
             """
-            MATCH (e:Entity)
+            MATCH (e:Entity {tenant: $tenant})
             WHERE e.status_dirty = true
             RETURN e.name AS name
             LIMIT $limit
             """,
+            tenant=tenant,
             limit=limit,
         )
         count = 0
         for row in dirty_rows:
-            await self.recompute_aggregates(row["name"])
+            await self.recompute_aggregates(tenant, row["name"])
             count += 1
-        log.info("propagation.batch_recomputed", count=count)
+        log.info("propagation.batch_recomputed", count=count, tenant=tenant)
         return count
 
     async def propagate_status_change(
-        self, entity_name: str, new_status: str
+        self, tenant: str, entity_name: str, new_status: str
     ) -> None:
         """
         Full workflow: update own_status → mark ancestors dirty → stop
         propagation early if parent computed_status doesn't change.
         """
+        tenant = require_tenant(tenant)
         # Update the leaf
         await self._neo4j.run(
             """
-            MATCH (e:Entity {name: $name})
+            MATCH (e:Entity {name: $name, tenant: $tenant})
             SET e.own_status = $status, e.status_updated_at = datetime()
             """,
             name=entity_name,
             status=new_status,
+            tenant=tenant,
         )
 
         # Get direct parents
         parents = await self._neo4j.run(
             """
-            MATCH (parent:Entity)-[:RELATES_TO]->(e:Entity {name: $name})
+            MATCH (parent:Entity {tenant: $tenant})-[:RELATES_TO]->(e:Entity {name: $name, tenant: $tenant})
             RETURN parent.name AS name, parent.computed_status AS computed_status
             """,
             name=entity_name,
+            tenant=tenant,
         )
 
         for parent in parents:
             old_status = parent.get("computed_status")
-            new_agg = await self.recompute_aggregates(parent["name"])
+            new_agg = await self.recompute_aggregates(tenant, parent["name"])
             # Only propagate upward if the parent's own computed status changed
             if new_agg.get("computed_status") != old_status:
-                await self.mark_dirty(parent["name"])
+                await self.mark_dirty(tenant, parent["name"])
 
         log.info(
             "propagation.status_change_complete",
             entity=entity_name,
             new_status=new_status,
             parents_checked=len(parents),
+            tenant=tenant,
         )

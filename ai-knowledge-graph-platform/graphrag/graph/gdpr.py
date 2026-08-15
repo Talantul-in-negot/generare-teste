@@ -44,6 +44,8 @@ from uuid import uuid4
 
 import structlog
 
+from graphrag.core.tenancy import require_tenant
+
 log = structlog.get_logger(__name__)
 
 
@@ -84,7 +86,7 @@ class GDPRService:
         self,
         entity_name: str,
         entity_type: str,
-        tenant: str = "default",
+        tenant: str,
         requested_by: str = "dpo",
         request_id: str = "",
     ) -> dict:
@@ -100,7 +102,13 @@ class GDPRService:
         6. Complete audit record.
 
         Returns a report dict with counts of what was removed.
+
+        `tenant` is required (no default) -- an erasure request is the most
+        consequential write in this codebase; a caller that omits it should
+        get a loud error, not a silent fall-through to some default tenant's
+        data. See graphrag.core.tenancy.require_tenant.
         """
+        tenant = require_tenant(tenant)
         audit_id = str(uuid4())
         await self._neo4j.run(
             """
@@ -175,14 +183,25 @@ class GDPRService:
             tenant=tenant,
         )
 
-        # Step 5: Remove ChangeLog entries for this entity
+        # Step 5: Remove ChangeLog entries for this entity.
+        # Was `MATCH (cl:ChangeLog {target_label:'Entity'}) WHERE cl.target_id
+        # = $name` -- two bugs: no tenant filter (deleted ANY tenant's
+        # ChangeLog row with a matching target_id), and target_id is never
+        # equal to $name in the first place -- audit_trail.py stores
+        # `target_id: e.id` (the entity's internal id), not its name, so
+        # this predicate never matched anything it was meant to. Traversing
+        # the HAS_CHANGE edge audit_trail.py actually creates fixes both:
+        # it's tenant-scoped via the entity match, and doesn't depend on a
+        # field that was never populated the way this assumed.
         await self._neo4j.run(
             """
-            MATCH (cl:ChangeLog {target_label: 'Entity'})
-            WHERE cl.target_id = $name
+            MATCH (e:Entity {name: $name, type: $type, tenant: $tenant})
+                  -[:HAS_CHANGE]->(cl:ChangeLog {tenant: $tenant})
             DELETE cl
             """,
             name=entity_name,
+            type=entity_type,
+            tenant=tenant,
         )
 
         # Step 6: Delete the entity node
@@ -227,7 +246,7 @@ class GDPRService:
     async def forget_document(
         self,
         doc_id: str,
-        tenant: str = "default",
+        tenant: str,
         requested_by: str = "dpo",
         request_id: str = "",
     ) -> dict:
@@ -237,15 +256,24 @@ class GDPRService:
         Entities that also appear in other documents are NOT deleted —
         only their association with this document is removed.
         Entities whose sole evidence comes from this document are fully erased.
+
+        `tenant` is required (no default) -- see forget_entity's docstring.
         """
+        tenant = require_tenant(tenant)
         audit_id = str(uuid4())
 
-        # Entities exclusively from this document
+        # Entities exclusively from this document. `other:Chunk` in the
+        # NOT EXISTS subquery previously had no tenant filter, so a
+        # same-named/id'd chunk in a DIFFERENT tenant could make an
+        # otherwise-exclusive entity look non-exclusive -- an under-deletion
+        # (fails safe, doesn't leak data), but still wrong: a genuine GDPR
+        # erasure could silently fail to fully erase an entity because of
+        # data it can't even see.
         exclusive_rows = await self._neo4j.run(
             """
             MATCH (c:Chunk {document_id: $doc_id, tenant: $tenant})-[:MENTIONS]->(e:Entity {tenant: $tenant})
             WHERE NOT EXISTS {
-                MATCH (other:Chunk)-[:MENTIONS]->(e)
+                MATCH (other:Chunk {tenant: $tenant})-[:MENTIONS]->(e)
                 WHERE other.document_id <> $doc_id
             }
             RETURN DISTINCT e.name AS name, e.type AS type
@@ -265,17 +293,21 @@ class GDPRService:
             )
             erased_entities.append({"name": row["name"], "type": row["type"]})
 
-        # Delete all chunks for this document
+        # Delete all chunks for this document. Was matched by document_id
+        # alone -- a document_id collision (or reuse) across tenants would
+        # DETACH DELETE another tenant's chunks entirely.
         chunk_rows = await self._neo4j.run(
-            "MATCH (c:Chunk {document_id: $doc_id}) DETACH DELETE c RETURN count(c) AS n",
+            "MATCH (c:Chunk {document_id: $doc_id, tenant: $tenant}) DETACH DELETE c RETURN count(c) AS n",
             doc_id=doc_id,
+            tenant=tenant,
         )
         chunks_deleted = chunk_rows[0].get("n", 0) if chunk_rows else 0
 
-        # Delete the document node itself
+        # Delete the document node itself. Same class of bug -- id-only match.
         await self._neo4j.run(
-            "MATCH (d:Document {id: $doc_id}) DETACH DELETE d",
+            "MATCH (d:Document {id: $doc_id, tenant: $tenant}) DETACH DELETE d",
             doc_id=doc_id,
+            tenant=tenant,
         )
 
         report = {
@@ -295,10 +327,17 @@ class GDPRService:
 
     async def deletion_audit_log(
         self,
-        tenant: str = "default",
+        tenant: str,
         limit: int = 100,
     ) -> list[dict]:
-        """Return all erasure records for a tenant, newest first."""
+        """Return all erasure records for a tenant, newest first.
+
+        `tenant` required for consistency with forget_entity/forget_document
+        -- this query was already correctly scoped, but a default here would
+        leave one of three public methods on this service silently exempt
+        from the "no unscoped GDPR operation" rule the other two now enforce.
+        """
+        tenant = require_tenant(tenant)
         return await self._neo4j.run(
             """
             MATCH (a:DeletionAudit)
@@ -372,9 +411,14 @@ class GDPRService:
             original = row.get("text") or ""
             redacted = pattern.sub("[REDACTED]", original)
             if redacted != original:
+                # The read above (this function's first query) is already
+                # tenant-scoped; this write wasn't -- matched by chunk_id
+                # alone, so a chunk_id collision across tenants would
+                # redact another tenant's chunk text.
                 await self._neo4j.run(
-                    "MATCH (c:Chunk {id: $chunk_id}) SET c.text = $text, c.redacted = true",
+                    "MATCH (c:Chunk {id: $chunk_id, tenant: $tenant}) SET c.text = $text, c.redacted = true",
                     chunk_id=row["chunk_id"],
+                    tenant=tenant,
                     text=redacted,
                 )
                 count += 1

@@ -3,6 +3,8 @@ reification, property schema, external entity linking, multi-modal entities, and
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -555,10 +557,11 @@ async def get_entity_media(
     dependencies=[Depends(require_scope("write"))],
     summary="Store a cross-modal embedding on a MediaAttachment",
 )
-async def set_media_embedding(request: SetEmbeddingRequest):
+async def set_media_embedding(request: SetEmbeddingRequest, tenant: str = Depends(get_tenant)):
     from graphrag.graph.multimodal import MultiModalEntityService
     svc = MultiModalEntityService(get_neo4j())
     await svc.set_embedding(
+        tenant=tenant,
         attachment_id=request.attachment_id,
         embedding=request.embedding,
     )
@@ -590,30 +593,45 @@ class SPARQLRequest(BaseModel):
     # The export location is server configuration, not request data.
 
 
+_TENANT_PATH_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
 @router.post(
     "/sparql",
     dependencies=[Depends(require_scope("read"))],
     summary="Execute a SPARQL 1.1 SELECT query against the exported Turtle graph",
 )
-async def sparql_query(request: SPARQLRequest):
-    """Run a read-only SPARQL query against the last RDF export.
+async def sparql_query(request: SPARQLRequest, tenant: str = Depends(get_tenant)):
+    """Run a read-only SPARQL query against the caller's tenant's RDF export.
 
-    The export is produced by ``scripts/export_rdf.py``. Its location is
-    server configuration (``GRAPHRAG_RDF_EXPORT_PATH``, default
-    ``exports/graph_export.ttl``), never a request field. If no export
-    exists there, returns a 404 with a hint to run the script.
+    The export is produced by ``scripts/export_rdf.py --tenant <t>``. Its
+    location is server configuration derived from the caller's tenant
+    (``GRAPHRAG_RDF_EXPORT_DIR``, default ``exports``) plus a fixed
+    filename, never a request field. If no export exists there, returns a
+    404 with a hint to run the script.
+
+    Previously this route took no tenant dependency at all and read one
+    shared export file for every caller -- whichever tenant last ran the
+    export script silently became the data every tenant's SPARQL queries
+    saw. Tenant is validated against a strict filename-safe pattern before
+    it ever touches Path(...), so it can't be used for traversal even
+    though it's now part of the constructed path.
     """
     import os
     from pathlib import Path
 
     from graphrag.graph.sparql_bridge import SPARQLBridge
 
-    path = Path(os.getenv("GRAPHRAG_RDF_EXPORT_PATH", "exports/graph_export.ttl"))
+    if not _TENANT_PATH_RE.fullmatch(tenant):
+        raise HTTPException(status_code=403, detail="Invalid tenant")
+
+    export_dir = Path(os.getenv("GRAPHRAG_RDF_EXPORT_DIR", "exports"))
+    path = export_dir / tenant / "graph_export.ttl"
     if not path.exists():
         raise HTTPException(
             status_code=404,
             detail=f"RDF export not found at '{path}'. "
-                   "Run: python scripts/export_rdf.py",
+                   f"Run: python scripts/export_rdf.py --tenant {tenant}",
         )
     try:
         bridge = SPARQLBridge.from_turtle(path)
