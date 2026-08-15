@@ -1,0 +1,38 @@
+{
+  "report_schema_version": "graph-fact-golden-eval/v1",
+  "dataset_version": "local-graph-facts/v1",
+  "tenant": "local-evidence",
+  "baseline": {
+    "name": "empty tenant returns no evidence and scores 0 of 3",
+    "pass_rate": 0.0
+  },
+  "candidate": {
+    "pass_rate": 1.0,
+    "absolute_improvement": 1.0,
+    "questions": 3
+  },
+  "results": [
+    {
+      "id": "relations-737",
+      "passed": true,
+      "latency_ms": 72.23439999870607,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-faa-2024",
+      "passed": true,
+      "latency_ms": 66.61700000040582,
+      "returned_rows": 4,
+      "missing_expected_values": []
+    },
+    {
+      "id": "aircraft-types",
+      "passed": true,
+      "latency_ms": 510.6727000020328,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    }
+  ],
+  "claim_policy": "Fixed synthetic local corpus and empty-corpus baseline; not a customer accuracy claim."
+}

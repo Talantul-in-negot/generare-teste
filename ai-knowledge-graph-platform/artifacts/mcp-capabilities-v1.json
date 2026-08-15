@@ -1,0 +1,172 @@
+{
+  "contract_schema_version": "mcp-capability-contract/v1",
+  "capabilities": [
+    {
+      "capability_id": "biz.workorder.compensate",
+      "version": "1.0.0",
+      "qualified_name": "biz.workorder.compensate@1.0.0",
+      "title": "Cancel a work order and reopen its finding through an approved compensation",
+      "kind": "write",
+      "risk": "destructive",
+      "required_scopes": [
+        "biz:write"
+      ],
+      "arg_schema_keys": [
+        "approval_id",
+        "command_id",
+        "correlation_id",
+        "dry_run",
+        "expected_finding_version",
+        "expected_version",
+        "original_command_id",
+        "reason_code",
+        "work_order_id"
+      ],
+      "dry_run_ok": true,
+      "requires_approval": true,
+      "deprecated": false,
+      "replacement": null,
+      "legacy_aliases": []
+    },
+    {
+      "capability_id": "biz.workorder.create",
+      "version": "1.0.0",
+      "qualified_name": "biz.workorder.create@1.0.0",
+      "title": "Create a remediation work order from a compliance finding",
+      "kind": "write",
+      "risk": "moderate",
+      "required_scopes": [
+        "biz:write"
+      ],
+      "arg_schema_keys": [
+        "approval_id",
+        "assignee",
+        "command_id",
+        "correlation_id",
+        "description",
+        "dry_run",
+        "expected_version",
+        "originating_finding_id",
+        "reason_code",
+        "title"
+      ],
+      "dry_run_ok": true,
+      "requires_approval": true,
+      "deprecated": false,
+      "replacement": null,
+      "legacy_aliases": []
+    },
+    {
+      "capability_id": "cg.precedent.find",
+      "version": "1.0.0",
+      "qualified_name": "cg.precedent.find@1.0.0",
+      "title": "Find outcome-backed Context Graph precedents",
+      "kind": "read",
+      "risk": "moderate",
+      "required_scopes": [],
+      "arg_schema_keys": [
+        "limit",
+        "policy_version_id",
+        "tenant"
+      ],
+      "dry_run_ok": true,
+      "requires_approval": false,
+      "deprecated": false,
+      "replacement": null,
+      "legacy_aliases": []
+    },
+    {
+      "capability_id": "kg.answer.query",
+      "version": "1.0.0",
+      "qualified_name": "kg.answer.query@1.0.0",
+      "title": "Grounded hybrid GraphRAG answer with citations",
+      "kind": "read",
+      "risk": "moderate",
+      "required_scopes": [],
+      "arg_schema_keys": [
+        "mode",
+        "question",
+        "session_id",
+        "tenant"
+      ],
+      "dry_run_ok": true,
+      "requires_approval": false,
+      "deprecated": false,
+      "replacement": null,
+      "legacy_aliases": []
+    },
+    {
+      "capability_id": "kg.entity.lookup",
+      "version": "1.0.0",
+      "qualified_name": "kg.entity.lookup@1.0.0",
+      "title": "Resolve an entity and return tenant-scoped graph evidence",
+      "kind": "read",
+      "risk": "safe",
+      "required_scopes": [],
+      "arg_schema_keys": [
+        "as_of",
+        "limit",
+        "name",
+        "tenant"
+      ],
+      "dry_run_ok": true,
+      "requires_approval": false,
+      "deprecated": false,
+      "replacement": null,
+      "legacy_aliases": []
+    },
+    {
+      "capability_id": "kg.facts.query",
+      "version": "1.0.0",
+      "qualified_name": "kg.facts.query@1.0.0",
+      "title": "Controlled natural-language graph fact query",
+      "kind": "read",
+      "risk": "safe",
+      "required_scopes": [],
+      "arg_schema_keys": [
+        "limit",
+        "question",
+        "tenant"
+      ],
+      "dry_run_ok": true,
+      "requires_approval": false,
+      "deprecated": false,
+      "replacement": null,
+      "legacy_aliases": []
+    },
+    {
+      "capability_id": "kg.graph.stats",
+      "version": "1.0.0",
+      "qualified_name": "kg.graph.stats@1.0.0",
+      "title": "Knowledge graph tenant statistics",
+      "kind": "read",
+      "risk": "safe",
+      "required_scopes": [],
+      "arg_schema_keys": [
+        "tenant"
+      ],
+      "dry_run_ok": true,
+      "requires_approval": false,
+      "deprecated": false,
+      "replacement": null,
+      "legacy_aliases": [
+        "graph_stats"
+      ]
+    },
+    {
+      "capability_id": "platform.capabilities.discover",
+      "version": "1.0.0",
+      "qualified_name": "platform.capabilities.discover@1.0.0",
+      "title": "Discover MCP capabilities available to the authenticated caller",
+      "kind": "read",
+      "risk": "safe",
+      "required_scopes": [],
+      "arg_schema_keys": [],
+      "dry_run_ok": true,
+      "requires_approval": false,
+      "deprecated": false,
+      "replacement": null,
+      "legacy_aliases": []
+    }
+  ]
+}

@@ -53,7 +53,9 @@ The graph is not a RAG index. It is a formally modeled knowledge base:
 - [`docs/mcp-capability-contract.md`](docs/mcp-capability-contract.md) — reusable, compatibility-tested MCP contract boundary
 - [`docs/production-evidence-template.json`](docs/production-evidence-template.json) — source-of-truth fields for production scale and business-impact claims
 - [`docs/public-evaluation-report-template.md`](docs/public-evaluation-report-template.md) — reproducible public evaluation report template
+- [`docs/public-local-evaluation-report.md`](docs/public-local-evaluation-report.md) — generated, bounded local MCP/retrieval/write evidence
 - [`docs/articles/governed-mcp-and-agent-writes.md`](docs/articles/governed-mcp-and-agent-writes.md) — governed MCP architecture walkthrough article draft
+- [`docs/articles/local-evidence-walkthrough.md`](docs/articles/local-evidence-walkthrough.md) — reproducible local evidence walkthrough
 - [`docs/local-evidence-runbook.md`](docs/local-evidence-runbook.md) — repeatable local MCP, load, retrieval, workflow, cost, recovery, and security evidence
 - [`evals/golden_set.json`](evals/golden_set.json) — 34-question golden eval set (v2.2); run with `scripts/run_golden_eval.py`
 

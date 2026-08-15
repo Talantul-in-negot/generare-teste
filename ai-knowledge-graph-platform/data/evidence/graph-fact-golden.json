@@ -1,0 +1,24 @@
+{
+  "dataset_version": "local-graph-facts/v1",
+  "baseline": "empty tenant returns no evidence and scores 0 of 3",
+  "questions": [
+    {
+      "id": "relations-737",
+      "question": "What are relations for Boeing 737 MAX?",
+      "expected_values": ["FAA-AD-2020-05-11"],
+      "minimum_rows": 2
+    },
+    {
+      "id": "relations-faa-2024",
+      "question": "What are relations for FAA-AD-2024-01-02?",
+      "expected_values": ["Boeing 737 MAX"],
+      "minimum_rows": 3
+    },
+    {
+      "id": "aircraft-types",
+      "question": "List all aircraft type entities",
+      "expected_values": ["Airbus A320neo", "Boeing 737 MAX"],
+      "minimum_rows": 2
+    }
+  ]
+}
