@@ -8,6 +8,7 @@ UVICORN   ?= $(PYTHON) -m uvicorn
 PIP       ?= $(PYTHON) -m pip
 
 .PHONY: help install install-dev lock test test-collect test-integration test-load test-all lint \
+	terraform-fmt terraform-validate terraform-test terraform-security \
         api dashboard backup services-up services-down \
         community-rebuild re-embed entity-migrate smoke-test
 
@@ -35,6 +36,19 @@ test:          ## Run unit tests only (fast, no live services)
 
 test-collect:   ## Collect every test with the deterministic plugin set
 	$(PYTEST) --collect-only -q tests/
+
+terraform-fmt:  ## Check Terraform formatting
+	terraform -chdir=infra/terraform fmt -check -recursive
+
+terraform-validate:  ## Validate Terraform without a backend
+	terraform -chdir=infra/terraform init -backend=false
+	terraform -chdir=infra/terraform validate -no-color
+
+terraform-test:  ## Run provider-mocked Terraform invariant tests
+	terraform -chdir=infra/terraform test -no-color
+
+terraform-security:  ## Run Checkov when installed (no cloud credentials required)
+	checkov -d infra/terraform --framework terraform
 
 test-integration: ## Run integration tests (AsyncMock, no live services)
 	$(PYTEST) tests/integration/ -v

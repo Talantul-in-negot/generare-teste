@@ -126,5 +126,10 @@ jobs:
           terraform init -backend=false
           terraform fmt -check -recursive
           terraform validate -no-color
+          terraform test -no-color
+      - name: Terraform security scan
+        run: |
+          python -m pip install --disable-pip-version-check checkov
+          checkov -d ai-knowledge-graph-platform/infra/terraform --framework terraform --quiet
       - name: Render Kubernetes manifests
         run: kubectl kustomize deploy/kubernetes > /dev/null
