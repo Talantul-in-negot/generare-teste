@@ -143,6 +143,16 @@ Kustomize tree, and runs a server-side dry-run. It validates admission and API
 compatibility without pretending that placeholder production images or cloud
 secrets are deployable locally.
 
+For a real local MCP pod smoke test, use the disposable-secret workflow:
+
+```powershell
+.\scripts\run_minikube_smoke.ps1
+```
+
+It loads the existing local API/MCP images into Minikube, creates only
+local-only credentials, scales the background workers to zero, waits for MCP
+readiness, and checks `/health` through a port-forward.
+
 The five Docker-backed service tests in `tests/e2e/test_live_services.py`
 require Docker Desktop and `testcontainers-python`. Install project
 dependencies and verify Docker before running them:

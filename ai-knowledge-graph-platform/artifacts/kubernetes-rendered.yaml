@@ -128,7 +128,10 @@ spec:
         - mountPath: /tmp
           name: tmp
       securityContext:
+        fsGroup: 101
+        runAsGroup: 101
         runAsNonRoot: true
+        runAsUser: 100
         seccompProfile:
           type: RuntimeDefault
       serviceAccountName: graphrag-workload
@@ -199,7 +202,10 @@ spec:
         - mountPath: /tmp
           name: tmp
       securityContext:
+        fsGroup: 101
+        runAsGroup: 101
         runAsNonRoot: true
+        runAsUser: 100
         seccompProfile:
           type: RuntimeDefault
       serviceAccountName: graphrag-workload
@@ -278,7 +284,10 @@ spec:
         - mountPath: /tmp
           name: tmp
       securityContext:
+        fsGroup: 101
+        runAsGroup: 101
         runAsNonRoot: true
+        runAsUser: 100
         seccompProfile:
           type: RuntimeDefault
       serviceAccountName: graphrag-workload
@@ -351,7 +360,10 @@ spec:
         - mountPath: /tmp
           name: tmp
       securityContext:
+        fsGroup: 101
+        runAsGroup: 101
         runAsNonRoot: true
+        runAsUser: 100
         seccompProfile:
           type: RuntimeDefault
       serviceAccountName: graphrag-workload
