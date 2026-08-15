@@ -3,11 +3,11 @@
 # Requires: Python 3.11+, Docker (for services)
 
 PYTHON    ?= python
-PYTEST    ?= $(PYTHON) -m pytest
+PYTEST    ?= $(PYTHON) scripts/run_pytest.py
 UVICORN   ?= $(PYTHON) -m uvicorn
 PIP       ?= $(PYTHON) -m pip
 
-.PHONY: help install install-dev lock test test-integration test-load test-all lint \
+.PHONY: help install install-dev lock test test-collect test-integration test-load test-all lint \
         api dashboard backup services-up services-down \
         community-rebuild re-embed entity-migrate smoke-test
 
@@ -32,6 +32,9 @@ lock:          ## Regenerate requirements.lock from requirements.txt (reproducib
 
 test:          ## Run unit tests only (fast, no live services)
 	$(PYTEST) tests/unit/ -x
+
+test-collect:   ## Collect every test with the deterministic plugin set
+	$(PYTEST) --collect-only -q tests/
 
 test-integration: ## Run integration tests (AsyncMock, no live services)
 	$(PYTEST) tests/integration/ -v

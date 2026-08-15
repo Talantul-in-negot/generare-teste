@@ -33,3 +33,6 @@ filterwarnings      = [
     "ignore::DeprecationWarning:scipy",
     "ignore::numba.core.errors.NumbaDeprecationWarning",
 ]
+markers             = [
+    "asyncio: run the test in an asyncio event loop",
+]

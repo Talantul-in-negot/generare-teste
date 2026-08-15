@@ -21,6 +21,7 @@ from graphrag.core.models import QueryResult
 from graphrag.retrieval.local_search import LocalSearch
 from graphrag.retrieval.context_builder import ContextBuilder
 from graphrag.retrieval.claim_verifier import ClaimVerifier
+from graphrag.retrieval.fallback_policy import is_low_confidence as _is_low_confidence  # noqa: F401
 
 log = structlog.get_logger(__name__)
 
