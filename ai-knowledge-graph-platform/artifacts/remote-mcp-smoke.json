@@ -1,0 +1,10 @@
+{
+  "report_schema_version": "remote-mcp-smoke/v1",
+  "url": "http://localhost:8002/mcp",
+  "initialize_status": 200,
+  "tools_list_status": 200,
+  "session_established": true,
+  "tools_list_response_bytes": 6179,
+  "passed": true,
+  "claim_policy": "This verifies one authenticated local gateway run, not production availability."
+}

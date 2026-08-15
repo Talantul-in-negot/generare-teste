@@ -1,0 +1,17 @@
+{
+  "total": 4,
+  "passed": 2,
+  "failed": 2,
+  "failures": [
+    {
+      "name": "cross-tenant-read",
+      "case": "cross-tenant-read",
+      "reason": "tenant_isolation"
+    },
+    {
+      "name": "destructive-without-approval",
+      "case": "destructive-without-approval",
+      "reason": "missing_approval_gate"
+    }
+  ]
+}

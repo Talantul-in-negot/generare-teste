@@ -1,0 +1,30 @@
+{
+  "tenant": "automotive",
+  "golden_set": "C:\\Users\\Sergiu\\Desktop\\Projects\\Generative-AI\\ai-knowledge-graph-platform\\data\\eval_golden\\queries_automotive.json",
+  "questions": 10,
+  "profiles": {
+    "vector_only": {
+      "bm25_enabled": false,
+      "reranker_enabled": false,
+      "multihop_depth": 0,
+      "gnn_enabled": false,
+      "pagerank_tiebreak_enabled": false,
+      "authority_weighting_enabled": false,
+      "feedback_ranking_enabled": false,
+      "query_rewrite_enabled": false,
+      "entity_context_enabled": false,
+      "named_document_boost_enabled": false
+    },
+    "text_hybrid": {
+      "multihop_depth": 0,
+      "gnn_enabled": false,
+      "pagerank_tiebreak_enabled": false,
+      "authority_weighting_enabled": false,
+      "feedback_ranking_enabled": false,
+      "entity_context_enabled": false,
+      "named_document_boost_enabled": false
+    },
+    "full": {}
+  },
+  "cache": "disabled (no query ID)"
+}

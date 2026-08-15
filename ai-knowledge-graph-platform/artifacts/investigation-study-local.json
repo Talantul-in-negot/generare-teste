@@ -1,0 +1,19 @@
+{
+  "report_schema_version": "investigation-study/v1",
+  "manual": {
+    "tasks": 3,
+    "median_duration_seconds": 120.0,
+    "mean_duration_seconds": 121.66666666666667,
+    "mean_evidence_score": 0.7000000000000001,
+    "success_rate": 1.0
+  },
+  "agent_assisted": {
+    "tasks": 3,
+    "median_duration_seconds": 68.0,
+    "mean_duration_seconds": 68.33333333333333,
+    "mean_evidence_score": 0.89,
+    "success_rate": 1.0
+  },
+  "median_time_reduction_percent": 43.333333333333336,
+  "claim_policy": "Results describe this supplied local study only; they are not customer outcomes."
+}
