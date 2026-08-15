@@ -8,6 +8,7 @@ const STORAGE_SCORE = "ci_score";
 const STORAGE_PROGRESS = "ci_progress";
 const STORAGE_USER = "ci_user";
 const STORAGE_CYCLE = "ci_cycle";
+const STORAGE_PAGE_MISTAKES = "ci_page_mistakes";
 
 // La fiecare prag de 1000 de puncte, un verset despre Cuvânt apare pe ecran.
 // Se arată în ordine (pragul N → versetul N), iar când lista se termină se
@@ -32,6 +33,16 @@ const totalPages = Math.ceil(VERSES.length / PAGE_SIZE);
 // Verset → indexul paginii pe care se află (pentru sincronizarea progresului
 // între dispozitive, calculată din evenimentele stocate în Supabase).
 const REF_PAGE = new Map(VERSES.map((v, i) => [v.ref, Math.floor(i / PAGE_SIZE)]));
+const CHAPTER_SIZES = new Map();
+for (const verse of VERSES) {
+  const chapterRef = verse.ref.replace(/:\d+$/, "");
+  CHAPTER_SIZES.set(chapterRef, (CHAPTER_SIZES.get(chapterRef) || 0) + 1);
+}
+
+function chapterMetaForRef(ref) {
+  const chapter_ref = ref.replace(/:\d+$/, "");
+  return { chapter_ref, chapter_size: CHAPTER_SIZES.get(chapter_ref) || 0 };
+}
 
 const el = {
   score: document.getElementById("score"),
@@ -65,6 +76,40 @@ let page = parseInt(localStorage.getItem(STORAGE_PROGRESS), 10) || 0;
 let cycle = parseInt(localStorage.getItem(STORAGE_CYCLE), 10) || 0;
 let userName = "";
 let hadMistake = false;
+
+function pageMistakeKey(cycleNumber = cycle, pageNumber = page) {
+  return `${cycleNumber}:${pageNumber}`;
+}
+
+function hasPageMistake(cycleNumber = cycle, pageNumber = page) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_PAGE_MISTAKES) || "{}");
+    return saved[pageMistakeKey(cycleNumber, pageNumber)] === true;
+  } catch {
+    return false;
+  }
+}
+
+function setPageMistake(cycleNumber = cycle, pageNumber = page) {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(STORAGE_PAGE_MISTAKES) || "{}");
+  } catch {
+    // Reset a corrupted local state instead of blocking the game.
+  }
+  saved[pageMistakeKey(cycleNumber, pageNumber)] = true;
+  localStorage.setItem(STORAGE_PAGE_MISTAKES, JSON.stringify(saved));
+}
+
+function clearPageMistake(cycleNumber = cycle, pageNumber = page) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_PAGE_MISTAKES) || "{}");
+    delete saved[pageMistakeKey(cycleNumber, pageNumber)];
+    localStorage.setItem(STORAGE_PAGE_MISTAKES, JSON.stringify(saved));
+  } catch {
+    localStorage.removeItem(STORAGE_PAGE_MISTAKES);
+  }
+}
 
 function save() {
   localStorage.setItem(STORAGE_SCORE, String(score));
@@ -149,11 +194,30 @@ function showMilestone(m) {
   setTimeout(() => launchCelebration("fireworks"), 1100);
 }
 
-// Publică scorul curent în tabelul agregat `scores` (un rând per utilizator),
-// ca 📊 să nu mai descarce toate evenimentele. Fire-and-forget.
-function pushScore() {
+async function syncScoreFromServer({ announceStreak = false, localScoreBefore = score, localGain = 0 } = {}) {
+  const serverScore = await Tracker.fetchOwnScore();
+  if (!Number.isFinite(serverScore) || serverScore < 0) return;
+  const streakBonus = serverScore - localScoreBefore - localGain;
+  score = serverScore;
+  el.score.textContent = score;
+  save();
+  if (announceStreak && streakBonus >= 2000) showStreakMessage();
+}
+
+// Supabase recalculează scorul din evenimentele înregistrate și poate adăuga
+// bonusuri de consecvență care nu există în starea locală.
+async function pushScore() {
   if (!Tracker.enabled || !userName) return;
-  Tracker.upsertScore(userName, score);
+  await Tracker.refreshScore();
+  await syncScoreFromServer();
+}
+
+async function refreshAndSyncScore() {
+  if (!Tracker.enabled || !userName) return;
+  await Tracker.flush();
+  // Triggerul din Supabase actualizeaza scorul la fiecare eveniment nou.
+  // Citim apoi totalul autoritativ, inclusiv daca a fost corectat din server.
+  await syncScoreFromServer();
 }
 
 function buildVerseCard(v) {
@@ -233,7 +297,7 @@ function buildSolvedVerseCard(v) {
 }
 
 function renderPage() {
-  hadMistake = false;
+  hadMistake = hasPageMistake();
 
   // Pagină deja terminată corect în acest ciclu, ultima din carte — se
   // consideră ciclul încheiat (poate fi cazul unui reload chiar înainte ca
@@ -289,8 +353,10 @@ function checkAnswers() {
     return;
   }
 
+  const scoreBefore = score;
   let earned = 0;
   for (const s of selects) {
+    const chapter = chapterMetaForRef(s.dataset.ref);
     Tracker.log({
       user_name: userName || "necunoscut",
       verse_ref: s.dataset.ref,
@@ -298,6 +364,9 @@ function checkAnswers() {
       chosen: s.value,
       correct: s.value === s.dataset.answer,
       cycle,
+      page_index: page,
+      page_size: selects.length,
+      ...chapter,
     });
     if (s.value === s.dataset.answer) {
       const span = document.createElement("span");
@@ -307,10 +376,11 @@ function checkAnswers() {
       earned += POINTS_PER_VERSE;
     } else {
       hadMistake = true;
+      setPageMistake();
       flashWrong(s, true);
     }
   }
-  Tracker.flush();
+  const flushPromise = Tracker.flush();
   if (earned > 0) updateScore(earned);
 
   if (!el.container.querySelector("select.blank")) {
@@ -320,8 +390,13 @@ function checkAnswers() {
       updateScore(bonus);
     }
     solvedThisCycle.add(page);
+    clearPageMistake();
     saveSolvedThisCycle();
-    pushScore();
+    flushPromise.then(() => syncScoreFromServer({
+      announceStreak: true,
+      localScoreBefore: scoreBefore,
+      localGain: earned + bonus,
+    }));
     celebrate(bonus);
   }
 }
@@ -348,6 +423,43 @@ function celebrate(bonus) {
     setTimeout(showFinal, 1600);
   }
   launchCelebration();
+}
+
+function showStreakMessage() {
+  const overlay = document.createElement("div");
+  overlay.className = "streak-overlay";
+  overlay.innerHTML = `
+    <section class="streak-modal" role="dialog" aria-modal="true" aria-labelledby="streak-title">
+      <div class="streak-icon">🎉</div>
+      <h2 id="streak-title">Felicitări pentru perseverență și consecvență!</h2>
+      <p>Ai citit cel puțin un capitol din Biblie în fiecare zi, 7 zile la rând.<br>Streak complet!</p>
+      <p class="streak-glory">Slavă Domnului!</p>
+      <strong>+2.000 puncte bonus pentru consecvență!</strong>
+      <button class="btn primary" type="button">Continuă</button>
+    </section>`;
+  overlay.querySelector("button").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+  launchCelebration("fireworks");
+}
+
+function showWelcomeMessage(name) {
+  const overlay = document.createElement("div");
+  overlay.className = "welcome-overlay";
+  overlay.innerHTML = `
+    <section class="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+      <div class="welcome-icon">📖</div>
+      <h2 id="welcome-title">Bine ai revenit, ${escapeHtml(name)}!</h2>
+      <p>Domnul să te binecuvanteze!</p>
+      <button class="btn primary" type="button">Continuă</button>
+    </section>`;
+  overlay.querySelector("button").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
 }
 
 function nextPage() {
@@ -434,7 +546,9 @@ async function handleLogin() {
     updateUserChip();
     el.loginPassword.value = "";
     progressSynced = false;
-    syncProgressFromCloud();
+    await refreshAndSyncScore();
+    await syncProgressFromCloud();
+    showWelcomeMessage(userName);
   } catch (err) {
     setAuthError(el.loginError, err.message);
   } finally {
@@ -493,12 +607,27 @@ function computeSolvedPagesForCycle(events, curCycle) {
   return solved;
 }
 
+function pageHadMistakeBeforeCompletion(events, targetPage, curCycle) {
+  const pageRefs = VERSES.slice(targetPage * PAGE_SIZE, targetPage * PAGE_SIZE + PAGE_SIZE).map((v) => v.ref);
+  const pageEvents = events
+    .filter((e) => (e.cycle == null ? 0 : e.cycle) === curCycle && REF_PAGE.get(e.verse_ref) === targetPage)
+    .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+  const solved = new Set();
+  for (const e of pageEvents) {
+    if (!e.correct) return true;
+    solved.add(e.verse_ref);
+    if (pageRefs.every((ref) => solved.has(ref))) return false;
+  }
+  return false;
+}
+
 // Rulează o singură dată la logare — aduce progresul de pe orice dispozitiv.
 let progressSynced = false;
 async function syncProgressFromCloud() {
   if (progressSynced || !Tracker.enabled || !userName) return;
   progressSynced = true;
   try {
+    await Tracker.flush();
     const events = await Tracker.fetchUserEvents(userName);
 
     // Sincronizează ciclul curent de pe orice dispozitiv: cel puțin cel mai mare
@@ -510,13 +639,9 @@ async function syncProgressFromCloud() {
     }
     cycle = Math.max(cycle, cloudCycle);
 
-    // Scorul canonic din baza de date — aceeași valoare ca în clasament,
-    // ca ⭐ din antet să nu mai difere de 📊.
-    score = computePointsForUser(events);
-    el.score.textContent = score;
-    // Împrospătează rândul din clasament cu scorul canonic (și auto-populează
-    // tabelul `scores` la prima logare a fiecărui utilizator după migrare).
-    pushScore();
+    // Nu calculam scorul din evenimente in browser: totalul serverului include
+    // baseline-ul si bonusurile, deci ramane identic cu cel din clasament.
+    await refreshAndSyncScore();
 
     // Paginile deja terminate în ciclul curent, calculate din cloud — astfel
     // restricția „nu poți relua o pagină" ține și dacă schimbă dispozitivul.
@@ -527,6 +652,9 @@ async function syncProgressFromCloud() {
     if (resume >= 0 && resume !== page) {
       page = resume;
     }
+    hadMistake = pageHadMistakeBeforeCompletion(events, page, cycle);
+    if (hadMistake) setPageMistake();
+    else clearPageMistake();
     save();
     if (resume >= 0) renderPage();
   } catch {
@@ -537,6 +665,7 @@ async function syncProgressFromCloud() {
 
 /* --- Ecran de statistici (agregate din evenimentele Supabase) --- */
 async function renderStats() {
+  await syncProgressFromCloud();
   el.progress.textContent = "Statistici";
   el.cheer.hidden = true;
   el.checkBtn.hidden = true;
@@ -568,18 +697,11 @@ async function renderStats() {
       Tracker.fetchUserEvents(userName),
       Tracker.fetchConfig(),
     ]);
-    if (scores.length > 0) {
-      renderStatsFromScores(wrap, scores, myEvents, config.leaderboard_size);
-    } else {
-      // Tabelul `scores` încă nu există sau nu e populat — recurge la calculul
-      // clasic din toate evenimentele, ca statisticile să funcționeze oricum.
-      const events = await Tracker.fetchAll();
-      if (events.length === 0) {
-        wrap.innerHTML = "<p>Nicio activitate înregistrată încă.</p>";
-      } else {
-        renderStatsContent(wrap, events, config.leaderboard_size);
-      }
+    if (scores.length === 0) {
+      wrap.innerHTML = "<p>Clasamentul nu este disponibil momentan. Încearcă din nou mai târziu.</p>";
+      return;
     }
+    renderStatsFromScores(wrap, scores, myEvents, config.leaderboard_size);
   } catch {
     wrap.innerHTML = "<p>Statisticile au nevoie de internet. Încearcă din nou mai târziu.</p>";
   }
@@ -642,6 +764,16 @@ function normName(n) {
   return (n || '').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[char]));
+}
+
 function groupByUser(events) {
   const byUser = new Map();
   for (const e of events) {
@@ -663,10 +795,10 @@ function renderStatsContent(wrap, events, leaderboardSize) {
   const board = document.createElement("div");
   board.className = "leaderboard";
   board.innerHTML = "<h3>🏆 Clasament</h3>";
-  ranking.slice(0, leaderboardSize).forEach((entry, i) => {
+  ranking.filter((entry) => entry.points > 0).forEach((entry, i) => {
     const row = document.createElement("div");
     row.className = "leaderboard-row" + (entry.name === userName ? " me" : "");
-    row.innerHTML = `<span class="rank">${i + 1}</span><span class="who">${entry.name}</span><span class="pts">${entry.points} pct</span>`;
+    row.innerHTML = `<span class="rank">${i + 1}</span><span class="who">${escapeHtml(entry.name)}</span><span class="pts">${entry.points} pct</span>`;
     board.appendChild(row);
   });
   wrap.appendChild(board);
@@ -691,10 +823,10 @@ function renderStatsFromScores(wrap, scores, myEvents, leaderboardSize) {
   const board = document.createElement("div");
   board.className = "leaderboard";
   board.innerHTML = "<h3>🏆 Clasament</h3>";
-  ranking.slice(0, leaderboardSize).forEach((entry, i) => {
+  ranking.filter((entry) => entry.points > 0).forEach((entry, i) => {
     const row = document.createElement("div");
     row.className = "leaderboard-row" + (entry.name === userName ? " me" : "");
-    row.innerHTML = `<span class="rank">${i + 1}</span><span class="who">${entry.name}</span><span class="pts">${entry.points} pct</span>`;
+    row.innerHTML = `<span class="rank">${i + 1}</span><span class="who">${escapeHtml(entry.name)}</span><span class="pts">${entry.points} pct</span>`;
     board.appendChild(row);
   });
   wrap.appendChild(board);
@@ -738,9 +870,9 @@ function buildMyStatsPanel(myEvents) {
   if (topMistakes.length > 0) {
     html += `<p class="stat-label">Unde am greșit:</p><ul>`;
     for (const [ref, m] of topMistakes) {
-      const wrongList = [...m.wrong].map((w) => `„${w}”`).join(", ");
+      const wrongList = [...m.wrong].map((w) => `„${escapeHtml(w)}”`).join(", ");
       const label = m.count === 1 ? "greșeală" : "greșeli";
-      html += `<li><strong>${ref}</strong> — ${m.count} ${label}: ${wrongList} → corect: „${m.answer}”</li>`;
+      html += `<li><strong>${escapeHtml(ref)}</strong> — ${m.count} ${label}: ${wrongList} → corect: „${escapeHtml(m.answer)}”</li>`;
     }
     html += `</ul>`;
   } else {
@@ -1005,6 +1137,12 @@ if (page >= totalPages) page = 0;
 renderPage();
 Tracker.flush();
 
+// Daca scorul a fost actualizat pe alt dispozitiv sau corectat de administrator,
+// afiseaza totalul curent imediat ce utilizatorul revine in aplicatie.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshAndSyncScore();
+});
+
 // Arătăm modalul imediat — nu așteptăm Supabase (poate fi lent/offline).
 // Dacă sesiunea se restaurează, onAuthStateChange ascunde modalul automat.
 showAuthModal();
@@ -1013,12 +1151,14 @@ Auth.init((user) => {
   userName = user || "";
   updateUserChip();
   if (user) hideAuthModal();
-}).then((user) => {
+}).then(async (user) => {
   userName = user || "";
   updateUserChip();
   if (user) {
     hideAuthModal();
-    syncProgressFromCloud();
+    await refreshAndSyncScore();
+    await syncProgressFromCloud();
+    showWelcomeMessage(userName);
   }
 });
 

@@ -25,13 +25,20 @@ const Auth = (() => {
     return username.trim().toLowerCase().replace(/\s+/g, '_') + DOMAIN;
   }
 
+  function normalizeUsername(username) {
+    return String(username || '')
+      .trim()
+      .toLocaleLowerCase('ro-RO')
+      .replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase('ro-RO'));
+  }
+
   function extractUsername(user) {
     if (!user) return null;
     const raw = user.user_metadata?.username ||
                 (user.email || '').replace(DOMAIN, '') ||
                 null;
     if (!raw) return null;
-    return raw.replace(/\b\w/g, c => c.toUpperCase());
+    return normalizeUsername(raw);
   }
 
   function translateError(msg) {
@@ -70,7 +77,7 @@ const Auth = (() => {
 
   async function signUp(username, password) {
     if (!client()) throw new Error('Serviciul de autentificare nu este disponibil. Verifică conexiunea la internet.');
-    const trimmed = username.trim();
+    const trimmed = normalizeUsername(username);
     if (trimmed.length < 2) throw new Error('Numele trebuie să aibă cel puțin 2 caractere.');
     if (password.length < 6) throw new Error('Parola trebuie să aibă cel puțin 6 caractere.');
     const { data, error } = await client().auth.signUp({
