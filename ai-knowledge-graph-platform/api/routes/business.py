@@ -18,7 +18,9 @@ from pydantic import BaseModel, Field
 from api.auth.dependencies import get_current_user, get_tenant, require_scope
 from graphrag.business.commands import CommandEnvelope, CommandOutcome, CommandReceipt
 from graphrag.business.repository import BusinessObjectRepository, NotFoundError
-from graphrag.business.service import WORKORDER_CREATE_CAPABILITY, WorkOrderService
+from graphrag.business.service import (
+    WORKORDER_COMPENSATE_CAPABILITY, WORKORDER_CREATE_CAPABILITY, WorkOrderService,
+)
 from graphrag.graph.neo4j_client import get_neo4j
 
 router = APIRouter(prefix="/business", tags=["Business Objects P0"])
@@ -95,6 +97,43 @@ async def create_work_order(
 
 class ApprovalDecisionRequest(BaseModel):
     approved: bool
+
+
+class WorkOrderCompensationRequest(BaseModel):
+    command_id: str | None = None
+    reason_code: str = Field(min_length=1)
+    original_command_id: str = Field(min_length=1)
+    expected_version: int = Field(ge=1)
+    expected_finding_version: int = Field(ge=1)
+    dry_run: bool = False
+    approval_id: str | None = None
+    correlation_id: str = ""
+
+
+@router.post("/work-orders/{work_order_id}/compensate", dependencies=[Depends(require_scope("biz:write"))])
+async def compensate_work_order(
+    work_order_id: str,
+    request: WorkOrderCompensationRequest,
+    tenant: str = Depends(get_tenant),
+    user: dict = Depends(get_current_user),
+):
+    envelope = CommandEnvelope(
+        **({"command_id": request.command_id} if request.command_id else {}),
+        capability=WORKORDER_COMPENSATE_CAPABILITY, tenant=tenant,
+        actor_id=user["sub"], actor_type=_actor_type(user), reason_code=request.reason_code,
+        args={
+            "work_order_id": work_order_id,
+            "original_command_id": request.original_command_id,
+            "expected_finding_version": request.expected_finding_version,
+        },
+        expected_version=request.expected_version, dry_run=request.dry_run,
+        approval_id=request.approval_id, correlation_id=request.correlation_id,
+    )
+    receipt = await WorkOrderService(get_neo4j()).compensate_work_order(envelope)
+    status_code = _status_for_receipt(receipt)
+    if status_code >= 400:
+        raise HTTPException(status_code=status_code, detail=receipt.model_dump(mode="json"))
+    return JSONResponse(status_code=status_code, content=receipt.model_dump(mode="json"))
 
 
 @router.post("/approvals/{approval_id}/decide", dependencies=[Depends(require_scope("biz:approve"))])

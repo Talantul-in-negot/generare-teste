@@ -1,6 +1,33 @@
 [
   {
     "arg_schema_keys": [
+      "approval_id",
+      "command_id",
+      "correlation_id",
+      "dry_run",
+      "expected_finding_version",
+      "expected_version",
+      "original_command_id",
+      "reason_code",
+      "work_order_id"
+    ],
+    "capability_id": "biz.workorder.compensate",
+    "deprecated": false,
+    "dry_run_ok": true,
+    "kind": "write",
+    "legacy_aliases": [],
+    "qualified_name": "biz.workorder.compensate@1.0.0",
+    "replacement": null,
+    "required_scopes": [
+      "biz:write"
+    ],
+    "requires_approval": true,
+    "risk": "destructive",
+    "title": "Cancel a work order and reopen its finding through an approved compensation",
+    "version": "1.0.0"
+  },
+  {
+    "arg_schema_keys": [
       "limit",
       "policy_version_id",
       "tenant"

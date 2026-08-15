@@ -22,7 +22,9 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from graphrag.agents.tool_policy import validate_args
-from graphrag.observability.agent_telemetry import record_capability_call
+from graphrag.observability.agent_telemetry import (
+    record_capability_call, record_operational_write_receipt,
+)
 
 
 @dataclass(frozen=True)
@@ -192,7 +194,16 @@ class CapabilityRegistry:
                 result = await spec.fn(**call_args)
             else:
                 result = await asyncio.get_event_loop().run_in_executor(None, lambda: spec.fn(**call_args))
-            outcome = "executed"
+            # Governed write adapters return a CommandReceipt as a dict. Keep
+            # the MCP-call metric and the write-outcome metric semantically
+            # useful by exposing approval/stale/dry-run/denied separately.
+            receipt_outcome = result.get("outcome") if isinstance(result, dict) else None
+            outcome = str(receipt_outcome or "executed")
+            if spec.kind == "write" and receipt_outcome:
+                record_operational_write_receipt(
+                    capability=spec.qualified_name, outcome=outcome,
+                    tenant=identity.tenant,
+                )
             return result
         finally:
             record_capability_call(

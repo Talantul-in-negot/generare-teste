@@ -216,6 +216,111 @@ class BusinessObjectRepository:
         )
         return dict(rows[0]["work_order"]) if rows else None
 
+    async def compensate_work_order_creation(
+        self,
+        tenant: str,
+        work_order_id: str,
+        *,
+        expected_work_order_version: int,
+        expected_finding_version: int,
+        original_command_id: str,
+        actor_id: str,
+        actor_type: str = "human",
+        reason_code: str,
+        rationale: str = "",
+    ) -> dict[str, Any]:
+        """Atomically cancel a compensable work order and reopen its finding.
+
+        This is deliberately a *compensation*, not history deletion.  The
+        original work order, finding transition, command receipt, and approval
+        remain immutable; two new lifecycle events and a ``BizCompensation``
+        record establish the reversal.  Both mutable objects are guarded by
+        independent optimistic-concurrency checks in the same Cypher write.
+        """
+        tenant = require_tenant(tenant)
+        valid_work_order_sources = [
+            WorkOrderStatus.DRAFT.value,
+            WorkOrderStatus.PENDING_APPROVAL.value,
+            WorkOrderStatus.APPROVED.value,
+            WorkOrderStatus.IN_PROGRESS.value,
+        ]
+        compensation_id = str(uuid4())
+        work_transition_id = str(uuid4())
+        finding_transition_id = str(uuid4())
+        rows = await self._neo4j.run(
+            """
+            MATCH (w:BizWorkOrder {tenant: $tenant, id: $work_order_id})-[:REMEDIATES]->
+                  (f:BizComplianceFinding {tenant: $tenant})
+            WHERE w.object_version = $expected_work_order_version
+              AND f.object_version = $expected_finding_version
+              AND w.status IN $valid_work_order_sources
+              AND f.status = 'remediating'
+            WITH w, f, w.status AS work_order_from_state, f.status AS finding_from_state
+            SET w.status = 'cancelled',
+                w.object_version = $work_order_to_version,
+                w.updated_at = toString(datetime()), w.updated_by = $actor_id,
+                f.status = 'open',
+                f.object_version = $finding_to_version,
+                f.updated_at = toString(datetime()), f.updated_by = $actor_id
+            CREATE (wt:BizTransition {
+                id: $work_transition_id, tenant: $tenant, object_id: w.id,
+                object_type: 'WorkOrder', from_state: work_order_from_state,
+                to_state: 'cancelled', from_version: $expected_work_order_version,
+                to_version: $work_order_to_version, actor_id: $actor_id,
+                actor_type: $actor_type, reason_code: $reason_code,
+                rationale: $rationale, recorded_at: toString(datetime())
+            })
+            CREATE (ft:BizTransition {
+                id: $finding_transition_id, tenant: $tenant, object_id: f.id,
+                object_type: 'ComplianceFinding', from_state: finding_from_state,
+                to_state: 'open', from_version: $expected_finding_version,
+                to_version: $finding_to_version, actor_id: $actor_id,
+                actor_type: $actor_type, reason_code: $reason_code,
+                rationale: $rationale, recorded_at: toString(datetime())
+            })
+            CREATE (c:BizCompensation {
+                id: $compensation_id, tenant: $tenant,
+                original_command_id: $original_command_id,
+                work_order_id: w.id, finding_id: f.id, actor_id: $actor_id,
+                reason_code: $reason_code, rationale: $rationale,
+                recorded_at: toString(datetime())
+            })
+            MERGE (w)-[:HAS_TRANSITION]->(wt)
+            MERGE (f)-[:HAS_TRANSITION]->(ft)
+            MERGE (c)-[:COMPENSATES]->(w)
+            RETURN w.object_version AS work_order_version,
+                   f.object_version AS finding_version,
+                   work_order_from_state, finding_from_state,
+                   c.id AS compensation_id
+            """,
+            tenant=tenant, work_order_id=work_order_id,
+            expected_work_order_version=expected_work_order_version,
+            expected_finding_version=expected_finding_version,
+            valid_work_order_sources=valid_work_order_sources,
+            work_order_to_version=expected_work_order_version + 1,
+            finding_to_version=expected_finding_version + 1,
+            original_command_id=original_command_id, actor_id=actor_id,
+            actor_type=actor_type, reason_code=reason_code, rationale=rationale,
+            compensation_id=compensation_id, work_transition_id=work_transition_id,
+            finding_transition_id=finding_transition_id,
+        )
+        if rows:
+            return dict(rows[0])
+
+        work_order = await self.get_work_order(tenant, work_order_id)
+        if work_order is None:
+            raise NotFoundError(f"WorkOrder {work_order_id!r} not found")
+        if int(work_order["object_version"]) != expected_work_order_version:
+            raise StaleVersionError(expected_work_order_version, int(work_order["object_version"]))
+        finding = await self.get_finding(tenant, str(work_order["originating_finding_id"]))
+        if finding is None:
+            raise NotFoundError("originating ComplianceFinding not found")
+        if int(finding["object_version"]) != expected_finding_version:
+            raise StaleVersionError(expected_finding_version, int(finding["object_version"]))
+        validate_work_order_transition(work_order["status"], WorkOrderStatus.CANCELLED)
+        validate_finding_transition(finding["status"], FindingStatus.OPEN)
+        raise StaleVersionError(expected_work_order_version, int(work_order["object_version"]))  # pragma: no cover
+
     async def transition_work_order(
         self,
         tenant: str,

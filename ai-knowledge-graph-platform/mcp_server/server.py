@@ -201,5 +201,37 @@ async def create_work_order(
     return _result_to_dict(result)
 
 
+@mcp.tool()
+async def compensate_work_order(
+    reason_code: str,
+    work_order_id: str,
+    original_command_id: str,
+    expected_version: int,
+    expected_finding_version: int,
+    dry_run: bool = False,
+    approval_id: str | None = None,
+    command_id: str | None = None,
+) -> dict:
+    """Cancel a work order and reopen its finding through human-approved compensation.
+
+    This does not delete or overwrite the original command.  It records new,
+    linked lifecycle transitions and an immutable receipt.  Every compensation
+    requires a separate ``biz:approve`` decision, including human requests.
+    """
+    result = await _registry.call(
+        "biz.workorder.compensate@1.0.0",
+        {
+            "reason_code": reason_code, "work_order_id": work_order_id,
+            "original_command_id": original_command_id,
+            "expected_version": expected_version,
+            "expected_finding_version": expected_finding_version,
+            "dry_run": dry_run, "approval_id": approval_id,
+            "command_id": command_id, "correlation_id": current_correlation_id(),
+        },
+        CallerIdentity.current(),
+    )
+    return _result_to_dict(result)
+
+
 if __name__ == "__main__":
     mcp.run()
