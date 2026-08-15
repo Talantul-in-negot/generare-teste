@@ -60,7 +60,7 @@ JSON receipt is evidence of that one synthetic local execution only.
 ## 4. Retrieval baseline comparison
 
 ```powershell
-python scripts/run_graph_fact_golden_eval.py --token $env:GRAPHRAG_MCP_TOKEN --tenant local-evidence --output artifacts/graph-fact-golden-eval.json
+python scripts/run_graph_fact_golden_eval.py --token $env:GRAPHRAG_MCP_TOKEN --tenant local-evidence --repetitions 3 --output artifacts/graph-fact-golden-eval.json
 ```
 
 The fixed three-case graph-fact set is compared with an explicit empty-corpus
@@ -149,6 +149,7 @@ With Docker Compose running, exercise a real dependency restart and restore:
 
 ```powershell
 python scripts/run_docker_failure_exercise.py --service redis --output artifacts/docker-redis-failure-exercise.json
+python scripts/run_docker_failure_exercise.py --service neo4j --output artifacts/docker-neo4j-failure-exercise.json
 ```
 
 The command stops only the selected local dependency and always attempts to

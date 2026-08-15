@@ -1,0 +1,16 @@
+{
+  "report_schema_version": "docker-failure-exercise/v1",
+  "service": "neo4j",
+  "stop_observed": true,
+  "stopped_seconds": 8.077637099999265,
+  "restart_observed": true,
+  "running_services": [
+    "mcp",
+    "api",
+    "neo4j",
+    "rabbitmq",
+    "redis",
+    "timescaledb"
+  ],
+  "claim_policy": "Local Docker dependency stop/start and container recovery only; not incident prevention or availability evidence."
+}

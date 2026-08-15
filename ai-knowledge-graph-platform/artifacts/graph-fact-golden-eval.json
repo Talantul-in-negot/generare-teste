@@ -9,76 +9,246 @@
   "candidate": {
     "pass_rate": 1.0,
     "absolute_improvement": 1.0,
-    "questions": 10
+    "questions": 30
   },
   "results": [
     {
       "id": "relations-737",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 14.175199998135213,
+      "latency_ms": 1044.2261999996845,
       "returned_rows": 2,
       "missing_expected_values": []
     },
     {
       "id": "relations-faa-2024",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 13.630000001285225,
+      "latency_ms": 38.06990000157384,
       "returned_rows": 4,
       "missing_expected_values": []
     },
     {
       "id": "aircraft-types",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 15.029799997137161,
+      "latency_ms": 309.83740000010584,
       "returned_rows": 2,
       "missing_expected_values": []
     },
     {
       "id": "relations-airbus",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 16.5807000012137,
+      "latency_ms": 733.0443999999261,
       "returned_rows": 1,
       "missing_expected_values": []
     },
     {
       "id": "relations-faa-2022",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 21.086699998704717,
+      "latency_ms": 70.42019999789773,
       "returned_rows": 1,
       "missing_expected_values": []
     },
     {
       "id": "relations-faa-2020",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 15.851199997996446,
+      "latency_ms": 70.61690000045928,
       "returned_rows": 2,
       "missing_expected_values": []
     },
     {
       "id": "organizations",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 14.540000000124564,
+      "latency_ms": 391.63080000071204,
       "returned_rows": 5,
       "missing_expected_values": []
     },
     {
       "id": "directives",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 13.786600000457838,
+      "latency_ms": 122.8164000021934,
       "returned_rows": 4,
       "missing_expected_values": []
     },
     {
       "id": "relations-boeing-repeatable",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 13.436099998216378,
+      "latency_ms": 81.56579999922542,
       "returned_rows": 2,
       "missing_expected_values": []
     },
     {
       "id": "relations-faa-2024-repeatable",
+      "repetition": 1,
       "passed": true,
-      "latency_ms": 12.785299997631228,
+      "latency_ms": 65.86719999904744,
+      "returned_rows": 4,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-737",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 69.05799999731244,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-faa-2024",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 65.50369999968098,
+      "returned_rows": 4,
+      "missing_expected_values": []
+    },
+    {
+      "id": "aircraft-types",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 61.819000002287794,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-airbus",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 37.805799998750445,
+      "returned_rows": 1,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-faa-2022",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 64.62850000025355,
+      "returned_rows": 1,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-faa-2020",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 37.960699999530334,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    },
+    {
+      "id": "organizations",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 42.35780000090017,
+      "returned_rows": 5,
+      "missing_expected_values": []
+    },
+    {
+      "id": "directives",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 45.07969999758643,
+      "returned_rows": 4,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-boeing-repeatable",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 76.06369999848539,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-faa-2024-repeatable",
+      "repetition": 2,
+      "passed": true,
+      "latency_ms": 46.88489999898593,
+      "returned_rows": 4,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-737",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 36.04039999845554,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-faa-2024",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 46.96660000263364,
+      "returned_rows": 4,
+      "missing_expected_values": []
+    },
+    {
+      "id": "aircraft-types",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 72.39969999864115,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-airbus",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 46.64010000124108,
+      "returned_rows": 1,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-faa-2022",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 47.38110000107554,
+      "returned_rows": 1,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-faa-2020",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 48.5393999988446,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    },
+    {
+      "id": "organizations",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 67.86280000233091,
+      "returned_rows": 5,
+      "missing_expected_values": []
+    },
+    {
+      "id": "directives",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 48.58310000054189,
+      "returned_rows": 4,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-boeing-repeatable",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 38.494899999932386,
+      "returned_rows": 2,
+      "missing_expected_values": []
+    },
+    {
+      "id": "relations-faa-2024-repeatable",
+      "repetition": 3,
+      "passed": true,
+      "latency_ms": 53.09290000150213,
       "returned_rows": 4,
       "missing_expected_values": []
     }

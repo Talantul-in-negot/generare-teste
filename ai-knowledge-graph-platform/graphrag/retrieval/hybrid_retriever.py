@@ -24,7 +24,8 @@ from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.retrieval.local_search import LocalSearch
 from graphrag.retrieval.global_search import GlobalSearch
 from graphrag.retrieval.context_builder import ContextBuilder
-from graphrag.retrieval.agentic_retriever import AgenticRetriever, _is_low_confidence
+from graphrag.retrieval.agentic_retriever import AgenticRetriever
+from graphrag.retrieval.fallback_policy import is_low_confidence as _is_low_confidence
 from graphrag.retrieval.claim_verifier import ClaimVerifier
 from graphrag.retrieval.query_rewriter import QueryRewriter
 from graphrag.retrieval.feedback import RetrievalFeedbackService, apply_feedback_scores

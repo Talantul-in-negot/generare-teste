@@ -23,6 +23,7 @@ def main() -> None:
     parser.add_argument("--dev-token", action="store_true", help="Mint a short-lived local development token")
     parser.add_argument("--tenant", default="local-evidence")
     parser.add_argument("--golden-set", type=Path, default=root / "data/evidence/graph-fact-golden.json")
+    parser.add_argument("--repetitions", type=int, default=1, help="Repeat each fixed case to measure run stability")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.dev_token:
@@ -37,20 +38,21 @@ def main() -> None:
     client = MCPHTTPClient(args.url, args.token)
     client.initialize()
     results = []
-    for case in golden["questions"]:
-        started = time.perf_counter()
-        response = tool_result(client.call_tool("query_graph_facts", {
-            "question": case["question"], "tenant": args.tenant,
-        }))
-        latency_ms = (time.perf_counter() - started) * 1000
-        rows = response.get("rows", [])
-        rendered = _render(rows)
-        missing = [value for value in case["expected_values"] if value.casefold() not in rendered]
-        passed = not response.get("denied") and len(rows) >= case["minimum_rows"] and not missing
-        results.append({
-            "id": case["id"], "passed": passed, "latency_ms": latency_ms,
-            "returned_rows": len(rows), "missing_expected_values": missing,
-        })
+    for repetition in range(max(1, args.repetitions)):
+        for case in golden["questions"]:
+            started = time.perf_counter()
+            response = tool_result(client.call_tool("query_graph_facts", {
+                "question": case["question"], "tenant": args.tenant,
+            }))
+            latency_ms = (time.perf_counter() - started) * 1000
+            rows = response.get("rows", [])
+            rendered = _render(rows)
+            missing = [value for value in case["expected_values"] if value.casefold() not in rendered]
+            passed = not response.get("denied") and len(rows) >= case["minimum_rows"] and not missing
+            results.append({
+                "id": case["id"], "repetition": repetition + 1, "passed": passed,
+                "latency_ms": latency_ms, "returned_rows": len(rows), "missing_expected_values": missing,
+            })
     passed = sum(result["passed"] for result in results)
     report = {
         "report_schema_version": "graph-fact-golden-eval/v1",
