@@ -1,6 +1,6 @@
 {
   "schema_version": "sales-evidence.v1",
-  "recorded_at": "2026-08-15T12:16:29.918993+00:00",
+  "recorded_at": "2026-08-15T17:48:53.537953+00:00",
   "classification": "local benchmark; not production evidence",
   "checks": [
     {
@@ -15,7 +15,7 @@
         "tests/unit/test_mcp_registry.py"
       ],
       "exit_code": 0,
-      "duration_seconds": 0.824,
+      "duration_seconds": 3.068,
       "stdout_tail": "All checks passed!\n",
       "stderr_tail": ""
     },
@@ -26,7 +26,7 @@
         "from src.mcp.registry import discover; assert discover(scopes={'sales:read'}, workspace_id='ws-measurement'); from src.sales.adapter import LocalCRMEmulator; from src.domain.sales import SalesCRMWrite; c=LocalCRMEmulator(); c.seed(workspace_id='ws-measurement', object_id='opp-1', values={'stage':'PROPOSAL'}); x=SalesCRMWrite(command_id='smoke', workspace_id='ws-measurement', actor_id='smoke', capability='sales.opportunity.update', object_id='opp-1', patch={'stage':'NEGOTIATION'}, expected_version=1, approved=True, correlation_id='smoke'); assert len(c.execute(x).receipt_hash) == 64"
       ],
       "exit_code": 0,
-      "duration_seconds": 2.896,
+      "duration_seconds": 13.458,
       "stdout_tail": "",
       "stderr_tail": ""
     }
@@ -42,11 +42,11 @@
   },
   "local_crm_emulator": {
     "iterations": 1000,
-    "throughput_ops_per_second": 6322.275,
+    "throughput_ops_per_second": 2905.042,
     "latency_ms": {
       "p50": 0.0837,
-      "p95": 0.3809,
-      "p99": 1.5521
+      "p95": 0.3623,
+      "p99": 5.4055
     },
     "environment": "local in-memory synthetic emulator"
   },

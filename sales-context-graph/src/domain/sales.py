@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class SalesStage(StrEnum):
@@ -106,7 +106,17 @@ class SalesPolicy(BaseModel):
     version: str
     name: str = Field(min_length=1)
     approval_required_for: set[str] = Field(default_factory=set)
+    allowed_write_fields: set[str] = Field(default_factory=set)
+    effective_from: datetime | None = None
+    expires_at: datetime | None = None
     active: bool = True
+
+    def applies_at(self, now: datetime) -> bool:
+        return (
+            self.active
+            and (self.effective_from is None or self.effective_from <= now)
+            and (self.expires_at is None or now < self.expires_at)
+        )
 
 
 class SalesRecommendation(BaseModel):
@@ -134,13 +144,8 @@ class SalesCRMWrite(BaseModel):
     dry_run: bool = False
     approved: bool = False
     correlation_id: str = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def _high_risk_requires_approval(self) -> "SalesCRMWrite":
-        high_risk = {"stage", "forecast_category", "close_date", "discount"}
-        if high_risk.intersection(self.patch) and not self.approved and not self.dry_run:
-            raise ValueError("high-risk sales CRM writes require explicit approval")
-        return self
+    policy_id: str = "local-default"
+    policy_version: str = "1.0.0"
 
 
 class SalesCompensationAction(BaseModel):

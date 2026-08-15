@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import time
 
+from redis.exceptions import RedisError
+
 from src.core.redis_client import get_redis
 
 _WINDOW_SECONDS = 60
@@ -48,15 +50,21 @@ async def check_and_increment(workspace_id: str, *, limit_per_minute: int) -> tu
 
     client = get_redis()
     if client is not None:
-        key = f"{_KEY_PREFIX}{workspace_id}:{window}"
-        count = await client.incr(key)
-        if count == 1:
-            # Only the request that created this window's key sets its
-            # expiry -- redundant SETs from every subsequent request in
-            # the same window would be wasted round trips for no benefit,
-            # the key already expires at the right time either way.
-            await client.expire(key, _WINDOW_SECONDS)
-        return (count <= limit_per_minute), retry_after
+        try:
+            key = f"{_KEY_PREFIX}{workspace_id}:{window}"
+            count = await client.incr(key)
+            if count == 1:
+                # Only the request that created this window's key sets its
+                # expiry -- redundant SETs from every subsequent request in
+                # the same window would be wasted round trips for no benefit,
+                # the key already expires at the right time either way.
+                await client.expire(key, _WINDOW_SECONDS)
+            return (count <= limit_per_minute), retry_after
+        except RedisError:
+            # Redis is an availability enhancement for multi-instance rate
+            # limiting, not a reason to turn an otherwise-authenticated API
+            # request into a 500. Fall back to the documented local limiter.
+            pass
 
     stored_window, count = _local_counters.get(workspace_id, (window, 0))
     if stored_window != window:

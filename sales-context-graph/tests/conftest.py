@@ -6,13 +6,16 @@ Neo4j default 7687). `docker compose up -d neo4j` before running this suite.
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from src.embedding.sentence_transformer_provider import SentenceTransformerEmbeddingProvider
 
 import src.core.neo4j_client as neo4j_client_module
 from src.core.config import get_settings
 from src.core.neo4j_client import Neo4jClient
-from src.embedding.sentence_transformer_provider import SentenceTransformerEmbeddingProvider
 from src.graph.execution import GraphExecutor
 from src.graph.migrations.migration_001_init_schema import run as run_migration
 
@@ -36,8 +39,12 @@ def auth_headers(monkeypatch, workspace_id: str, api_key: str = "test-key") -> d
 
 
 @pytest.fixture(scope="session")
-def embedding_provider() -> SentenceTransformerEmbeddingProvider:
+def embedding_provider() -> "SentenceTransformerEmbeddingProvider":
     """Model loading (~1-2s) happens once per test session, not once per test."""
+    # Keep heavyweight ML imports out of pytest collection. Unit/API tests
+    # that do not need embeddings must remain fully offline and fast.
+    from src.embedding.sentence_transformer_provider import SentenceTransformerEmbeddingProvider
+
     return SentenceTransformerEmbeddingProvider()
 
 

@@ -1,20 +1,18 @@
 from datetime import datetime, timezone
 
-import pytest
-from pydantic import ValidationError
-
 from src.domain.sales import SalesCRMWrite, SalesEvidence, SalesPolicy
+from src.sales.policy import PolicyCatalog, PolicyError
 from src.usecases.sales_intelligence import SalesAbstention, recommend_next_action
 
 
-def test_high_risk_write_requires_approval():
-    with pytest.raises(ValidationError, match="require explicit approval"):
-        SalesCRMWrite(
-            command_id="cmd-1", workspace_id="ws-a", actor_id="seller-1",
-            capability="sales.opportunity.update", object_id="opp-1",
-            patch={"forecast_category": "COMMIT"}, expected_version=1,
-            correlation_id="corr-1",
-        )
+def test_high_risk_write_requires_approval_from_the_versioned_policy():
+    policy = PolicyCatalog.default_policy()
+    try:
+        PolicyCatalog().enforce(policy=policy, patch={"forecast_category": "COMMIT"}, approved=False, dry_run=False)
+    except PolicyError as exc:
+        assert "approval" in str(exc)
+    else:
+        raise AssertionError("policy must deny an unapproved forecast change")
 
 
 def test_dry_run_can_preview_high_risk_write_without_approval():

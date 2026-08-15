@@ -76,27 +76,10 @@ A second pass (Increments 15–20) closed the gaps between "a tested engine" and
   iframe-embeddable single-deal view for embedding in Salesforce/Showpad — an
   embeddable panel, not a packaged app (no OAuth, no AppExchange packaging).
 
-The repository has a broad unit/integration/security/evaluation suite with
-**560 tests collected**. The latest full local run
-
-The sales-domain extension adds typed, provider-neutral contracts and grounded
-next-action abstention in [`docs/sales-context-graph.md`](docs/sales-context-graph.md).
-High-risk CRM command patches are approval-gated and carry tenant, actor,
-idempotency, optimistic-version, dry-run and correlation fields. A live CRM
-write adapter and remote MCP transport remain explicitly pending external
-integration validation; no production outcomes are claimed.
-
-For the local CRM safety checks and MCP capability discovery run:
-
-```powershell
-python -m ruff check src/sales src/mcp tests/unit/sales tests/unit/test_mcp_registry.py
-pytest -q tests/unit/sales/test_local_crm_adapter.py tests/unit/test_mcp_registry.py -o addopts=""
-```
-
-The local adapter is synthetic and in-memory; it is not a Salesforce or
-Dynamics connection.
-(`pytest tests/ -q -p no:unraisableexception`, against the Docker-Compose
-Neo4j/Redis stack) executed all 560 and finished **560 passed / 0 failed in
+The repository has a broad unit/integration/security/evaluation suite. The
+latest recorded full local run (`pytest tests/ -q -p no:unraisableexception`,
+against the Docker-Compose Neo4j/Redis stack) executed 560 and finished
+**560 passed / 0 failed in
 324 seconds**, with `ruff check` and `mypy` (162 source files) both clean. Windows emits asyncio "Event loop is closed" noise at
 interpreter teardown; that is teardown-time only and does not affect any
 result. RAGAS remains an optional external-judge evaluation and is not
@@ -106,6 +89,21 @@ limitations — including two scope caveats worth reading before the code
 ("Known limitations", first two bullets). Deferred work is centralized in
 [`docs/evaluation.md`](docs/evaluation.md), rather than hidden in code
 comments.
+
+The sales-domain extension adds typed, provider-neutral contracts, a
+policy-enforced persistent local CRM emulator, and an opt-in authenticated MCP
+HTTP surface. High-risk CRM commands carry tenant, actor, idempotency,
+optimistic-version, dry-run, correlation and policy-version fields. The local
+emulator is synthetic, not a Salesforce/Dynamics connection; a live connector
+and production deployment validation remain external integration work.
+
+For the local CRM/MCP safety checks run:
+
+```powershell
+python -m ruff check src api tests scripts
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'; $env:REDIS_URL=''
+python -m pytest -q tests/unit/domain/test_sales_contracts.py tests/unit/sales/test_local_crm_adapter.py tests/unit/test_mcp_registry.py tests/unit/api/test_mcp_route.py -p pytest_asyncio.plugin -p no:unraisableexception
+```
 
 ## Engineering rigor — the short version
 

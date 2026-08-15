@@ -2276,3 +2276,19 @@ storage encryption, manual assistive-technology testing, real workload SLO
 results, strict tenant-fair scheduling, IdP/SCIM, CRM/Showpad contracts and
 managed-service recovery exercises still require deployment credentials or
 customer-scale data.
+
+### Implementation update: authenticated MCP and local CRM evidence (2026-08-15)
+
+`POST /mcp` is now an opt-in authenticated HTTP transport. It authenticates
+every request with the same workspace API-key/JWT boundary used by REST,
+constructs a fresh access context, limits request bytes, filters discovery by
+entitlement and rejects arbitrary code or Cypher. Its executable local tools
+are intentionally limited to grounded next-action recommendations and the
+synthetic CRM emulator; complete production read handlers and external MCP
+interoperability validation remain pending.
+
+The local CRM emulator now enforces a versioned tenant policy catalogue,
+optimistic version checks, idempotency, hash-verifiable receipts, compensation
+and atomic JSON persistence. It is not a Salesforce/Dynamics connector or a
+production audit store. MCP/CRM metrics and production protection for
+`/metrics` were added; production startup now requires `METRICS_API_KEY`.

@@ -23,6 +23,7 @@ def test_local_adapter_preview_execute_and_hash_receipt():
     receipt = crm.execute(_command())
     assert receipt.outcome == "EXECUTED"
     assert len(receipt.receipt_hash) == 64
+    assert receipt.verify()
     assert receipt.compensation is not None
 
 
@@ -46,3 +47,14 @@ def test_idempotent_replay_returns_same_receipt_and_compensation_restores_state(
     compensation = crm.compensate(first.compensation)
     assert compensation.outcome == "EXECUTED"
     assert crm._records[("ws-a", "opp-1")]["stage"] == "PROPOSAL"
+
+
+def test_local_adapter_persists_receipts_and_state_atomically(tmp_path):
+    path = tmp_path / "local-crm.json"
+    first = LocalCRMEmulator(storage_path=path)
+    first.seed(workspace_id="ws-a", object_id="opp-1", values={"stage": "PROPOSAL"})
+    receipt = first.execute(_command())
+    reloaded = LocalCRMEmulator(storage_path=path)
+    replay = reloaded.execute(_command())
+    assert replay.receipt_hash == receipt.receipt_hash
+    assert replay.verify()

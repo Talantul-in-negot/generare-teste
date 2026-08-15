@@ -4,6 +4,7 @@ src/core/rate_limit.py: per-workspace fixed-window rate limiting."""
 from __future__ import annotations
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 pytestmark = pytest.mark.asyncio
 
@@ -86,3 +87,17 @@ async def test_in_process_fallback_also_isolates_workspaces(limiter_without_redi
 
     allowed, _ = await rl.check_and_increment("ws-b", limit_per_minute=2)
     assert allowed is True
+
+
+async def test_falls_back_when_configured_redis_is_unreachable(monkeypatch):
+    import src.core.rate_limit as rl
+
+    class BrokenRedis:
+        async def incr(self, _key):
+            raise RedisConnectionError("unreachable")
+
+    monkeypatch.setattr(rl, "get_redis", lambda: BrokenRedis())
+    rl._local_counters.clear()
+    allowed, _ = await rl.check_and_increment("ws-fallback", limit_per_minute=1)
+    assert allowed is True
+    rl._local_counters.clear()

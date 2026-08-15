@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
+import secrets
 import time
 
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from api.routes import (
@@ -16,6 +17,7 @@ from api.routes import (
     health,
     ingestions,
     insights,
+    mcp,
     qa,
     tts,
     unresolved_mentions,
@@ -206,9 +208,21 @@ app.include_router(alerts.router)
 app.include_router(viz.router)
 app.include_router(tts.router)
 app.include_router(workflows.router)
+app.include_router(mcp.router)
 
 
 @app.get("/metrics", include_in_schema=False)
-async def metrics() -> Response:
-    """Prometheus scrape target for the metrics in src/core/telemetry.py."""
+async def metrics(request: Request) -> Response:
+    """Prometheus scrape target; production requires its configured bearer key."""
+    settings = get_settings()
+    # The route is intentionally unauthenticated only when no key is set for
+    # local Compose. Settings fail closed if production omits METRICS_API_KEY.
+    # A constant-time comparison avoids making the metrics token an oracle.
+    # Request is injected here rather than trusting an arbitrary header in
+    # middleware, so this does not affect normal API authentication.
+    if settings.metrics_api_key:
+        authorization = request.headers.get("authorization", "")
+        token = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        if not token or not secrets.compare_digest(token, settings.metrics_api_key):
+            raise HTTPException(status_code=401, detail="metrics bearer authorization is required")
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

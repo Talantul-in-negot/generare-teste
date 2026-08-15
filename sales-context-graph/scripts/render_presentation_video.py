@@ -14,7 +14,6 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-
 ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / "artifacts" / "presentation_video_work"
 OUTPUT = ROOT / "artifacts" / "sales_context_graph_presentation.mp4"
@@ -31,6 +30,19 @@ CREAM = "#f0ece8"
 WHITE = "#f7f9fc"
 MUTED = "#a8b5ca"
 GREEN = "#45c486"
+
+
+def executable(name: str) -> str:
+    """Resolve only a locally installed, named rendering executable."""
+    path = shutil.which(name)
+    if path is None:
+        raise RuntimeError(f"required executable is not available: {name}")
+    return path
+
+
+def run_checked(command: list[str], *, cwd: Path) -> None:
+    """Run an internally constructed renderer command with checked failures."""
+    subprocess.run(command, cwd=str(cwd), check=True)  # noqa: S603 -- no user-controlled command fragments
 
 
 def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -193,11 +205,7 @@ def synthesize(work: Path) -> None:
         "}\n$s.Dispose()\n",
         encoding="utf-8",
     )
-    subprocess.run(
-        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps)],
-        cwd=str(work),
-        check=True,
-    )
+    run_checked([executable("powershell.exe"), "-NoProfile", "-File", str(ps)], cwd=work)
 
 
 def run() -> None:
@@ -218,16 +226,19 @@ def run() -> None:
     for i, frame in enumerate(frames, 1):
         wav = WORK / f"scene_{i:02d}.wav"
         clip = WORK / f"clip_{i:02d}.mp4"
-        subprocess.run([
-            "ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", str(frame),
+        run_checked([
+            executable("ffmpeg"), "-y", "-loglevel", "error", "-loop", "1", "-i", str(frame),
             "-i", str(wav), "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac",
             "-b:a", "160k", "-pix_fmt", "yuv420p", "-r", "30", "-shortest", str(clip),
-        ], check=True)
+        ], cwd=WORK)
         clips.append(clip)
     manifest = WORK / "concat.txt"
     manifest.write_text("\n".join(f"file '{p.as_posix()}'" for p in clips), encoding="utf-8")
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(manifest), "-c", "copy", str(OUTPUT)], check=True)
+    run_checked([
+        executable("ffmpeg"), "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
+        "-i", str(manifest), "-c", "copy", str(OUTPUT),
+    ], cwd=WORK)
     metadata = {"output": str(OUTPUT), "scenes": len(SCENES), "resolution": f"{W}x{H}", "voiceover": "Windows SpeechSynthesizer", "source": "docs/presentation_script.md"}
     (WORK / "render_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     print(json.dumps(metadata))

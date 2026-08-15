@@ -90,8 +90,8 @@ class Settings(BaseSettings):
 
     # ── OIDC/JWT SSO (docs/evaluation.md's Showpad engineering-rigor ────────────
     # assessment, Band 2: "no SSO/SAML/OIDC/SCIM") -- see src/auth/sso.py.
-    # Off by default and not wired into any route's Depends() -- verify_api_key
-    # above stays the default auth path unchanged. A real external IdP account
+    # Off by default; when enabled, api.dependencies.verify_api_key switches
+    # standard API routes to validated JWT/JWKS claims. A real external IdP account
     # (Okta/Auth0/Azure AD/...) is outside what this repo can stand up itself;
     # what's real here is the validation logic (real JWT/JWKS signature,
     # issuer, audience, and expiry checks), tested against a locally-generated
@@ -114,6 +114,16 @@ class Settings(BaseSettings):
     # this process, require an explicit deployment declaration. This prevents
     # a client from self-asserting X-User-Roles on an accidentally enabled API.
     authz_trusted_gateway_enabled: bool = False
+
+    # Authenticated Streamable-HTTP MCP.  It uses the same per-request API
+    # key/JWT boundary as the REST API; the local CRM emulator is opt-in and
+    # remains synthetic even when this endpoint is enabled.
+    mcp_enabled: bool = False
+    mcp_request_max_bytes: int = 65536
+    local_crm_emulator_path: str = "data/runtime/local_crm_emulator.json"
+    # Empty is allowed only for local Compose convenience. Production startup
+    # requires this token and api.main protects /metrics with it.
+    metrics_api_key: str = ""
 
     # ── Redis (durable ingestion job store, see api/state.py::get_ingestion_store) ─
     # Empty means "no Redis configured" -> falls back to InMemoryIngestionStore.
@@ -308,6 +318,8 @@ class Settings(BaseSettings):
             )
         if self.env == "production" and self.demo_public_access_enabled:
             raise ValueError("demo_public_access_enabled must remain disabled in production.")
+        if self.env == "production" and not self.metrics_api_key:
+            raise ValueError("metrics_api_key must be configured in production (METRICS_API_KEY).")
         return self
 
     def __init__(self, **data):

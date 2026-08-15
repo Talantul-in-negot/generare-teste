@@ -115,6 +115,47 @@ async def verify_api_key(
     return workspace_id
 
 
+async def verify_mcp_bearer(
+    request: Request,
+    authorization: str | None = Header(None, alias="Authorization"),
+    workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
+) -> str:
+    """Authenticate Streamable-HTTP MCP on every request.
+
+    Local deployments use their existing workspace API key as a bearer token;
+    SSO mode delegates the same Bearer value to JWT/JWKS validation. Identity
+    is never retained between calls.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Bearer authorization is required for MCP")
+    token = authorization[7:].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Bearer authorization is required for MCP")
+    return await verify_api_key(
+        x_api_key=token,
+        workspace_id=workspace_id,
+        authorization=authorization,
+        request=request,
+    )
+
+
+async def get_mcp_access_context(
+    request: Request,
+    workspace_id: str = Depends(verify_mcp_bearer),
+    x_user_id: str | None = Header(None, alias="X-User-Id"),
+    x_actor_id: str | None = Header(None, alias="X-Actor-Id"),
+    x_user_roles: str | None = Header(None, alias="X-User-Roles"),
+    x_division_ids: str | None = Header(None, alias="X-Authorized-Divisions"),
+    x_opportunity_ids: str | None = Header(None, alias="X-Authorized-Opportunities"),
+) -> AccessContext:
+    """Construct a request-local access context after MCP authentication."""
+    return await get_access_context(
+        request=request, workspace_id=workspace_id, x_user_id=x_user_id,
+        x_actor_id=x_actor_id, x_user_roles=x_user_roles,
+        x_division_ids=x_division_ids, x_opportunity_ids=x_opportunity_ids,
+    )
+
+
 async def get_access_context(
     request: Request,
     workspace_id: str = Depends(verify_api_key),

@@ -192,6 +192,30 @@ INGESTION_QUEUE_RETRIES_TOTAL = Counter(
     ["kind"],
 )
 
+# --- Sales MCP and local CRM command surface --------------------------------
+# No tenant identifier is used as a label: per-tenant diagnosis stays in the
+# structured audit logs, while metrics remain safe to operate at tenant scale.
+MCP_REQUESTS_TOTAL = Counter(
+    "scg_mcp_requests_total",
+    "MCP requests by method, bounded capability and outcome.",
+    ["method", "capability", "outcome"],
+)
+MCP_REQUEST_DURATION_SECONDS = Histogram(
+    "scg_mcp_request_duration_seconds",
+    "MCP request latency by bounded capability.",
+    ["capability"],
+)
+CRM_COMMANDS_TOTAL = Counter(
+    "scg_crm_commands_total",
+    "Synthetic/local CRM command outcomes by operation.",
+    ["operation", "outcome"],
+)
+GROUNDED_RECOMMENDATIONS_TOTAL = Counter(
+    "scg_grounded_recommendations_total",
+    "Grounded sales recommendation versus abstention outcomes.",
+    ["outcome"],
+)
+
 
 def record_blocking_recall(value: float) -> None:
     """Called by tests/eval/* after scoring a labeled run's blocking output

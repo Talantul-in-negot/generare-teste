@@ -9,12 +9,16 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
+from pathlib import Path
 from typing import Protocol
 
 from src.domain.sales import SalesCompensationAction, SalesCRMWrite
+from src.sales.policy import PolicyCatalog, PolicyError
 
 
 class CRMAdapter(Protocol):
@@ -40,17 +44,32 @@ class CRMReceipt:
     receipt_hash: str
     compensation: SalesCompensationAction | None = None
 
+    def verify(self) -> bool:
+        payload = {
+            "command_id": self.command_id, "workspace_id": self.workspace_id,
+            "object_id": self.object_id, "outcome": self.outcome, "version": self.version,
+            "diff": self.diff, "correlation_id": self.correlation_id,
+            "recorded_at": self.recorded_at,
+        }
+        return self.receipt_hash == LocalCRMEmulator._hash(payload)
+
 
 class LocalCRMEmulator:
-    """In-memory, tenant-isolated CRM with deterministic receipt semantics."""
+    """Synthetic, local CRM with policy, receipt and optional atomic JSON persistence."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, storage_path: Path | None = None, policy_catalog: PolicyCatalog | None = None) -> None:
+        self._storage_path = storage_path
+        self._policy_catalog = policy_catalog or PolicyCatalog()
         self._records: dict[tuple[str, str], dict] = {}
         self._commands: dict[tuple[str, str], CRMReceipt] = {}
         self.audit_events: list[dict] = []
+        self._lock = threading.RLock()
+        self._load()
 
     def seed(self, *, workspace_id: str, object_id: str, values: dict, version: int = 1) -> None:
-        self._records[(workspace_id, object_id)] = {"version": version, **copy.deepcopy(values)}
+        with self._lock:
+            self._records[(workspace_id, object_id)] = {"version": version, **copy.deepcopy(values)}
+            self._save()
 
     def _record(self, command: SalesCRMWrite) -> dict:
         try:
@@ -73,33 +92,44 @@ class LocalCRMEmulator:
         return sha256(canonical.encode("utf-8")).hexdigest()
 
     def execute(self, command: SalesCRMWrite) -> CRMReceipt:
-        key = (command.workspace_id, command.command_id)
-        existing = self._commands.get(key)
-        if existing:
-            if existing.diff.get("after") != command.patch:
-                raise CRMCommandError("command_id was already used with a different payload")
-            self.audit_events.append({"event": "crm.command.replay", "command_id": command.command_id})
-            return existing
-        if command.dry_run:
+        with self._lock:
+            key = (command.workspace_id, command.command_id)
+            existing = self._commands.get(key)
+            if existing:
+                if existing.diff.get("after") != command.patch:
+                    raise CRMCommandError("command_id was already used with a different payload")
+                self.audit_events.append({"event": "crm.command.replay", "command_id": command.command_id})
+                self._save()
+                return existing
+            try:
+                policy = self._policy_catalog.resolve(
+                    workspace_id=command.workspace_id, policy_id=command.policy_id,
+                    version=command.policy_version,
+                )
+                self._policy_catalog.enforce(policy=policy, patch=command.patch,
+                                             approved=command.approved, dry_run=command.dry_run)
+            except PolicyError as exc:
+                raise CRMCommandError(str(exc)) from exc
+            if command.dry_run:
+                diff = self.preview(command)
+                return self._receipt(command, "PREVIEW", command.expected_version, diff, None)
             diff = self.preview(command)
-            return self._receipt(command, "PREVIEW", command.expected_version, diff, None)
-        diff = self.preview(command)
-        if not command.approved and {"stage", "forecast_category", "close_date", "discount"}.intersection(command.patch):
-            raise CRMCommandError("approval required for high-risk CRM command")
-        record = self._record(command)
-        previous = {key: record.get(key) for key in command.patch}
-        record.update(command.patch)
-        record["version"] += 1
-        compensation = SalesCompensationAction(
-            compensation_id=f"compensate-{command.command_id}", workspace_id=command.workspace_id,
-            original_command_id=command.command_id, object_id=command.object_id,
-            restore_patch=previous,
-        )
-        receipt = self._receipt(command, "EXECUTED", record["version"], diff, compensation)
-        self._commands[key] = receipt
-        self.audit_events.append({"event": "crm.command.executed", "command_id": command.command_id,
-                                  "workspace_id": command.workspace_id, "correlation_id": command.correlation_id})
-        return receipt
+            record = self._record(command)
+            previous = {field: record.get(field) for field in command.patch}
+            record.update(command.patch)
+            record["version"] += 1
+            compensation = SalesCompensationAction(
+                compensation_id=f"compensate-{command.command_id}", workspace_id=command.workspace_id,
+                original_command_id=command.command_id, object_id=command.object_id,
+                restore_patch=previous,
+            )
+            receipt = self._receipt(command, "EXECUTED", record["version"], diff, compensation)
+            self._commands[key] = receipt
+            self.audit_events.append({"event": "crm.command.executed", "command_id": command.command_id,
+                                      "workspace_id": command.workspace_id, "correlation_id": command.correlation_id,
+                                      "policy_id": policy.policy_id, "policy_version": policy.version})
+            self._save()
+            return receipt
 
     def compensate(self, action: SalesCompensationAction) -> CRMReceipt:
         command = SalesCRMWrite(
@@ -110,7 +140,36 @@ class LocalCRMEmulator:
         )
         receipt = self.execute(command)
         self.audit_events.append({"event": "crm.command.compensated", "original_command_id": action.original_command_id})
+        self._save()
         return receipt
+
+    def _load(self) -> None:
+        if self._storage_path is None or not self._storage_path.exists():
+            return
+        payload = json.loads(self._storage_path.read_text(encoding="utf-8"))
+        self._records = {(item["workspace_id"], item["object_id"]): item["values"] for item in payload.get("records", [])}
+        self._commands = {}
+        for item in payload.get("receipts", []):
+            compensation = item.pop("compensation", None)
+            self._commands[(item["workspace_id"], item["command_id"])] = CRMReceipt(
+                **item, compensation=SalesCompensationAction(**compensation) if compensation else None,
+            )
+        self.audit_events = payload.get("audit_events", [])
+
+    def _save(self) -> None:
+        if self._storage_path is None:
+            return
+        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "records": [{"workspace_id": workspace_id, "object_id": object_id, "values": values}
+                        for (workspace_id, object_id), values in self._records.items()],
+            "receipts": [{**receipt.__dict__, "compensation": receipt.compensation.model_dump(mode="json") if receipt.compensation else None}
+                         for receipt in self._commands.values()],
+            "audit_events": self.audit_events,
+        }
+        temporary = self._storage_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(payload, sort_keys=True, default=str), encoding="utf-8")
+        os.replace(temporary, self._storage_path)
 
     def _receipt(self, command: SalesCRMWrite, outcome: str, version: int, diff: dict,
                  compensation: SalesCompensationAction | None) -> CRMReceipt:

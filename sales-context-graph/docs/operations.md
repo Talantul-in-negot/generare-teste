@@ -47,9 +47,11 @@ against disposable infrastructure.
 
 ## Local observability stack
 
-The application already exposes Prometheus metrics at `GET /metrics`. Set a
-unique `GRAFANA_ADMIN_PASSWORD` in `.env` before exposing Grafana outside a
-local machine, then start the opt-in local stack:
+The application exposes Prometheus metrics at `GET /metrics`. In production,
+`METRICS_API_KEY` is mandatory and the scrape must use
+`Authorization: Bearer <METRICS_API_KEY>`; local Compose can leave it empty.
+Set a unique `GRAFANA_ADMIN_PASSWORD` in `.env` before exposing Grafana outside
+a local machine, then start the opt-in local stack:
 
 ```bash
 docker compose --profile observability up -d
@@ -75,6 +77,15 @@ backup scripts can recover a marker after simulated local data loss. It does
 not back up AuraDB or Fly Redis, and it is not evidence of multi-region failover;
 those production recovery controls must be supplied and tested with the managed
 providers under the agreed RPO/RTO.
+
+## Authenticated MCP operations
+
+Set `MCP_ENABLED=true` to expose `POST /mcp`. Every request is independent and
+must send `Authorization: Bearer <workspace API key>` and `X-Workspace-Id` (or
+a validated JWT when SSO is enabled). The transport accepts only `tools/list`
+and fixed `tools/call` payloads; it does not accept raw Cypher or arbitrary
+code. The local CRM adapter is synthetic and writes only to the configured
+local JSON state file.
 
 ## Triggering the digest
 
