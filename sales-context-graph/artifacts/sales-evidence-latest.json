@@ -1,0 +1,62 @@
+{
+  "schema_version": "sales-evidence.v1",
+  "recorded_at": "2026-08-15T12:16:29.918993+00:00",
+  "classification": "local benchmark; not production evidence",
+  "checks": [
+    {
+      "command": [
+        "C:\\Users\\Sergiu\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "-m",
+        "ruff",
+        "check",
+        "src/sales",
+        "src/mcp",
+        "tests/unit/sales",
+        "tests/unit/test_mcp_registry.py"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.824,
+      "stdout_tail": "All checks passed!\n",
+      "stderr_tail": ""
+    },
+    {
+      "command": [
+        "C:\\Users\\Sergiu\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "-c",
+        "from src.mcp.registry import discover; assert discover(scopes={'sales:read'}, workspace_id='ws-measurement'); from src.sales.adapter import LocalCRMEmulator; from src.domain.sales import SalesCRMWrite; c=LocalCRMEmulator(); c.seed(workspace_id='ws-measurement', object_id='opp-1', values={'stage':'PROPOSAL'}); x=SalesCRMWrite(command_id='smoke', workspace_id='ws-measurement', actor_id='smoke', capability='sales.opportunity.update', object_id='opp-1', patch={'stage':'NEGOTIATION'}, expected_version=1, approved=True, correlation_id='smoke'); assert len(c.execute(x).receipt_hash) == 64"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 2.896,
+      "stdout_tail": "",
+      "stderr_tail": ""
+    }
+  ],
+  "full_test_suite": {
+    "status": "not_run_in_measurement_script",
+    "result": null
+  },
+  "mcp_discovery": {
+    "workspace": "ws-measurement",
+    "read_capabilities": 4,
+    "write_capabilities_without_scope": 0
+  },
+  "local_crm_emulator": {
+    "iterations": 1000,
+    "throughput_ops_per_second": 6322.275,
+    "latency_ms": {
+      "p50": 0.0837,
+      "p95": 0.3809,
+      "p99": 1.5521
+    },
+    "environment": "local in-memory synthetic emulator"
+  },
+  "external_or_production": {
+    "neo4j": null,
+    "redis": null,
+    "remote_mcp": null,
+    "production_latency": null,
+    "availability": null,
+    "cost": null,
+    "business_outcomes": null
+  }
+}
