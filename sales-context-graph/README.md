@@ -85,6 +85,16 @@ High-risk CRM command patches are approval-gated and carry tenant, actor,
 idempotency, optimistic-version, dry-run and correlation fields. A live CRM
 write adapter and remote MCP transport remain explicitly pending external
 integration validation; no production outcomes are claimed.
+
+For the local CRM safety checks and MCP capability discovery run:
+
+```powershell
+python -m ruff check src/sales src/mcp tests/unit/sales tests/unit/test_mcp_registry.py
+pytest -q tests/unit/sales/test_local_crm_adapter.py tests/unit/test_mcp_registry.py -o addopts=""
+```
+
+The local adapter is synthetic and in-memory; it is not a Salesforce or
+Dynamics connection.
 (`pytest tests/ -q -p no:unraisableexception`, against the Docker-Compose
 Neo4j/Redis stack) executed all 560 and finished **560 passed / 0 failed in
 324 seconds**, with `ruff check` and `mypy` (162 source files) both clean. Windows emits asyncio "Event loop is closed" noise at

@@ -14,6 +14,12 @@ tenant-isolated evidence graph. It is not a claim of CRM production adoption.
 - High-risk CRM patches (`stage`, `forecast_category`, `close_date`, and
   `discount`) cannot execute without explicit approval. Dry-run previews remain
   available before approval.
+- `src/sales/adapter.py` provides a deterministic, tenant-isolated local CRM
+  emulator with stale-version rejection, idempotent replay, immutable receipt
+  hashes, audit events and explicit compensation commands.
+- `src/mcp/registry.py` provides semantic-versioned, scope-filtered capability
+  discovery for the sales surface. Discovery is deny-by-default and requires a
+  workspace binding.
 
 ## Existing platform reused
 
@@ -24,9 +30,10 @@ second graph or bypass those controls.
 
 ## Boundary and limitations
 
-The contracts are provider-neutral. A Salesforce/Dynamics connector, external
-CRM mutation adapter, remote MCP transport and production policy catalogue are
-pending integration-specific validation. Synthetic demo records must remain
+The contracts are provider-neutral. A Salesforce/Dynamics connector, authenticated
+Streamable HTTP MCP transport and production policy catalogue are pending
+integration-specific validation; the local adapter is explicitly synthetic.
+Synthetic demo records must remain
 labelled as synthetic and must not be presented as customer or production data.
 
 ## Verification
