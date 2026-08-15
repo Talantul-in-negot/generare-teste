@@ -6,15 +6,15 @@ a laptop run proves production scale or customer impact.
 
 The walkthrough starts at the versioned MCP capability export. It then uses an
 authenticated Streamable HTTP session to query a tenant-scoped graph, rather
-than calling an in-process test double. The three fixed graph-fact cases are
+than calling an in-process test double. Ten fixed graph-fact cases are
 evaluated against the seeded `local-evidence` tenant and an explicit empty
 corpus baseline.
 
-The same local gateway receives a concurrent graph-fact workload. The checked-in
-report records 30 successful requests at 35.39 requests per second, with p50
-447.35 ms, p95 822.90 ms, and p99 831.62 ms. Each request includes MCP session
-initialization, so these figures are a reproducible local integration measure,
-not a capacity or availability claim.
+The same local gateway receives concurrent graph-fact workloads. The checked-in
+report records 100/100 and 1,000/1,000 successful requests at 32.90 and 26.24
+requests per second. At concurrency 25, p95 reaches 36.27 seconds because each
+request includes MCP session initialization; this exposes a useful optimization
+target, not a capacity or availability claim.
 
 The governed-write run follows a full evidence trail: an agent request is held
 for approval; an authorized human approval releases it; the write executes once;

@@ -20,10 +20,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://localhost:8002/mcp")
     parser.add_argument("--token", default=os.environ.get("GRAPHRAG_MCP_TOKEN", ""))
+    parser.add_argument("--dev-token", action="store_true", help="Mint a short-lived local development token")
     parser.add_argument("--tenant", default="local-evidence")
     parser.add_argument("--golden-set", type=Path, default=root / "data/evidence/graph-fact-golden.json")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.dev_token:
+        from api.auth.jwt import create_access_token
+        args.token = create_access_token({
+            "sub": "local-golden-agent", "tenant": args.tenant,
+            "scope": f"read tenant:{args.tenant}", "type": "m2m",
+        })
     if not args.token:
         raise SystemExit("GRAPHRAG_MCP_TOKEN or --token is required")
     golden = json.loads(args.golden_set.read_text(encoding="utf-8"))

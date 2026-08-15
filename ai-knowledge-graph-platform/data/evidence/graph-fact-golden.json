@@ -1,6 +1,6 @@
 {
-  "dataset_version": "local-graph-facts/v1",
-  "baseline": "empty tenant returns no evidence and scores 0 of 3",
+  "dataset_version": "local-graph-facts/v2",
+  "baseline": "empty tenant returns no evidence and scores 0 of 10",
   "questions": [
     {
       "id": "relations-737",
@@ -19,6 +19,48 @@
       "question": "List all aircraft type entities",
       "expected_values": ["Airbus A320neo", "Boeing 737 MAX"],
       "minimum_rows": 2
+    },
+    {
+      "id": "relations-airbus",
+      "question": "What are relations for Airbus?",
+      "expected_values": ["Airbus A320neo"],
+      "minimum_rows": 1
+    },
+    {
+      "id": "relations-faa-2022",
+      "question": "What are relations for FAA-AD-2022-03-07?",
+      "expected_values": ["FAA-AD-2020-05-11"],
+      "minimum_rows": 1
+    },
+    {
+      "id": "relations-faa-2020",
+      "question": "List relations for Boeing 737 MAX",
+      "expected_values": ["FAA-AD-2020-05-11"],
+      "minimum_rows": 1
+    },
+    {
+      "id": "organizations",
+      "question": "List all org entities",
+      "expected_values": ["Boeing", "Airbus"],
+      "minimum_rows": 2
+    },
+    {
+      "id": "directives",
+      "question": "List all airworthiness directive entities",
+      "expected_values": ["FAA-AD-2024-01-02", "FAA-AD-2022-03-07", "FAA-AD-2020-05-11"],
+      "minimum_rows": 3
+    },
+    {
+      "id": "relations-boeing-repeatable",
+      "question": "Show the relationships for Boeing 737 MAX",
+      "expected_values": ["FAA-AD-2020-05-11"],
+      "minimum_rows": 2
+    },
+    {
+      "id": "relations-faa-2024-repeatable",
+      "question": "Show relations of FAA-AD-2024-01-02",
+      "expected_values": ["Boeing 737 MAX"],
+      "minimum_rows": 3
     }
   ]
 }

@@ -16,9 +16,8 @@ scope. The current release includes:
 - workspace+identity constraints, bounded entity candidate retrieval, rate
   limiting, readiness/metrics and reproducible load/backup exercises.
 
-The current checkout collects **547 tests**: 379 unit, 157 integration, 8
-security and 3 evaluation tests. The latest full local run against the active
-Neo4j and Redis containers completed with **547 passed in 241.07s** and 28
+The current checkout collects **560 tests**. The latest full local run against
+the active Neo4j and Redis containers completed with **560 passed in 324s** and 28
 Windows asyncio cleanup warnings. The detailed numeric snapshots below are
 retained as dated audit captures; they explain how the system evolved, but must
 not be read as the current release count. The RAGAS runner is optional and is

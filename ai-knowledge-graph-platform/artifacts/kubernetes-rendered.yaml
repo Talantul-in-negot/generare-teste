@@ -1,0 +1,428 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/part-of: ai-knowledge-graph-platform
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+  name: graphrag
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    iam.gke.io/gcp-service-account: graphrag-workload@PROJECT_ID.iam.gserviceaccount.com
+  name: graphrag-workload
+  namespace: graphrag
+---
+apiVersion: v1
+data:
+  ENV: production
+  GRAPHRAG_RATE_LIMIT_INGEST: 20/minute
+  GRAPHRAG_RATE_LIMIT_QUERY: 60/minute
+  KPI_BACKEND: timescale
+  LOG_LEVEL: INFO
+  PYTHONPATH: /app
+  PYTHONUNBUFFERED: "1"
+  QUERY_RESULT_TTL_SECONDS: "3600"
+kind: ConfigMap
+metadata:
+  name: graphrag-config
+  namespace: graphrag
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graphrag-api
+  namespace: graphrag
+spec:
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  selector:
+    app.kubernetes.io/name: graphrag-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: graphrag-mcp
+  name: graphrag-mcp
+  namespace: graphrag
+spec:
+  ports:
+  - name: mcp
+    port: 8002
+    targetPort: mcp
+  selector:
+    app.kubernetes.io/name: graphrag-mcp
+  sessionAffinity: ClientIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: graphrag-api
+  name: graphrag-api
+  namespace: graphrag
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: graphrag-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: graphrag-api
+    spec:
+      containers:
+      - command:
+        - uvicorn
+        - api.main:app
+        - --host
+        - 0.0.0.0
+        - --port
+        - "8000"
+        env:
+        - name: TMPDIR
+          value: /tmp
+        envFrom:
+        - configMapRef:
+            name: graphrag-config
+        - secretRef:
+            name: graphrag-secrets
+        image: REGION-docker.pkg.dev/PROJECT_ID/graphrag/api:TAG
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 45
+          periodSeconds: 20
+        name: api
+        ports:
+        - containerPort: 8000
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "2"
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: graphrag-workload
+      volumes:
+      - emptyDir: {}
+        name: tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphrag-ingestion-worker
+  namespace: graphrag
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: graphrag-ingestion-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: graphrag-ingestion-worker
+    spec:
+      containers:
+      - command:
+        - python
+        - workers/ingestion_worker.py
+        env:
+        - name: WORKER_HEALTH_PORT
+          value: "8081"
+        - name: TMPDIR
+          value: /tmp
+        envFrom:
+        - configMapRef:
+            name: graphrag-config
+        - secretRef:
+            name: graphrag-secrets
+        image: REGION-docker.pkg.dev/PROJECT_ID/graphrag/ingestion:TAG
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 20
+        name: worker
+        ports:
+        - containerPort: 8081
+          name: health
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "3"
+            memory: 4Gi
+          requests:
+            cpu: 1
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: graphrag-workload
+      volumes:
+      - emptyDir: {}
+        name: tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: agent-gateway
+    app.kubernetes.io/name: graphrag-mcp
+  name: graphrag-mcp
+  namespace: graphrag
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: graphrag-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: agent-gateway
+        app.kubernetes.io/name: graphrag-mcp
+    spec:
+      containers:
+      - command:
+        - python
+        - -m
+        - mcp_server.remote
+        env:
+        - name: GRAPHRAG_MCP_PORT
+          value: "8002"
+        - name: GRAPHRAG_MCP_MAX_REQUEST_BYTES
+          value: "1048576"
+        - name: TMPDIR
+          value: /tmp
+        envFrom:
+        - configMapRef:
+            name: graphrag-config
+        - secretRef:
+            name: graphrag-secrets
+        image: REGION-docker.pkg.dev/PROJECT_ID/graphrag/api:TAG
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: mcp
+          initialDelaySeconds: 30
+          periodSeconds: 20
+        name: mcp
+        ports:
+        - containerPort: 8002
+          name: mcp
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: mcp
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: graphrag-workload
+      volumes:
+      - emptyDir: {}
+        name: tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphrag-query-worker
+  namespace: graphrag
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: graphrag-query-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: graphrag-query-worker
+    spec:
+      containers:
+      - command:
+        - python
+        - workers/query_worker.py
+        env:
+        - name: WORKER_HEALTH_PORT
+          value: "8082"
+        - name: TMPDIR
+          value: /tmp
+        - name: HF_HOME
+          value: /tmp/huggingface
+        envFrom:
+        - configMapRef:
+            name: graphrag-config
+        - secretRef:
+            name: graphrag-secrets
+        image: REGION-docker.pkg.dev/PROJECT_ID/graphrag/query:TAG
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: health
+          initialDelaySeconds: 60
+          periodSeconds: 20
+        name: worker
+        ports:
+        - containerPort: 8082
+          name: health
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "3"
+            memory: 4Gi
+          requests:
+            cpu: 1
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: graphrag-workload
+      volumes:
+      - emptyDir: {}
+        name: tmp
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: graphrag-api
+  namespace: graphrag
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: graphrag-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: graphrag-mcp
+  namespace: graphrag
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: graphrag-mcp
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: graphrag-api
+  namespace: graphrag
+spec:
+  maxReplicas: 10
+  metrics:
+  - resource:
+      name: cpu
+      target:
+        averageUtilization: 70
+        type: Utilization
+    type: Resource
+  minReplicas: 3
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: graphrag-api
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: graphrag-api-ingress
+  namespace: graphrag
+spec:
+  ingress:
+  - ports:
+    - port: http
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graphrag-api
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: graphrag-default-deny-ingress
+  namespace: graphrag
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress

@@ -27,11 +27,12 @@ your local development configuration and must never be committed.
 ```powershell
 python scripts/seed_demo_data.py --commit --wipe --tenant local-evidence
 $env:GRAPHRAG_MCP_TOKEN = "<local scoped JWT>"
-python scripts/run_mcp_operation_load.py --token $env:GRAPHRAG_MCP_TOKEN --tenant local-evidence --requests 30 --concurrency 6 --output artifacts/mcp-graph-fact-load.json
+python scripts/run_mcp_operation_load.py --token $env:GRAPHRAG_MCP_TOKEN --tenant local-evidence --matrix 100:5,1000:25 --output artifacts/mcp-graph-fact-load-matrix.json
 ```
 
 This calls `query_graph_facts` over authenticated Streamable HTTP MCP for every
-request and records success count, error rate, throughput, and p50/p95/p99. It
+request and records success count, error rate, throughput, and p50/p95/p99 for
+each request/concurrency scenario. It
 includes a fresh MCP session initialization in each measured request, so it is a
 reproducible local service measurement rather than a production capacity claim.
 
@@ -119,6 +120,20 @@ python scripts/run_production_exercises.py recovery artifacts/backup.dump artifa
 Use `scripts/export_operational_evidence.py` to combine an authenticated
 Prometheus scrape with explicitly measured deployment metadata. Leave every
 unmeasured field as `null`.
+
+## 10. Failure matrix and Kubernetes validation
+
+```powershell
+python scripts/run_local_failure_exercises.py --output artifacts/local-failure-exercises.json
+kubectl kustomize deploy/kubernetes > artifacts/kubernetes-rendered.yaml
+kubectl apply --dry-run=client -k deploy/kubernetes
+```
+
+The failure matrix records the local controls for duplicate writes, stale
+versions, tenant boundaries, approval bypass, compensation replay, and backup
+integrity. The Kubernetes commands validate rendered manifests and admission
+shape. See `docs/local-kubernetes-validation.md` for rollout and rollback steps;
+neither exercise is a production availability or incident-prevention claim.
 
 ## Public artifacts
 

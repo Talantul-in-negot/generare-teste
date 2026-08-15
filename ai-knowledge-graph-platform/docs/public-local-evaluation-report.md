@@ -10,11 +10,11 @@
 
 | Measure | Result | Evidence |
 |---|---:|---|
-| Graph-fact retrieval pass rate | 100% (3 fixed questions) | `artifacts/graph-fact-golden-eval.json` |
+| Graph-fact retrieval pass rate | 100% (10 fixed questions) | `artifacts/graph-fact-golden-eval.json` |
 | Empty-corpus baseline pass rate | 0% | `data/evidence/graph-fact-golden.json` |
-| MCP retrieval load success | 30/30 (100%) | `artifacts/mcp-graph-fact-load.json` |
-| MCP retrieval throughput | 35.39 req/s | `artifacts/mcp-graph-fact-load.json` |
-| MCP retrieval p95 latency | 822.90 ms | `artifacts/mcp-graph-fact-load.json` |
+| MCP load (100 requests) | 100/100 passed; 32.90 req/s; p95 2869.37 ms | `artifacts/mcp-graph-fact-load-matrix.json` |
+| MCP load (1000 requests) | 1000/1000 passed; 26.24 req/s; p95 36274.79 ms | `artifacts/mcp-graph-fact-load-matrix.json` |
+| Local failure-control matrix | 6/6 scenarios passed | `artifacts/local-failure-exercises.json` |
 
 ## Governed operational write cases
 
