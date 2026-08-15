@@ -1,0 +1,15 @@
+{
+  "doc_id": "CSR-CLIENT-2023",
+  "industry": "automotive",
+  "doc_type": "long",
+  "language": "mixed",
+  "saved_at": "2026-06-13T08:07:22.678906",
+  "word_count": 12271,
+  "char_count": 90817,
+  "detected_contradictions": [
+    "C01",
+    "C02",
+    "C03",
+    "C05"
+  ]
+}

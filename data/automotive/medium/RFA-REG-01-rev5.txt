@@ -1,0 +1,284 @@
+# INSTRUCTIUNE DE LUCRU
+
+## RFA-REG-01-rev5
+
+### DATE APROBARE SI DISTRIBUTIE
+- **Data aprobării**: [inserați data]
+- **Aprobator**: [numele persoanei care aprobă documentul]
+- **Distribuitor**: [numele persoanei responsabile de distribuirea documentului]
+- **Resposabil de revizuire**: [numele persoanei care se ocupă de revizuirea documentului]
+- **Distribuție**: 
+  - Departamentul Calitate
+  - Departamentul Achiziții
+  - Departamentul Logistică
+  - Departamentul Tehnic
+
+---
+
+### SCOP
+Scopul acestei instrucțiuni de lucru este de a stabili un proces standardizat pentru gestionarea comenzilor de achiziție la PlastiAuto SRL. Procesul include inițierea comenzii, selectarea furnizorului, emiterea comenzii, recepția și verificarea produselor, precum și gestionarea neconformităților, în conformitate cu cerințele IATF 16949.
+
+---
+
+### DOMENIU DE APLICARE
+Această instrucțiune se aplică tuturor activităților de achiziție efectuate de PlastiAuto SRL în relația cu furnizorii, inclusiv dar fără a se limita la selecția furnizorilor, gestionarea comenzilor și receptia materialelor aferente produselor destinate clientului AutoCorp GmbH.
+
+---
+
+### DEFINITII SI ABREVIERI
+- **FMEA**: Analiza modurilor de defectare și a efectelor acestora
+- **PPAP**: Pachetul de Aprobat pentru Proiectare și Proces
+- **SPC**: Control Statistic al Procesului
+- **MSA**: Analiza Sistemului de Măsurare
+- **FAI**: Primul Articol de Inspectie
+- **Neconformitate**: Nerespectarea cerințelor specificate
+- **Furnizor critic**: Furnizor identificat ca având impact semnificativ asupra calității produselor
+- **Comandă de achiziție**: Document oficial prin care se solicită furnizarea de bunuri sau servicii
+- **Verificare**: Proces de evaluare a conformității unui produs sau serviciu cu cerințele stabilite
+- **Recepție**: Procesul de primire și control al bunurilor în cadrul organizației
+
+---
+
+### REFERINTE
+1. **IATF 16949**: Standard pentru Sistemele de Management al Calității în Industria Automotive, Revizia 2016
+2. **ISO 9001**: Sistem de Management al Calității, Revizia 2015
+3. **RFA-PRO-01**: Procedura de Management al Calității, rev 3
+4. **RFA-FORM-07**: Formular de Receție a Produselor, Rev 2
+5. **RFA-REG-03**: Politica de Seleție a Furnizorilor, Rev 4
+6. **RFA-REG-02**: Procedura de Evaluare a Performanțelor Furnizorilor, Rev 1
+
+---
+
+### RESPONSABILITATI
+
+| Rol               | Responsabilități                                          |
+|-------------------|--------------------------------------------------------|
+| Manager Calitate  | Monitorizarea implementării și respectării instrucțiunii |
+| Responsabil Achiziții | Inițierea și gestionarea comenzilor                  |
+| Tehnic            | Verificarea specificațiilor tehnice ale produselor      |
+| Logistică         | Gestionarea recepției și stocării produselor            |
+| Inginer Calitate  | Analiza neconformităților și propunerea de acțiuni corective |
+
+---
+
+### PROCEDURA DETALIATA
+
+#### 7.1 Initierea comenzii
+1. **Identificarea necesarului**: Departamentele implicate vor identifica necesarul de bunuri și servicii în funcție de planul de producție și cerințele clientului AutoCorp GmbH.
+2. **Solicitarea aprobată**: Solicitările de achiziție vor fi aprobate de managerul de departament și vor fi transmise departamentului de Achiziții.
+3. **Documentația necesară**: Toate solicitările vor fi însoțite de documentele justificative necesare, inclusiv specificațiile tehnice și termenii de livrare.
+
+#### 7.2 Selectarea furnizorului
+1. **Evaluarea furnizorilor**: Departamentul de Achiziții va realiza o evaluare a furnizorilor disponibili, în funcție de criteriile stabilite în procedura RFA-REG-03.
+2. **Criterii de selecție**: Criteriile de evaluare vor include calitatea produselor, capacitatea de livrare, prețul și suportul tehnic oferit.
+3. **Furnizorii clasificati ca CRITICI sunt supusi reevaluării SEMESTRIALE.**
+4. **Selecția finală**: Furnizorii care îndeplinesc criteriile vor fi incluși în lista de furnizori aprobați, iar departamentul va informa toate părțile implicate.
+
+#### 7.3 Emiterea comenzii
+1. **Crearea comenzii**: Odată ce furnizorul a fost selectat, departamentul de Achiziții va emite comanda de achiziție în format electronic sau fizic.
+2. **Confirmarea comenzii**: Furnizorul va fi responsabil să confirme primirea comenzii și acceptarea termenilor și condițiilor stipulate.
+3. **Întreținerea unei copii a comenzii**: O copie a comenzii emise va fi păstrată în arhivele departamentului de Achiziții pentru referințe viitoare și verificări.
+
+#### 7.4 Receptia si verificarea
+1. **Primirea bunurilor**: Bunurile vor fi primite conform programului de livrare stabilit și vor fi verificate în raport cu comanda de achiziție.
+2. **Verificări fizice**: Se vor efectua verificări fizice pentru a confirma conformitatea cantităților și a specificațiilor tehnice.
+3. **Documente de recepție**: Toate bunurile primite vor fi însoțite de un document de recepție, care va fi completat de personalul de logistică și aprobat de inginerul de calitate.
+4. **Stocarea**: Bunurile conforme vor fi stocate corespunzător, iar cele neconforme vor fi izolate și raportate conform procedurii de gestionare a neconformităților.
+
+#### 7.5 Gestionarea neconformităților
+1. **Identificarea neconformităților**: Neconformitățile vor fi identificate în timpul recepției, procesului de producție sau în cadrul evaluării performanțelor furnizorului.
+2. **Raportarea neconformităților**: Se va întocmi un raport de neconformitate, care va include detalii despre nonconformitate, sursa acesteia și impactul asupra procesului de producție.
+3. **Soluționarea neconformităților**: Departamentul de Calitate va coordona acțiunile corective necesare pentru a rezolva neconformitățile identificate. Aceasta va include, după caz, returnarea produselor neconforme către furnizor sau solicitarea de remedieri.
+4. **Analiza și prevenirea recidivei**: Odată ce neconformitățile au fost corectate, se va realiza o analiză pentru a preveni recidiva, prin revizuirea proceselor de selecție și evaluare a furnizorilor.
+
+---
+
+### INREGISTRARI
+1. **Comenzi de achiziție**: Toate comenzile emise vor fi arhivate electronic și fizic.
+2. **Documente de recepție**: Toate formularele de recepție vor fi păstrate pentru o perioadă de minim 5 ani.
+3. **Rapoarte de neconformitate**: Rapoartele de neconformitate vor fi arhivate pentru analiza de performanță.
+
+---
+
+### ISTORIC REVIZII
+| Revizie | Data | Descriere |
+|---------|------|-----------|
+| 1       | [data] | Documentul inițial |
+| 2       | [data] | Revizuiri pentru actualizarea politicilor de achiziție |
+| 3       | [data] | Îmbunătățiri procedurale conform feedback-ului intern |
+| 4       | [data] | Revizuire a criteriilor de selecție a furnizorilor |
+| 5       | [data] | Actualizări conform cerințelor IATF 16949 |
+
+--- 
+
+Acest document este menit să asigure transparență și standardizare în procesele de achiziție ale PlastiAuto SRL, contribuind la îmbunătățirea continuă a calității produselor furnizate clientului nostru, AutoCorp GmbH.---
+
+### 8. INREGISTRARI
+1. **Comenzi de achiziție**: Toate comenzile de achiziție emise vor fi arhivate, atât în format fizic, cât și electronic, conform standardelor organizației, pentru a putea fi accesibile pentru evaluări și audituri interne sau externe. Acestea vor include detalii precum numărul comenzii, data emiterii, furnizorul, produsele comandate, cantitățile, prețurile convenite și termenii de livrare.
+   
+2. **Documente de recepție**: Toate formularele de recepție vor fi completate în momentul primirii bunurilor și vor conține detalii despre cantitățile primite și conformitatea acestora cu comanda de achiziție. Aceste documente vor fi păstrate pentru o perioadă minimă de 5 ani, conform cerințelor legale și standardelor de audit.
+   
+3. **Rapoarte de neconformitate**: Orice neconformitate identificată în procesul de recepție sau utilizare a produselor va fi documentată într-un raport de neconformitate. Aceste rapoarte vor fi arhivate pentru o perioadă de minim 5 ani și vor include analiza cauzelor și acțiunile corective implementate.
+
+4. **Evaluări ale furnizorilor**: Evaluările efectuate asupra performanțelor furnizorilor vor fi documentate și ținute la dosar, incluzând criteriile de evaluare, rezultatele obținute și orice acțiuni necesare pentru îmbunătățirea performanței. Aceste evaluări vor fi revizuite cel puțin o dată pe an.
+
+5. **Înregistrări de instruire**: Toți angajații implicați în procesele de selecție, emitere a comenzilor și recepție vor participa la sesiuni de formare privind IATF 16949 și vor semna registre de instruire care vor fi arhivate pentru verificări ulterioare.
+
+### 9. ISTORIC REVIZII
+| Revizie | Data     | Descriere                                                                                        |
+|---------|----------|--------------------------------------------------------------------------------------------------|
+| 1       | [data]   | Documentul inițial elaborat, stabilind procedurile de achiziție și recepție.                   |
+| 2       | [data]   | Revizuiri pentru actualizarea politicilor de selecție a furnizorilor, inclusiv criterii de eligibilitate.      |
+| 3       | [data]   | Îmbunătățiri procedurale conform feedback-ului obținut de la audituri interne și externe.       |
+| 4       | [data]   | Revizuire a criteriilor de evaluare și selecție a furnizorilor, pentru a reflecta schimbările în cerințele clienților. |
+| 5       | [data]   | Actualizări conforme cerințelor IATF 16949, inclusiv proceduri de reacție în situații de neconformitate.   |
+| 6       | [data]   | Revizuire completă a documentului pentru a alinia politicile interne cu noile reglementări legale și proceduri ale clienților. |
+
+---
+
+### 10. ANEXE
+#### Anexa A: Formulare necesare
+1. **Formular de cerere de aprobat al comenzii**: Folosit pentru solicitarea de aprobat a comenzilor de achiziție.
+2. **Formular de evaluare a furnizorilor**: Utilizat pentru evaluarea și documentarea performanțelor furnizorilor.
+3. **Formular de raportare a neconformităților**: Documentația necesară pentru a comunica neconformitățile identificate.
+
+#### Anexa B: Planificarea instruirii
+1. **Program de instruire anual**: Listă de sesiuni de formare planificate pentru angajați, inclusiv teme, date și instructori.
+2. **Evaluarea eficacității instruirii**: Metodele de evaluare a eficienței instruirii pentru a se asigura că angajații sunt bine pregătiți în ceea ce privește respectarea IATF 16949.
+
+---
+
+### 11. POLITICA DE CONTINUITATE ȘI ÎMBUNĂTĂȚIRE CONTINUĂ
+PlastiAuto SRL se angajează să îmbunătățească continuu sistemul său de management al calității, în conformitate cu principiile IATF 16949. Aceasta include o revizuire frecventă a proceselor, feedback de la client și evaluarea constantă a furnizorilor pentru a asigura alinierea la standardele de calitate a produselor.
+
+#### Politica de îmbunătățire continuă:
+- Obținerea feedback-ului de la clienți în mod regulat pentru a înțelege nevoile și așteptările acestora.
+- Implementarea de măsuri corective și preventive, atunci când sunt identificate neconformități, pentru a reduce recidivele.
+- Organizarea de sesiuni de brainstorming și evaluări periodice interne pentru a identifica aspectele care necesită îmbunătățire.
+
+---
+
+Această instrucțiune de lucru va rămâne în vigore până la o nouă revizuire, asigurându-se că toate activitățile de achiziție sunt realizate în conformitate cu cele mai înalte standarde de calitate, contribuind la satisfacția clientului și la succesul organizației noastre în industria automotive. 
+
+---
+
+(Segmentul final - se va adăuga la sfârșitul documentului pentru a respecta structura formală a instrucțiunii, inclusiv finalizarea actualizărilor și reviziilor documentului.)### 7.2 Selectarea furnizorului (continuare)
+
+5. **Monitorizarea performanței**: După aprobarea furnizorilor, se va efectua monitorizarea regulată a performanței acestora, prin analiza feedback-ului referitor la livrările efectuate, calitatea produselor și respectarea termenelor de livrare. Aceasta se va realiza prin întâlniri periodice și rapoarte de performanță transmise departamentului de Achiziții.
+
+6. **Feedback de la departamentele interne**: Departamentele de producție și calitate vor fi implicate în procesul de evaluare a furnizorilor, oferind feedback pe baza experiențelor lor directe cu livrările efectuate, contribuind astfel la o selecție mai bine informată a furnizorilor.
+
+7. **Revizuirea periodică a furnizorilor**: Comitetul de Evaluare a Furnizorilor, format din membri ai echipei de producție, calitate și achiziții, va organiza întâlniri semestriale pentru a revizui lista furnizorilor aprobați, verificând conformitatea lor cu cerințele de calitate și livrare. În cazul în care un furnizor nu îndeplinește standardele așteptate, se vor lua măsuri, care pot include, dar nu se limitează la, implementarea unui plan de îmbunătățire sau retragerea din lista furnizorilor aprobați.
+
+#### 7.3 Emiterea comenzii (continuare)
+
+4. **Detalierea termenilor contractuali**: Comanda de achiziție va include toți termenii și condițiile agreate, inclusiv penalități pentru întârzieri la livrare sau neconformități în produsele livrate. Aceste detalii sunt esențiale pentru protejarea intereselor PlastiAuto SRL și pentru a asigura o relație transparentă și corectă cu furnizorul.
+
+5. **Trimiterea comenzii**: Comanda aprobată va fi transmisă furnizorului prin canalul preferat (email, fax, sistem ERP) pentru a asigura o comunicare promptă și eficientă. Este responsabilitatea departamentului de Achiziții să confirme faptul că furnizorul a primit comanda.
+
+6. **Monitorizarea statusului comenzii**: Departamentul de Achiziții va monitoriza statusul comenzii până la livrare, comunicând cu furnizorul pentru a rezolva eventualele dispute sau întrebări apărute pe parcurs.
+
+#### 7.4 Recepția și verificarea (continuare)
+
+5. **Raportarea discrepanțelor**: În cazul în care se constată discrepanțe între cantitățile primite și cele stipulate în comanda de achiziție, sau dacă produsele nu corespund specificațiilor tehnice, personalul de recepție va întocmi un raport de neconformitate. Acest raport va fi analizat de către inginerul de calitate și va fi trimis departamentului de Achiziții pentru a implementa acțiuni corective.
+
+6. **Respectarea normelor de sănătate și siguranță**: În timpul procesului de recepție, personalul va respecta toate normele de sănătate și siguranță, asigurându-se că produsele sunt manipulate și depozitate în condiții care previn deteriorarea.
+
+7. **Instruirea angajaților**: Personalul implicat în recepția bunurilor va beneficia de instruire periodică în ceea ce privește criteriile de evaluare a bunurilor primite, procedurile de raportare a neconformităților și utilizarea instrumentelor de evaluare a calității, pentru a se asigura că procesul de recepție este executat corect și eficient.
+
+#### 7.5 Gestionarea neconformităților (continuare)
+
+5. **Urmărirea acțiunilor corective**: Toate acțiunile corective vor fi documentate și urmărirea progresului lor va face parte din responsabilitățile departamentului de calitate. Termenele limită pentru finalizarea acțiunilor corective vor fi stabilite și comunicate echipei responsabile.
+
+6. **Îmbunătățirea sistemului de gestionare a neconformităților**: Orice neconformitate identificată va fi utilizată pentru a îmbunătăți sistemul de gestionare a calității al PlastiAuto SRL. Aceasta va include ajustări la procesele interne, politici de selecție a furnizorilor sau procesele de instruire pentru angajați.
+
+7. **Raportarea periodică a neconformităților**: Se va realiza o raportare periodică a neconformităților identificate și a acțiunilor implementate pentru a le remedia. Aceste rapoarte vor fi revizuite de conducerea superioară pentru a asigura responsabilizarea și transparența în procesul de calitate.
+
+### 8. INREGISTRARI (continuare)
+
+6. **Înregistrările de audit**: Toate auditurile interne și externe efectuate asupra proceselor de achiziție și recepție vor avea asociate înregistrări detaliate, care vor include scopul auditului, constatările și recomandările rezultate, arhivate pentru o perioadă minimă de 5 ani.
+
+7. **Evaluările anuale ale furnizorilor**: Evaluările efectuate anual asupra performanței furnizorilor vor fi documentate, inclusiv criteriile de evaluare, rezultatele obținute și recomandările pentru îmbunătățirea performanțelor. Aceste documente vor sta la baza revizuirilor semestriale ale furnizorilor.
+
+8. **Statistici de neconformitate**: PlastiAuto SRL va menține statistici privind neconformitățile, incluzând rata de neconformitate a fiecărui furnizor, pentru a ajuta la luarea unor decizii informate în procesele de selecție și evaluare a furnizorilor.
+
+### 9. ISTORIC REVIZII (continuare)
+
+| Revizie | Data     | Descriere                                                                            |
+|---------|----------|--------------------------------------------------------------------------------------|
+| 1       | [data]   | Documentul inițial elaborat, stabilind procedurile de achiziție și recepție.       |
+| 2       | [data]   | Revizuiri pentru actualizarea politicilor de selecție a furnizorilor, inclusiv criterii de eligibilitate. |
+| 3       | [data]   | Îmbunătățiri procedurale conform feedback-ului obținut de la audituri interne și externe. |
+| 4       | [data]   | Revizuire a criteriilor de evaluare și selecție a furnizorilor, pentru a reflecta schimbările în cerințele clienților. |
+| 5       | [data]   | Actualizări conforme cerințelor IATF 16949, inclusiv proceduri de reacție în situații de neconformitate. |
+| 6       | [data]   | Revizuire completă a documentului pentru a alinia politicile interne cu noile reglementări legale și proceduri ale clienților. |
+| 7       | [data]   | Actualizarea procedurii de gestionare a neconformităților pentru a include noi metodologii și standarde de calitate. |
+
+### 10. ANEXE (continuare)
+
+#### Anexa C: Politica de selecție a furnizorilor
+
+1. **Scopul politicii**: Politica are ca scop maximizarea eficienței și asigurarea că furnizorii selectați contribuie pe deplin la succesul organizației noastre. Aceasta se va concentra pe îmbunătățirea continuă a relațiilor cu furnizorii, având în vedere colaborări pe termen lung.
+
+2. **Procedura de selecție**: Toate selecțiile de furnizori trebuie să ia în considerare nu doar prețul, ci și calitatea, capacitatea de livrare, stabilitatea financiară și compatibilitatea cu valorile PlastiAuto SRL.
+
+3. **Îmbunătățirea performanței furnizorilor**: Se vor desfășura întâlniri anuale cu furnizorii pentru a discuta performanțele și modul de îmbunătățire a serviciilor și produselor oferite. Feedback-ul din aceste sesiuni va fi parte integrantă din raportările ce urmează a fi făcute conducere la finalul anului.
+
+### 11. POLITICA DE CONTINUITATE ȘI ÎMBUNĂTĂȚIRE CONTINUĂ (continuare)
+
+PlastiAuto SRL va derula anchete interne anuale pentru a identifica zonele de îmbunătățire, axându-se pe impactul proceselor de achiziție asupra satisfacției clienților. Acestea vor include evaluări ale impactului pe termen lung al furnizorilor asupra calității produselor și se vor folosi pentru a corecta abaterile, asigurându-se că standardele sunt respectate și că procesele sunt aliniate cu cerințele IATF 16949.
+
+### 12. CONCLUZII
+
+Această instrucțiune de lucru, RFA-REG-01-rev5, asigură standardizarea și eficiența în procesele de achiziție și recepție ale PlastiAuto SRL. Respectarea acestor proceduri va contribui la succesul organizației și la satisfacția continuă a clientului nostru, AutoCorp GmbH, prin livrarea de produse de calitate superioară și servicii eficiente.
+
+---
+
+Acest document este finalizat. Asigurându-se că toate secțiunile sunt complet implementate, se va determina un cadru de lucru eficient care să sprijine activitatea de achiziție și managementul calității. Documentul va fi disponibil tuturor angajaților relevanți și va fi supus reviziilor periodice, pentru a rămâne în conformitate cu standardele internaționale și pentru a promova o cultură a excelenței în cadrul organizației.### 8. INREGISTRARI (continuare)
+
+9. **Documentele cerute pentru procesul de selecție a furnizorului**: Toate documentele relevante care susțin procesul de selecție, inclusiv formularele de evaluare, certificatele de calitate și organizație, vor fi păstrate pentru o perioadă de minim 5 ani. Acestea vor fi utilizate pentru revizuirea semestrială și eventual perioada de evaluare a furnizorilor, asigurându-se că toți furnizorii îndeplinesc standardele stabilite.
+
+10. **Bilanțuri de performanță ale furnizorilor**: Consolidarea și arhivarea acordurilor de performanță cu furnizorii va fi realizată anual. Acestea vor include evaluări pe baza feedback-ului din departamentele interne și rezultatele auditurilor efectuate. Această activitate va ajuta la constituirea unei baze solide pentru deciziile viitoare cu privire la relațiile de furnizare.
+
+11. **Formulare de neconformitate și rapoarte de acțiuni corective**: Toate formularele de neconformitate generate în urma inspecției și recepției produselor, precum și rapoartele referitoare la acțiunile corective implementate, vor fi păstrate în registrele departamentului de calitate, facilitând analiza periodică a eficienței procesului de gestionare a calității.
+
+### 9. ISTORIC REVIZII (continuare)
+
+| Revizie | Data     | Descriere                                                                                            |
+|---------|----------|-----------------------------------------------------------------------------------------------------|
+| 8       | [data]   | Actualizarea procedurii de recepție pentru a integra noi cerințe de conformitate cu ISO 9001.      |
+| 9       | [data]   | Re-evaluarea și modificarea etapelor de gestionare a neconformităților conform observațiilor din auditurile recente. |
+| 10      | [data]   | Revizuirea documentului pentru a include cerințele suplimentare impuse de clientul nostru AutoCorp GmbH.          |
+
+### 10. ANEXE (continuare)
+
+#### Anexa D: Plan de îmbunătățire continuă
+
+1. **Obiective de îmbunătățire**: Stabilirea unor obiective clare pentru fiecare proces critic identificat va avea rolul de a îmbunătăți consistent calitatea produselor și eficiența operațiunilor. Aceste obiective vor fi măsurate și revizuite anual.
+
+2. **Evaluarea periodică a procesului**: Vor fi realizate evaluări ale proceselor interne, pentru a identifica variabilele care afectează calitatea livrărilor. Rezultatele acestor evaluări vor fi comunicate tuturor angajaților pentru a promova implicarea activă în activitățile de corectare și prevenire.
+
+3. **Sesiuni de formare și dezvoltare**: PlastiAuto SRL va desfășura sesiuni de formare cu privire la standardele IATF 16949, pentru a asigura că angajații sunt bine pregătiți să facă față cerințelor în continuă schimbare ale pieței automotive.
+
+4. **Feedback continuu**: Intrările de feedback de la clienți și furnizori vor fi integrate în strategiile de îmbunătățire, contribuind la ajustarea proceselor interne și la consolidarea relațiilor de parteneriat.
+
+### 11. POLITICA DE CONTINUITATE ȘI ÎMBUNĂTĂTIRE CONTINUĂ (continuare)
+
+PlastiAuto SRL va promova o cultură a îmbunătățirii continue, încurajând angajații să contribuie cu idei și sugestii pentru optimizarea proceselor. În plus, se vor implementa instrumente și metodologii pentru a evalua impactul inițiativelor de îmbunătățire asupra performanței organizației. O raportare regulată a rezultatelor obținute va permite ajustarea rapidă a abordărilor folosite și va asigura adaptabilitatea la schimbările din mediul înconjurător.
+
+### 12. CONCLUZII (continuare)
+
+RFA-REG-01-rev5 va fi un document de referință esențial pentru toate activitățile de achiziție și managementul calității la PlastiAuto SRL. Acesta evidențiază angajamentul nostru față de excelență, transparență și respectarea standardelor internaționale, asigurându-ne că livrăm produse care corespund exigențelor clienților și reglementărilor în vigoare în industrie. Toate angajamentele scrise în acest document vor fi revizuite periodic, asigurându-se astfel o adaptare constantă la standardele de calitate globale și cerințele clienților, mai ales în raport cu partenerul nostru de bază, AutoCorp GmbH.
+
+Acest document finalizează instruirea detaliată necesară pentru îmbunătățirea continuă a proceselor de achiziție și gestionare a neconformităților, dorind astfel să creăm un mediu de lucru care să sprijine competitivitatea și satisfacția clienților noștri. Toți angajații vor fi instruiți să respecte și să pună în aplicare aceste proceduri, contribuind astfel activ la succesul și reputația PlastiAuto SRL în industria auto.
+
+=== METADATA ===
+doc_id: RFA-REG-01-rev5
+industry: automotive
+doc_type: medium
+language: ro
+standard: IATF 16949
+contradiction: C05
+save_path: data/automotive/medium/RFA-REG-01-rev5.txt
+save_command: python manage_corpus.py save --file RFA-REG-01-rev5.txt --name RFA-REG-01-rev5 --industry automotive --lang ro
+================

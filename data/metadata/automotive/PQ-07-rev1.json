@@ -1,0 +1,12 @@
+{
+  "doc_id": "PQ-07-rev1",
+  "industry": "automotive",
+  "doc_type": "medium",
+  "language": "ro",
+  "saved_at": "2026-06-13T11:00:29.752938",
+  "word_count": 3272,
+  "char_count": 25128,
+  "detected_contradictions": [
+    "C01"
+  ]
+}

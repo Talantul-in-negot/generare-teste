@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:\\Users\\Sergiu\\Desktop\\Projects\\Generative-AI\\ai-knowledge-graph-platform\\.claude\\hooks\\run_tests_on_edit.py\""
+          }
+        ]
+      }
+    ]
+  },
+  "mcpServers": {
+    "graphrag": {
+      "command": "python",
+      "args": ["mcp_server/server.py"]
+    }
+  }
+}

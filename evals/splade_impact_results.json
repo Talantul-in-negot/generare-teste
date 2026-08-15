@@ -1,0 +1,557 @@
+{
+  "run_at": "2026-08-04T03:15:35.410573+00:00",
+  "tenant": "aerospace",
+  "model": "naver/splade-cocondenser-ensembledistil",
+  "n_questions": 33,
+  "candidate_pool_k": 50,
+  "final_top_k": 10,
+  "current": {
+    "hit_rate": 0.0,
+    "mean_coverage": 0.0,
+    "mrr": 0.0
+  },
+  "splade": {
+    "hit_rate": 0.0,
+    "mean_coverage": 0.0,
+    "mrr": 0.0
+  },
+  "mrr_improved": 0,
+  "mrr_regressed": 0,
+  "mrr_tied": 33,
+  "splade_latency_ms": {
+    "mean_ms": 2071.635281818806,
+    "p50_ms": 2008.004900009837,
+    "p95_ms": 2423.7338000093587,
+    "max_ms": 2561.037400009809
+  },
+  "per_question": [
+    {
+      "id": "SH-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 4205.329399992479,
+      "splade_latency_ms": 1913.7057999905664,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "SH-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 272.8623000148218,
+      "splade_latency_ms": 1858.3015000040177,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "SH-03",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 228.32629998447374,
+      "splade_latency_ms": 1853.259200026514,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "SH-04",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 237.89099999703467,
+      "splade_latency_ms": 1856.867800001055,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "SH-05",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 300.03809998743236,
+      "splade_latency_ms": 1731.181099981768,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "SH-06",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 265.5304000072647,
+      "splade_latency_ms": 1887.505599996075,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "SH-07",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 248.05510000442155,
+      "splade_latency_ms": 1825.7351999927778,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "SH-08",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 236.3130000012461,
+      "splade_latency_ms": 2284.5842000097036,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "MH-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 307.1524999977555,
+      "splade_latency_ms": 2561.037400009809,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "MH-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 294.76349998731166,
+      "splade_latency_ms": 2093.2308999763336,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "MH-03",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 300.17339999903925,
+      "splade_latency_ms": 2210.192200000165,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "MH-04",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 261.02439998066984,
+      "splade_latency_ms": 1936.603699985426,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "MH-05",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 285.6524999951944,
+      "splade_latency_ms": 1854.3592999922112,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "MH-06",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 729.560700012371,
+      "splade_latency_ms": 1917.2994999971706,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "CON-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 232.84119999152608,
+      "splade_latency_ms": 1995.2667000179645,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "CON-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 258.6782000144012,
+      "splade_latency_ms": 2132.003499980783,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "AUT-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 254.59320002119057,
+      "splade_latency_ms": 2366.8829999805894,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "AUT-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 259.5427999913227,
+      "splade_latency_ms": 2208.9816000079736,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "AUT-03",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 264.8314999823924,
+      "splade_latency_ms": 2162.6449000032153,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "INF-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 250.16799999866635,
+      "splade_latency_ms": 1948.1144000019412,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "INF-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 270.7178999844473,
+      "splade_latency_ms": 2265.07429999765,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "NEG-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 231.16759999538772,
+      "splade_latency_ms": 2337.941099976888,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "NEG-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 202.02249998692423,
+      "splade_latency_ms": 2222.3425999982283,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "TMP-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 288.7856000161264,
+      "splade_latency_ms": 2300.7019000069704,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "TMP-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 224.43349999957718,
+      "splade_latency_ms": 2016.52680002735,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "TMP-03",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 259.1262999922037,
+      "splade_latency_ms": 2368.3589000138454,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "PRE-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 237.51269999775104,
+      "splade_latency_ms": 2423.7338000093587,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "PRE-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 275.9995000087656,
+      "splade_latency_ms": 2116.4167000097223,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "CAL-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 246.99020001571625,
+      "splade_latency_ms": 1990.0763999903575,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "AGT-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 194.03750001220033,
+      "splade_latency_ms": 1811.7257000121754,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "AGT-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 210.28370002750307,
+      "splade_latency_ms": 1987.7810000034515,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "CTX-01",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 326.4748000074178,
+      "splade_latency_ms": 1917.5227000087034,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    },
+    {
+      "id": "CTX-02",
+      "candidate_pool_size": 9,
+      "pipeline_latency_ms": 217.69799999310635,
+      "splade_latency_ms": 2008.004900009837,
+      "current": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      },
+      "splade": {
+        "hit": false,
+        "coverage": 0.0,
+        "mrr": 0.0
+      }
+    }
+  ]
+}

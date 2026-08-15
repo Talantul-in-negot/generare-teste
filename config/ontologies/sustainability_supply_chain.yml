@@ -1,0 +1,39 @@
+# Synthetic local ontology for the relational-to-graph demonstration.
+# It contains no real supplier, emissions, or assessment data.
+ontology:
+  id: synthetic-sustainability-supply-chain
+  version: "1.0.0"
+  status: active
+  compatible_with: ">=1.0.0"
+  deprecated_types: []
+  deprecated_relations: []
+
+type_hierarchy:
+  - [SUPPLIER, ORG]
+  - [FACILITY, LOCATION]
+  - [MATERIAL, PRODUCT]
+  - [EMISSIONS_RECORD, EVENT]
+  - [ASSESSMENT, EVENT]
+  - [RISK, CONCEPT]
+  - [EVIDENCE, CONCEPT]
+
+relation_rules:
+  SUPPLIES:
+    domain: [SUPPLIER]
+    target: [MATERIAL]
+  OPERATES:
+    domain: [SUPPLIER]
+    target: [FACILITY]
+  REPORTED:
+    domain: [SUPPLIER]
+    target: [EMISSIONS_RECORD]
+  HAS_EVIDENCE:
+    domain: [ASSESSMENT, EMISSIONS_RECORD, RISK]
+    target: [EVIDENCE]
+  HAS_RISK:
+    domain: [SUPPLIER, FACILITY, MATERIAL]
+    target: [RISK]
+
+inference_rules: []
+exclusive_state_pairs: []
+functional_relations: []

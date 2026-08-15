@@ -1,0 +1,216 @@
+ingestion:
+  chunk_size: 512
+  chunk_overlap: 64  # Phase 5 Fix C (64->128) reverted — regressed automotive 10/13->9/13 (below 70% gate) without fixing MH-02, see tasks/lessons.md A109
+  embedding_batch_size: 100
+  extraction_concurrency: 5         # max concurrent LLM extract+embed calls per document
+  entity_types:
+    - PERSON
+    - ORG
+    - PRODUCT
+    - CONCEPT
+    - LOCATION
+    - EVENT
+  # ── Alias registry ──────────────────────────────────────────────────────────
+  alias_embedding_threshold: 0.92   # cosine similarity to treat as duplicate entity — reverted from
+                                     # an uncommitted 0.97 that fragmented automotive into 278 Leiden
+                                     # communities (vs ~55 baseline) and caused a contradiction
+                                     # false-positive explosion (500-cap conflicts), see A111
+  alias_fuzzy_threshold: 85         # rapidfuzz ratio for soft name matching
+  # Same (name, type, tenant) MERGE key, but the incoming mention's embedding
+  # is below this cosine similarity to what's already stored — likely two
+  # different meanings sharing a name+type (e.g. "Apple" ORG for the company
+  # vs. mistakenly for the fruit). Logged as a warning, not blocked — see
+  # graph_writer.write_entities and neo4j_client.merge_entities_batch.
+  entity_collision_similarity_min: 0.5
+  # ── Human review queue ──────────────────────────────────────────────────────
+  review_queue_enabled: true         # queue ambiguous alias matches for human review
+  review_fuzzy_min: 70               # lower bound of fuzzy "ambiguous" band (70–84 queued)
+  review_embedding_min: 0.85         # lower bound of embedding "ambiguous" band (0.85–0.92 queued)
+  # ── Ingestion validation (graph poisoning prevention) ───────────────────────
+  validate_after_ingestion: true    # run graph health check after every doc
+  auto_remove_self_loops: true      # delete self-referencing edges automatically
+  detect_cycles_after_ingestion: true
+  scan_contradictions_after_ingestion: true   # disable + scan once for bulk ingest (see ingest_corpus.py) — per-doc scan is O(whole tenant graph), not doc-scoped despite the doc_id param
+
+graph:
+  community_levels: 3
+  leiden_resolution: 1.0
+  min_community_size: 3
+  community_summary_max_tokens: 512
+  # ── Hierarchy depth limits ───────────────────────────────────────────────────
+  max_explicit_depth: 5             # warn when node depth exceeds this
+  # ── Dirty flags & materialized aggregates ───────────────────────────────────
+  dirty_flag_propagation: true      # cascade status_dirty to ancestors on change
+  aggregate_recompute_batch: 100    # max nodes to recompute per maintenance run
+  auto_rebuild_communities: true    # rebuild when staleness exceeds threshold; disable only if you run scripts/community_rebuild.py externally
+  community_staleness_threshold: 0.15   # 0.0-1.0 — rebuild when drift exceeds this
+  community_staleness_check_on_ingest: true  # check staleness on every ingestion batch
+  require_leiden: true              # fail hard if graspologic is missing — silent fallback to connected-components degrades global search quality undetectably
+  # ── PageRank centrality (GDS) ────────────────────────────────────────────────
+  pagerank_damping_factor: 0.85     # standard PageRank default
+  pagerank_iterations: 20           # GDS default max iterations
+  pagerank_min_score_threshold: 0.0000001  # GDS convergence tolerance
+  # ── PageRank recompute triggers ──────────────────────────────────────────────
+  # Was previously never recomputed automatically — live check found aerospace
+  # 45% coverage, automotive 100% but 11 days stale, marketing/telecom 0%.
+  # Mirrors the community-rebuild staleness pattern above. Three triggers:
+  # growth drift (below), re-ingestion of an existing document (always forces
+  # recompute — see PageRankComputer.check_staleness, not separately
+  # switchable), and a decay-conditional time ceiling (only evaluated when
+  # retrieval.gnn_confidence_half_life_days > 0 for the tenant).
+  pagerank_recompute_on_ingest: true    # master gate
+  pagerank_growth_threshold: 0.15       # 0.0-1.0 — same idiom as community_staleness_threshold
+  pagerank_time_ceiling_days: 60        # backstop; only applies when confidence decay is enabled
+  # ── Document authority ───────────────────────────────────────────────────────
+  default_authority_level: 4        # INFORMAL — override per document on ingestion
+  superseded_confidence_penalty: 0.5  # confidence multiplier for superseded doc edges
+
+retrieval:
+  local_top_k: 10          # validated baseline — precision 0.907 measured at this value
+  multihop_depth: 2        # validated baseline — depth 3 diluted retrieval and caused refusals on answerable questions
+  multihop_top_k: 50       # max hop chunks fed to GNN — prevents full-corpus scoring on dense graphs (bug fix: 21min→30s)
+  multihop_semantic_weight: 0.5  # blend hop ranking: (1-w)·path_score + w·cos(chunk,query), cosine computed in Neo4j. 0 = pure path score (pre-2026-06 behavior). Gated on retrieval eval — see scripts/eval_hop_ranking.py. Phase 5 Fix B tried 0.8 (no effect on CON-04/AUTH-01, reverted — see tasks/lessons.md A105)
+  global_top_communities: 5
+  global_search_strategy: direct_context  # direct summaries -> final synthesis; map_reduce remains available for ablations
+  global_direct_context_max_chars: 6000   # bounded high-level context sent to the final answer call
+  global_reduce_max_tokens: 300  # ceiling on the reduce step's output. Measured: unbounded
+                                  # generation produced 494-2090 chars (6.5-15.7s) for identical
+                                  # prompts. Output is machine-consumed context, not user-facing,
+                                  # so it needs facts not prose. ~4.3s fixed overhead means this
+                                  # bounds the tail, it does not make reduce fast. See A144.
+  rerank_top_k: 5  # validated baseline — precision 0.907 measured at this value. A124: 7+_text_score floor fixed automotive 12/13 but broke aerospace (4/39), reverted. A125: 6 alone (no _text_score change) regressed automotive to 9/13 (below 70% gate, CON-02 newly failed) — also reverted.
+  lexical_seed_min_documents: 3  # preserve distinct BM25 evidence before multilingual GNN scoring
+  hybrid_weight_local: 0.6
+  hybrid_weight_global: 0.4
+  bm25_enabled: true       # BM25 fulltext + RRF fusion with vector results
+  reranker_enabled: true   # cross-encoder rerank after RRF (ms-marco-MiniLM-L-6-v2)
+  entity_context_enabled: true  # append entity descriptions/neighbors to the final prompt
+  named_document_boost_enabled: true  # reserve a seed for explicitly named documents
+  query_rewrite_enabled: true  # Stage-1: strip retrieval-diluting boilerplate + expand/normalize query before first-pass retrieval; search-only, never touches answer/eval. Fails open. A/B measured 2026-07-24 on aerospace golden set (34 Q): rewrite ON and OFF both scored 29/34 (85%) — zero accuracy delta. A later re-run of the OFF arm scored 13/34 with a timeout-dominated failure signature, but that was NOT rewrite-related — root cause was an unrelated DeepSeek model-id deprecation bug (fixed separately, commit 6fe2cc7) coincidentally active during that run. Keep enabled: no accuracy cost, and it reduces load on the agentic fallback path. See tasks/lessons.md A138.
+  query_planner_enabled: true
+  adaptive_router_enabled: true
+  adaptive_router_minimum_samples: 5    # per tenant/query-class/mode before measured routing
+  adaptive_router_exploration_rate: 0.05  # deterministic exploration, capped in code at 25%
+  adaptive_router_latency_weight: 0.12  # quality remains dominant over log-scaled latency
+  # ── Session context ──────────────────────────────────────────────────────────
+  session_context_enabled: true     # enrich ambiguous follow-up queries with session entities
+  session_max_turns: 10             # sliding window size per session
+  session_store: redis              # "memory" | "redis" — redis survives restarts; falls back to memory if Redis is unreachable
+  redis_url: redis://localhost:6379/0  # update to your Redis instance in production
+  session_ttl_seconds: 86400        # Redis key TTL for session turns (24h)
+  session_store_strict: false       # true = fail startup if Redis unreachable; false = silent in-memory fallback
+  query_result_ttl_seconds: 3600   # how long to keep query results in Redis (1 hour)
+  semantic_answer_cache_enabled: true  # governed exact-input cache for completed API/worker queries
+  semantic_answer_cache_ttl_seconds: 3600  # corpus revision is the hard staleness guard; TTL bounds storage
+  # ── GNN scoring (after multi-hop traversal) ───────────────────────────────
+  gnn_enabled: true        # GCN/GAT graph-propagated re-scoring
+  gnn_type: gat            # "gcn" (Kipf & Welling 2017) | "gat" (Veličković 2018)
+  gnn_layers: 2            # number of message-passing layers
+  gnn_alpha: 0.9           # weight for cross-encoder / vector score
+  gnn_beta: 0.1            # weight for GNN structural score
+  gnn_edge_confidence_threshold: 0.7  # drop RELATES_TO edges below this confidence
+  gnn_confidence_half_life_days: 180  # edge confidence decay half-life; 0 = no decay
+  gnn_adaptive_weights: true          # relational queries use 0.5/0.5, factoid uses alpha/beta
+  # ── PageRank tiebreak (low-confidence retrieval only) ─────────────────────
+  pagerank_tiebreak_enabled: true     # only fires when the top-ranked chunk's final_score
+                                       # is below pagerank_tiebreak_threshold — i.e. no
+                                       # confident winner from text/GNN scoring alone.
+                                       # Deliberately NOT a general relevance boost — global
+                                       # entity importance anti-correlates with correctness on
+                                       # precise lookups (e.g. exact document IDs), so this only
+                                       # engages as a fallback tiebreaker, never overriding a
+                                       # confident text/GNN signal. See tasks/lessons.md.
+  pagerank_tiebreak_threshold: 0.4    # top chunk's final_score must be below this to trigger
+  pagerank_tiebreak_weight: 0.15      # small additive weight — a nudge among near-ties, not
+                                       # a dominant term
+  # ── Authority-weighted retrieval ─────────────────────────────────────────────
+  authority_weighting_enabled: true   # adjust edge confidence by source doc authority
+  # ── Conflict-aware answering ──────────────────────────────────────────────
+  conflict_annotation_enabled: true  # warn the LLM when a retrieved entity has an
+                                      # open, unresolved Conflict node (see
+                                      # ContradictionDetector) instead of letting it
+                                      # silently state a disputed fact as settled
+  feedback_ranking_enabled: true     # blend tenant-scoped citation feedback into final ranking
+  feedback_ranking_weight: 0.10      # conservative signal; retrieval evidence remains dominant
+  # ─────────────────────────────────────────────────────────────────────────
+  agentic_fallback: true   # trigger iterative agent when hybrid answer is weak
+  agentic_max_steps: 4     # max sub-searches before forced synthesis
+  agentic_hedge_only_fallback: false  # when true, a hedging answer triggers the agent even if it has citations. Default false = strict gate (hedge AND no citations), keeping trigger rate ~10-15% and p95 ~2.5s. The strict gate has a real blind spot — multi-hop questions where retrieval returned citations that don't contain the answer never reach IRCoT. NOT RECOMMENDED to enable yet: measured on aerospace MH-03/TMP-03 (2026-07-22) the gate fires correctly and IRCoT generates the right sub-query, but it burns ~80s/query (4 sub-searches, each a full retrieval pass) and still fails to synthesize the retrieved bridging chunk into the answer — net worse (latency + citation recall) with no pass-rate gain. Enable only after the agentic retriever's sub-search synthesis and latency are addressed.
+  claim_verification: false # post-synthesis grounding check — DISABLED: re-confirmed via A/B (automotive golden set) that per-claim checks strip valid grounded claims, dropping faithfulness 0.917->0.800 (pass rate unchanged 9/10) despite a stricter answer prompt. Re-enable only with a more reliable verifier model.
+  # ── Per-tenant overrides ─────────────────────────────────────────────────────
+  # Any key above can be overridden per tenant here; the tenant's value wins over
+  # the global default for that tenant only (resolved by Settings.retrieval_for()).
+  # Empty block = no-op: every tenant uses the global defaults above. This exists
+  # so a retrieval knob can be tuned for one corpus (e.g. aerospace needs deeper
+  # recall) without regressing the validated automotive/marketing golden sets —
+  # the exact failure mode that produced the reverts documented above.
+  # Shape mirrors business_matrix.tenant_alert_thresholds. Example:
+  #   tenant_overrides:
+  #     aerospace:
+  #       rerank_top_k: 8
+  tenant_overrides: {}
+  # local_top_k=15 for aerospace was tried and REVERTED 2026-08-14 — see
+  # docs/specs/inf-01-local-top-k.md for the measured outcome. Did not fix
+  # INF-01 (citation recall got worse) and regressed two previously-passing
+  # questions (AUT-02, NEG-02). Don't retry this exact change without a new
+  # diagnosis; a different local_top_k value is not obviously safer without
+  # first checking what specifically pulled AUT-02/NEG-02 off track.
+
+evaluation:
+  ragas_metrics:
+    - faithfulness          # faithfulness-only to conserve quota; add others when quota is plentiful
+    # - answer_relevancy    # requires OpenAI embeddings + extra LLM tokens
+    # - context_precision
+    # - context_recall
+  eval_sample_rate: 0.2
+  min_ground_truth_queries: 50
+
+context_graph:
+  proactive:
+    policy_expiry_days: 30
+    critical_expiry_days: 7
+    minimum_policy_uses: 1
+
+ontology:
+  enforce_domain_range: true        # reject relations that violate domain/range rules
+  allow_migration_renames: true     # auto-rename deprecated relation names on ingestion
+  # Optional: path to a domain-specific ontology YAML (relative to repo root).
+  # Leave empty ("") for the general-purpose ontology.
+  # Example: config/ontologies/aerospace_regulatory.yml
+  domain_ontology_path: ""
+  migration_map:                    # old_relation: new_relation
+    IS_CEO: CEO_OF
+    FOUNDED_BY_PERSON: FOUNDED_BY
+    PART_OF_ORG: PART_OF
+    HAS_LOCATION: LOCATED_IN
+
+maintenance:
+  stale_edge_days: 365              # edges older than this are candidates for pruning
+  low_conf_prune_threshold: 0.2     # minimum confidence to keep an edge
+  orphan_flag_enabled: true         # flag entities with no chunk links
+  cycle_check_enabled: true         # detect cycles on every maintenance run
+
+business_matrix:
+  kpi_retention_days: 90
+  dashboard_refresh_seconds: 30
+  alert_thresholds:
+    latency_p95_ms: 30000  # raised from 3000 to match measured reality (n=44: p95 26.4s,
+                            # see docs/performance-metrics-inventory.md) — headroom above
+                            # today's baseline so this fires on genuine regressions, not
+                            # constantly on the pipeline's current normal behavior
+    faithfulness: 0.8
+    context_recall: 0.6
+    contradiction_rate: 0.05   # breach if conflicts_per_1k_edges / 1000 exceeds 5 %
+    orphan_rate: 0.10          # breach if orphan_rate exceeds 10 %
+    low_confidence_rate: 0.30  # breach if noise_edge_rate exceeds 30 %
+  # Per-tenant threshold overrides — values here replace the global defaults for
+  # that tenant only.  Keys must match the metric names in alert_thresholds above.
+  # Example: tenant "finance" has a stricter contradiction_rate limit.
+  tenant_alert_thresholds:
+    finance:
+      contradiction_rate: 0.02   # 2 % — stricter for regulated tenant
+      orphan_rate: 0.05
+    sandbox:
+      contradiction_rate: 0.20   # 20 % — more permissive for experimental tenant
+      orphan_rate: 0.40
+      low_confidence_rate: 0.60

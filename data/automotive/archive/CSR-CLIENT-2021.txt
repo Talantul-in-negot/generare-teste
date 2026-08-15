@@ -1,0 +1,60 @@
+# FISA DE PROCES
+
+## 1. HEADER 
+**Cod:** CSR-CLIENT-2021  
+**Titlu:** Fisa de Proces pentru gestionarea relației cu clientul AutoCorp GmbH  
+**Revizie:** 1.0  
+**Data:** 2023-10-01  
+**Responsabil:** Director Calitate
+
+## 2. SCOP SI DOMENIU
+Scopul acestei fise de proces este de a defini și standardiza activitățile necesare pentru menținerea unei relații eficiente cu clientul AutoCorp GmbH, asigurându-se astfel livrarea de produse conforme și satisfacerea cerințelor clienților. Domeniul de aplicare include toate etapele procesului de comunicare și gestionare a contratelor de livrare, de la primirea cerințelor și specificațiilor clientului, până la analiza feedback-ului post-livrare.
+
+## 3. REFERINTE DOCUMENTE
+1. **CSR-PROCEDURA-2019** - Procedura de gestionare a reclamațiilor clienților, Revizie 3
+2. **CSR-PLAN-2020** - Plan de calitate client, Revizie 2
+3. **CSR-FMEA-2020** - Analiza de tip FMEA pentru produse, Revizie 1
+4. **CSR-PPAP-2021** - Plan de aprobat al pieselor de producție, Revizie 1
+5. **CSR-MSA-2020** - Procedură de analiză a sistemului de măsurare, Revizie 2
+
+## 4. DESCRIERE PROCES
+1. **Primirea cerințelor clientului:** Toate solicitările și specificațiile tehnice primite de la AutoCorp GmbH sunt centralizate în sistemul de management al calității.
+2. **Analiza cerințelor:** Echipa de dezvoltare analizează cerințele primite pentru a identifica posibile neclarități sau neconformități, comunicând clientului eventualele ajustări necesare.
+3. **Elaborarea ofertei comerciale:** Pe baza analizei, se completează oferta comercială, incluzând termenele de livrare și prețurile, care este trimisă pentru aprobat clientului.
+4. **Planificarea producției:** Ofertele aprobate conduc la elaborarea planului de producție, care include coordonarea resurselor și programarea activităților.
+5. **Producția și controlul calității:** Produsele sunt fabricate conform specificațiilor, iar controlul calității este efectuat pe parcursul procesului, conform planului de control stabilit.
+6. **Livrarea produselor:** Odată ce produsele sunt gata, se organizează livrarea către AutoCorp GmbH, în conformitate cu termenii agreați.
+7. **Feedback post-livrare:** După livrare, se solicită feedback de la client cu privire la calitatea produselor și a serviciilor oferite.
+8. **Analiza feedback-ului:** Feedback-ul primit este analizat, iar orice neconformitate este gestionată prin procedura de reclamare existentă, iar măsurile corective sunt implementate pentru a preveni repetarea unor asemenea situații.
+
+## 5. PARAMETRI DE CONTROL
+| Parametru               | Target          | Limite                  | Frecvență            |
+|-------------------------|-----------------|-------------------------|----------------------|
+| Rata de livrare la timp | 98%             | Sub 95% - Neacceptabil  | Lunar                |
+| Rata de respingere a produselor | 1%              | Peste 2% - Neacceptabil | Lunar                |
+| Satisfacția clientului  | 90%             | Sub 85% - Neacceptabil  | Trimestrial          |
+| Timp de răspuns la solicitări | 24 ore          | Peste 48 ore - Neacceptabil | Zilnic                |
+
+## 6. INREGISTRARI GENERATE
+- Înregistrări de cerințe și comenzi de la client
+- Ofertă comercială aprobată
+- Plan de producție
+- Raport de control al calității
+- Feedback de la client
+- Raport de analiză a reclamațiilor
+
+## 7. ISTORIC REVIZII
+- **Revizia 1.0:** 2023-10-01 – Elaborarea inițială a fisei de proces.
+- **Revizia 0.1:** 2023-09-15 – Schiță preliminară a procesului.
+- **Revizia 0.0:** 2023-08-01 – Inițierea dezvoltării procesului de gestionare a relației cu clientul.
+
+=== METADATA ===
+doc_id: CSR-CLIENT-2021
+industry: automotive
+doc_type: short
+language: ro
+standard: IATF 16949
+contradiction: 
+save_path: data/automotive/short/CSR-CLIENT-2021.txt
+save_command: python manage_corpus.py save --file CSR-CLIENT-2021.txt --name CSR-CLIENT-2021 --industry automotive --lang ro
+================

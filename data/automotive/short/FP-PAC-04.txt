@@ -1,0 +1,63 @@
+# FP-PAC-04
+
+## SCOP SI DOMENIU
+Scopul acestui document este de a defini fluxul de proces pentru gestionarea și controlul activităților de producție la PlastiAuto SRL, în conformitate cu cerințele standardului IATF 16949. Domeniul de aplicare include toate etapele procesului de producție, de la primirea comenzii până la livrarea produsului finit către clientul AutoCorp GmbH.
+
+## REFERINTE DOCUMENTE
+1. DOC-POL-01 - Politica calității - Revizie 3
+2. DOC-PRO-02 - Procedura de gestionare a neconformităților - Revizie 2
+3. DOC-PRO-03 - Procedura de control al documentelor - Revizie 1
+4. DOC-PLAN-01 - Planul de calitate pentru AutoCorp GmbH - Revizie 1
+5. DOC-REPORT-01 - Raport de execuție trimestrial - Revizie 2
+
+## DESCRIERE PROCES
+1. **Planificarea producției**: Se desfășoară o analiză a comenzilor pentru a stabili resursele necesare, termenii de livrare și prioritățile de producție.
+   
+2. **Achiziționarea materialelor**: Departamentul de achiziții verifică stocurile și plasează comenzi pentru materii prime și materiale necesare conform planului de producție.
+
+3. **Recepția materialelor**: La primirea materialelor, se efectuează verificări de calitate pentru a asigura conformitatea acestora cu specificațiile tehnice și cerințele clientului. 
+
+4. **Utilizarea echipamentului**: Echipamentele de producție sunt pregătite și verificate pentru a asigura funcționarea optimă. Se realizează proceduri de întreținere preventivă conform planului stabilit.
+
+5. **Producția efectivă**: Se derulează procesul de producție conform documentației de lucru, respectând toate instrucțiunile și normele de calitate stabilite prin proceduri interne.
+
+6. **Controlul procesului**: Se monitorizează în mod constant procesul de producție, aplicând tehnici statistice (SPC) pentru a identifica eventualele variații și a lua măsuri corective.
+
+7. **Verificarea produselor**: Produsele finite sunt supuse unor teste de calitate, inclusiv analize MSA și FAI, pentru a verifica conformitatea cu specificațiile convenite.
+
+8. **Livrarea către client**: După finalizarea verificărilor, produsele sunt ambalate corespunzător și livrate către clientul AutoCorp GmbH, în conformitate cu termenii agreați.
+
+## PARAMETRI DE CONTROL
+
+| Parametru                | Target         | Limite         | Frecvență         |
+|--------------------------|----------------|----------------|-------------------|
+| Rata de defecte          | 0.5%           | ≤1%            | Zilnic            |
+| Timpul de livrare        | 100% on-time   | ≤10% întârziere| Pe fiecare livrare |
+| Conformitatea produselor  | 98% conform    | ≥95%           | La fiecare livrare  |
+| Eficiența echipamentelor  | ≥90%           | ≥85%           | Zilnic            |
+| Grad de satisfacție client| ≥95%          | ≥90%           | Semestrial        |
+
+## INREGISTRARI GENERATE
+1. Fise de verificare a conformității materialelor primite.
+2. Raport de monitorizare SPC.
+3. Fişe de control pentru întreținerea echipamentelor.
+4. Înregistrări de testare FAI.
+5. Raport de livrare pentru AutoCorp GmbH.
+
+## ISTORIC REVIZII
+1. Revizie 3 - Data: 01.10.2023 - Actualizare parametri de control și proceduri de verificare.
+2. Revizie 2 - Data: 15.04.2023 - Integrarea cerințelor suplimentare de la client.
+3. Revizie 1 - Data: 20.01.2023 - Implementarea procedurii pentru controlul livrărilor. 
+
+Acest document va fi revizuit periodic pentru a se asigura conformitatea cu cerințele IATF 16949 și pentru a îmbunătăți continuu procesul de producție la PlastiAuto SRL.
+
+=== METADATA ===
+doc_id: FP-PAC-04
+industry: automotive
+doc_type: short
+language: ro
+standard: IATF 16949
+contradiction: 
+save_path: data/automotive/short/FP-PAC-04.txt
+save_command: python manage_corpus.py save --file FP-PAC-04.txt --name FP-PAC-04 --industry automotive --lang ro
+================

@@ -1,0 +1,12 @@
+{
+  "doc_id": "MC-01-S8-rev6",
+  "industry": "automotive",
+  "doc_type": "long",
+  "language": "ro",
+  "saved_at": "2026-06-13T10:17:01.440187",
+  "word_count": 7271,
+  "char_count": 56147,
+  "detected_contradictions": [
+    "C03"
+  ]
+}

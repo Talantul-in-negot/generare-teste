@@ -1,0 +1,13 @@
+{
+  "doc_id": "IL-INS-03-rev2",
+  "industry": "automotive",
+  "doc_type": "medium",
+  "language": "ro",
+  "saved_at": "2026-06-13T10:29:22.250253",
+  "word_count": 3715,
+  "char_count": 28089,
+  "detected_contradictions": [
+    "C03",
+    "C04"
+  ]
+}

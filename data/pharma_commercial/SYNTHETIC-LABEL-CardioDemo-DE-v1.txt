@@ -1,0 +1,10 @@
+SYNTHETIC DEMO DATA ONLY - FICTIONAL PRODUCT AND INDICATION
+
+Document ID: SYNTHETIC-LABEL-CardioDemo-DE-v1
+Product: CardioDemo
+Market: Germany
+Synthetic indication: Demo Cardiac Condition
+
+This controlled placeholder document exists only to demonstrate knowledge-graph
+modeling. It contains no real product information, clinical claims, dosing, or
+patient guidance.

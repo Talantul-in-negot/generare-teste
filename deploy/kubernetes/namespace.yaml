@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: graphrag
+  labels:
+    app.kubernetes.io/part-of: ai-knowledge-graph-platform
+    # Enforce Kubernetes Restricted Pod Security for every workload in the
+    # namespace. All shipped manifests are compatible (non-root, seccomp,
+    # dropped capabilities, read-only root filesystem).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

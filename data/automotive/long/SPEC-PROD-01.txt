@@ -1,0 +1,939 @@
+# SPEC-PROD-01 - Procedura de Sistem pentru PlastiAuto SRL
+
+## 1. HEADER
+**Cod:** SPEC-PROD-01  
+**Titlu:** Procedura de Sistem de Calitate pentru Gestionarea Furnizorilor  
+**Rev.:** 3  
+**Aprobat de:**  
+Director Calitate: _______________  
+Director General: _______________
+
+## 2. SCOP SI OBIECTIVE MASURABILE
+Scopul acestei proceduri este de a stabili criteriile și metodele de evaluare, clasificare, gestionare și reevaluare a furnizorilor pentru a asigura conformitatea produselor livrate de PlastiAuto SRL în relația cu AutoCorp GmbH.
+
+Obiective masurabile:
+- Evaluarea și calificarea a 100% din furnizorii noi în termen de 30 de zile de la recepția documentației necesare.
+- Reevaluarea anuală a 100% din furnizorii activi.
+- Menținerea unui procent de 95% din furnizorii activi cu performanțe acceptabile în cadrul sistemului de management al calității, conform indicatorilor KPI definiți în acest document.
+
+## 3. DOMENIU DE APLICARE
+Această procedură se aplică tuturor furnizorilor de materii prime, componente și servicii utilizate în cadrul procesului de producție al PlastiAuto SRL, având ca principal client AutoCorp GmbH. Se aplică la toate etapele de gestionare a furnizorilor, incluzând selecția, evaluarea, clasificarea și monitorizarea performanțelor acestora.
+
+## 4. DEFINITII SI ABREVIERI
+1. **IATF 16949** - Standard internațional pentru sistemele de management al calității în industria automotive.
+2. **SPC** - Controlul statistic al proceselor.
+3. **MSA** - Analiza sistemului de măsurare.
+4. **FAI** - Inspecția inițială a produsului.
+5. **PPAP** - Planificarea și aprobarea pieselor de producție.
+6. **FMEA** - Analiza modurilor de defectare și efectele acestora.
+7. **KPI** - Indicator cheie de performanță.
+8. **Furnizor** - Entitate care furnizează produse sau servicii pentru PlastiAuto SRL.
+9. **Evaluare** - Procesul de analiză a capacității unui furnizor de a livra produse sau servicii conforme.
+10. **Clasificare** - Procesul de alocare a furnizorilor în categorii bazate pe performanță.
+11. **Îmbunătățire continuă** - Abordare de gestionare care se concentrează pe îmbunătățirea constantă a proceselor.
+12. **Reevaluare** - Procesul de revizuire a performanțelor furnizorilor activi.
+13. **Audit** - Examinarea sistematică a proceselor pentru a evalua conformitatea cu cerințele stabilite.
+14. **RACI** - Matrice de responsabilitate care identifică cine este responsabil, cine trebuie să fie consultat și cine trebuie să fie informat.
+15. **Performanță slabă** - Situatie in care furnizorii nu îndeplinesc criteriile stabilite de evaluare și monitorizare.
+
+## 5. REFERINTE NORMATIVE SI INTERNE
+1. IATF 16949:2016 - Standardul internațional pentru sistemele de management al calității în industria automotive.
+2. ISO 9001:2015 - Cerințe pentru sistemele de management al calității.
+3. APQP - Procesul de planificare a calității avansate.
+4. FMEA - Standardul pentru analiza modurilor de defectare.
+5. PPAP - Cerințele pentru aprobarea pieselor de producție.
+6. SPC - Norme pentru controlul statistic al proceselor.
+7. ISO/TS 16949:2009 - Standardizare și cerințe pentru furnizorii din industria automotive.
+8. SR EN ISO 10006:2018 - Managementul calității în proiecte.
+9. SR EN ISO 9000:2015 - Fundamentele managementului calității.
+10. Procedura de Audit Intern - Document intern - SPEC-AUD-01.
+11. Politica de Calitate - document intern - POL-CAL-01.
+12. Procedura de Gestionare a Non-conformităților - SPEC-NC-01.
+13. Plan de Îmbunătățire Continua - document intern - PLAN-IMB-01.
+14. Manualul de Calitate - document intern - MAN-CAL-01.
+15. Procedura de Recepție a Materialelor - SPEC-REC-01.
+
+## 6. RESPONSABILITATI - matrice RACI
+| Activitate                   | Responsabil           | Aprobat de           | Consultat           | Informat            |
+|-----------------------------|-----------------------|---------------------|---------------------|---------------------|
+| Evaluarea Furnizorilor Noi  | Manager Achiziții     | Director Calitate    | Inginer Proiectare  | Director General     |
+| Reevaluarea Furnizorilor    | Manager Calitate      | Director Calitate    | Manager Achiziții    | Director General     |
+| Clasificarea Furnizorilor    | Manager Calitate      | Director Calitate    | Manager Achiziții    | Director General     |
+| Gestionarea Performanțelor Slabe | Manager Calitate      | Director Calitate    | Manager Achiziții    | Director General     |
+
+## 7. CALIFICAREA FURNIZORILOR NOI
+### 7.1. Cerințe Inițiale
+Pentru ca un furnizor să fie considerat pentru evaluare, acesta trebuie să îndeplinească următoarele cerințe inițiale:
+- Să fie înregistrat legal și să dețină toate licențele necesare.
+- Să prezinte documente care să ateste capacitatea tehnică și economică de livrare a produselor sau serviciilor.
+- Să dispună de un sistem de management al calității certificat conform standardelor internaționale relevante (de exemplu, IATF 16949, ISO 9001).
+
+### 7.2. Procesul de Evaluare
+Evaluarea furnizorilor noi se va realiza printr-un proces de examinare a următoarelor aspecte:
+- **Capacitatea de producție:** verificarea echipamentelor, a tehnologiilor și a personalului.
+- **Controlul calității:** analiza sistemului de management al calității al furnizorului pentru a asigura conformitatea produselor.
+- **Conformitate la termenele de livrare:** verificarea istoricului livrărilor și a respectării termenelor.
+
+### 7.3. Auditul Furnizorului
+Un audit va fi efectuat la fața locului, care includ:
+- Revizuirea documentației tehnice și a proceselor.
+- Observarea propriu-zisă a procesului de producție.
+- Interviuri cu personalul cheie pentru a evalua nivelul de pregătire și cunoștințe în domeniu.
+
+### 7.4. Rapoarte de Evaluare
+După finalizarea evaluării, se va întocmi un raport de evaluare care va conține:
+- Rezultatele auditorului.
+- Recomandările pentru îmbunătățire, dacă este cazul.
+- Decizia finală de calificare a furnizorului, care poate fi acceptat, condiționat sau respins. Raportul va fi trimis managerului de achiziții pentru a asigura acțiuni ulterioare.
+
+## 8. REEVALUAREA FURNIZORILOR ACTIVI
+### 8.1. Frecvența Reevaluării
+Reevaluarea furnizorilor activi se va realiza anual; totuși, acest interval va putea fi ajustat în funcție de performanțele anterioare și de riscurile identificate. Furnizorii cu performanțe slabe pot fi evaluați mai frecvent.
+
+### 8.2. Metodologia de Reevaluare
+Reevaluarea va implica:
+- Analiza datelor de performanță din ultimul an, inclusiv livrările la termen, calitatea produselor și feedback-ul de la echipa de producție.
+- Auditarea lor periodică, similar procesului de evaluare inițial.
+
+### 8.3. Rapoarte de Reevaluare
+După reevaluare, se va elabora un raport similar cu cel din etapa de calificare, care va conține o analiză detaliată a performanțelor oferite și o recomandare de clasă pentru furnizor.
+
+## 9. CLASIFICAREA FURNIZORILOR
+Furnizorii vor fi clasificați pe baza rezultatelor evaluării și reevaluării în următoarele categorii:
+- **Furnizori Excepționali:** întreținerea livrărilor și a calității peste 98%.
+- **Furnizori Acceptabili:** întreținerea livrărilor și a calității între 90-98%.
+- **Furnizori Necesită Îmbunătățiri:** livrări sau calitate sub 90%, cu planuri de acțiune definite.
+- **Furnizori Necorespunzători:** livrări sau calitate inacceptabile, ceea ce poate duce la suspendarea colaborării.
+
+## 10. GESTIONAREA PERFORMANTEI SLABE
+În cazul în care un furnizor este clasificats ca "Necesită Îmbunătățiri" sau "Necorespunzător", se va activa un plan de acțiune astfel:
+1. **Informații și Comunicare:** Furnizorul va fi informat despre problemele identificate și se va solicita un plan pentru remedierea acestora.
+2. **Plan de Acțiune Corectivă:** Furnizorul va trebui să furnizeze un plan de acțiune corectivă care să fie aprobat de PlastiAuto SRL.
+3. **Monitorizarea Implementării:** Progresul furnizorului va fi monitorizat prin întâlniri regulate și revizuirea progresului implementării planului.
+
+## 11. INDICATORI KPI cu valori target numerice
+Pentru a evalua eficiența și performanța furnizorilor, se vor defini următorii indicatori KPI cu ținte specifice:
+1. **Timpul de Livrare:** Target: 95% livrări la termen.
+2. **Calitate a Produsului:** Target: Maxim 2% produse non-conforme.
+3. **Rata de Răspuns la Reclamații:** Target: 100% răspunsuri în 48 de ore.
+4. **Gradul de Implementare a Planurilor Corective:** Target: 100% implementare în termen de 30 zile.
+
+## 12. INREGISTRARI SI TRASABILITATE
+Se va păstra o evidență a tuturor evaluărilor, auditilor, rapoartelor de performanță și planurilor de acțiune utilizând sistemul de management al documentelor precum și un sistem de ERP. Toate acestea vor fi disponibile pentru audituri externe și interne, asigurând astfel trasabilitatea informațiilor.
+
+## 13. ISTORIC REVIZII
+**Revizii Document**:
+- **Revizia 1:** Data: 01.01.2020 - Prima versiune a documentului.
+- **Revizia 2:** Data: 15.06.2021 - Actualizarea procedurii de reevaluare a furnizorilor.
+- **Revizia 3:** Data: 05.10.2022 - Revizuirea cerințelor KPI și a clasificării furnizorilor.
+
+---
+
+### Appendix A – Exemple de Formulare
+
+1. **Formular de Evaluare a Furnizorilor**
+2. **Formular de Audit al Furnizorilor**
+3. **Formular de Raportare a Performanței**
+
+### Appendix B – Tabel Scorecard pentru KPI
+
+| KPI                          | Valoare Actuală    | Target                | Observații          |
+|-----------------------------|---------------------|----------------------|----------------------|
+| Timpul de Livrare           | 93%                 | 95%                  | Încercăm să îmbunătățim |
+| Calitate a Produsului       | 1.5%                | 2%                   | On track             |
+| Rata de Răspuns             | 90% răspunsuri      | 100% răspunsuri      | Necesită îmbunătățiri|
+
+### Appendix C – Liste de Verificare pentru Audit
+
+1. **Checklist Audit Practici de Recepsie**
+2. **Checklist Audit Documentație Calitate**
+3. **Checklist Audit Producție**
+
+### Appendix D – Flux de Escalare
+
+1. **Identificarea Problemei:** 
+   - Se colectează informații de la echipa de producție și cu privire la livrări.
+2. **Informarea Managerului de Calitate:**
+   - Problemele sunt discutate in cadrul echipelor de calitate.
+3. **Plan de Acțiune:**
+   - Se elaborează un plan comun pentru soluționarea problemelor cu furnizorul.
+4. **Monitorizare și Raportare:**
+   - Se va face monitorizarea constantă a acțiunilor și rezultatelor obținute.
+
+Acest document este supus revizuirii periodice și va fi ușor accesibil tuturor angajaților implicați în procesele de gestionare a furnizorilor în cadrul PlastiAuto SRL, asigurând astfel respectarea standardelor IATF 16949 în domeniul automotive, și menținerea unei relații eficiente cu AutoCorp GmbH.## 7. CALIFICAREA FURNIZORILOR NOI 
+
+### 7.1. Cerințe Inițiale 
+
+Pentru ca un furnizor să fie considerat pentru evaluare, acesta trebuie să îndeplinească următoarele cerințe inițiale:
+
+1. **Documentație Legală**:
+   - Furnizorul trebuie să fie înregistrat ca entitate legală conform legislației din țara de origine, având toate licențele necesare pentru desfășurarea activității de fabricație și furnizare de produse sau servicii.
+
+2. **Certificări de Calitate**:
+   - Furnizorul trebuie să prezinte documente de certificare pentru sistemul de management al calității, conform standardelor internaționale relevante, inclusiv IATF 16949 și ISO 9001. Aceste certificări trebuie sa fie actualizate și să fie emise de organisme de certificare recunoscute.
+
+3. **Capacitate Tehnică și Economică**:
+   - Furnizorul trebuie să demonstreze capacitatea tehnică și resursele necesare pentru a livra produse de calitate în cantitățile solicitate, inclusiv prezentarea unui istoric al livrărilor și parteneriatelor anterioare.
+
+4. **Referințe de Clienți**:
+   - Să fie furnizate minimum două referințe de la clienți anteriori, care să ateste performanța, fiabilitatea și calitatea serviciilor oferite.
+
+### 7.2. Procesul de Evaluare 
+
+Evaluarea furnizorilor noi se va realiza printr-un proces de examinare a următoarelor aspecte:
+
+1. **Evaluarea Capacității de Producție**:
+   - Se va verifica infrastructura tehnică, inclusiv echipamentele utilizate, procesele de fabricație și unițile de producție. Se va evalua, de asemenea, personalul implicat în procesele de producție.
+
+2. **Controlul Calității**:
+   - Se va analiza cum este implementat sistemul de management al calității de către furnizor. Acesta include procesele de control al calității, metodologiile utilizate pentru testare și analiză, precum și sistemul de gestionare a nonconformităților.
+
+3. **Interviuri cu Personalul Cheie**:
+   - Interviuri cu personalul din management și cu angajații care participă direct la producție pentru a evalua cunoștințele, competențele și angajamentul față de standardele de calitate.
+
+4. **Verificarea Performanțelor Anterioare**:
+   - Analiza performanțelor măsurate prin KPI, istoric de livrări și orice feedback de la alți clienți, în special din cadrul industriei automotive.
+
+### 7.3. Auditul Furnizorului 
+
+Un audit va fi efectuat la fața locului, care include:
+
+1. **Revizuirea Documentației Tehnice**:
+   - Auditori vor verifica toate documentele care sunt relevante pentru procesele și produsele furnizorului și vor asigura că acestea sunt conforme cu standardele IATF 16949.
+
+2. **Observația Propriu-Zisă a Procesului de Producție**:
+   - Auditori vor observa procesele de producție în acțiune pentru a verifica conformitatea cu ceea ce este documentat în sistemul de management al calității.
+
+3. **Interviuri cu Personalul Cheie**:
+   - Realizarea de interviuri cu angajați din diferite niveluri organizatorice pentru a evalua gradul de conștientizare a standardelor de calitate și procedurilor interne.
+
+4. **Identificarea Riscurilor**:
+   - Evaluarea potențialelor riscuri legate de operațiunile furnizorului și discuțiile despre măsurile de control al riscurilor.
+
+### 7.4. Rapoarte de Evaluare 
+
+După finalizarea evaluării, se va întocmi un raport de evaluare care va conține:
+
+1. **Rezultatele Auditorului**:
+   - Detalii despre constatările din cadrul auditului și evaluărilor, incluzând observații specifice asupra punctelor forte și slabe.
+
+2. **Recomandările pentru Îmbunătățire**:
+   - În cazul în care există aspecte ce necesită îmbunătățiri, se vor face recomandări specific pentru fiecare observație.
+
+3. **Decizia Finală de Calificare a Furnizorului**:
+   - Decizia de acceptare, acceptare condiționată sau respingere va fi luată pe baza rezultatelor evaluării și comunicată părților interesate. Raportul va fi trimis managerului de achiziții pentru a asigura acțiuni ulterioare.
+
+## 8. REEVALUAREA FURNIZORILOR ACTIVI 
+
+### 8.1. Frecvența Reevaluării 
+
+Reevaluarea furnizorilor activi se va realiza anual; totuși, acest interval va putea fi ajustat în funcție de performanțele anterioare și de riscurile identificate. Furnizorii cu performanțe slabe sau cu o istorie de nonconformități pot fi evaluați mai frecvent, utilizând o metodologie stringentă.
+
+### 8.2. Metodologia de Reevaluare 
+
+Reevaluarea va implica:
+
+1. **Analiza Datelor de Performanță**:
+   - Se vor analiza datele de performanță din ultimul an, inclusiv livrările la termen, calitatea produselor (în baza rapoartelor de defecte) și feedback-ul colegilor din echipa de producție.
+
+2. **Auditare Periodică**:
+   - Procesul de auditare periodică va fi similar cu cel utilizat în evaluarea inițială; acesta va include verificarea documentației, audituri interne și observații directe la fața locului.
+
+3. **Verificarea Planurilor Corective**:
+   - Se vor verifica dacă planurile corective stabilite anterior au fost aplicate și dacă au avut efectul dorit asupra performanțelor furnizorilor.
+
+### 8.3. Rapoarte de Reevaluare 
+
+După reevaluare, se va elabora un raport similar cu cel din etapa de calificare, care va conține:
+
+1. **Analiza Detaliată a Performanțelor**:
+   - O evaluare detaliată a performanțelor recente ale furnizorului, menționând atât realizările, cât și aspectele care necesită îmbunătățire.
+
+2. **Recomandare de Clasă pentru Furnizor**:
+   - Clasificarea furnizorului în funcție de criteriile de performanță stabilite anterior (Excepțional, Acceptabil, Necesită Îmbunătățiri, Necorespunzător) și recomandările corespunzătoare pentru managementul calității.
+
+3. **Transmiterea Raportului**:
+   - Raportul va fi întocmit și distribuit managerului de calitate și managerului de achiziții, împreună cu sugestii de acțiuni corective sau preventive.
+
+## 9. CLASIFICAREA FURNIZORILOR 
+
+Furnizorii vor fi clasificați pe baza rezultatelor evaluării și reevaluării în următoarele categorii:
+
+1. **Furnizori Excepționali**:
+   - Aceștia au o performanță constantă, livrând peste 98% din produse conform specificațiilor și termenelor stabilite.
+
+2. **Furnizori Acceptabili**:
+   - Mențin o performanță între 90% și 98% în livrări și calitate, având un istoric de îmbunătățire continuă.
+
+3. **Furnizori Necesită Îmbunătățiri**:
+   - Aceștia au o performanță sub 90% din punct de vedere al livrărilor sau calității, cu planuri de acțiune definite pentru remedierea problemelor identificate.
+
+4. **Furnizori Necorespunzători**:
+   - Aceștia nu respectă standardele acceptate, iar livrările sau calitatea sunt inacceptabile, ceea ce poate duce la suspendarea colaborării. Acest lucru este însoțit de un proces formal de terminate a relației.
+
+## 10. GESTIONAREA PERFORMANȚEI SLABE 
+
+În cazul în care un furnizor este clasificat ca "Necesită Îmbunătățiri" sau "Necorespunzător", se va activa un plan de acțiune astfel:
+
+1. **Informații și Comunicare**:
+   - Furnizorul va fi informat în legătură cu problemele identificate printr-o comunicare formală. Aceasta va include un rezumat al performanței acestuia și a nonconformităților detectate.
+
+2. **Plan de Acțiune Corectivă**:
+   - Furnizorul va trebui să furnizeze un plan de acțiune corectivă care să fie aprobat de PlastiAuto SRL. Acest plan va detalia măsurile care vor fi luate pentru remedierea deficiențelor.
+
+3. **Monitorizarea Implementării**:
+   - Progresul furnizorului va fi monitorizat prin întâlniri regulate și revizuirea progresului implementării planului de acțiune. Se vor stabili date limită clare și se va urmări evoluția pentru a asigura respectarea termenelor stabilite.
+
+## 11. INDICATORI KPI cu valori target numerice 
+
+Pentru a evalua eficiența și performanța furnizorilor, se vor defini următorii indicatori KPI cu ținte specifice:
+
+1. **Timpul de Livrare**:
+   - Target: 95% livrări la termen. Aceasta se va măsura prin raportarea procentuală a livrărilor efectuate la timp față de livrările totale.
+
+2. **Calitate a Produsului**:
+   - Target: Maxim 2% produse non-conforme. Aceasta se va calcula ca procent din totalul produselor livrate.
+
+3. **Rata de Răspuns la Reclamații**:
+   - Target: 100% răspunsuri în termen de 48 de ore. Aceasta se va urmări prin verificarea timpului mediu de răspuns la reclamațiile primite.
+
+4. **Gradul de Implementare a Planurilor Corective**:
+   - Target: 100% implementare în termen de 30 zile. Se va urmări numărul planurilor corective implementate în termenul stabilit și stadiul de realizare.
+
+5. **Satisfacția Clientului (în cazul în care este relevant)**:
+   - Target: 90% feedback pozitiv de la utilizatorii interni (de exemplu, echipa de producție și departamentele care interacționează direct cu produsele furnizorului).
+
+## 12. ÎNREGISTRĂRI ȘI TRASABILITATE 
+
+Toate documentele relevante vor fi stocate și gestionate conform procedurii interne de management al documentelor. Recordurile vor include:
+
+1. **Evaluările Furnizorilor**:
+   - Toate evaluările și auditurile efectuate asupra furnizorilor vor fi documentate și păstrate în format electronic și/sau fizic.
+
+2. **Rapoarte de Performanță**:
+   - Rapoartele de performanță, inclusiv cele referitoare la indicatorii KPI, vor fi păstrate timp de 5 ani, conform cerințelor legislației și politicilor interne.
+
+3. **Monitorizarea Acțiunilor Corective**:
+   - Toate acțiunile corective întreprinse pentru furnizorii cu performanțe slabe vor fi documentate, inclusiv planurile de acțiune și rezultatele monitorizării.
+
+4. **Accesibilitatea Documentației**:
+   - Documentele vor fi disponibile pentru audituri externe și interne, asigurând astfel trasabilitatea informațiilor și conformitatea cu standardele IATF 16949.
+
+## 13. ISTORIC REVIZII 
+
+**Revizii Document**:
+- **Revizia 1**: Data: 01.01.2020 - Prima versiune a documentului.
+- **Revizia 2**: Data: 15.06.2021 - Actualizarea procedurii de reevaluare a furnizorilor.
+- **Revizia 3**: Data: 05.10.2022 - Revizuirea cerințelor KPI și a clasificării furnizorilor.
+- **Revizia 4**: Data: 15.03.2023 - Extinderea detaliilor în cadrul secțiunilor de evaluare, audit și monitorizarea planurilor corective.
+
+### Appendix A – Exemple de Formulare 
+
+1. **Formular de Evaluare a Furnizorilor**:
+   - Utilizat pentru evaluarea inițială a furnizorilor, incluzând criteriile de evaluare și notarea acestora.
+
+2. **Formular de Audit al Furnizorilor**:
+   - Documentație destinată auditării anuale a furnizorilor, cu întrebări și secțiuni pentru observații.
+
+3. **Formular de Raportare a Performanței**:
+   - Formular utilizat pentru consolidarea și raportarea performanțelor furnizorului pe baza indicatorilor KPI.
+
+### Appendix B – Tabel Scorecard pentru KPI 
+
+| KPI                       | Valoare Actuală | Target            | Observații                     |
+|---------------------------|------------------|-------------------|--------------------------------|
+| Timpul de Livrare         | 93%              | 95%               | Încercăm să îmbunătățim       |
+| Calitate a Produsului     | 1.5%             | 2%                | On track                       |
+| Rata de Răspuns           | 90% răspunsuri   | 100% răspunsuri   | Necesită îmbunătățiri          |
+| Gradul de Implementare     | 85%              | 100% în 30 zile   | În desfășurare                 |
+| Satisfacția Clientului     | 88%              | 90%               | În recoltare feedback          |
+
+### Appendix C – Liste de Verificare pentru Audit 
+
+1. **Checklist Audit Practici de Recepsie**:
+   - O listă detaliată ce include toate practicile și documentele necesare evaluării recepției materialelor de la furnizori.
+
+2. **Checklist Audit Documentație Calitate**:
+   - Lista documentației necesare pentru a evalua conformitatea sistemului de management al calității al furnizorului.
+
+3. **Checklist Audit Producție**:
+   - O listă pentru auditarea proceselor de producție, inclusiv procedurile și controlele aplicabile.
+
+### Appendix D – Flux de Escalare 
+
+1. **Identificarea Problemei**:
+   - Colectarea informațiilor de la echipa de producție și de la livrările de produse, identificând deficiențele.
+
+2. **Informarea Managerului de Calitate**:
+   - Problemele sunt discutate la întâlniri, iar managerul de calitate va coordona eforturile de remediere.
+
+3. **Plan de Acțiune**:
+   - Se elaborează un plan comun pentru soluționarea problemelor cu furnizorul, inclusiv resursele necesare.
+
+4. **Monitorizare și Raportare**:
+   - Se va realiza monitorizarea constantă a acțiunilor și rezultatelor obținute, prin întâlniri periodice și revizuiri documentate.
+
+Acest document este supus revizuirii periodice și va fi ușor accesibil tuturor angajaților implicați în procesele de gestionare a furnizorilor în cadrul PlastiAuto SRL, asigurând astfel respectarea standardelor IATF 16949 în domeniul automotive, și menținerea unor relații eficiente cu AutoCorp GmbH.# 8.3. Rapoarte de Reevaluare (continuare)
+
+În urma reevaluării, fiecare raport de reevaluare va conține nu doar o analiză detaliată a performanțelor, ci și recomandări specifice pentru următorul an de colaborare, precum și termene limită pentru implementarea acestor recomandări.
+
+### 8.4. Comunicare și Implementare
+
+1. **Discutarea Rezultatelor**: - Rezultatul procesului de reevaluare va fi prezentat în cadrul unei întâlniri cu furnizorul, pentru a discuta despre punctele forte și slabe identificate în cadrul procesului de evaluare. Această discuție va include și progresul realizat față de planul de acțiune anterior, dacă este cazul.
+
+2. **Planificarea Măsurilor Corective**: - Împreună cu furnizorul, se va dezvolta un plan de măsuri corective care să abordeze neconformitățile evidențiate în raport. Fiecare măsură corectivă va fi însoțită de un responsabil și de o dată limită pentru finalizare.
+
+3. **Monitorizarea Progresului**: - Progresul implementării măsurilor corective va fi monitorizat prin întâlniri periodice, iar orice întârziere sau dificultate în implementare va fi documentată și comunicată relevant.
+
+# 9. CLASIFICAREA FURNIZORILOR
+
+Clasificarea furnizorilor va fi realizată pe baza următoarelor criterii:
+
+1. **Performanță Generală**: - Vor fi analizate statisticile de livrări la termen, calitatea produselor și eficiența în gestionarea reclamațiilor.
+
+2. **Istoricul Colaborării**: - Se va evalua istoricul colaborării cu furnizorul, inclusiv aspecte precum frecvența nonconformităților și repetiția acestora.
+
+## 9.1. Criterii pentru Clasificarea Furnizorilor
+
+Clasificarea furnizorilor se va face pe baza următoarelor categorii, definite după cum urmează:
+
+- **Furnizori Excepționali**: Acești furnizori vor avea un procent de livrări corecte de minimum 98% și nu vor avea istorii de produse neconforme. 
+
+- **Furnizori Acceptabili**: Aceștia vor avea un procent de livrări corecte de minim 90%, dar cu un istoric al îmbunătățirii pe termen lung. Nu vor avea probleme majore în calitate.
+
+- **Furnizori Necesită Îmbunătățiri**: Aceștia vor avea mai puțin de 90% livrări conforme și vor fi supuși unui plan de acțiune corectivă detaliat.
+
+- **Furnizori Necorespunzători**: Acest grup va include furnizorii care nu respectă standardele calității și livrării, confruntându-se frecvent cu nonconformități. Se va iniția procedura de terminare a colaborării.
+
+## 9.2. Raportarea Clasificării
+
+Fiecare clasă de furnizor va fi raportată la finalul procesului de evaluare anuală. Clasificarea va fi trimisă către managementul aferent și se va ține un registru centralizat al acestora pentru a asigura transparența procesului.
+
+# 10. GESTIONAREA PERFORMANȚEI SLABE
+
+Gestionarea performanțelor slabe ale furnizorilor reprezintă un aspect crucial în cadrul managementului relațiilor cu furnizorii. Măsurile specifice vor include:
+
+## 10.1. Identificarea Performanței Slabe
+
+1. **AnalizaIndicatorilor de Performanță**: - Vor fi examinate rapoartele de neconformitate, livrările întârziate și feedback-ul echipei de producție.
+
+2. **Evaluarea Impactului asupra Produsului Final**: - Se va analiza cum defectele furnizorului afectează produsul finit, inclusiv riscurile legate de siguranță și conformitate.
+
+## 10.2. Procesul de Comunicare
+
+1. **Informarea Furnizorului**: - O scrisoare oficială va fi trimisă furnizorului în care se vor detalia neconformitățile și problema legată de performanță.
+
+2. **Întâlniri de Clarificare**: - Se vor organiza întâlniri pentru a discuta despre problemele identificate și despre măsurile corective propuse de furnizor.
+
+## 10.3. Plan de Îmbunătățire
+
+1. **Elaborarea unui Plan de Acțiune**: - Furnizorul va trebui să supună un plan detaliat de ameliorare, ce va include responsabilități clare și termene limită.
+
+2. **Monitorizare și Revisie**: - Progresul implementării acestui plan va fi monitorizat constant, utilizând întâlniri regulate și rapoarte intermediare.
+
+# 11. INDICATORI KPI cu valori target numerice
+
+Stabilirea indicatorilor KPI este vitală pentru asigurarea continuității îmbunătățirii performanței furnizorilor. În urma analizei statisticelor și a proceselor interne, sunt stabiliți următorii indicatori:
+
+### 11.1. Timpul de Livrare
+
+- **Țintă**: 95% livrări la termen.
+- **Măsurare**: Procentul livrărilor efectuate la timp raportat la totalul livrărilor.
+
+### 11.2. Calitatea Produsului
+
+- **Țintă**: Maxim 2% produse neconforme.
+- **Măsurare**: Procentul produselor livrate care nu respectă specificațiile de calitate.
+
+### 11.3. Rata de Răspuns la Reclamații
+
+- **Țintă**: 100% răspunsuri în termen de 48 de ore.
+- **Măsurare**: Timpul mediu între primirea reclamației și răspunsul furnizorului.
+
+### 11.4. Gradul de Implementare a Planurilor Corective
+
+- **Țintă**: 100% implementarea planurilor corective în termen de 30 de zile.
+- **Măsurare**: Numărul de planuri corective implementate raportat la numărul total de planuri corective solicitate.
+
+### 11.5. Satisfacția Clientului
+
+- **Țintă**: 90% feedback pozitiv.
+- **Măsurare**: Din evaluările interne efectuate pe baza feedback-ului de la echipele de producție și departamente relevante.
+
+# 12. ÎNREGISTRĂRI ȘI TRASABILITATE
+
+Pentru a asigura conformitatea cu cerințele IATF 16949, toate înregistrările și documentele vor fi gestionate conform următoarelor criterii:
+
+## 12.1. Evaluările Furnizorilor
+
+Toate evaluările și rapoartele de audit se vor păstra în format electronic și fizic, asigurând astfel accesibilitatea lor.
+
+## 12.2. Rapoartele de Performanță
+
+Documentele vor fi arhivate pentru o perioadă de 5 ani, în conformitate cu cerințele legislației, iar accesibilitatea lor va fi asigurată în timpul auditurilor interne și externe.
+
+## 12.3. Monitorizarea Acțiunilor Corective
+
+Toate acțiunile corective întreprinse vor fi documentate în detaliu, incluzând atât planurile de acțiune, cât și rezultatele monitorizării acestora.
+
+## 12.4. Accesibilitatea Documentației
+
+Documentele vor fi disponibile pentru toate părțile interesate, inclusiv pentru audituri externe și interne, asigurând trasabilitatea și conformitatea cu standardele stabilite.
+
+# 13. ISTORIC REVIZII
+
+Menținerea unui istoric detaliat al reviziilor este esențială pentru asigurarea transparenței proceselor interne și a conformității cu standardele. Istoricul reviziilor va include:
+
+- **Revizia 1**: Data: 01.01.2020 - Prima versiune a documentului.
+- **Revizia 2**: Data: 15.06.2021 - Actualizarea procedurii de reevaluare a furnizorilor.
+- **Revizia 3**: Data: 05.10.2022 - Revizuirea cerințelor KPI și a clasificării furnizorilor.
+- **Revizia 4**: Data: 15.03.2023 - Extinderea detaliilor în cadrul secțiunilor de evaluare, audit și monitorizarea planurilor corective.
+- **Revizia 5**: Data: 30.09.2023 - Actualizarea criteriilor de performanță și a procedurilor de comunicare pentru gestionarea performanțelor slabe.
+
+## Appendix A – Exemple de Formulare
+
+### 1. Formular de Evaluare a Furnizorilor
+
+Acest formular va include informații generale despre furnizor, date de contact, criterii de evaluare și o secțiune pentru observații.
+
+### 2. Formular de Audit al Furnizorilor
+
+Va conține instrucțiuni de auditare, criterii de evaluare a calității, observații și o secțiune pentru semnătura auditorilor.
+
+### 3. Formular de Raportare a Performanței
+
+Utilizat pentru compilarea și raportarea performanțelor furnizorului, incluzând KPI și observații relevante.
+
+## Appendix B – Tabel Scorecard pentru KPI
+
+Tabelul scorecard va include metrici detaliate pentru toți indicatorii KPI, cu scopul menținerii unui istoric clar al performanțelor furnizorilor.
+
+| KPI | Valoare Actuală | Target | Observații |
+|---------------------------|------------------|-------------------|--------------------------------|
+| Timpul de Livrare | 93% | 95% | Încercăm să îmbunătățim |
+| Calitate a Produsului | 1.5% | 2% | Pe drumul cel bun |
+| Rata de Răspuns | 90% răspunsuri | 100% răspunsuri | Necesită îmbunătățiri |
+| Gradul de Implementare | 85% | 100% în 30 zile | În desfășurare |
+| Satisfacția Clientului | 88% | 90% | În recoltare feedback |
+
+## Appendix C – Liste de Verificare pentru Audit
+
+### 1. Checklist Audit Practici de Recepție
+
+Această listă va include toate practicile și documentația necesare evaluării recepției materialelor de la furnizori, pentru a asigura conformitatea cu standardele.
+
+### 2. Checklist Audit Documentație Calitate
+
+Aceasta va conține documentația necesară pentru a evalua sistemul de management al calității al furnizorului, incluzând politici și proceduri.
+
+### 3. Checklist Audit Producție
+
+Va include pașii necesari pentru auditarea proceselor de producție, inclusiv procedurile aplicabile și controalele implementate.
+
+## Appendix D – Flux de Escalare
+
+### 1. Identificarea Problemei
+
+- Colectarea informațiilor relevante de la echipa de producție și analiza livrărilor de produse, pentru a identifica eventualele deficiențe printr-o evaluare sistematică.
+
+### 2. Informarea Managerului de Calitate
+
+- Informarea managerului de calitate despre problemele identificate, pentru a iniția discuții în cadrul întâlnirilor periodice ale echipei de management.
+
+### 3. Plan de Acțiune
+
+- Se va dezvolta un plan comun cu furnizorul pentru abordarea problemelor identificate, definind măsurile necesare și resursele necesare pentru execuția acestora.
+
+### 4. Monitorizare și Raportare
+
+- Monitorizarea progresului în implementarea acțiunilor definind întâlniri periodice de revizuire, cu actualizări referitoare la stadiile de realizare și rezultatele obținute, asigurându-se îmbunătățirea continuării procesului.
+
+Acest document va fi supus revizuirii periodice, iar actualizările vor fi comunicate tuturor angajaților implicați în procesele de gestionare a furnizorilor, asigurând astfel respectarea continuării standardelor IATF 16949 și menținerea relațiilor eficiente cu AutoCorp GmbH.# 11. INDICATORI KPI cu valori target numerice (continuare)
+
+### 11.6. Numărul de Nonconformități Raportate
+- **Țintă**: Maximal 3 nonconformități raportate pe trimestru.
+- **Măsurare**: Totalul nonconformităților raportate pe trimestru, inclusiv sursa și tipul neconformității. Acest indicator va ajuta la monitorizarea calității generale a produselor furnizate.
+
+### 11.7. Rata de Îmbunătățire a Performanței
+- **Țintă**: 5% îmbunătățire anuală a performanței KPI.
+- **Măsurare**: Compararea rezultatelor KPI de la an la an, având în vedere îmbunătățirile implementate, pentru a evalua progresele în procesul de management al furnizorilor.
+
+### 11.8. Timpul Mediu de Răspuns la Cerințele Clientului
+- **Țintă**: Timp mediu de răspuns de sub 24 de ore pentru solicitările clientului.
+- **Măsurare**: Timpul mediu dintre primirea cerințelor din partea clientului și răspunsul oferit de echipa de management al furnizorilor.
+
+### 11.9. Rata de Înlocuire a Furnizorilor
+- **Țintă**: Maximal 2 furnizori înlocuiți anual.
+- **Măsurare**: Numărul de furnizori înlocuiți în decursul anului, comparativ cu numărul total de furnizori activați, pentru a evalua stabilitatea relațiilor de furnizare.
+
+### 11.10. Procentul de Utilizare a Furnizorilor Recomandați
+- **Țintă**: 80% din comenzile realizate către furnizorii clasificați ca excepționali.
+- **Măsurare**: Raportul dintre comenzile efectuate la furnizorii excepționali și totalul comenzilor efectuate pe o perioadă dată.
+
+Aceste KPI-uri vor fi revizuite trimestrial în cadrul întâlnirilor de management, iar rezultatele vor fi prezentate echipei executive în scopul stimulării îmbunătățirii continue.
+
+# 12. ÎNREGISTRĂRI ȘI TRASABILITATE (continuare)
+
+## 12.5. Procedura de Arhivare
+Arhivarea documentației se va face conform următoarei proceduri:
+1. **Tipuri de Documente**: Vor fi arhivate documentele legate de evaluările furnizorilor, măsurile corective, rapoartele de audit și comunicările oficiale.
+2. **Intervale de Arhivare**: Documentele se vor arhiva pentru o perioadă de minimum 5 ani, conform cerințelor IATF 16949. Materialele care necesită o păstrare mai îndelungată, cum ar fi contractele sau documentele legate de calitate, vor fi arhivate conform reglementărilor interne.
+3. **Formatul Documentelor**: Toate documentele vor fi păstrate în format electronic, iar unele vor fi realizate și în format fizic, când este necesar.
+4. **Accesibilitate**: Accesul la documente va fi reglementat prin proceduri interne, asigurându-se că angajații autorizați pot accesa informațiile necesare, respectând în același timp restricțiile de confidențialitate.
+
+## 12.6. Mecanisme de Trasabilitate
+1. **Codificare**: Fiecare document înregistrat va beneficia de un cod unic de identificare (ID de document) pentru a facilita găsirea și gestionarea ulterioară.
+2. **Registre de Înregistrare**: Toate înregistrările vor fi integrate într-un sistem de registre digital, unde se va putea urmări modul în care informațiile sunt gestionate și restaurate.
+3. **Audituri Periodice**: Se vor efectua audituri interne pentru a verifica integritatea și corectitudinea înregistrărilor, asigurându-se astfel conformitatea cu standardele interne și externe.
+
+# 13. ISTORIC REVIZII (continuare)
+
+### Revizii Suplimentare
+- **Revizia 6**: Data: 20.06.2023 - Revizuirea cerințelor de monitorizare a KPI-urilor, în lumina feedback-ului din procesul de analiză.
+- **Revizia 7**: Data: 10.11.2023 - Implementarea unor noi criterii de evaluare și a unui sistem de raportare mai eficient pentru managementul livrărilor.
+
+## Appendix A – Exemple de Formulare (continuare)
+
+### 4. Formular de Plan de Acțiune Corectivă
+Acest formular va documenta toate măsurile corective adoptate în urma evaluării furnizorului, incluzând:
+- Descrierea neconformității.
+- Măsurile corective propuse.
+- Responsabilul desemnat pentru implementarea măsurilor.
+- Data limită pentru implementare.
+
+### 5. Formular pentru Sondajul de Satisfacție
+Acest formular va fi utilizat pentru a evalua satisfacția clientului în legătură cu bunurile și servicile furnizate, incluzând întrebări referitoare la calitate, livrare, comunicare și colaborare.
+
+## Appendix B – Tabel Scorecard pentru KPI (continuare)
+
+Tabelul scorecard va fi completat trimestrial, ci informatiile vor fi utilizate la întâlnirile de management pentru analizarea performanțelor și identificarea oportunităților de îmbunătățire.
+
+| KPI                       | Valoare Actuală | Target           | Observații                     |
+|---------------------------|------------------|-------------------|----------------------------------|
+| Timpul de Livrare         | 93%              | 95%               | Îmbunătățiri continue       |
+| Calitate a Produsului     | 1.5%             | 2%                | În parametri acceptabili    |
+| Rata de Răspuns           | 90% răspunsuri   | 100% răspunsuri   | Necesită atenție sporită    |
+| Gradul de Implementare     | 85%              | 100% în 30 zile   | Monitorizare activă          |
+| Satisfacția Clientului    | 88%              | 90%               | Feedback constructiv         |
+| Numărul de Nonconformități| 2 (trimestrial)  | Max 3             | Necesită revizuire           |
+| Rata de Îmbunătățire      | --               | 5% anual          | Analiză comparativă         |
+| Timp de răspuns           | 20 de ore        | <24 ore           | Îmbunătățiri necesare       |
+| Rata de înlocuire a furnizorilor | 1         | Max 2             | Stabilitate în furnizare     |
+| Procent utilizare furnizori recomandați | 78% | 80%         | Îmbunătățiri încurajate    |
+
+## Appendix C – Liste de Verificare pentru Audit (continuare)
+
+### 4. Checklist pentru Auditul gestionării relațiilor cu furnizorii
+Această listă va include aspecte precum:
+- Documentația procesului de evaluare a furnizorilor.
+- Rapoartele recente de performanță.
+- Completitudinea și corectitudinea formularului de evaluare a furnizorului.
+- Proceduri stabilite pentru gestionarea performanțelor slabe.
+
+### 5. Checklist pentru Auditul Procesului de Livrare
+Aceasta va cuprinde:
+- Procedurile de transport și livrare.
+- Măsurile de verificare și inspectare a bunurilor la primire.
+- Feedback-ul de la echipa de producție cu privire la livrările primite.
+
+## Appendix D – Flux de Escalare (continuare)
+
+### 5. Evaluarea rezultatelor
+După implementarea acțiunilor corective, rezultatele vor fi evaluate pe baza indicatorilor KPI stabiliți. Vor fi efectuate rapoarte detaliate pentru a se asigura că acțiunile întreprinse au fost eficiente și vor aduce îmbunătățiri pe termen lung.
+
+### 6. Comunicare pe parcursul procesului
+O comunicare transparentă este esențială între toate părțile implicate. Se vor stabili canale de comunicare formale, cum ar fi email-uri sau întâlniri de status, pentru a menține toate părțile actualizate și pentru a facilita o discuție deschisă privind progresele și provocările.
+
+### 7. Revizuirea finală a planului
+Aceasta se va realiza la sfârșitul procesului de escaladare. O revizuire finală va fi efectuată pentru a evalua eficiența întregului proces și pentru a determina dacă este necesară o abordare alternativă sau dacă se poate relua dialogul cu furnizorul într-un mod constructiv.
+
+Acest document este un ghid esențial pentru gestionarea eficientă a relațiilor cu furnizorii, asigurându-se integrarea standardelor de calitate IATF 16949 în toate aspectele proceselor interne și oferind un cadru solid pentru continuarea îmbunătățirii performanțelor furnizorului.# 13. ISTORIC REVIZII (continuare)
+
+### 13.1 Revizii anterioare
+- **Revizia 1**: Data: 15.01.2021
+  - Revisuirea clauzelor referitoare la evaluarea inițială a furnizorilor, cu focus pe metodologia de audit și criteriile de selecție.
+- **Revizia 2**: Data: 12.06.2021
+  - Actualizarea procesului de reevaluare a furnizorilor activi pentru a include aspecte de mediu și sustenabilitate, conform cerințelor IATF 16949.
+- **Revizia 3**: Data: 03.11.2021
+  - Modificarea indicatorilor KPI pentru a reflecta mai bine performanța furnizorilor și a îmbunătăți raportarea cu privire la livrări.
+
+### 13.2 Revizii recente
+- **Revizia 4**: Data: 15.04.2022
+  - Actualizarea procedurii de gestionare a performanței slabe, adăugând măsuri preventive și proceduri de escaladare a problemelor.
+- **Revizia 5**: Data: 05.09.2022
+  - Reformularea cerințelor privind documentația necesară pentru clasificarea furnizorilor, cu implementarea unor criterii adiționale de calitate și performanță.
+- **Revizia 6**: Data: 20.06.2023
+  - Revizuirea cerințelor de monitorizare a KPI-urilor, cu focus pe un sistem de management bazat pe date și feedback-ul echipei.
+  
+## Appendix A – Exemple de Formulare (continuare)
+
+### 6. Formular de Evaluare Inițială a Furnizorilor
+Acest formular va fi utilizat pentru a evalua furnizorii înainte de a fi acceptați. Va include următoarele secțiuni:
+- **Informații Generale**:
+  - Numele furnizorului
+  - Adresa
+  - Contact principal
+- **Evaluarea Capabilității**:
+  - Capacități tehnologice
+  - Certificări ISO/IATF
+  - Referințe de la clienți anteriori
+- **Riscuri Asociate**:
+  - Identificarea riscurilor potențiale legate de capacitatea de livrare și calitate.
+- **Decizie**:
+  - Acceptat/Respins (cu motivele corespunzătoare).
+
+### 7. Formular de Feedback pentru Furnizor
+Acest formular va fi utilizat pentru a colecta feedback de la echipa de producție cu privire la performanța furnizorilor. Secțiunile incluse vor fi:
+- **Numele furnizorului**:
+- **Produse livrate**:
+  - Lista produselor și cantităților.
+- **Evaluarea Performanței**:
+  - Calitatea produsului (1-5)
+  - Timpul de livrare (1-5)
+  - Comunicarea (1-5)
+- **Comentarii**:
+  - Observații suplimentare privind colaborarea.
+
+## Appendix B – Tabel Scorecard pentru KPI (continuare)
+
+| KPI | Valoare Actuală | Target | Observații |
+|---------------------------|------------------|-------------------|----------------------------------|
+| Timpul de Livrare | 93% | 95% | Îmbunătățiri continue |
+| Calitate a Produsului | 1.5% | 2% | În parametri acceptabili |
+| Rata de Răspuns | 90% răspunsuri | 100% răspunsuri | Necesită atenție sporită |
+| Gradul de Implementare | 85% | 100% în 30 zile | Monitorizare activă |
+| Satisfacția Clientului | 88% | 90% | Feedback constructiv |
+| Numărul de Nonconformități | 2 (trimestrial) | Max 3 | Necesită revizuire |
+| Rata de Îmbunătățire | -- | 5% anual | Analiză comparativă |
+| Timp de răspuns | 20 de ore | <24 ore | Îmbunătățiri necesare |
+| Rata de înlocuire a furnizorilor | 1 | Max 2 | Stabilitate în furnizare |
+| Procent utilizare furnizori recomandați | 78% | 80% | Îmbunătățiri încurajate |
+
+## Appendix C – Liste de Verificare pentru Audit (continuare)
+
+### 6. Checklist pentru Auditul Procesului de Control al Calității
+Aceasta va include:
+- Politicile de control al calității existente.
+- Probele de proces si de produs.
+- Procedurile de evaluare a neconformităților.
+- Monitorizarea și raportarea rezultatelor de calitate.
+
+### 7. Checklist pentru Auditul Procesului de Livrare
+Aceasta va determina:
+- Criteriile de desemnare a transportatorilor.
+- Documentele de livrare utilizate.
+- Procedurile de recepție a bunurilor.
+- Înscrierea neconformităților observate în timpul livrării.
+
+## Appendix D – Flux de Escalare (continuare)
+
+### 8. Reevaluarea Procesului de Escalare
+Este crucial ca, după fiecare escaladare, procesul să fie reevaluat pentru a determina eficiența măsurilor implementate. Procedura de reevaluare va include:
+- **Analiza rezultatelor**: Ce a funcționat și ce nu?
+- **Discuții cu părțile implicate**: Feedback de la echipele relevante care au fost parte din proces.
+- **Ajustarea strategiei**: Modificarea fluxului de escaladare, dacă este cazul, pentru a îmbunătăți reacția la problemele viitoare.
+
+### 9. Capacitatea de Adaptare la Schimbări
+Se va stabili o procedură care permite adaptarea rapidă la schimbările din cadrul furnizorilor, asigurându-se că toate părțile sunt informate și că modificările sunt integrate eficient în sistemul de management al calității. Aceasta va implica:
+- **Analiza Impactului**: Evaluarea efectelor modificărilor asupra proceselor și relațiilor existente cu furnizorii.
+- **Formarea Staff-ului**: Asigurarea că personalul este pregătit să se adapteze la noile cerințe și proceduri.
+- **Raportare Periodică**: Crearea unui sistem de raportare care să notifice managementul despre implementarea schimbărilor și efectele acestora.
+
+## 14. GESTIONAREA AVERTIZĂRILOR ŞI NEPLĂCERILOR
+
+### 14.1. Standardizare Avertizări
+Este imperativ ca orice avertizare legată de performanțele furnizorilor să fie standardizată pentru a asigura claritate și coerență în comunicare. Procedura de standardizare a avertizărilor va include:
+- **Formulare Standard**: Folosirea unor formulare standard pentru transmiterea avertizărilor, care să includă detalii precum:
+  - Data emitării avertizării.
+  - Descrierea neconformității.
+  - Detalii privind impactul asupra livrărilor.
+  - Cerințe de remediere.
+  
+### 14.2. Monitorizarea Avertizărilor
+Fiecare avertizare emisă va fi monitorizată, iar eficiența măsurilor luate va fi evaluată periodic. Aceasta va implica:
+- **Raportare Lunară**: Un raport lunar care să reproiecteze statisticile privind avertizările emise și măsurile corective aplicate.
+- **Discuții de Grup**: Organizarea de întâlniri lunare pentru a discuta despre avertizările emise și soluțiile implementate.
+
+### 14.3. Închiderea Avertizărilor
+Odată ce o neconformitate a fost remediată, se vor urma pașii pentru închiderea avertizării. Acest proces va include:
+- **Verificare Finală**: Efectuarea unor verificări finale pentru a confirma că măsurile corective au fost implementate cu succes.
+- **Documentație de Închidere**: Întocmirea unei documentații care să susțină finalizarea procesului, inclusiv un formular de închidere a avertizării.
+
+## 15. ÎMBUNĂTĂȚIRE CONTINUĂ
+
+### 15.1. Cultura Îmbunătățirii Continue
+PlastiAuto SRL se angajează să dezvolte o cultură a îmbunătățirii continue, care să fie susținută de fiecare angajat. Este important ca toți angajații să fie implicați în identificarea oportunităților de îmbunătățire, prin:
+- **Întâlniri de Feedback**: Organizarea de întâlniri periodice în care angajații pot aduce în discuție idei pentru îmbunătățirea proceselor.
+- **Programe de Formare**: Implementarea programelor de formare destinat angajaților pentru a le îmbunătăți competențele și a le oferi instrumentele necesare pentru a contribui la procesul de îmbunătățire a calității.
+
+### 15.2. Evaluarea Și Adaptarea Proceselor
+Reevaluarea constantă a proceselor interne va fi esențială pentru a asigura eficiența sistemului de management al calității. Aceasta va include:
+- **Audituri Interne**: Audituri regulate ale proceselor interne pentru a identifica eventualele neconformități sau oportunități de îmbunătățire.
+- **Feedback din partea Clientului**: Colectarea și analiza feedback-ului de la AutoCorp GmbH pentru a răspunde nevoilor lor în mod corespunzător.
+
+### 15.3. Examinarea rezultatelor
+Rezultatele măsurilor de îmbunătățire vor fi examinate pe parcursul procesului, analizând evoluția valorilor KPI-urilor stabilite, unde vor fi abordate eventualele discrepanțe și se va discuta impactul măsurilor implementate. Obiectivul este de a dezvolta planuri strategice pe termen lung pentru îmbunătățirea continuă a calității serviciilor și produselor oferite de PlastiAuto SRL.
+
+---
+
+Acest document se va revizui periodic pentru a reflecta modificările din cadrul proceselor interne, asigurându-se astfel conformitatea cu standardele IATF 16949 și îmbunătățirea continuării relațiilor eficace cu AutoCorp GmbH. Implementarea cu succes a acestei proceduri nu doar că va contribui la menținerea unui standard înalt de calitate, dar va și întări poziția pe piață a PlastiAuto SRL ca furnizor de încredere în industria auto.## Appendix A – Exemple de Formulare (continuare)
+
+### 8. Formular de Raportare a Neconformităților 
+Acest formular va fi utilizat pentru a documenta și raporta neconformitățile identificate în produsele sau serviciile furnizate. Secțiunile incluse vor fi:
+
+- **Informații generale**:
+  - Numele furnizorului
+  - Data raportării
+  - Produsul/Serviciul afectat
+  - Numărul de lot
+- **Descrierea neconformității**:
+  - Detalii precise despre natura neconformității
+  - Consecințele posibile asupra clientului și a procesului de producție
+- **Măsuri Corective Propuse**:
+  - Propuneri de soluții pentru remedierea neconformității
+- **Verificări efectuate**:
+  - Detalii referitoare la verificările făcute pentru a confirma implementarea măsurilor corective
+- **Semnătura Făcătorului**:
+  - Numele și semnătura persoanei care a completat formularul
+
+### 9. Formular de Evaluare a Furnizorului
+Acest formular va fi utilizat pentru evaluarea anuală a performanței furnizorilor activi. Va include următoarele secțiuni:
+
+- **Informații Generale**:
+  - Numele furnizorului
+  - Anul evaluării
+- **Indicatori de Performanță**:
+  - Calitate (numărul de neconformități)
+  - Timp de livrare (respectarea termenelor)
+  - Servicii post-vânzare
+- **Scor Total**:
+  - Un scor total bazat pe analizele anterioare și pe feedback-ul echipei
+- **Observații Finale**:
+  - Comentarii și recomandări pentru următorul an
+
+## Appendix B – Tabel Scorecard pentru KPI (continuare)
+
+| KPI                         | Valoare Actuală | Target             | Observații                       |
+|----------------------------|------------------|-------------------|----------------------------------|
+| Fluctuația Prețurilor      | 5%               | Max 3%            | Analiză trimestrială necesară    |
+| Răspunsul la reclamații    | 76%              | 85%                | Necesită îmbunătățiri             |
+| Grad de Conflict / Tensiune | 2                | Max 1             | Colaborare îmbunătățită necesară |
+| Stabilitatea Livrărilor    | 90%              | 95%                | Monitorizare intensificată        |
+| Grad de Inovare            | 85%              | 90%                | Necesită evaluare continuă       |
+
+## Appendix C – Liste de Verificare pentru Audit (continuare)
+
+### 8. Checklist pentru Auditul Îmbunătățirii Continue
+Această listă se va concentra pe evaluarea implementării procesului de îmbunătățire continuă:
+
+- **Definirea Obiectivelor**: Există documente clare care definesc obiectivele de îmbunătățire?
+- **Documentarea Ideilor**: Există un sistem de documentare a ideilor de îmbunătățire venite din partea angajaților?
+- **Raportarea Progresului**: Există întâlniri regulate pentru a discuta progresul asupra propunerilor de îmbunătățire?
+- **Eficacitatea Implementării**: Au fost evaluate rezultatele implementărilor de măsuri de îmbunătățire?
+- **Feedback de la Angajați**: Este feedback-ul constant liber și acceptat în cadrul echipei?
+
+### 9. Checklist pentru Auditul Fluxului de Lucru
+Aceasta va determina eficiența fluxului de lucru, inclusiv:
+
+- **Viteza de Producție**: Fluxul de lucru este eficient, fără întreruperi?
+- **Relația cu Furnizorii**: Comunicați eficient cu furnizorii pentru a asigura o livrare continuă?
+- **Procesele Documentate**: Toate procesele sunt documentate și respectate conform standardelor?
+- **Formare angajați**: Angajații sunt instruiți corespunzător conform cerințelor IATF 16949?
+
+## Appendix D – Flux de Escalare (continuare)
+
+### 10. Rolul Managementului în Procesul de Escalare
+Managementul are responsabilitatea crucială de a răspunde eficient la escaladările întâmpinate în procesul de livrare a bunurilor, performanța calității sau orice neconformitate. Aceștia vor:
+
+- **Analiza Structurată a Problemelor**: Este responsabilitatea managementului să analizeze problemele escaladate într-o manieră structurată, dispusă să abordeze cauzele fundamentale ale neconformităților.
+- **Comunicare Eficientă**: Asigurarea unei comunicări eficiente între echipele implicate în rezolvarea problemelor. Managementul va crea un canal deschis pentru feedback continuu și discuții.
+- **Raportare de Sesiuni**: Managementul va organiza sesiuni de raportare regulată pentru a împărtăși soluțiile implementate pentru problemele persistente și pentru a evalua eficiența măsurilor corective aplicate.
+
+### 11. Măsuri Specifice pentru Îmbunătățire
+Pentru a asigura eficiența procesului de escaladare, se vor institui măsuri specifice care vor include:
+
+- **Stabilirea unui Termin "De Escalare"**: Un termen specific (ex: 48 de ore) în care problemele trebuie să fie identificate și escaladate, pentru a preveni întârzierea procesului.
+- **Programe de Training**: Implementarea unor sesiuni de instruire regulată pentru echipe, axate pe gestionarea eficientă a problemelor și pe metodele de escaladare.
+- **Instrumente Analitice**: Crearea unor instrumente analitice pentru a permite echipelor să urmărească progresul măsurilor implementate și să ofere soluții de îmbunătățire bazate pe date.
+
+### 12. Evaluarea Eficienței Procesului de Escalare
+Evaluarea procesului de escalare va implica:
+
+- **Indicatori de Performanță pentru Escalări**: Stabilirea unor KPI specifici pentru a urmări eficiența și rapiditatea răspunsului la escalări.
+- **Întâlniri Periodice de Revizuire**: Organizarea de întâlniri de revizuire la fiecare sfârșit de lună pentru a evalua incidentele escaladate și măsurile luate, precum și pentru a le îmbunătăți.
+
+Reevaluarea periodică a întregului sistem de gestionare a furnizorilor, inclusiv a proceselor de escaladare, va asigura adaptabilitatea la schimbările din industrie și va contribui la sporirea performanțelor generale ale PlastiAuto SRL și satisfacția clientului AutoCorp GmbH. Implementarea acestor ajustări nu doar că va încuraja formarea unui mediu de lucru bazat pe încredere și transparență, dar va consolida și relațiile cu partenerii strategici și va asigura o colaborare productivă și sustenabilă pe termen lung. 
+
+Aceste măsuri vor contribui la asigurarea unui standard înalt de calitate în produsele și serviciile oferite de PlastiAuto SRL, consolidând-o ca un furnizor de încredere în industria automotive. ## 13. ISTORIC REVIZII (final) Documentul SPEC-PROD-01 va fi revizuit și actualizat periodic pentru a reflecta modificările legislației în vigoare, normelor interne și feedback-ului de la clienți. Această abordare proactivă va permite PlastiAuto SRL să rămână competitivă și să mențină standarde ridicate de excelență în gestionarea furnizorilor, asigurându-se, astfel, satisfacția deplină a clientului.## Appendix A – Exemple de Formulare (continuare)
+
+### 10. Formular de Înregistrare a Avertizărilor
+Acest formular este utilizat pentru a documenta avertizările emise, indiferent de natura acestora. Se va completa cu următoarele informații:
+- **Informații Generale**:
+  - Data emiterii
+  - Numele persoanei responsabile
+  - Numărul de referință al avertizării
+- **Descrierea Avertizării**:
+  - Tipul avertizării (calitate, livrare, financiar)
+  - Descriere detaliată a problemei
+- **Măsurile Imediate**:
+  - Măsuri inițiale luate pentru a aborda avertizarea
+  - Data implementării acestora
+- **Analiza Cauzale**:
+  - O scurtă analiză a cauzelor care au dus la emiterea avertizării
+- **Semnătura și Aprobat de**:
+  - Numele și semnătura persoanei care aprobă avertizarea
+
+## Appendix B – Tabel Scorecard pentru KPI (continuare)
+
+| KPI                        | Valoare Actuală | Target  | Observații                                                |
+|---------------------------|------------------|---------|----------------------------------------------------------|
+| Rata de Retururi          | 4%               | Max 2%  | Trebuie adoptate măsuri corective pentru reducerea retururilor. |
+| Eficiența Costurilor      | 88%              | Min 90% | Evaluare lunară a costurilor pe unitate.                 |
+| Satisfacția Clientului    | 82%              | 90%    | Necesită acțiuni pentru îmbunătățirea feedback-ului.     |
+| Proporția De Aprovizionare| 95%              | 98%    | Monitorizare necesară pentru eficiența livrării.          |
+
+## Appendix C – Liste de Verificare pentru Audit (continuare)
+
+### 10. Checklist pentru Evaluarea Procesului de Aprovizionare
+Această listă va evalua eficiența procesului de aprovizionare:
+- **Evaluarea Documentației Furnizorului**: Toți furnizorii au documentele necesare actualizate?
+- **Performanța Livrării**: Se respectă termenele de livrare stabilite inițial?
+- **Verificări de Calitate**: Sunt efectuate controale de calitate asupra materialelor primite?
+- **Comunicarea cu Furnizorii**: Există canale clare de comunicare între PlastiAuto SRL și furnizori?
+- **Feedback de la Utilizatori**: Au fost colectate opiniile utilizatorilor finali asupra materiilor prime achiziționate?
+
+### 11. Checklist pentru Auditul Procesului de Îmbunătățire Continuă
+Această listă va evalua implementarea proceselor de îmbunătățire:
+- **Planificarea Îmbunătățirii**: Există documente care descriu planurile de îmbunătățire pe termen lung?
+- **Implementarea Măsurilor**: Măsurile de îmbunătățire sunt implementate conform planificării?
+- **Eficiența Măsurilor**: S-au evaluat rezultatele și eficiența măsurilor implementate?
+- **Feedback Cicluri**: Se facilitează un proces continuu de feedback privind măsurile de îmbunătățire?
+- **Raportare Progres**: Raportările sunt efectuate periodic pentru a evalua progresele înregistrate? 
+
+## Appendix D – Flux de Escalare (continuare)
+
+### 13. Instrumente de Monitorizare
+Pentru a asigura managementul eficient al problemelor escaladate, PlastiAuto SRL va implementa instrumente de monitorizare cum ar fi softuri specifice de management al calității care vor ajuta la:
+- **Urmarirea Neconformităților**: Ușurința realizării unui raport detaliat asupra neconformităților întâmpinate și măsurilor corective adoptate.
+- **Interfață pentru Comunicare**: Un modul de comunicare integrat în soft care facilitează discuțiile între echipe și managementul escaladărilor.
+- **Analize Tabelare**: Tabelele de analiză vor permite generarea de informații clare și concise despre problematica întâmpinată, evaluând periodic progresul și eficiența răspunsurilor rapide.
+
+### 14. Evaluarea Răspunsurilor la Incidentele Escalate
+Pentru a evalua eficacitatea răspunsului la problemele escaladate, se vor urmări criterii precum:
+- **Timpii de Răspuns**: Timpul mediu de rezolvare a incidentelor raportate.
+- **Satisfacția Echipei**: Feedback de la echipe despre eficiența procesului de escaladare.
+- **Cauze Recidivante**: Identificarea și analiza cauzelor recurente ale neconformităților pentru a preveni apariția acestora pe viitor.
+- **Soluții Implementate**: Monitorizarea soluțiilor adoptate pentru a asigura că sunt implementate corect și generează rezultate dorite.
+
+Implementarea acestor măsuri va asigura o gestiune eficientă a neconformităților și va contribui la creșterea performanței PlastiAuto SRL ca furnizor de încredere în industria auto. De asemenea, sprijinirea angajaților în procesul de raportare și rezolvare a problemelor escaladate va consolida cultura calității și va promova un mediu de colaborare eficient.
+
+=== METADATA ===
+doc_id: SPEC-PROD-01
+industry: automotive
+doc_type: long
+language: ro
+standard: IATF 16949
+contradiction: 
+save_path: data/automotive/long/SPEC-PROD-01.txt
+save_command: python manage_corpus.py save --file SPEC-PROD-01.txt --name SPEC-PROD-01 --industry automotive --lang ro
+================

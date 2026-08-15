@@ -1,0 +1,24 @@
+app = "graphrag-neo4j"
+primary_region = "ams"
+
+[build]
+  dockerfile = "docker/Dockerfile"
+
+[env]
+  NEO4J_AUTH = "neo4j/graphrag_dev"
+  NEO4J_server_memory_heap_max__size = "256m"
+  NEO4J_server_memory_pagecache_size = "128m"
+  NEO4J_server_bolt_listen__address = "[::]:7687"
+  NEO4J_server_http_listen__address = "[::]:7474"
+  NEO4J_server_bolt_advertised__address = "graphrag-neo4j.internal:7687"
+
+# Internal-only TCP services — no [[services.ports]] means not exposed externally
+# but allows private 6PN access from other apps in the same organization
+[[mounts]]
+  source = "neo4j_data"
+  destination = "/data"
+
+[vm]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -1,0 +1,1036 @@
+# PFMEA-01
+### Rev. 3
+### Aprobat de: Director Calitate, Director General
+
+## 1. SCOP SI OBIECTIVE MASURABILE
+Scopul acestei proceduri este de a stabili un proces clar și eficient pentru evaluarea și gestionarea riscurilor asociate cu furnizorii, astfel încât să asigurăm un nivel ridicat de calitate a produselor și serviciilor livrate de "PlastiAuto SRL" în raport cu cerințele clientului nostru principal, "AutoCorp GmbH". 
+
+Obiectivele măsurabile sunt următoarele:
+1. **Reducerea numărului de neconformități** în livrările de la furnizori cu 20% pe an.
+2. **Creșterea procentului de furnizori calificați** de la 75% la 90% pe parcursul a 2 ani.
+3. **Finalizarea reevaluărilor anuale** pentru 100% dintre furnizorii activi.
+
+## 2. DOMENIU DE APLICARE
+Această procedură se aplică tuturor furnizorilor de materiale și servicii, la nivel național și internațional, care colaborează cu "PlastiAuto SRL". Procedura se va aplica de la identificarea necesității de achiziție, până la evaluarea și reevaluarea furnizorilor existenți.
+
+## 3. DEFINITII SI ABREVIERI
+1. **FMEA** - Analiza modului și efectului defectării.
+2. **KPI** - Indicatori cheie de performanță.
+3. **Furnizor** - Entitate care livrează bunuri sau servicii.
+4. **AutoCorp GmbH** - Clientul principal al "PlastiAuto SRL".
+5. **RACI** - Matrice a responsabilităților (Responsible, Accountable, Consulted, Informed).
+6. **Reevaluare** - Proces prin care se verifică performanța curentă a furnizorului.
+7. **Calificare** - Proces prin care un furnizor este evaluat pentru a determina dacă satisface cerințele specificate.
+8. **Neconformitate** - Abaterea de la cerințele tehnice sau de calitate.
+9. **Audit** - Examinare sistematică a proceselor sau produselor.
+10. **Performanță slabă** - Definirea unei stări în care un furnizor nu respectă cerințele de calitate sau livrare.
+11. **Indicatorii de performanță** - Măsurători utilizate pentru a evalua eficiența și succesul unui furnizor.
+12. **Evaluare** - Proces de analiză a furnizorilor pentru identificarea riscurilor și a oportunităților de îmbunătățire.
+13. **Livrare** - Procesul de livrare a bunurilor sau serviciilor de către furnizor.
+14. **Specificații** - Cerințele tehnice definite pentru produsul sau serviciul livrat.
+15. **Contract** - Document legal care definește termenii și condițiile colaborării cu un furnizor.
+16. **Monitorizare** - Procesul de urmărire a performanței furnizorilor pe durata colaborării.
+17. **Continuitate** - Capacitatea unui furnizor de a menține standardele de calitate pe o perioadă extinsă de timp.
+18. **Evaluare inițială** - Primul proces de examinare a unui furnizor nou pentru acceptarea acestuia.
+19. **Decizii corective** - Acțiuni luate pentru a remedia neconformitățile identificate.
+20. **Procese interne** - Activitățile și operațiunile desfășurate în cadrul organizației.
+
+## 4. REFERINTE NORMATIVE SI INTERNE
+1. IATF 16949:2016 - Sistem de management al calității pentru organizațiile din sectorul auto.
+2. ISO 9001:2015 - Sisteme de management al calității - Cerințe.
+3. Documentul intern DI-01 - Procedură de achiziții.
+4. Documentul intern DI-02 - Politica de calitate.
+5. Documentul intern DI-03 - Procedură de gestionare a neconformităților.
+6. Documentul intern DI-04 - Manualul de procese.
+7. Documentul intern DI-05 - Procedură de audit intern.
+8. Documentul intern DI-06 - Procedură de evaluare a furnizorilor.
+9. Documentul intern DI-07 - Procedura de măsurare a satisfacției clienților.
+10. Documentul intern DI-08 - Ghid pentru formarea angajaților.
+
+## 5. RESPONSABILITATI - MATRICE RACI
+| Activitate                       | Responsabil  | Răspunzător | Consultat       | Informat               |
+|----------------------------------|--------------|-------------|------------------|------------------------|
+| Identificarea furnizorilor noi   | Achiziții    | Director Calitate | Departament Tehnic | Director General       |
+| Evaluarea furnizorilor           | Director Calitate | Manager Achiziții | Departament Tehnic | Director General       |
+| Reevaluarea furnizorilor         | Manager R&D  | Director Calitate | Departament Tehnic | Director General       |
+| Gestionarea performanței slabe   | Manager Calitate | Director Calitate | Manager R&D       | Departament Tehnic     |
+| Monitorizarea performanței       | Analist Calitate | Manager Calitate | Departament Tehnic | Director General       |
+
+## 6. CALIFICAREA FURNIZORILOR NOI
+
+### 6.1. Identificarea Nevoilor
+Identificarea nevoilor de furnizare se face anual, sau ori de câte ori apar solicitări noi de produse. Departamentului de achiziții îi revine responsabilitatea de a aduna informațiile necesare și de a evalua necesarul în funcție de planul de producție.
+
+### 6.2. Criterii de Selecție
+Criteriile de selecție a furnizorilor se împart în următoarele categorii:
+- **Capacitatea tehnică**: Analiza proceselor de producție și a echipamentelor disponibile.
+- **Stabilitatea financiară**: Evaluarea situației financiare a furnizorului pentru a asigura continuitatea livrării.
+- **Referințe**: Cererea de referințe de la clienți anteriori pentru a verifica reputația furnizorului.
+- **Certificări**: Verificarea certificărilor relevante ISO pentru domeniul de activitate al furnizorului.
+
+### 6.3. Evaluarea Inițială
+Evaluarea inițială a furnizorilor se realizează pe baza unui chestionar care include întrebări referitoare la:
+- Calitatea proceselor de producție.
+- Controlul proceselor interne.
+- Sistemele de management al calității implementate.
+
+Această evaluare se finalizează printr-un raport care determină acceptabilitatea furnizorului.
+
+### 6.4. Aprobat și Contractare
+Furnizorii care îndeplinesc criteriile stabilite vor fi acceptați și contractați prin încheierea unui acord formal. Acest acord va conține termenele de livrare, specificațiile tehnice și condițiile de plată.
+
+## 7. REEVALUAREA FURNIZORILOR ACTIVI
+
+### 7.1. Frecvența Reevaluărilor
+Reevaluarea furnizorilor activi se va realiza anual, sau mai frecvent în cazul în care se identifică probleme legate de calitate sau livrare. 
+
+### 7.2. Metodologia de Reevaluare
+Metodologia de reevaluare include următoarele etape:
+- Colectarea datelor de performanță (livrări la timp, calitatea produselor, feedback de la clienți).
+- Realizarea unui audit periodic al proceselor furnizorului.
+- Analiza neconformităților raportate și a măsurilor corective implementate.
+
+### 7.3. Raport de Reevaluare
+După finalizarea reevaluării, se întocmește un raport care include concluzii legate de performanța furnizorului, recomandări și acțiuni corective necesare. Acest raport se va trimite managementului pentru decizii ulterioare.
+
+## 8. CLASIFICAREA FURNIZORILOR
+Furnizorii vor fi clasificați în funcție de performanță și importanța acestora în lanțul de aprovizionare. Clasificarea se face pe următoarele categorii:
+
+1. **A** - Furnizori excelenți, cu livrări la timp și neconformități reduse.
+2. **B** - Furnizori buni, cu livrări acceptabile, dar cu cerințe de îmbunătățire.
+3. **C** - Furnizori care necesită o supraveghere mai atentă din cauza neconformităților frecvente.
+
+Această clasificare va influența relațiile comerciale și negocierile cu furnizorii.
+
+## 9. GESTIONAREA PERFORMANTEI SLABE
+Performanța slabă a furnizorilor va fi gestionată prin următoarele etape:
+
+1. **Identificarea Neconformităților**: Efectuarea unei analize detaliate pentru a identifica cauza principală a problemelor.
+2. **Comunicarea cu Furnizorul**: Notificarea furnizorului cu privire la problemele identificate și solicitarea de acțiuni corective.
+3. **Plan de Acțiune Corectivă**: Stabilirea unui plan care să cuprindă acțiunile necesare pentru remedierea neconformităților.
+4. **Monitorizarea Implementării**: Evaluarea progresului realizat de furnizor în implementarea planului de acțiune.
+5. **Decizii ulterioare**: În funcție de eficiența măsurilor corective, se pot lua decizii de continuare a colaborării sau, dimpotrivă, de reziliere a contractului.
+
+## 10. INDICATORI KPI CU VALORI TARGET NUMERICE
+1. **Procentajul de livrări la timp** – Target: 95% 
+2. **Rata neconformităților** – Target: sub 1%
+3. **Timpul mediu de răspuns la reclamații** – Target: 48 de ore
+4. **Numărul de audituri finalizate** – Target: 100% din furnizori auditați anual
+5. **Procentajul de furnizori cu rating „A”** – Target: 50%
+
+## 11. INREGISTRARI SI TRASABILITATE
+Se vor păstra înregistrări ale tuturor evaluărilor și reevaluărilor furnizorilor, ale auditurilor efectuate, precum și ale neconformităților raportate și acțiunilor corective întreprinse. Aceste înregistrări vor asigura trasabilitatea deciziilor luate și a măsurilor implementate.
+
+## 12. ISTORIC REVIZII
+- **Revizia 1**: [DATA] – Elaborarea documentului inițial.
+- **Revizia 2**: [DATA] – Actualizare criterii de selecție și reevaluare.
+- **Revizia 3**: [DATA] – Adăugarea secțiunilor privind gestionarea performanței slabe și KPI.
+
+## Appendix A – Example Forms
+- Formular de evaluare a furnizorului
+- Formular de feedback privind livrările
+- Raport de audit furnizor
+
+## Appendix B – KPI Scorecards
+- Tabloul de bord pentru KPI-uri, analizând performanțele furnizorilor.
+
+## Appendix C – Audit Checklists
+- Liste de verificare pentru auditarea furnizorilor.
+
+## Appendix D – Escalation Workflow
+- Procesul de escaladare în caz de neconformitate majoră a furnizorului.
+
+---
+
+Acesta este un model complet pentru procedura PFMEA-01 destinată companiei fictive "PlastiAuto SRL", conform standardului IATF 16949. Documentul include toate secțiunile cerute, fiecare cu detalii clare și specificații relevante pentru managementul furnizorilor în industria auto.## 12. INREGISTRARI SI TRASABILITATE
+
+Pentru a menține standardele ridicate de calitate și pentru a respecta cerințele IATF 16949, "PlastiAuto SRL" va implementa un sistem robust de înregistrare și trasabilitate a tuturor activităților legate de evaluarea și gestionarea furnizorilor. Această secțiune detaliază cerințele privind înregistrările, responsabilitățile, metodele de stocare, precum și perioadele de păstrare a documentelor.
+
+### 12.1. Tipuri de Înregistrări
+
+1. **Înregistrări de evaluare a furnizorilor**: Acestea includ chestionarele completate, rapoartele de evaluare inițială, precum și rezultatele evaluărilor anuale sau periodice.
+2. **Rapoarte de audit**: Documentele care atestă auditările efectuate asupra furnizorilor, incluzând listele de verificare utilizate, constatările și acțiunile corective propuse.
+3. **Înregistrări de neconformitate**: Documente care detaliază toate neconformitățile raportate, inclusiv descrierea problemei, data raportării, măsurile corective luate și rezultatele acestora.
+4. **Contracte cu furnizorii**: Acorduri formale care stipulează termenii și condițiile colaborării, precum și specificațiile tehnice și de calitate.
+5. **Feedback-ul clienților**: Înregistrări ale plângerilor și sugestiilor primite de la clienți referitoare la calitatea produselor furnizate de furnizori.
+
+### 12.2. Metode de Stocare a Înregistrărilor
+
+Întregul sistem de înregistrare se va desfășura atât în format fizic, cât și electronic, prin implementarea unui sistem de management al documentelor care să asigure:
+
+- **Accesibilitate**: Toate documentele necesare vor fi disponibile angajaților autorizați, asigurându-se astfel transparența și eficiența în gestionarea informațiilor.
+- **Securitate**: Documentele vor fi protejate prin măsuri de prevenire a accesului neautorizat și prin copii de rezervă pentru a asigura integritatea informațiilor.
+- **Etichetare corespunzătoare**: Toate înregistrările vor fi etichetate clar cu datele relevante, cum ar fi tipul de document, data și numele persoanei responsabile pentru completarea acestora.
+
+### 12.3. Perioade de Păstrare a Documentelor
+
+Înregistrările și documentele menționate vor fi păstrate conform următoarelor termene:
+
+1. **Înregistrările de evaluare și audit**: Se vor păstra timp de 5 ani, după care pot fi distruse, cu excepția cazurilor în care se aplică reglementări specifice care necesită păstrarea pe termen lung.
+2. **Neconformitățile și măsurile corective**: Aceste informații vor fi păstrate timp de minim 5 ani, pentru a asigura trasabilitatea problemelor și a soluțiilor implementate.
+3. **Contractele cu furnizorii**: Acestea vor fi păstrate atât timp cât furnizorul este activ, plus încă 5 ani după încetarea colaborării.
+4. **Feedback-ul clienților**: Înregistrările vor fi arhivate timp de 3 ani pentru a le utiliza în îmbunătățirea continuă a colaborării cu furnizorii.
+
+Aceste procese vor asigura că "PlastiAuto SRL" menține o documentație bine organizată, care susține calitatea și trasabilitatea în colaborarea cu furnizorii.
+
+## 13. ISTORIC REVIZII
+
+Istoricul reviziilor documentului PFMEA-01 constă în modificările aduse în urma evaluării continue și a necesității de adaptare a procedurii la reglementările și cerințele actuale. Istoricul va conține detalii despre natura schimbărilor, data implementării lor, precum și persoanele responsabile pentru aceste modificări. 
+
+### 13.1. Formatul Istoricului de Revizii
+
+- **Revizia 1**: [DATA] – Elaborarea documentului inițial, inclusiv selecția, evaluarea și reevaluarea furnizorilor.
+- **Revizia 2**: [DATA] – Actualizare criterii de selecție și reevaluare, introducerea unor proceduri detaliate pentru gestionarea performanței slabe a furnizorilor.
+- **Revizia 3**: [DATA] – Adăugarea secțiunilor privind indicatorii KPI și a metodelor precise de măsurare a performanței furnizorilor.
+
+Această documentare a reviziilor va permite monitorizarea progresului implementării standardelor IATF 16949 și va facilita auditul, evaluationarea și interpretarea rezultatelor în cadrul managementului calității.
+
+## Appendix A – Example Forms
+
+### 1. Formular de Evaluare a Furnizorului
+- **Date Generale**:
+  - Nume Furnizor: ___________________
+  - Adresă: ________________________
+  - Data Evaluării: ________________
+
+- **Scoruri pe Criterii**:
+  - Capacitate Tehnică: _____/10
+  - Stabilitate Financiară: _____/10
+  - Referințe: _____/10
+  - Certificări: _____/10
+
+- **Observații**:
+  - _______________________________________________________
+  - _______________________________________________________
+
+### 2. Formular de Feedback privind Livrările
+- **Date Generale**:
+  - Nume Client: ___________________
+  - Produs: ________________________
+  - Data Livrării: ________________
+
+- **Calitate**: (Ex: Acceptabil, Neacceptabil) ________
+- **Livrare la Timp**: (Da/Nu) __________
+- **Comentarii**:
+  - _______________________________________________________
+  - _______________________________________________________
+
+### 3. Raport de Audit Furnizor
+- **Date Audit**:
+  - Nume Furnizor: ________________________
+  - Data Auditului: _______________________
+
+- **Aspecte Auditate**:
+  - Procese de Producție: _______ (Conform / Neconform)
+  - Controlul Calității: _______ (Conform / Neconform)
+  
+- **Neconformități Identificate**:
+  - _______________________________________________________
+  
+- **Plan de Acțiune Propus**:
+  - _______________________________________________________
+
+## Appendix B – KPI Scorecards
+
+### Tabloul de Bord pentru KPI-uri
+- **Procentajul de livrări la timp**: _____%
+- **Rata neconformităților**: _____%
+- **Timpul mediu de răspuns la reclamații**: ______ ore
+- **Numărul de audituri finalizate**: _____
+- **Procentajul de furnizori cu rating „A”**: _____%
+
+### Grafice de Performanță
+- Grafice utilizate pentru a vizualiza tendințele KPI-urilor pe parcursul anului, permițând managementului să observe progresul și eficiența furnizorilor.
+
+## Appendix C – Audit Checklists
+
+### Liste de Verificare pentru Auditarea Furnizorilor
+1. **Informații Generale**:
+   - Informații de contact actualizate? (Da/Nu)
+   - Certificările sunt valide? (Da/Nu)
+
+2. **Calitatea Proceselor**:
+   - Există un sistem de management al calității implementat? (Da/Nu)
+   - Rata neconformităților este monitorizată? (Da/Nu)
+
+3. **Monitorizarea Performanței**:
+   - Sunt înregistrate toate livrările și comenzile? (Da/Nu)
+   - Feedback de la clienți este analizat periodic? (Da/Nu)
+
+4. **Planuri de Continuitate**:
+   - Există măsuri de urgență pentru livrările întârziate? (Da/Nu)
+   - Planuri de dezvoltare a capacităților sunt documentate? (Da/Nu)
+
+## Appendix D – Escalation Workflow
+
+### Procesul de Escaladare în Caz de Neconformitate Majoră a Furnizorului
+1. **Identificare Neconformitate**: Semnalizarea unei neconformități majore de către Departamentul Calitate.
+2. **Evaluare Urgentă**: Formarea unei echipe de răspuns rapid pentru a evalua impactul neconformității asupra producției.
+3. **Notificare Furnizor**: Contactarea furnizorului pentru a informa despre problema identificată.
+4. **Plan de Acțiune Corectivă**: Stabilirea rapidă a unui plan de acțiune corectivă în colaborare cu furnizorul.
+5. **Monitorizare**: Urmărirea implementării măsurilor corective și evaluarea eficacității lor în cadrul următorului audit programat.
+
+Acest flux de lucru asigură că toate neconformitățile majore sunt tratate prompt și eficient, minimizând impactul asupra lanțului de aprovizionare și asupra clientului final.
+
+---
+
+Această procedură PFMEA-01 pentru "PlastiAuto SRL" stabilește un cadru detaliat pentru gestionarea furnizorilor, conform cerințelor IATF 16949, asigurând astfel respectarea standardelor de calitate și optimizarea proceselor interne.## 12. INREGISTRARI SI TRASABILITATE
+
+Pentru a menține standardele ridicate de calitate și pentru a respecta cerințele IATF 16949, "PlastiAuto SRL" va implementa un sistem robust de înregistrare și trasabilitate a tuturor activităților legate de evaluarea, monitorizarea și gestionarea furnizorilor. Această secțiune detaliază cerințele privind înregistrările, responsabilitățile, metodele de stocare, precum și perioadele de păstrare a documentelor.
+
+### 12.1. Tipuri de Înregistrări
+
+1. **Înregistrări de evaluare a furnizorilor**: Acestea includ chestionarele completate, rapoartele de evaluare inițială, precum și rezultatele evaluărilor anuale sau periodice. Înregistrările vor evidenția scorurile obținute pe diverse criterii, cum ar fi calitatea, livrările și nivelul de serviciu.
+
+2. **Rapoarte de audit**: Documentele care atestă auditările efectuate asupra furnizorilor, incluzând listele de verificare utilizate, constatările și acțiunile corective propuse. Fiecare raport de audit va conține o evaluare a conformității sistemului de management al calității al furnizorului.
+
+3. **Înregistrări de neconformitate**: Aceste documente detaliază toate neconformitățile raportate, inclusiv descrierea problemei, data raportării, măsurile corective luate și rezultatele acestora. Fiecare neconformitate va fi clasificată în funcție de severitate și impact asupra procesului.
+
+4. **Contracte cu furnizorii**: Acorduri formale care stipulează termenii și condițiile colaborării, precum și specificațiile tehnice și de calitate necesare. Informațiile referitoare la modificările contractuale vor fi de asemenea păstrate pentru referințe ulterioare.
+
+5. **Feedback-ul clienților**: Înregistrări ale plângerilor și sugestiilor primite de la clienți referitoare la calitatea produselor furnizate de furnizori. Aceste feedback-uri sunt esențiale pentru îmbunătățirea relației cu furnizorii și pentru corectarea eventualelor neajunsuri.
+
+### 12.2. Metode de Stocare a Înregistrărilor
+
+Întregul sistem de înregistrare se va desfășura atât în format fizic, cât și electronic, prin implementarea unui sistem de management al documentelor care să asigure:
+
+- **Accesibilitate**: Toate documentele necesare vor fi disponibile angajaților autorizați, asigurându-se astfel transparența și eficiența în gestionarea informațiilor. Accesul va fi reglementat prin drepturi de utilizator, limitând accesul la informațiile sensibile ale furnizorilor.
+
+- **Securitate**: Documentele vor fi protejate prin măsuri de prevenire a accesului neautorizat și prin copii de rezervă pentru a asigura integritatea informațiilor. Se vor lua în considerare metode de criptare și se vor efectua verificări periodice pentru a preveni pierderea datelor.
+
+- **Etichetare corespunzătoare**: Toate înregistrările vor fi etichetate clar cu datele relevante, cum ar fi tipul de document, data și numele persoanei responsabile pentru completarea acestora. Standardizarea etichetării va facilita căutarea și recuperarea rapidă a documentelor.
+
+### 12.3. Perioade de Păstrare a Documentelor
+
+Înregistrările și documentele menționate vor fi păstrate conform următoarelor termene:
+
+1. **Înregistrările de evaluare și audit**: Se vor păstra timp de 5 ani, după care pot fi distruse, cu excepția cazurilor în care se aplică reglementări specifice care necesită păstrarea pe termen lung.
+
+2. **Neconformitățile și măsurile corective**: Aceste informații vor fi păstrate timp de minim 5 ani, pentru a asigura trasabilitatea problemelor și a soluțiilor implementate.
+
+3. **Contractele cu furnizorii**: Acestea vor fi păstrate atât timp cât furnizorul este activ, plus încă 5 ani după încetarea colaborării, pentru a permite o eventuală revizuire sau dispută legală.
+
+4. **Feedback-ul clienților**: Înregistrările vor fi arhivate timp de 3 ani pentru a le utiliza în îmbunătățirea continuă a colaborării cu furnizorii. Aceste informații pot fi folosite pentru analize de eficiență și pentru ajustarea strategiilor.
+
+Aceste procese vor asigura că "PlastiAuto SRL" menține o documentație bine organizată, care susține calitatea și trasabilitatea în colaborarea cu furnizorii.
+
+## 13. ISTORIC REVIZII
+
+Istoricul reviziilor documentului PFMEA-01 constă în modificările aduse în urma evaluării continue și a necesității de adaptare a procedurii la reglementările și cerințele actuale. Istoricul va conține detalii despre natura schimbărilor, data implementării lor, precum și persoanele responsabile pentru aceste modificări.
+
+### 13.1. Formatul Istoricului de Revizii
+
+- **Revizia 1**: [DATA] – Elaborarea documentului inițial, inclusiv selecția, evaluarea și reevaluarea furnizorilor.
+- **Revizia 2**: [DATA] – Actualizare criterii de selecție și reevaluare, introducerea unor proceduri detaliate pentru gestionarea performanței slabe a furnizorilor.
+- **Revizia 3**: [DATA] – Adăugarea secțiunilor privind indicatorii KPI și a metodelor precise de măsurare a performanței furnizorilor.
+- **Revizia 4**: [DATA] – Revizuirea modului de gestionare a înregistrărilor și a traseului documentației pentru a îmbunătăți accesibilitatea și securitatea datelor. Introducerea unui sistem electronic de management al documentelor.
+- **Revizia 5**: [DATA] – Actualizarea procedurilor de auditare și extinderea metodei de evaluare a furnizorilor pentru a include criterii de sustenabilitate și impact ecologic.
+
+Această documentare a reviziilor va permite monitorizarea progresului implementării standardelor IATF 16949 și va facilita auditul, evaluarea și interpretarea rezultatelor în cadrul managementului calității.
+
+## Appendix A – Example Forms
+
+### 1. Formular de Evaluare a Furnizorului
+
+- **Date Generale**:
+  - Nume Furnizor: ___________________
+  - Adresă: ________________________
+  - Data Evaluării: ________________
+  
+- **Scoruri pe Criterii**:
+  - Capacitate Tehnică: _____/10
+  - Stabilitate Financiară: _____/10
+  - Referințe: _____/10
+  - Certificări: _____/10
+  
+- **Observații**:
+  - _______________________________________________________
+  - _______________________________________________________
+
+### 2. Formular de Feedback privind Livrările
+
+- **Date Generale**:
+  - Nume Client: ___________________
+  - Produs: ________________________
+  - Data Livrării: ________________
+  
+- **Calitate**: (Ex: Acceptabil, Neacceptabil) ________
+- **Livrare la Timp**: (Da/Nu) __________
+- **Comentarii**:
+  - _______________________________________________________
+  - _______________________________________________________
+
+### 3. Raport de Audit Furnizor
+
+- **Date Audit**:
+  - Nume Furnizor: ________________________
+  - Data Auditului: _______________________
+
+- **Aspecte Auditate**:
+  - Procese de Producție: _______ (Conform / Neconform)
+  - Controlul Calității: _______ (Conform / Neconform)
+
+- **Neconformități Identificate**:
+  - _______________________________________________________
+  
+- **Plan de Acțiune Propus**:
+  - _______________________________________________________
+
+## Appendix B – KPI Scorecards
+
+### Tabloul de Bord pentru KPI-uri
+
+- **Procentajul de livrări la timp**: _____%
+- **Rata neconformităților**: _____%
+- **Timpul mediu de răspuns la reclamații**: ______ ore
+- **Numărul de audituri finalizate**: _____
+- **Procentajul de furnizori cu rating „A”**: _____%
+
+### Grafice de Performanță
+
+Grafice utilizate pentru a vizualiza tendințele KPI-urilor pe parcursul anului, permițând managementului să observe progresul și eficiența furnizorilor.
+
+## Appendix C – Audit Checklists
+
+### Liste de Verificare pentru Auditarea Furnizorilor
+
+1. **Informații Generale**:
+   - Informații de contact actualizate? (Da/Nu)
+   - Certificările sunt valide? (Da/Nu)
+   
+2. **Calitatea Proceselor**:
+   - Există un sistem de management al calității implementat? (Da/Nu)
+   - Rata neconformităților este monitorizată? (Da/Nu)
+
+3. **Monitorizarea Performanței**:
+   - Sunt înregistrate toate livrările și comenzile? (Da/Nu)
+   - Feedback de la clienți este analizat periodic? (Da/Nu)
+
+4. **Planuri de Continuitate**:
+   - Există măsuri de urgență pentru livrările întârziate? (Da/Nu)
+   - Planuri de dezvoltare a capacităților sunt documentate? (Da/Nu)
+
+## Appendix D – Escalation Workflow
+
+### Procesul de Escaladare în Caz de Neconformitate Majoră a Furnizorului
+
+1. **Identificare Neconformitate**: Semnalizarea unei neconformități majore de către Departamentul Calitate.
+2. **Evaluare Urgentă**: Formarea unei echipe de răspuns rapid pentru a evalua impactul neconformității asupra producției.
+3. **Notificare Furnizor**: Contactarea furnizorului pentru a informa despre problema identificată.
+4. **Plan de Acțiune Corectivă**: Stabilirea rapidă a unui plan de acțiune corectivă în colaborare cu furnizorul. Se va include un termen limită clar pentru implementarea măsurilor corective.
+5. **Monitorizare**: Urmărirea implementării măsurilor corective și evaluarea eficienței lor în cadrul următorului audit programat. Feedback-ul de la echipa de audit va fi esențial pentru a determina succesul implementării soluțiilor.
+
+Acest flux de lucru asigură că toate neconformitățile majore sunt tratate prompt și eficient, minimizând impactul asupra lanțului de aprovizionare și asupra clientului final. În cazul în care măsurile corective nu sunt implementate în termen, se va iniția un proces de revizuire a relațiilor comerciale cu furnizorul respectiv, iar managementul va lua decizii în funcție de gravitatea situației.
+
+--- 
+
+Acest document oferă o mai bună structurare a relațiilor cu furnizorii și facilitează respectarea standardelor IATF 16949, asigurându-se totodată că "PlastiAuto SRL" menține un control eficient asupra calității și performanței furnizorilor săi. Puțin câte puțin, prin aplicarea acestor proceduri, compania va contribui la îmbunătățirea generală a proceselor de afaceri și la îndeplinirea așteptărilor clienților săi.### 12. INREGISTRARI SI TRASABILITATE
+
+Documentele și înregistrările referitoare la evaluarea și gestionarea furnizorilor sunt esențiale pentru asigurarea transparenței și conformității cu cerințele IATF 16949. Înregistrările trebuie să fie ușor accesibile, precise și bine structurate pentru a permite o trasabilitate eficientă, atât pe plan intern cât și extern.
+
+#### 12.1. Tipuri de Înregistrări
+
+1. **Înregistrări de Evaluare a Furnizorilor**:
+   - Chestionare de evaluare
+   - Fotocopie a documentelor de certificat de calitate
+   - Rezultate ale evaluărilor anuale și rezultatele întâlnirilor cu furnizorii
+   - Note de întâlniri și discuții de lucru
+
+2. **Rapoarte de Audit**:
+   - Rapoarte detaliate cu observațiile de la auditurile interne și externe
+   - Liste de neconformități identificate
+   - Planuri de acțiune corectivă
+
+3. **Înregistrări de Neconformitate**:
+   - Documentarea neconformităților, inclusiv natura, data și persoana responsabilă
+   - Istoricul acțiunilor corective implementate
+   - Efectele neconformităților asupra producției
+
+4. **Contracte cu Furnizorii**:
+   - Acorduri oficiale, clauze de calitate și termeni specifici clari
+   - Anexe privind specificațiile tehnice și metodele de lucru
+   - Documentație referitoare la modificările contractelor în timp
+
+5. **Feedback-ul Clienților**:
+   - Documentarea reclamațiilor și sugestiilor
+   - Analiza feedback-ului pentru îmbunătățirea relațiilor cu furnizorii
+   - Rapoarte de trendare a reclamațiilor pe parcursul unui interval definit
+
+6. **Inregistrări de Training**:
+   - Dovezi de instruire a personalului și a furnizorilor
+   - Planuri de curs și agende de formare
+   - Evaluări post-training
+
+#### 12.2. Metode de Stocare a Înregistrărilor
+
+Pentru a asigura gestionarea sistematică a înregistrărilor, "PlastiAuto SRL" va adopta următoarele practici:
+
+- **Sistem Electronic de Management al Documentelor**:
+  - Crearea de foldere structurale pentru fiecare tip de document
+  - Utilizarea sistemelor de indexare pentru a facilita căutarea rapidă
+  - Stocarea documentelor într-un cloud securizat pentru asigurarea accesibilității de la distanță
+
+- **Documente Fizice**:
+  - Arhivarea documentelor fizice într-un spațiu dedicat, care să fie accesibil doar personalului autorizat
+  - Etichetarea rafturilor și fișierelor în conformitate cu sistemul de gestionare a documentelor
+  - Realizarea de copii de siguranță pentru documentele esențiale
+
+#### 12.3. Perioade de Păstrare a Documentelor
+
+- **Evaluările și Rapoartele de Audit**: 5 ani de la data efectuării evaluării sau auditului, cu revizuirea anuală a valabilității acestora.
+- **Neconformități**: vor fi păstrate pe o durată de 5 ani, pentru asigurarea trasabilității și a istoricului măsurilor corective
+- **Contractele cu Furnizorii**: vor fi păstrate pe durata de valabilitate a acestora plus 5 ani după încetare
+- **Feedback-ul Clienților**: înregistrările vor fi arhivate timp de 3 ani, pentru a urmări tendințele și a face analize statistice
+
+### 13. ISTORIC REVIZII
+
+Istoricul reviziilor documentului PFMEA-01 va conține toate modificările aduse pentru a menține documentul la zi cu reglementările și cerințele de calitate. 
+
+#### 13.1. Formatul Istoricului de Revizii
+
+Reviziile vor fi documentate cu următoarele informații:
+
+1. **Revizia 1**: [DATA] – Documentul inițial accepting politica de selectare și evaluare a furnizorilor.
+2. **Revizia 2**: [DATA] – Adăugarea unor criterii suplimentare privind sustenabilitatea și impactul ecologic.
+3. **Revizia 3**: [DATA] – Modificarea procedurii de gestionare a neconformităților, includerea mai multor pași de escaladare.
+4. **Revizia 4**: [DATA] – Actualizarea secțiunilor referitoare la KPIs și metodele de măsurare a performanței.
+5. **Revizia 5**: [DATA] – Revisionarea proceselor de audit si actualizarea formularelor folosite pentru evaluarea furnizorilor.
+
+Informațiile vor fi înregistrate într-un tabel care va cleat, numărul reviziei, data, descrierea modificărilor și persoana responsabilă de efectuarea modificării.
+
+### Appendix A – Example Forms
+
+1. **Formular de Evaluare a Furnizorului**
+   - Nume Furnizor: ___________________
+   - Adresă: ________________________
+   - Data Evaluării: ________________
+   - Scoruri pe Criterii:
+     - Capacitate Tehnică: _____/10
+     - Stabilitate Financiară: _____/10
+     - Referințe: _____/10
+     - Certificări: _____/10
+   - Observații: _______________________________________________________
+
+2. **Formular de Feedback privind Livrările**
+   - Nume Client: ___________________
+   - Produs: ________________________
+   - Data Livrării: ________________
+   - Calitate (Ex: Acceptabil/Neacceptabil): ________
+   - Livrare la Timp (Da/Nu): __________
+   - Comentarii: _______________________________________________________
+
+3. **Raport de Audit Furnizor**
+   - Nume Furnizor: ________________________
+   - Data Auditului: _______________________
+   - Aspecte Auditate:
+     - Procese de Producție: _______ (Conform / Neconform)
+     - Controlul Calității: _______ (Conform / Neconform)
+   - Neconformități Identificate: _______________________________________________________
+
+4. **Plan de Acțiune Corectivă**
+   - Neconformitate: _______________________________________________________
+   - Persoana Responsabilă: ______________________
+   - Data Limită pentru Implementare: ______________
+   - Măsuri Corective Planificate: _______________________________________________________
+
+### Appendix B – KPI Scorecards
+
+Tabloul de bord pentru KPI-uri va include:
+
+1. **Procentajul de livrări la timp**: _____%
+2. **Rata neconformităților**: _____%
+3. **Timpul mediu de răspuns la reclamații**: ______ ore
+4. **Numărul de audituri finalizate**: _____
+5. **Procentajul de furnizori cu rating „A”**: _____%
+
+Graficele vor ilustra progresul KPI-urilor, evidențiind tendințele și zonele de îmbunătățire.
+
+### Appendix C – Audit Checklists
+
+Listele de verificare pentru auditarea furnizorilor vor include secțiuni precum:
+
+1. **Informații Generale**:
+   - Contact actualizat? (Da/Nu)
+   - Certificările sunt valide? (Da/Nu)
+
+2. **Calitatea Proceselor**:
+   - A fost implementat un sistem de management al calității? (Da/Nu)
+   - Rata neconformităților este monitorizată? (Da/Nu)
+
+3. **Monitorizarea Performanței**:
+   - Se înregistrează toate livrările și comenzile? (Da/Nu)
+   - Analiza feedback-ului clienților este realizată periodic? (Da/Nu)
+
+4. **Planuri de Continuitate**:
+   - Există măsuri de urgență pentru livrările întârziate? (Da/Nu)
+   - Planuri de dezvoltare a capacităților sunt documentate? (Da/Nu)
+
+### Appendix D – Escalation Workflow
+
+Scenariul de escaladare în caz de neconformitate majoră a furnizorului va fi structurat în pași critici:
+
+1. **Identificare Neconformitate**:
+   - Semnalarea unei neconformități majore va fi efectuată de către Departamentul Calitate, specificând natura și impactul acesteia.
+
+2. **Evaluare Urgentă**:
+   - O echipă de răspuns rapid va fi formată de urgență pentru a evalua impactul neconformității asupra producției și livrărilor.
+
+3. **Notificare Furnizor**:
+   - Furnizorul va fi contactat imediat pentru a-i semnala problema identificată și a solicita o reacție rapidă.
+
+4. **Plan de Acțiune Corectivă**:
+   - Echipa va colabora cu furnizorul pentru a stabili un plan de acțiune corectivă precis, incluzând un termen limită clar pentru implementarea măsurilor sigure.
+
+5. **Monitorizare**:
+   - Implementarea măsurilor corective va fi monitorizată riguros, iar evaluarea eficienței lor se va face în cadrul auditului următor.
+
+### Concluzie
+
+Acest document PFMEA-01 detaliază procedura de sistem pentru evaluarea, gestionarea, și colaborarea cu furnizorii în conformitate cu standardul IATF 16949. Prin urmarea acestor pași, "PlastiAuto SRL" va asigura o îmbunătățire continuă a calității produselor sale, contribuind astfel la satisfacția clientului și la relații comerciale durabile. Fiecare membru al echipei este încurajat să participe activ la implementarea și respectarea acestor proceduri, garantând astfel succesul colectiv.## 12. INREGISTRARI SI TRASABILITATE
+
+### 12.1 Tipuri de Înregistrări
+
+Înregistrările sunt elemente esențiale pentru demonstrating conformitatea cu cerințele IATF 16949 și pentru o gestionare eficientă a furnizorilor. Acestea vor include următoarele tipuri de înregistrări:
+
+1. **Înregistrări de Evaluare a Furnizorilor**:
+   - Chestionare de evaluare completate.
+   - Certificate de calitate și conformitate a furnizorilor.
+   - Rezultate de evaluare pe baza unor criterii standardizate, cum ar fi performanța anterioară.
+   - Note și recomandări din întâlnirile de lucru sau de evaluare.
+
+2. **Rapoarte de Audit**:
+   - Rapoarte detaliate, inclusiv observatiile auditurilor interne efectuate asupra furnizorilor.
+   - Lista neconformităților identificate și acțiunile corective stabilite.
+   - Obiective de îmbunătățire pentru viitor și măsuri de follow-up.
+
+3. **Înregistrări de Neconformitate**:
+   - Documentarea în detaliu a neconformităților apărute în livrările furnizorilor, inclusiv data și persoana responsabilă de gestionare.
+   - Evidențierea istoricului acțiunilor corective, inclusiv eficacitatea acestora și stadiul de implementare.
+
+4. **Contracte cu Furnizorii**:
+   - Acorduri bilaterale formalizate cu furnizorii care definesc standardele de calitate și livrare.
+   - Documentația referitoare la modificările contractuale și corectarea oricăror discrepanțe.
+
+5. **Feedback-ul Clienților**:
+   - Înregistrarea reclamațiilor și sugestiilor primite de la clienți.
+   - Analizele de feedback care să vizeze îmbunătățirea proceselor interne și relațiile cu furnizorii.
+   - Raportarea reclamanților pe un interval definit de timp, cel puțin anual.
+
+6. **Inregistrări de Training**:
+   - Dovada de instruire a personalului în managementul relațiilor cu furnizorii.
+   - Planuri de curs și agende de formare pentru personalul implicat.
+   - Evaluarea performanței post-training.
+
+### 12.2 Metode de Stocare a Înregistrărilor
+
+Pentru gestionarea eficientă a înregistrărilor, "PlastiAuto SRL" va adopta următoarele metode:
+
+- **Sistem Electronic de Management al Documentelor**:
+  - Crearea de foldere structurale dedicate fiecărui tip de document, cu acces controlat.
+  - Utilizarea instrumentelor de căutare și indexare pentru acces rapid la informații.
+  - Stocarea înregistrărilor într-un server cloud securizat pentru a asigura protecția datelor.
+
+- **Documente Fizice**:
+  - Arhivarea documentelor fizice într-un spațiu dedicat, bine organizat și securizat.
+  - Etichetarea rafturilor și fișierelor conform unui sistem de gestionare a documentelor.
+  - Realizarea de copii de siguranță pentru documentele esențiale într-un loc diferit.
+
+### 12.3 Perioade de Păstrare a Documentelor
+
+Politica de retenție a documentelor se va aplica astfel:
+
+- **Evaluările și Rapoartele de Audit**: vor fi păstrate timp de 5 ani după evaluare, cu o revizuire anuală a relevanței acestora.
+- **Neconformități**: vor fi păstrate timp de 5 ani pentru a asigura trasabilitatea neconformităților și măsurile corective.
+- **Contractele cu Furnizorii**: vor fi păstrate pe durata de valabilitate a contractului plus 5 ani după încetare.
+- **Feedback-ul Clienților**: înregistrările vor fi arhivate timp de 3 ani pentru a urmări tendințele și analiza feedback-ul.
+
+## 13. ISTORIC REVIZII
+
+Istoricul reviziilor documentului PFMEA-01 documentează toate modificările efectuate, asigurându-se astfel că procedurile rămân conforme cu standardele IATF 16949 și cele mai bune practici din industrie.
+
+### 13.1 Formatul Istoricului de Revizii
+
+Reviziile vor fi documentate într-un tabel dedicat, incluzând următoarele informații:
+
+1. **Revizia 1**: [DATA] – Introducerea inițială a documentului, inclusiv procedurile de evaluare a furnizorilor și cerințele de bază.
+2. **Revizia 2**: [DATA] – Îmbunătățiri aduse criteriilor de evaluare, inclusiv adăugarea unor aspecte legate de mediu și sustenabilitate.
+3. **Revizia 3**: [DATA] – Revizuirea procedurii de gestionare a neconformităților, inclusiv pașii pentru escaladare.
+4. **Revizia 4**: [DATA] – Actualizarea indicatorilor KPI și metodologia de măsurare a performanței.
+5. **Revizia 5**: [DATA] – Reformularea proceselor de audit și actualizarea formularelor utilizate pentru evaluarea furnizorilor.
+6. **Revizia 6**: [DATA] – Includerea unor măsuri suplimentare pentru gestionarea performanței slabe a furnizorilor, precum și clarificarea rolurilor și responsabilităților.
+
+### Appendix A – Example Forms
+
+Acest anexa va conține formulare utilizate în procesul de evaluare și management al furnizorilor:
+
+1. **Formular de Evaluare a Furnizorului**:
+   - Detalii de contact ale furnizorului, data evaluării și scoruri pe criterii precum capacitatea tehnică, stabilitatea financiară, și certificările de calitate.
+
+2. **Formular de Feedback privind Livrările**:
+   - Colectarea feedback-ului de la clienți cu privire la livrările efectuate, inclusiv calitatea produsului și respectarea termenelor de livrare.
+
+3. **Raport de Audit Furnizor**:
+   - Un document standardizat pentru raportarea auditurilor efectuate, evidențiind conformitatea cu standardele de calitate.
+
+4. **Plan de Acțiune Corectivă**:
+   - Document care detaliază măsurile corective necesare în urma identificării neconformităților, inclusiv persoana responsabilă de implementare.
+
+### Appendix B – KPI Scorecards
+
+Tabloul de bord pentru KPI-uri va include informații esențiale pentru monitorizarea performanței furnizorilor:
+
+1. **Procentajul de livrări la timp**: o țintă stabilită conform standardelor de industrie.
+2. **Rata neconformităților**: linia de demarcare a acceptabilității produsele livrate.
+3. **Timpul mediu de răspuns la reclamații**: un indicator cheie al reactibilității furnizorilor.
+4. **Numărul de audituri finalizate**: reflectă gradul de conformitate și angajamentul față de procesele de evaluare a furnizorilor.
+5. **Procentajul de furnizori cu rating „A”**: este o indicație a calității globale și fiabilității furnizorilor.
+
+Graficele vor ilustra progresul KPI-urilor, evidențiind tendințele și zonele de îmbunătățire, facilitând astfel o decizie bazată pe fapte pentru managementul furnizorilor.
+
+### Appendix C – Audit Checklists
+
+Listelor de verificare pentru auditarea furnizorilor vor include criterii de evaluare, ce vor ajuta echipele de audit să-și structureze munca:
+
+1. **Informații Generale**:
+   - Verificarea informațiilor de contact, certificărilor și actualizărilor de statut.
+
+2. **Calitatea Proceselor**:
+   - Analiza sistemului de management al calității implementat.
+   - Evaluarea modului în care se monitorizează rata de neconformitate.
+
+3. **Monitorizarea Performanței**:
+   - Validarea înregistrărilor de livrări și feedback de la clienți.
+   - Revizuirea analizei statisticilor de reclamații.
+
+4. **Planuri de Continuitate**:
+   - Evaluarea planurilor de urgență pentru livrările afectate de neconformități.
+   - Inspecția documentelor de planificare a promovării capacităților.
+
+### Appendix D – Escalation Workflow
+
+Fluxul de escaladare pentru gestionarea neconformităților majore va fi format din urmașii pași:
+
+1. **Identificare Neconformitate**:
+   - Semnalizarea neconformităților se va face de către Departamentul Calitate, care va detalia severitatea și impactul acesteia asupra livrărilor.
+
+2. **Evaluare Urgentă**:
+   - Formarea imediată a unei echipe de răspuns pentru evaluarea impactului asupra lanțului de aprovizionare.
+
+3. **Notificare Furnizor**:
+   - Contactarea rapidă a furnizorului pentru a-l informa despre problemă și a solicita o reacție rapidă.
+
+4. **Plan de Acțiune Corectivă**:
+   - Stabilirea unui plan de acțiune corectivă înglobează un termen limită clar pentru implementarea măsurilor necesare.
+
+5. **Monitorizare și Evaluare**:
+   - Monitorizarea implementării planului și evaluarea rezultatelor în auditul posterior pentru a asigura eficacitatea acțiunilor corective.
+
+Prin urmare, fiecare dintre aceste fluxuri de lucru si înregistrări sunt esențiale pentru îmbunătățirea continua a relațiilor cu furnizorii și asigurarea unui standard de calitate ridicat, conform IATF 16949.
+
+Acest document detaliază responsabilitățile și procesele necesare pentru a menține "PlastiAuto SRL" într-o poziție competitivă și conformă cu așteptările clienților. Toate cele menționate susțin angajamentul firmei față de calitate și satisfacția clientului, constituind un fundament solid pentru cadrul de operare al companiei.# PFMEA-01 - Procedura de Sistem pentru Evaluarea și Gestionarea Furnizorilor
+
+## 12. INREGISTRARI SI TRASABILITATE
+
+### 12.1 Tipuri de Înregistrări
+
+Inregistrările sunt esențiale pentru a demonstra conformitatea cu cerințele IATF 16949, precum și pentru a facilita o gestionare eficientă a furnizorilor. Acestea vor include:
+
+1. **Înregistrări de Evidență a Procesului de Evaluare**:
+   - Chestionare de evaluare completate pentru fiecare furnizor, inclusiv date despre performanțele anterioare și istoricul livrărilor.
+   - Certificatul ISO 9001 sau alte certificări relevante obținute de furnizor.
+   - Documentația suport pentru neconformitățile anterioare și acțiunile corective implementate.
+
+2. **Rapoarte de Audit**:
+   - Rapoarte complete de audit, care să conțină observații detaliate, neconformități identificate și propunerile de măsuri corective.
+   - Liste de verificare utilizate la audit, inclusiv criteriile concrete de evaluare.
+
+3. **Înregistrări de Neconformitate**:
+   - Detalii despre fiecare neconformitate identificată, inclusiv data, persoana responsabilă și acțiunile întreprinse pentru soluționare.
+   - Analizele fundamentale care explică cauzele rădăcină ale neconformităților și măsurile preventive.
+
+4. **Contracte cu Furnizorii**:
+   - Copii ale tuturor contractelor și acordurilor de colaborare cu furnizorii.
+   - Documentația referitoare la modificările aduse contractelor și cotele de calitate stabilite.
+
+5. **Feedback-ul Clienților**:
+   - Documentarea reclamațiilor primite de la clienți, inclusiv răspunsurile formulate pentru fiecare caz în parte.
+   - Analiza periodică a feedback-ului clienților, împreună cu măsurile luate pentru îmbunătățirea produselor și serviciilor.
+
+6. **Înregistrări de Training**:
+   - Rapoarte de absolvire a cursurilor de formare a angajaților implicați în procesul de evaluare și management al furnizorilor.
+   - Evaluările performanței post-instruire, care să reflecte îmbunătățirile aduse de pregătire.
+
+### 12.2 Metode de Stocare a Înregistrărilor
+
+PlastiAuto SRL va implementa următoarele metode de stocare a înregistrărilor pentru a asigura integritatea și accesibilitatea acestora:
+
+- **Sistem Electronic de Management al Documentelor**:
+  - Înființarea unor foldere structurale dedicate fiecărui tip de document, cu drepturi de acces bine definite.
+  - Utilizarea unei platforme de management al documentelor care să permită accesul rapid, căutarea eficientă și actualizările în timp real.
+  - Securizarea înregistrărilor prin criptare și backup periodic.
+
+- **Documente Fizice**:
+  - Arhivarea documentelor fizice într-un spațiu dedicat, bine organizat, cu etichete clare.
+  - Implementarea unui sistem de rotație pentru documentele care trebuie revizuite, pentru a preveni suprapunerea informațiilor și a permite actualizările riguroase.
+  - Asigurarea accesului limitat la documentele fizice de către personalul autorizat.
+
+### 12.3 Perioade de Păstrare a Documentelor
+
+Politica de păstrare a documentelor se va aplica astfel:
+
+1. **Evaluările și Rapoartele de Audit**: 
+   - Păstrarea acestora timp de 5 ani de la data evaluării, cu o revizuire anuală a relevanței lor.
+2. **Neconformități**: 
+   - Păstrarea documentelor legate de neconformități timp de 5 ani, asigurând astfel trasabilitatea acțiunilor corective.
+3. **Contractele cu Furnizorii**: 
+   - Documentele vor fi păstrate pe durata de valabilitate a contractului plus încă 5 ani după încetarea acestuia.
+4. **Feedback-ul Clienților**: 
+   - Înregistrările de feedback vor fi arhivate timp de 3 ani pentru a permite evaluarea tendințelor.
+
+## 13. ISTORIC REVIZII
+
+Istoricul reviziilor documentului PFMEA-01 este crucial pentru a păstra o traiectorie clară a schimbărilor și îmbunătățirilor realizate. Fiecare revizie va fi documentată într-un tabel care va include următoarele informații:
+
+### 13.1 Formatul Istoricului de Revizii
+
+| Revizia Nr. | Data     | Descrierea Modificărilor                                           | Aprobat de                      |
+|-------------|----------|--------------------------------------------------------------------|----------------------------------|
+| 1           | [DATA]   | Introducerea inițială a documentului, cu proceduri de evaluare.   | Director Calitate                |
+| 2           | [DATA]   | Îmbunătățiri pentru criteriile de evaluare, incluzând aspecte ecologice. | Director General                 |
+| 3           | [DATA]   | Actualizarea procesului de gestionare a neconformităților, incluzând pași pentru escaladare. | Director Calitate                |
+| 4           | [DATA]   | Reformularea procedurilor de audit și clarificarea formularelor utilizate. | Director Calitate, Director General |
+| 5           | [DATA]   | Îmbunătățirea măsurilor pentru gestionarea performanței slabe a furnizorilor. | Director Calitate                |
+
+### Appendix A – Example Forms
+
+Acest anexa va conține o serie de formulare utilizate în procesul de evaluare și management al furnizorilor:
+
+1. **Formular de Evaluare a Furnizorului**:
+   - Include detalii de contact, data evaluării și scoruri pentru criterii precum capacitatea tehnică, stabilitatea financiară și certificările de calitate.
+   
+2. **Formular de Feedback privind Livrările**:
+   - Un formular standardizat pentru colectarea feedback-ului de la clienți pe baza livrărilor efectuate, incluzând calitatea produsului și respectarea calendarului de livrare.
+
+3. **Raport de Audit Furnizor**:
+   - Un document standardizat pentru raportarea auditurilor, care evidențiază conformitatea cu standardele de calitate și măsurile corective necesare.
+
+4. **Plan de Acțiune Corectivă**:
+   - Documentația care să detalieze măsurile corective necesare în urma identificării neconformităților, inclusiv persoana responsabilă și termenul limită pentru implementare.
+
+### Appendix B – KPI Scorecards
+
+Tabloul de bord pentru KPI-uri va include informații esențiale pentru monitorizarea performanței furnizorilor. Acesta va conține următoarele elemente:
+
+1. **Procentajul de livrări la timp**:
+   - O țintă stabilită conform standardelor de industrie, monitorizând performanța furnizorilor.
+
+2. **Rata neconformităților**:
+   - Un indicator cheie care semnalizează rata neconformităților acceptabile în livrările efectuate.
+
+3. **Timpul mediu de răspuns la reclamații**:
+   - Măsurarea capacității furnizorilor de a răspunde rapid la feedback-ul și reclamațiile clienților.
+
+4. **Numărul de audituri finalizate**:
+   - Acesta reflectă gradul de conformitate al furnizorilor și angajamentul față de procesele relevante.
+
+5. **Procentajul de furnizori cu rating „A”**:
+   - Indicația calității globale și fiabilității furnizorilor, ce trebuie menținută la un nivel cât mai ridicat.
+
+Graficele vor ilustra progresul KPI-urilor, evidențiind tendințele și zonele de îmbunătățire, facilitând de asemenea luarea deciziilor bazate pe fapte în managementul furnizorilor.
+
+### Appendix C – Audit Checklists
+
+Listele de verificare utilizate pentru auditarea furnizorilor vor include criterii care ajută echipele de audit să-și structureze activitatea, incluzând următoarele:
+
+1. **Informații Generale**:
+   - Verificarea informatiei de contact, certificărilor, actualizărilor de statut și a conformității acestora.
+
+2. **Calitatea Proceselor**:
+   - Analiza sistemului de management al calității implementat, evaluarea ratei de neconformitate și a metodelor de monitorizare a acestuia.
+   
+3. **Monitorizarea Performanței**:
+   - Validarea înregistrărilor de livrări și feedback-uri, precum și revizuirea analizei statisticilor de reclamații.
+
+4. **Planuri de Continuitate**:
+   - Evaluarea planurilor de urgență pentru livrările afectate de neconformități, inclusiv inspecția documentelor de planificare a capacităților.
+
+### Appendix D – Escalation Workflow
+
+Fluxul de escaladare pentru gestionarea neconformităților majore va include următorii pași:
+
+1. **Identificare Neconformitate**:
+   - Semnalizarea neconformităților se va face de către Departamentul Calitate, care va evaluat severitatea și impactul acestora asupra livrărilor.
+
+2. **Evaluare Urgentă**:
+   - Formarea unei echipe de răspuns care să evalueze rapid impactul asupra lanțului de aprovizionare și a necesității măsurilor corective.
+
+3. **Notificare Furnizor**:
+   - Contactarea furnizorului pentru informarea imediată asupra problemei și solicitarea unei reacții rapide.
+
+4. **Plan de Acțiune Corectivă**:
+   - Stabilirea unui plan detaliat de acțiune corectivă, cu responsabilități clare și termene limită pentru implementare.
+
+5. **Monitorizare și Evaluare**:
+   - Monitorizarea progresului implementării planului și evaluarea rezultatelor în auditurile ulterioare pentru a asigura eficacitatea soluțiilor adoptate.
+
+Prin aceste fluxuri de lucru și înregistrări, "PlastiAuto SRL" își va continua angajamentul față de calitate, asigurând în același timp o relație sănătoasă și de lungă durată cu furnizorii săi. Astfel, asigurăm nu doar conformitatea cu standardele IATF 16949, ci și îmbunătățirea continuă a pachetelor de produse și servicii livrate clienților.## Appendix A – Example Forms
+
+1. **Formular de Evaluare a Furnizorului**
+   - Cod formular: FE-FURN-01
+   - Data evaluării: __________
+   - Nume furnizor: ________________________
+   - Persoană de contact: ___________________
+   - Scoruri pentru criterii de evaluare:
+     1. Capacitatea tehnică: 0-10 | Scor: _________
+     2. Stabilitatea financiară: 0-10 | Scor: _________
+     3. Certificări de calitate: 0-10 | Scor: _________
+     4. Performanță anterioară: 0-10 | Scor: _________
+     5. Implicarea în inovare: 0-10 | Scor: _________
+   - Observații: _________________________________________________________
+
+2. **Formular de Feedback privind Livrările**
+   - Cod formular: FB-LIV-01
+   - Data evaluării: __________
+   - Nume client: ________________________
+   - Detalii livrare:
+     - Numărul de comandă: _______________
+     - Data livrării: ______________________
+   - Calitatea produsului: ______ (1-5)
+   - Respectarea calendarului de livrare: ______ (1-5)
+   - Comentarii suplimentare: _________________________________________________________
+
+3. **Raport de Audit Furnizor**
+   - Cod raport: RA-FURN-01
+   - Data auditului: __________
+   - Nume furnizor: ________________________
+   - Auditor(i): _____________________________
+   - Observații generale: _________________________________________________________
+   - Neconformități identificate:____________________________________________________________________________
+   - Măsuri corective propuse: _________________________________________________________
+
+4. **Plan de Acțiune Corectivă**
+   - Cod formular: PAC-01
+   - Data identificării neconformității: __________
+   - Nume furnizor: ________________________
+   - Descriere neconformitate: _________________________________________________________
+   - Responsabil: ________________________
+   - Termen limită: _______________________
+   - Măsuri implementate: _________________________________________________________
+   - Verificare finală: ______________________
+
+## Appendix B – KPI Scorecards
+
+### Tabloul de Bord pentru KPI-uri
+
+| KPI                       | Valoare Obținută | Țintă | Status |
+|--------------------------|------------------|-------|--------|
+| Procentajul de livrări la timp  | _______ %         | 95 %  | ██ On Track / ██ At Risk / ██ Off Track |
+| Rata neconformităților  | _______ %         | < 1 % | ██ On Track / ██ At Risk / ██ Off Track |
+| Timpul mediu de răspuns la reclamații | _______ zile           | < 2 zile | ██ On Track / ██ At Risk / ██ Off Track |
+| Numărul de audituri finalizate  | ________          | 4    | ██ On Track / ██ At Risk / ██ Off Track |
+| Procentajul de furnizori cu rating „A” | _______ %         | > 80 % | ██ On Track / ██ At Risk / ██ Off Track |
+
+### Graficele KPI
+
+1. **Graficele de Performanță**: Datele vor fi prezentate într-un format grafic care să evidențieze tendințele performanțelor în timp, inclusiv variația KPI-urilor.
+2. **Analiza Comportamentului Furnizorilor**: Tabel sau diagramă care variază ratingurile furnizorilor în funcție de neconformități pe o perioadă definită.
+
+## Appendix C – Audit Checklists
+
+### Liste de Verificare pentru Auditorii Furnizorilor
+
+1. **Informații Generale**
+   - Verificare a informațiilor de contact ale furnizorului.
+   - Validarea certificărilor obținute de furnizor, inclusiv termenul de valabilitate.
+
+2. **Calitatea Proceselor**
+   - Revizuirea politicii de calitate a furnizorului.
+   - Evaluarea proceselor internaționale dedicate asigurării calității, inclusiv SPC.
+
+3. **Monitorizarea Performanței**
+   - Notarea metricilor de performanță și a parametrilor KPI.
+   - Verificarea feedback-ului clienților și modul în care acesta este gestionat.
+
+4. **Planuri de Continuitate**
+   - Examinarea documentației referitoare la continuitatea activității în caz de neconformități.
+   - Aprobarea măsurilor luate pentru mitigarea riscurilor.
+
+## Appendix D – Escalation Workflow
+
+### Fluxul de Escaladare pentru Gestionarea Neconformităților Majore
+
+1. **Identificare Neconformitate**
+   - Definirea gravității neconformităților printr-o analiză rapidă.
+   - O notificare oficială către echipa de conducere pentru evaluarea impactului asupra afacerii.
+
+2. **Evaluare Urgentă**
+   - Formarea echipei de răspuns imediat.
+   - Stabilirea priorităților și alocarea resurselor necesare pentru gestionarea neconformității.
+
+3. **Notificare Furnizor**
+   - Informarea furnizorului despre neconformitate și impactul asupra produselor livrate.
+   - Definirea clară a termenelor pentru răspuns și acțiuni corective.
+
+4. **Plan de Acțiune Corectivă**
+   - Elaborarea unui plan de acțiune cu responsabilități asumate.
+   - Stabilirea măsurilor imediate și a monitorizării progresului.
+
+5. **Monitorizare și Evaluare**
+   - Evaluarea rezultatelor soluțiilor implementate prin audituri periodice.
+   - Înregistrarea lecțiilor învățate și rapoartelor la conducere pentru îmbunătățiri viitoare.
+
+ În concluzie, fluxurile de lucru detaliate și documentele standardizate ajută „PlastiAuto SRL” să mențină un sistem robust de evaluare și gestionare a furnizorilor, conform standardelor IATF 16949, asigurând nu doar conformitate, ci și o calitate constantă a produselor livrate către clienți. Această abordare contribuie nu doar la îmbunătățirea relației cu furnizorii, dar și la satisfacția finală a clienților și a pieței în ansamblu. Aceste documente și procese sunt esențiale în îndeplinirea angajamentelor față de calitate și excelență operațională, astfel încât „PlastiAuto SRL” să rămână un partener de încredere în industria auto.### Inregistrari si Trasabilitate
+
+Pentru a asigura o trasabilitate adecvată a furnizorilor și a performanțelor acestora, "PlastiAuto SRL" va implementa un sistem de înregistrări structurat, care să cuprindă următoarele tipuri de documentație:
+
+1. **Registrul furnizorilor**:
+   - Fiecare furnizor va fi înscris într-un registru centralizat, care va include datele de contact, certificările, istoricul performanțelor și orice neconformități. Acest registru va fi actualizat periodic și va permite accesul echipelor relevante la informațiile de bază despre fiecare furnizor.
+
+2. **Înregistrările auditurilor**:
+   - Vor fi păstrate înregistrări detaliate pentru fiecare audit realizat la furnizori, inclusiv datele auditului, constatările, măsurile corective propuse și data de verificare pentru implementarea acestora. Aceste înregistrări vor fi esențiale pentru evaluările ulterioare și pentru analizele de trend.
+
+3. **Feedback-ul clienților**:
+   - Toate feedback-urile primite de la clienți cu privire la livrări și produsele furnizate vor fi documentate. Acest feedback va fi utilizat pentru a evalua performanța furnizorilor și pentru a iniția discuții constructive asupra zonelor de îmbunătățire.
+
+4. **Rapoarte de performanță KPI**:
+   - Aceste rapoarte vor fi generate lunar și vor include toate KPI-urile relevante pentru furnizori, rezultatele fiind comparate cu valorile target stabilite. Rapoartele KPI vor fi un instrument de bază pentru analiza și deciziile privind strategia de gestionare a relațiilor cu furnizorii.
+
+5. **Planurile de acțiune corectivă**:
+   - Fiecare plan de acțiune corectivă dezvoltat ca urmare a neconformităților identificate va fi înregistrat și monitorizat, asigurând astfel urmarirea finalizării acțiunilor stabilite și evaluarea eficienței acestora.
+
+Toate documentele menționate anterior vor fi păstrate conform politicilor de confidențialitate și de management al documentelor ale companiei, asigurându-se că acestea sunt accesibile doar personalului autorizat.
+
+### Istoric Revizii
+
+Revizia periodică a documentului PFMEA-01 este crucială pentru asigurarea actualizării acestuia în concordanță cu cerințele organizației și cu standardele IATF 16949. "PlastiAuto SRL" va menține un istoric al reviziilor, care va include următoarele informații:
+
+1. **Data reviziei**: Fiecare dată în care documentul a fost revizuit sau actualizat va fi înregistrată.
+   
+2. **Motivul reviziei**: Se va specifica motivul fiecărei revizii, fie că a fost rezultatul unei auditeri, actualizări ale cerințelor legale sau interne, sau ca parte a inițiativelor de îmbunătățire continuă.
+
+3. **Numărul versiunii**: Fiecare revizie va primi un număr de versiune unic, care va facilita urmărirea modificărilor făcute în timp.
+
+4. **Responsabilul reviziei**: Numele persoanei care a efectuat revizia și a validat documentul va fi inclus, astfel încât să existe o claritate în ceea ce privește responsabilitatea.
+
+5. **Detalii asupra modificărilor**: O scurtă descriere a modificărilor specifice efectuate în document va fi inclusă, pentru a facilita înțelegerea impactului acestor modificări asupra procesului general de evaluare și management al furnizorilor.
+
+Acest sistem de înregistrare a reviziilor va sprijini "PlastiAuto SRL" în menținerea unei documentații clare și organizate, contribuind la procesul de îmbunătățire continuă a sistemului de management al calității.
+
+### Concluzie
+
+Implementarea și gestionarea eficientă a procedurii PFMEA-01 este vitală pentru "PlastiAuto SRL" în atingerea standardelor IATF 16949 și pentru asigurarea unei colaborări eficiente cu furnizorii. Prin finalizarea acestui document, "PlastiAuto SRL" se angajează să mențină relații comerciale sustenabile, bazate pe principii de calitate și excelență operațională, în beneficiul tuturor părților implicate, în special al clienților săi.
+
+### Anexe
+
+Documentele incluse în anexe sprijină implementarea și utilizarea procedurii PFMEA-01, furnizând instrumente și resurse care facilitează evaluarea și managementul furnizorilor. Acestea vor fi revizuite și actualizate periodic pentru a se asigura că rămân relevante și utile în cadrul organizației.
+
+=== METADATA ===
+doc_id: PFMEA-01
+industry: automotive
+doc_type: long
+language: ro
+standard: IATF 16949
+contradiction: 
+save_path: data/automotive/long/PFMEA-01.txt
+save_command: python manage_corpus.py save --file PFMEA-01.txt --name PFMEA-01 --industry automotive --lang ro
+================

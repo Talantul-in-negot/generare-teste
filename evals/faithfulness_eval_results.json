@@ -1,0 +1,332 @@
+{
+  "run_at": "2026-08-14T11:09:31.345934+00:00",
+  "faithfulness_answerable": 0.9188,
+  "baseline": 0.84,
+  "delta": 0.0788,
+  "n_scored": 29,
+  "n_refusals": 0,
+  "n_unscorable": 5,
+  "n_errors": 0,
+  "n_total": 34,
+  "by_type": {
+    "single_hop": {
+      "faithfulness": 0.875,
+      "scored": 8,
+      "refusals": 0
+    },
+    "multi_hop": {
+      "faithfulness": 0.9167,
+      "scored": 4,
+      "refusals": 0
+    },
+    "temporal": {
+      "faithfulness": 0.9375,
+      "scored": 4,
+      "refusals": 0
+    },
+    "inference": {
+      "faithfulness": 0.9444,
+      "scored": 3,
+      "refusals": 0
+    },
+    "authority_chain": {
+      "faithfulness": 0.95,
+      "scored": 2,
+      "refusals": 0
+    },
+    "negative": {
+      "faithfulness": 0.8334,
+      "scored": 2,
+      "refusals": 0
+    },
+    "precision": {
+      "faithfulness": 1.0,
+      "scored": 2,
+      "refusals": 0
+    },
+    "calibration": {
+      "faithfulness": 0.9,
+      "scored": 1,
+      "refusals": 0
+    },
+    "agentic": {
+      "faithfulness": 0.9286,
+      "scored": 1,
+      "refusals": 0
+    },
+    "contextual": {
+      "faithfulness": 1.0,
+      "scored": 2,
+      "refusals": 0
+    }
+  },
+  "questions": [
+    {
+      "id": "SH-01",
+      "type": "single_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "FAA AD 2024-01-02 supersedes AD 2022-03-07.",
+      "latency": 17.8
+    },
+    {
+      "id": "SH-02",
+      "type": "single_hop",
+      "status": "scored",
+      "faithfulness": 0.0,
+      "answer": "FAA AD 2024-01-02 supersedes AD 2020-05-11.",
+      "latency": 9.4
+    },
+    {
+      "id": "SH-03",
+      "type": "single_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "The Federal Aviation Administration (FAA), DOT, mandated FAA AD 2024-01-02. It was issued under 14 CFR Part 39.",
+      "latency": 7.0
+    },
+    {
+      "id": "SH-04",
+      "type": "single_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "FAA AD 2024-01-02 applies to Boeing Model 737-8 and 737-9 airplanes, certificated in any category, as identified in Boeing Alert Requirements Bulletin (ARB) 737-31A1904 RB, dated December 5, 2023.",
+      "latency": 7.0
+    },
+    {
+      "id": "SH-05",
+      "type": "single_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "Boeing manufactures the Boeing 737 MAX, with primary assembly at the Boeing Factory in Renton, WA. Major suppliers include Spirit AeroSystems for the fuselage, Safran for landing gear, and Parker Aerospace for hydraulics. The LEAP-1B engine is manufactured by CFM International, a 50/50 joint venture between GE Aerospace and Safran Aircraft Engines.",
+      "latency": 6.9
+    },
+    {
+      "id": "SH-06",
+      "type": "single_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "The Boeing 737 MAX is equipped with CFM International LEAP-1B engines.",
+      "latency": 9.0
+    },
+    {
+      "id": "SH-07",
+      "type": "single_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "MCAS Software v2.0 supersedes MCAS Software v1.7.3 and all prior versions. Therefore, MCAS Software v1.0 is superseded by v2.0.",
+      "latency": 6.4
+    },
+    {
+      "id": "SH-08",
+      "type": "single_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "Southwest Airlines operates Boeing 737 MAX aircraft, including the 737 MAX 8. Key operators of the 737 MAX Series also include Ryanair, American Airlines, United Airlines, and Air Canada. Lion Air operates both A320neo and 737 MAX aircraft.",
+      "latency": 9.9
+    },
+    {
+      "id": "MH-01",
+      "type": "multi_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "AD 2020-05-11 was partially superseded by AD 2022-03-07, and AD 2022-03-07 was superseded by AD 2024-01-02. AD 2020-05-11 is also fully superseded by AD 2024-01-02.",
+      "latency": 25.1
+    },
+    {
+      "id": "MH-02",
+      "type": "multi_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "FAA AD 2024-01-02 applies to LEAP-1B engine mount inspection and references 737 MAX continued airworthiness requirements. The required procedure is the CFM LEAP-1B Engine Mount \u2014 Inspection and Maintenance in Boeing 737 MAX CMM Chapter 71, Section 71-21-05, rev12, applicable to Boeing 737-8 and 737-9 aircraft with CFM International LEAP-1B engines. It includes visual inspection of the forward engine mount every 600 flight cycles or 12 months, whichever occurs first.",
+      "latency": 12.7
+    },
+    {
+      "id": "MH-03",
+      "type": "multi_hop",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "The context does not identify specific airlines affected by MCAS software requirements. It states that the requirements apply to all Boeing Model 737-8 and 737-9 airplanes.",
+      "latency": 6.3
+    },
+    {
+      "id": "MH-04",
+      "type": "multi_hop",
+      "status": "scored",
+      "faithfulness": 0.6667,
+      "answer": "The context does not provide an explicit regulatory path from the FAA to the maintenance crew for the CFM LEAP-1B engine. It records only that FAA AD 2020-05-11 has status IS_COMPLIANT_WITH and CFM AD CFM-2023-14 has status IS_COMPLIANT_WITH. The Component Maintenance Manual for the CFM LEAP-1B engine mount is at rev12. No intermediate steps or mechanism by which FAA requirements reach maintenance crews are stated.",
+      "latency": 20.5
+    },
+    {
+      "id": "MH-05",
+      "type": "multi_hop",
+      "status": "unscorable",
+      "answer": "Southwest Airlines received its first Boeing 737 MAX 8 on August 29, 2017. Following the MCAS-related fatal accidents, the FAA grounded all 737-8 and 737-9 aircraft on March 13, 2019. FAA AD 2020-05-11 established return-to-service requirements, with compliance mandatory for all Part 121 operators before revenue-service resumption; the FAA lifted the grounding on November 18, 2020. Southwest returned its 737 MAX 8 aircraft to revenue service on March 11, 2021. Later compliance milestones included FAA AD 2022-03-07 for additional AOA monitoring enhancements and FAA AD 2024-01-02 requiring MCAS Software v2.0 installation.",
+      "latency": 24.9
+    },
+    {
+      "id": "MH-06",
+      "type": "multi_hop",
+      "status": "unscorable",
+      "answer": "The context does not fully explain how a single 2022 directive relates to both 2020 and 2024 directives. EASA AD 2022-0201 is superseded by EASA AD 2024-0072, but no relationship to any 2020 directive is stated. FAA AD 2022-03-07 is listed alongside FAA AD 2020-05-11 and FAA AD 2024-01-02 as Boeing 737 MAX ADs under 14 CFR Part 39, but the context does not describe how they specifically relate to each other. For current operators, Boeing 737-8 and 737-9 operators must comply with all applicable Part 39 ADs or the aircraft is considered unairworthy. EASA A320neo operators with FMGC P/12C or earlier must install FMGC software P/12D within 6 months under EASA AD 2024-0072.",
+      "latency": 24.1
+    },
+    {
+      "id": "CON-01",
+      "type": "temporal",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "No. The March 5, 2024 AD compliance check report for G-ABCD states \u201cCRITICAL FINDING \u2014 NON-COMPLIANCE IDENTIFIED\u201d following receipt of FAA AD 2024-01-02, effective February 15, 2024. The upcoming AD compliance schedule lists AD 2024-01-02 MCAS v2.0 with a compliance deadline of May 15, 2024 and a planned completion of April 23, 2024. As of March 2024, that MCAS-related AD was not yet completed.",
+      "latency": 15.2
+    },
+    {
+      "id": "CON-02",
+      "type": "inference",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "Yes. The AD compliance check report for G-ABCD dated March 5, 2024 identifies a critical finding of non-compliance with FAA AD 2024-01-02. Under 14 CFR Part 39, operators of Boeing 737-8 and 737-9 aircraft are legally required to comply with all applicable ADs, and non-compliance results in the aircraft being considered unairworthy for operation under FAA jurisdiction. Therefore, G-ABCD\u2019s non-compliance at that time meant it was unairworthy for operation under FAA jurisdiction.",
+      "latency": 9.2
+    },
+    {
+      "id": "AUT-01",
+      "type": "authority_chain",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "The Boeing 737 MAX Component Maintenance Manual (CMM), Chapter 71, Section 71-21-05, \u201cCFM LEAP-1B Engine Mount \u2014 Inspection and Maintenance,\u201d rev12, dated November 15, 2023, governs engine mount inspection. It applies to Boeing 737-8 and 737-9 aircraft equipped with CFM International LEAP-1B engines.",
+      "latency": 11.8
+    },
+    {
+      "id": "AUT-02",
+      "type": "authority_chain",
+      "status": "scored",
+      "faithfulness": 0.9,
+      "answer": "No. AD 2020-05-11 is not still the governing airworthiness directive. The context states that AD 2020-05-11 is superseded by a subsequent AD, effective March 25, 2022, which requires enhanced MCAS software verification procedures, AOA disagree alert activation, and mandatory crew training completion records for certain Boeing 737-8 and 737-9 airplanes. The Part 39 framework lists AD 2020-05-11 as the initial return-to-service requirements, followed by FAA AD 2022-03-07 and FAA AD 2024-01-02.",
+      "latency": 32.1
+    },
+    {
+      "id": "AUT-03",
+      "type": "authority_chain",
+      "status": "unscorable",
+      "answer": "The FAA is the primary certification authority for the Boeing 737 MAX, acting under 49 USC 106(g), 40113, and 44701, with airworthiness directives governed by 14 CFR Part 39. The FAA\u2019s March 13, 2019 Emergency Order of Airworthiness grounds all 737-8 and 737-9 aircraft. Boeing holds FAA Production Approval and Design Approval Holder status under 14 CFR Parts 21, 25, and 39. For engine inspections, the applicable technical document is the Boeing 737 MAX Component Maintenance Manual, Chapter 71, Section 71-21-05, revision rev12, dated November 15, 2023, covering CFM LEAP-1B engine mount inspection and maintenance for 737-8 and 737-9 aircraft. Bilateral agreement partners include EASA, TCCA, CAAC, ANAC, CAAS, and other national authorities.",
+      "latency": 23.9
+    },
+    {
+      "id": "INF-01",
+      "type": "inference",
+      "status": "scored",
+      "faithfulness": 0.8333,
+      "answer": "The context does not state that FAA AD 2024-01-02 supersedes FAA AD 2020-05-11. It states that an AD effective March 25, 2022 supersedes AD 2020-05-11, and the timeline associates that date with FAA AD 2022-03-07. FAA AD 2024-01-02 is listed separately as requiring MCAS Software v2.0 installation, with no supersession relationship to the 2020 directive stated.",
+      "latency": 20.0
+    },
+    {
+      "id": "INF-02",
+      "type": "inference",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "Yes. Southwest Airlines operates Boeing 737 MAX 8 aircraft and is identified as a primary US operator of Boeing 737 MAX aircraft. FAA AD 2024-01-02 applies to Boeing 737-8 and 737-9 operators, and compliance is mandatory for all Part 121 operators. Non-compliance results in the aircraft being considered unairworthy under FAA jurisdiction.",
+      "latency": 8.1
+    },
+    {
+      "id": "NEG-01",
+      "type": "negative",
+      "status": "scored",
+      "faithfulness": 0.6667,
+      "answer": "The context does not state whether FAA AD 2024-01-02 applies to the Airbus A320neo. The context identifies EASA AD 2024-0072 as applying to the Airbus A320neo family, but it does not provide the applicability of FAA AD 2024-01-02.",
+      "latency": 6.3
+    },
+    {
+      "id": "NEG-02",
+      "type": "negative",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "No. The context identifies Boeing Factory in Renton, WA as the primary assembly site for the 737 family, and an inspection report lists the Boeing 737-8 as a Boeing aircraft. Airbus is described as a separate manufacturer with facilities in Toulouse, Hamburg, Tianjin, and Mobile; no context states that Airbus manufactures the 737 MAX.",
+      "latency": 8.3
+    },
+    {
+      "id": "NEG-03",
+      "type": "negative",
+      "status": "unscorable",
+      "answer": "No. The only FAA airworthiness directive identified in the context is FAA AD 2024-01-02, which is described as referencing 737 MAX continued airworthiness requirements, not Airbus aircraft. The Airbus-related airworthiness directive in the context is EASA AD 2024-0072 for the A320neo family.",
+      "latency": 7.0
+    },
+    {
+      "id": "TMP-01",
+      "type": "temporal",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "The earliest FAA airworthiness directive identified in the corpus is FAA AD 2022-03-07. The corpus also references AD No. 2024-01-02, which is later. A March 13, 2019 FAA Emergency Order of Airworthiness also appears, but it is characterized as an emergency order rather than as an airworthiness directive.",
+      "latency": 16.8
+    },
+    {
+      "id": "TMP-02",
+      "type": "temporal",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "The compliance record lists the current software version as MCAS v1.7.3. MCAS Software v2.0 supersedes MCAS v1.7.3 and all earlier versions, and is the version required by FAA AD 2024-01-02.",
+      "latency": 7.8
+    },
+    {
+      "id": "TMP-03",
+      "type": "temporal",
+      "status": "scored",
+      "faithfulness": 0.75,
+      "answer": "Two FAA airworthiness directives issued between 2020 and 2024 are listed as applying to LEAP-1B engine mount inspection: FAA AD 2022-03-07 and FAA AD 2024-01-02.",
+      "latency": 9.1
+    },
+    {
+      "id": "PRE-01",
+      "type": "precision",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "The document ID is AD 2022-03-07.",
+      "latency": 4.5
+    },
+    {
+      "id": "PRE-02",
+      "type": "precision",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "FAA AD 2024-01-02.",
+      "latency": 8.5
+    },
+    {
+      "id": "CAL-01",
+      "type": "calibration",
+      "status": "scored",
+      "faithfulness": 0.9,
+      "answer": "No. The corpus identifies aircraft G-ABCD, and the report notes a critical finding of non-compliance or anticipated non-compliance, while separate ADs for that aircraft are listed as compliant. This is a mixed compliance picture, not evidence of conflicting statements about the same compliance status. The unresolved conflicts in the corpus concern Boeing issuance and CFM engine manufacturing, not a specific aircraft\u2019s compliance status.",
+      "latency": 12.8
+    },
+    {
+      "id": "AGT-01",
+      "type": "agentic",
+      "status": "scored",
+      "faithfulness": 0.9286,
+      "answer": "The FAA is the Primary Certification Authority for the Boeing 737 MAX. Boeing holds FAA Production Approval and Design Approval Holder status under 14 CFR Parts 21, 25, and 39. The FAA issues airworthiness directives that apply to LEAP-1B engine mount inspection: FAA AD 2024-01-02, FAA AD 2022-03-07, and FAA AD 2020-05-11, along with CFM AD CFM-2023-14 for fan blade inspection. The maintenance instructions for the CFM LEAP-1B engine mount are in the Boeing 737 MAX Component Maintenance Manual Chapter 71, Section 71-21-05, revision 12 (rev12), which applies to 737-8 and 737-9 aircraft with LEAP-1B engines. Compliance status for FAA AD 2020-05-11 and CFM AD CFM-2023-14 shows IS_COMPLIANT_WITH, with both engines inspected and no discrepancies found.",
+      "latency": 31.5
+    },
+    {
+      "id": "AGT-02",
+      "type": "agentic",
+      "status": "unscorable",
+      "answer": "FAA AD 2024-01-02 is issued under 14 CFR Part 39 and requires installation of MCAS Software version 2.0 or later. Installation must be done in accordance with Boeing Service Bulletin 737-31-1944 rev2, dated January 8, 2024, with an estimated 3.5 hours per aircraft. Revised MCAS procedures are incorporated into the flight crew operating manual via Boeing Operations Manual Bulletin TBC-19-11 rev3. Southwest Airlines is a primary US Part 121 Boeing 737 MAX operator, so compliance is mandatory before revenue service resumption. Southwest\u2019s fleet registry is SWA-OPS-2024-FR-001, and revision history Rev12 (Nov 2023) updated inspection intervals per FAA AD 2024-01-02 compliance; non-compliance makes the aircraft unairworthy under FAA jurisdiction.",
+      "latency": 68.5
+    },
+    {
+      "id": "CTX-01",
+      "type": "contextual",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "14 CFR Part 39 establishes requirements for the correction of unsafe conditions in aircraft, aircraft engines, propellers, and appliances when those conditions exist or are likely to exist or develop in other products of the same design. FAA\u2019s airworthiness directives under this part are legally enforceable rules that apply to aircraft, aircraft engines, propellers, and appliances. The directive that references 14 CFR Part 39 is Airworthiness Directive AD No. 2024-01-02, Docket No. FAA-2023-1842.",
+      "latency": 9.1
+    },
+    {
+      "id": "CTX-02",
+      "type": "contextual",
+      "status": "scored",
+      "faithfulness": 1.0,
+      "answer": "EASA AD 2024-0072 applies to A320-200N and A321-271N aircraft with FMGC P/12C or earlier. Its Type/Model Designation lists A320-200N, A320-271N, and A321-271N (A320neo family). The action is to install FMGC software standard P/12D within 6 months.",
+      "latency": 8.6
+    }
+  ]
+}

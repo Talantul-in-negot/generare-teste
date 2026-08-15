@@ -1,0 +1,305 @@
+## INSTRUCTIUNE DE LUCRU
+### IL-CAL-05
+#### PlastiAuto SRL
+#### Data aprobării: [Data]
+#### Aprobat de: [Numele responsabilului]
+#### Distribuție: Toate departamentele implicate în procesul de achiziții
+
+---
+
+### 1. SCOP
+Scopul acestei Instrucțiuni de Lucru este de a stabili un cadru clar și concis pentru gestionarea și optimizarea procesului de achiziție a materialelor și componentelor necesare producției la PlastiAuto SRL, în conformitate cu cerințele IATF 16949. Procedura se concentrează pe asigurarea calității produselor achiziționate, selectarea furnizorilor adecvați și gestionarea eficientă a comenzilor.
+
+### 2. DOMENIU DE APLICARE
+Această Instrucțiune de Lucru se aplică tuturor departamentelor din cadrul PlastiAuto SRL implicate în procesul de achiziție și se extinde la toți furnizorii care colaborează cu societatea. Instrucțiunea se aplică de la inițierea comenzii până la recepția și verificarea produselor.
+
+### 3. DEFINITII SI ABREVIERI
+1. **Furnizor** - un terț care furnizează produse sau servicii către PlastiAuto SRL.
+2. **Neconformitate** - o neîndeplinire a cerințelor specificate, fie ele legale, de standarde sau interne.
+3. **Receptie** - procesul de primire și verificare a produselor livrate.
+4. **Comandă** - solicitare scrisă către un furnizor pentru livrarea de bunuri sau servicii.
+5. **Calitate** - gradul în care un set de caracteristici inherente îndeplinește cerințele.
+6. **PPAP (Part Production Approval Process)** - procesul de aprobat al unei producții de serie.
+7. **FMEA (Failure Mode and Effects Analysis)** - o metodă de identificare a posibilelor neconformități și evaluarea efectelor acestora.
+8. **SPC (Statistical Process Control)** - control statistic al proceselor pentru a stabiliza și îmbunătăți procesele de producție.
+9. **MSA (Measurement System Analysis)** - analiza sistemului de măsurare, utilizată pentru a determina capacitatea sistemului de măsurare.
+10. **Evaluare a performanței furnizorului** - procesul de evaluare periodică a performanței și conformității furnizorilor.
+
+### 4. REFERINTE
+1. ISO 9001:2015 – Sistemul de management al calității - Cerințe
+2. IATF 16949:2016 – Sistemul de management al calității pentru organizațiile din industria auto
+3. IL-CAL-01 – Politica de calitate a PlastiAuto SRL, revizia 02
+4. IL-CAL-02 – Manualul sistemului de management al calității, revizia 03
+5. IL-CAL-03 – Procedura de gestionare a neconformităților, revizia 01
+6. IL-CAL-04 – Procedura de evaluare a furnizorilor, revizia 04
+7. IL-CAL-06 – Procedura de recepție a produselor, revizia 01
+
+### 5. RESPONSABILITATI
+
+| Rol                  | Responsabilități                                                                              |
+|----------------------|----------------------------------------------------------------------------------------------|
+| Director General     | Aprobat și supervizarea tuturor proceselor de achiziție.                                    |
+| Manager Achiziții    | Coordonarea procesului de selectare a furnizorilor și a emiterii comenzilor.                |
+| Specialist Calitate   | Verificarea conformității produselor la recepție și raportarea neconformităților.           |
+| Departament Tehnic   | Evaluarea furnizorilor și validarea produselor livrate conform specificațiilor tehnice.     |
+| Responsabil Logistic  | Gestionarea fluxului de produse și documentației aferente comenzilor.                        |
+
+### 6. PROCEDURA DETALIATA
+
+#### 7.1 Initierea comenzii
+Initierea comenzii se va realiza în conformitate cu următorii pași:
+
+1. **Identificarea nevoii**: Produsele necesare pentru producție sunt identificate de către departamentul tehnic și/sau de către managerul de producție.
+   
+2. **Documentarea cerințelor**: Cerințele pentru produsele necesare (specificații tehnice, cantități, termene de livrare) se documentează într-o fișă de comandă.
+
+3. **Verificarea bugetului**: Angajamentul financiar trebuie verificat de către managerul de achiziții pentru a asigura disponibilitatea fondurilor.
+
+4. **Inițierea comenzii**: După completarea documentației necesare, managerul de achiziții inițiază procesul de comandă prin sistemul electronic de gestiune a comenzilor (SGC).
+
+#### 7.2 Selectarea furnizorului
+Selectarea furnizorului se va realiza conform următoarelor etape:
+
+1. **Criterii de selecție**: Stabilirea criteriilor de selecție a furnizorilor, care trebuie să includă aspecte precum: certificarea ISO/IATF, performanța anterioară, capacitatea de livrare și evaluări de calitate.
+
+2. **Identificarea furnizorilor potențiali**: Se face o listă de furnizori potențiali folosind baza de date internă și feedback-ul de la alte organizații.
+
+3. **Evaluarea preliminară**: O etapă preliminară de evaluare se desfășoară prin verificarea documentelor (certificări, rapoarte de audit, referințe).
+
+4. **Auditarea furnizorului**: Furnizorii selectați vor fi supuși unei auditări, dacă este cazul, pentru a verifica capacitatea de a respecta cerințele PlastiAuto SRL.
+
+5. **Decizarea**: După evaluarea finală, se selectează furnizorul care oferă cele mai bune condiții, iar rezultatul se documentează.
+
+#### 7.3 Emiterea comenzii
+Emiterea comenzii se va desfășura conform următorilor pași:
+
+1. **Pregătirea comenzii**: Managerul de achiziții completează documentul de comandă conform cu cerințele stabilite, incluzând toate detaliile necesare (specificații tehnice, termene, cantități).
+
+2. **Aprobarea comenzii**: Comanda va fi trimisă spre aprobat directorului general. Aprobată comanda se va transmite în mod electronic furnizorului selectat.
+
+3. **Confirmarea comenzilor**: Furnizorul trebuie să confirme primirea comenzii și termenul de livrare specificat. Orice modificare va fi documentată.
+
+#### 7.4 Receptia si verificarea
+Recepția și verificarea produsele livrate se realizează conform următoarelor proceduri:
+
+1. **Primirea produselor**: La recepția materialelor, echipa de logistică va verifica livrările în conformitate cu comanda inițială.
+
+2. **Verificarea documentelor**: Se vor verifica documentele de însoțire a produselor, inclusiv facturile și certificatele de conformitate.
+
+3. **Inspecția vizuală**: Se va efectua o inspecție vizuală a produselor pentru a verifica eventualele daune sau neconformități evidente.
+
+4. **Verificarea calității**: Specialistul de calitate va efectua teste conform specificațiilor prevăzute în planul de control. Se va utiliza MSA pentru a asigura că sistemele de măsurare sunt valide și conforme.
+
+5. **Înregistrarea**: Rezultatele verificărilor se vor înregistra într-un document care va rămâne în evidențele de calitate.
+
+#### 7.5 Gestionarea neconformitatilor
+Gestionarea neconformităților va fi realizată prin următorii pași:
+
+1. **Identificarea neconformității**: Orice produs care nu respectă standardele va fi marcat ca neconform.
+
+2. **Raportare**: Neconformitățile vor fi raportate de către specialistul de calitate și înregistrate într-o fișă de neconformitate.
+
+3. **Analiza cauzelor**: Se va efectua o analiză a cauzelor pentru a identifica originea problemei, utilizând tehnici precum FMEA.
+
+4. **Acțiuni corective**: Se vor defini și implementa acțiuni corective pentru a rezolva neconformitatea și a preveni reapariția acesteia.
+
+5. **Urmărirea**: Eficiența acțiunilor corective va fi monitorizată, iar rezultatele vor fi documentate.
+
+### 8. INREGISTRARI
+Toate procesele descrise mai sus vor genera următoarele înregistrări care vor fi păstrate conform cerințelor IATF 16949:
+
+1. Fişa de comandă.
+2. Rapoartele de evaluare a furnizorilor.
+3. Rapoartele de recepție și verificare a produselor.
+4. Fișele de neconformitate.
+5. Documentele de aprobat comenzi.
+6. Rapoartele de inspectie vizuală și testare.
+
+### 9. ISTORIC REVIZII
+| Revizie | Data modificării | Descriere modificări |
+|---------|-----------------|---------------------|
+| 01      | [Data]          | Creare document       |
+| 02      | [Data]          | Actualizare secțiuni | 
+| 03      | [Data]          | Revizuirea procedurii de recepție | 
+
+---
+
+Acest document va fi revizuit anual sau ori de câte ori este cazul pentru a asigura concordanța cu cerințele de standardizare IATF 16949. Documentele asociate vor fi gestionate și arhivate conform normelor interne.### 5. RESPONSABILITĂȚI (continuare)
+
+#### Tabel de Responsabilități Detaliate
+
+| Rol                  | Responsabilități                                                                                                    |
+|----------------------|--------------------------------------------------------------------------------------------------------------------|
+| Auditor Intern       | Realizarea auditurilor interne pentru a evalua conformitatea proceselor cu cerințele IATF 16949 și a politica de calitate. |
+| Personal Logistic     | Asigurarea integrității și trasabilității produselor pe parcursul procesului de recepție și manipulare.                   |
+| Manager Proiect      | Monitorizarea implementării acțiunilor corective rezultate din analiza neconformităților.                             |
+| Personal de Vânzări  | Comunica clar cerințele clienților către departamentul de achiziții pentru a asigura calitatea livrărilor.              |
+| Personal IT          | Mentenanța și siguranța sistemelor informatice utilizate pentru gestionarea comenzilor și a documentelor.               |
+
+### 6. PROCEDURA DETALIATĂ (continuare)
+
+#### 7.1 Inițierea comenzii (continuare)
+
+5. **Validarea cerințelor tehnice**: În această etapă, departamentul tehnic va valida cerințele tehnice legate de produse, asigurându-se că acestea sunt conforme cu specificațiile de proiect.
+
+6. **Colaborare cross-departamentală**: Managerul de achiziții va coordona o întâlnire între departamentele implicate (tehnic, logistic și financiar) pentru a obține feedback și pentru a finaliza cerințele comenzii.
+
+#### 7.2 Selectarea furnizorului (continuare)
+
+6. **Evaluare a performanței istorice**: Evaluarea performanței istorice a furnizorului va include analize de livrări anterioare în raport cu termenele și calitatea.
+
+7. **Vizite la fața locului**: Dacă este necesar, se vor efectua vizite la fabricile furnizorului pentru a observa condițiile de lucru și procesele de producție.
+
+8. **Documentarea evaluării**: Toată informația obținută în timpul evaluării furnizorului va fi documentată și arhivată pentru referințe ulterioare.
+
+#### 7.3 Emiterea comenzii (continuare)
+
+4. **Transmiterea comenzilor în sistem informatic**: Comenzile agreate se vor introduce în sistemul de gestiune pentru a asigura un flux de date transparent și urmăritor.
+
+5. **Feedback de la furnizor**: În cazul în care furnizorul refuză comanda sau propune modificări, managerul de achiziții va documenta discuțiile și va analiza alternativele disponibile.
+
+6. **Actualizare documente interne**: Toate comenzile emise vor genera actualizări în documentele interne pentru o mai bună gestionare a provenienței produselor.
+
+#### 7.4 Recepția și verificarea (continuare)
+
+6. **Testare suplimentară, dacă este cazul**: Pentru produsele critice, se vor efectua teste suplimentare, conform normelor interne, pentru a confirma calitatea acestora.
+
+7. **Documentarea neconformităților**: Orice neconformitate descoperită în timpul recepției va fi documentată în sistemul de gestionare a calității, iar fisele de neconformitate vor fi create și analizate.
+
+8. **Confidențialitate**: Toate informațiile colectate în timpul recepției se vor gestiona cu respectarea normelor de confidențialitate și integritate a datelor.
+
+#### 7.5 Gestionarea neconformităților (continuare)
+
+6. **Formarea unei echipe de răspuns**: În funcție de gravitatea neconformităților, se va forma o echipă de răspuns pentru a dezvolta și implementa soluții rapide.
+
+7. **Raportarea către management**: Toate neconformitățile semnificative vor fi raportate managementului pentru a facilita luarea deciziilor rapide și eficace.
+
+8. **Învățare din greșeli**: Rezultatele acțiunilor corective vor fi revizuite, iar lecțiile învățate vor fi integrate în instrucțiunile de lucru pentru a preveni reapariția neconformităților.
+
+### 8. ÎNREGISTRĂRI
+
+Toate înregistrările generate prin procedurile de achiziție sunt esențiale pentru cadrul de control al calității stabilit de IATF 16949. Toate documentele și înregistrările se vor păstra pe o perioadă de minim 5 ani, sau conform cerințelor clienților, pentru a facilita audituri interne și externe. Înregistrările specifice includ:
+
+1. **Fișele de comandă**: Acestea vor include toate detaliile necesare pentru urmărirea comenzii.
+   
+2. **Rapoartele de evaluare a furnizorilor**: Vor conține procesele de selecție, evaluare și auditare a furnizorilor.
+
+3. **Rapoartele de recepție**: Documentația care însoțește livrările, incluzând inspecțiile efectuate.
+
+4. **Fișele de neconformitate**: Vor include toate neconformitățile identificate și măsurile luate în urma acestora.
+
+5. **Documentele de aprobat comenzi**: Vor fi arhivate toate comenzile emise și aprobările aferente.
+
+6. **Rapoartele de testare calitate**: Acestea vor conține rezultatele testelor efectuate asupra materiilor prime și componentelor.
+
+7. **Rapoartele de audit intern**: Vor fi păstrate raportările legate de auditurile interne efectuate asupra proceselor de achiziție.
+
+### 9. ISTORIC REVIZII (continuare)
+
+| Revizie | Data modificării  | Descriere modificări                                          |
+|---------|-------------------|-------------------------------------------------------------|
+| 01      | [Data]            | Creare document                                             |
+| 02      | [Data]            | Actualizare secțiuni                                        |
+| 03      | [Data]            | Revizuirea procedurii de recepție                          |
+| 04      | [Data]            | Includerea criteriilor de selecție a furnizorilor          |
+| 05      | [Data]            | Detalierea procesului de gestionare a neconformităților    |
+
+---
+
+Acest document, IL-CAL-05, este esențial pentru implementarea eficientă a sistemului de management al calității la PlastiAuto SRL, conform cerințelor standardelor internaționale IATF 16949. Este subiectul unei revizuiri periodice pentru a rămâne actualizat și relevant față de cerințele pieței și ale clienților. Toți angajații sunt responsabili pentru familiarizarea și respectarea acestei instrucțiuni în activitățile cotidiene.### 6. PROCEDURA DETALIATĂ (continuare)
+
+#### 7.1 Inițierea comenzii (continuare)
+7. **Actualizarea planificării**: După validarea cerințelor tehnice, managerul de achiziții va revizui planificarea achizițiilor, asigurându-se că termenele de livrare sunt aliniate cu programul de producție.
+8. **Planificarea bugetară**: Toate comenzile noi vor fi integrate în bugetul anual, iar cheltuielile estimate vor fi aliniate cu standardele financiare ale companiei.
+9. **Consultarea cu managementul**: În cazul proiectelor majore sau achizițiilor de valoare ridicată, managerul de achiziții va consulta managementul pentru a obține aprobarea finală.
+
+#### 7.2 Selectarea furnizorului (continuare)
+9. **Colaborarea cu departamentele tehnic și de calitate**: În funcție de natura produsului, colaborarea cu aceste departamente va ajuta la stabilirea unor criterii de evaluare clare și specifice.
+10. **Raport final de evaluare**: După auditare și selecția furnizorului, se va redacta un raport final care va include toate constatările și raționamentul pentru selecția sau respingerea furnizorului.
+
+#### 7.3 Emiterea comenzii (continuare)
+7. **Configurarea comenzilor recurente**: În cazul în care PlastiAuto SRL efectuează comenzi regulate pentru produse specifice, se vor utiliza comenzi recurente pentru a facilita un flux constant de materiale necesare.
+8. **Stabilirea unor termene de livrare clare**: Termenele stabilite în comandă vor fi monitorizate continuu, iar abaterile vor fi imediat discutate cu furnizorii pentru a găsi soluții optime.
+9. **Comunicarea modificărilor de comandă**: Managerul de achiziții va anunța furnizorul imediat despre orice modificare de comandă care ar putea afecta livrarea, pentru a evita întârzierile.
+
+#### 7.4 Recepția și verificarea (continuare)
+9. **Păstrarea condițiilor de mediu**: Echipa de logistică va respecta condițiile necesare de mediu pentru păstrarea integrității produselor pe durata recepției, inclusiv temperaturi și umiditate controlate.
+10. **Verificarea transportului**: Se va verifica starea transportului, incluzând ambalajul și etichetarea, pentru a asigura conformitatea acestuia cu standardele legale și interne.
+11. **Recertificarea furnizorilor**: La intervale regulate, furnizorii vor fi recertificați pentru a asigura continuitatea calității produselor și serviciilor livrate.
+
+#### 7.5 Gestionarea neconformităților (continuare)
+9. **Implementarea unui plan de măsuri preventive**: Pentru a preveni reapariția neconformităților, se va dezvolta un plan de măsuri preventive pe baza analizei de cauză-rădăcină. 
+10. **Training-ul angajaților**: Angajații implicați în procesele de recepție și verificare vor beneficia de training constant pe teme legate de calitate și gestionarea neconformităților.
+11. **Externalizarea proceselor de calitate**: În unele cazuri, se va lua în considerare externalizarea testării sau inspecției de calitate a produselor către laboratoare acreditate, pentru a asigura un control mai riguros.
+
+### 8. ÎNREGISTRĂRI (continuare)
+8. **Fișele de nonconformitate**: Acestea sunt esențiale pentru urmărirea problemelor de calitate, incluzând data identificării, descrierea problemelor, acțiunile corective și persoana responsabilă de gestionarea acestora.
+9. **Evaluările de performanță**: Vor fi realizate periodic evaluări de performanță asupra furnizorilor, care să reflecte atât livrările la timp, cât și calitatea produselor.
+10. **Documente de audit**: Toate documentele generate în urma auditurilor interne și externe vor fi păstrate pentru a demonstra conformitatea cu standardele IATF 16949 și pentru a facilita auditările viitoare.
+
+### 9. ISTORIC REVIZII (continuare)
+| Revizie | Data modificării | Descriere modificări |
+|---------|------------------|----------------------|
+| 01 | [Data] | Creare document |
+| 02 | [Data] | Actualizare secțiuni |
+| 03 | [Data] | Revizuirea procedurii de recepție |
+| 04 | [Data] | Includerea criteriilor de selecție a furnizorilor |
+| 05 | [Data] | Detalierea procesului de gestionare a neconformităților |
+| 06 | [Data] | Actualizarea secțiunilor privind înregistrările și documentarea neconformităților |
+
+Acest document IL-CAL-05 servește ca bază pentru practicile de achiziții în cadrul PlastiAuto SRL și se aliniază cu cerințele IATF 16949. Reviziile și actualizările sunt esențiale pentru menținerea relevanței și eficienței proceselor interne. Implicarea activă a tuturor angajaților în respectarea procedurilor stabilite va conduce la îmbunătățirea continuă și la dezvoltarea unei culturi de calitate în cadrul organizației.
+
+### 10. ANEXE
+#### 10.1 Anexa A - Lista furnizorilor aprobați
+Această anexă va include o listă actualizată a furnizorilor care au fost evaluați și aprobați, incluzând datele de contact, tipurile de produse livrate și statusul certificărilor de calitate.
+
+#### 10.2 Anexa B - Formular pentru raportarea neconformităților
+Un formular standardizat care va fi utilizat pentru raportarea neconformităților, inclusiv datele necesare, descrierea problemei, acțiunile corective și confirmarea implementării soluțiilor propuse.
+
+#### 10.3 Anexa C - Procedura de auditare a furnizorilor
+Procedura detaliată de auditare a furnizorilor, incluzând frecvența auditurilor, criteriile de evaluare și formularele necesare pentru documentarea rezultatului auditurilor.
+
+Această documentare va asigura nu doar conformitatea cu standardele internaționale, ci va contribui și la construirea unor relații durabile cu furnizorii, esențiale pentru succesul continuu al PlastiAuto SRL. Fiecare angajat este încurajat să se familiarizeze cu aceste proceduri și să contribuie la îmbunătățirea sistemului de management al calității în cadrul companiei.### 10. ANEXE (continuare)
+
+#### 10.4 Anexa D - Ghid pentru evaluarea furnizorilor
+Această anexă cuprinde un ghid detaliat care va ajuta echipele de achiziții și de calitate în procesul de evaluare a furnizorilor. Elementele cheie includ:
+
+1. **Criterii de evaluare**: Transparența în cadrul criteriilor de selecție, precum capacitatea de producție, tehnologiile de proces utilizate, și standardele de calitate îndeplinite.
+2. **Instrumente de evaluare**: Să includă o descriere a instrumentelor și metodologiilor utilizate, cum ar fi chestionare, vizite la fața locului și analize ale rapoartelor de calitate.
+3. **Frecvența evaluărilor**: Determinarea intervalului în care furnizorii vor fi evaluați pentru a asigura o monitorizare constantă a performanței acestora.
+4. **Feedback și comunicare**: Stabilirea unui protocol pentru a oferi feedback constructiv furnizorilor, facilitatând astfel îmbunătățirea continuă a performanțelor acestora.
+
+#### 10.5 Anexa E - Politica de calitate a PlastiAuto SRL
+Politica de calitate pentru PlastiAuto SRL va fi documentată și comunicată tuturor angajaților pentru a asigura o înțelegere clară a angajamentului companiei față de calitate. Aceasta va include:
+
+1. **Angajamentul față de calitate**: O declarație care reafirmă angajamentul continuu al companiei pentru furnizarea de produse care îndeplinesc sau depășesc așteptările clienților.
+2. **Obiective de calitate**: Stabilirea de obiective specifice, măsurabile, realizabile, relevante și limitate în timp (SMART) legate de îmbunătățirea continuă a proceselor de achiziție și a calității produselor.
+3. **Cultură organizațională**: Promovarea unei culturi de calitate în cadrul organizației, prin încurajarea angajaților de a fi proactivi în identificarea și raportarea problemelor de calitate.
+
+#### 10.6 Anexa F - Schema de comunicare a neconformităților
+Această anexă va descrie schema de comunicare utilizată pentru gestionarea neconformităților, ierarhizarea responsabilităților și a fluxului de informații. Elemente cheie includ:
+
+1. **Fluxul de lucru**: O diagramă care ilustrează pașii necesari în gestionarea neconformităților, de la identificare la soluționare.
+2. **Responsabilitățile angajaților**: Definirea responsabilităților fiecarei persoane implicate în procesul de gestionare a neconformităților, inclusiv cei de la recepție, controlul calității și management.
+3. **Termene limită**: Stabilirea unor termene clare pentru raportarea, investigarea și soluționarea neconformităților, pentru a asigura o reacție rapidă și eficace.
+
+#### 10.7 Anexa G - Formular de solicitare pentru auditare
+Acest formular standardizat va fi utilizat pentru a solicita auditurile furnizorilor, incluzând informații despre:
+
+1. **Detalii despre furnizor**: Numele, locația, contactul și tipul de produse sau servicii oferite.
+2. **Motivul auditului**: O descriere a motivelor pentru care se solicită auditul, de exemplu, evaluarea periodică, neconformități recente sau cerințe noi de reglementare.
+3. **Data și rezultatele planificate**: Decalarea datelor propuse pentru audit și a așteptărilor de rezultate sau standarde de performanță de îndeplinit.
+
+### 11. CONCLUZII
+Fiecare angajat al PlastiAuto SRL are un rol esențial în aplicarea acestei instrucțiuni de lucru, IL-CAL-05, pentru a asigura o calitate ridicată a produselor și serviciilor furnizate clienților noștri, în special partenerului nostru strategic, AutoCorp GmbH. Respectarea strictă a acestor proceduri nu doar că va facilita conformitatea cu standardele IATF 16949, dar va contribui și la îmbunătățirea continuă a sistemului de management al calității. Colaborarea eficientă între angajați și departamente va maximiza eficiența procesului de achiziție și va asigura o gestionare optimală a furnizorilor și a neconformităților.
+
+=== METADATA ===
+doc_id: IL-CAL-05
+industry: automotive
+doc_type: medium
+language: ro
+standard: IATF 16949
+contradiction: 
+save_path: data/automotive/medium/IL-CAL-05.txt
+save_command: python manage_corpus.py save --file IL-CAL-05.txt --name IL-CAL-05 --industry automotive --lang ro
+================

@@ -1,0 +1,55 @@
+"""Agent that handles query orchestration (dual-LLM IRCoT: 8B routing + 70B synthesis)."""
+
+from __future__ import annotations
+
+import structlog
+
+from graphrag.agents.base_agent import BaseGraphRAGAgent
+from graphrag.core.config import get_settings
+from graphrag.core.models import QueryMessage, QueryResult
+from graphrag.retrieval.hybrid_retriever import HybridRetriever
+
+log = structlog.get_logger(__name__)
+
+
+class QueryAgent(BaseGraphRAGAgent):
+    def __init__(self):
+        self._retriever = HybridRetriever()
+        super().__init__("query_agent")
+
+    def _model(self) -> str:
+        return get_settings().groq_model
+
+    def _instruction(self) -> str:
+        return (
+            "You are a GraphRAG query agent. Given a question, use the retrieval tools "
+            "to find relevant context from the knowledge graph, then generate a "
+            "well-cited, grounded answer. Prefer hybrid search unless the user specifies local or global."
+        )
+
+    async def run(self, message: QueryMessage) -> QueryResult:
+        log.info(
+            "query_agent.start",
+            query_id=message.query_id,
+            mode=message.mode,
+        )
+        result = await self._retriever.retrieve_and_answer(
+            question=message.question,
+            mode=message.mode,
+            tenant=message.tenant,
+            session_id=message.session_id,
+            query_id=message.query_id,
+            valid_at=message.valid_at,
+            transaction_at=message.transaction_at,
+            correlation_id=message.correlation_id,
+        )
+        result.query_id = message.query_id
+        result.correlation_id = message.correlation_id
+        log.info(
+            "query_agent.done",
+            query_id=message.query_id,
+            latency_ms=round(result.latency_ms, 1),
+            answer=result.answer,
+            citations=result.citations,
+        )
+        return result

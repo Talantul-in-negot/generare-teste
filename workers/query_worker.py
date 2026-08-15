@@ -1,0 +1,99 @@
+"""Entry point: starts QueryConsumer with graceful SIGTERM shutdown."""
+
+import asyncio
+import io
+import os
+import signal
+import sys
+from pathlib import Path
+
+# On Windows, stdout/stderr default to the ANSI codepage (cp1252), which
+# raises UnicodeEncodeError on non-ASCII text (e.g. Romanian diacritics) in
+# log messages — an unhandled UnicodeEncodeError here crashes the whole
+# consumer process, silently killing the RabbitMQ consume loop after the
+# first such message (see scripts/ingest_corpus.py for the same fix).
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import structlog  # noqa: E402
+
+from graphrag.messaging.consumers import QueryConsumer  # noqa: E402
+from graphrag.retrieval.reranker import _get_cross_encoder  # noqa: E402
+from graphrag.workers.health_server import HealthServer  # noqa: E402
+
+log = structlog.get_logger(__name__)
+
+
+def _warmup_reranker():
+    _get_cross_encoder()
+    log.info("reranker.warmed")
+
+
+HEALTH_PORT = int(os.getenv("WORKER_HEALTH_PORT", "8082"))
+
+
+async def _ensure_schema():
+    """Wait for Neo4j and initialize schema using get_neo4j() to warm the global pool."""
+    import asyncio
+    from graphrag.graph.neo4j_client import get_neo4j
+
+    # Retry until the global Neo4j client can connect
+    for attempt in range(30):
+        try:
+            client = get_neo4j()
+            await client.run("RETURN 1")  # warm the global pool
+            break
+        except Exception as e:
+            log.info("query_worker.schema_waiting", attempt=attempt + 1, error=str(e)[:80])
+            await asyncio.sleep(10)
+    else:
+        log.warning("query_worker.schema_neo4j_unreachable")
+        return
+
+    # Initialize through the shared client so KG + Context Graph schema and
+    # Neo4j capability detection use one implementation.
+    try:
+        await client.init_schema()
+    except Exception as e:
+        log.warning("query_worker.schema_warn", error=str(e)[:120])
+    log.info("query_worker.schema_ready")
+
+
+async def main():
+    from graphrag.observability.tracing import configure_tracing
+    configure_tracing("graphrag-query-worker")
+    log.info("query_worker.starting")
+    health = HealthServer(port=HEALTH_PORT, worker_name="query_worker")
+    await health.start()
+
+    await _ensure_schema()
+
+    # Warm the cross-encoder so the first real query doesn't pay the load penalty
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _warmup_reranker)
+
+    consumer = QueryConsumer()
+    task = asyncio.create_task(consumer.start())
+
+    health.set_ready()
+
+    if sys.platform != "win32":
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(
+                sig,
+                lambda s=sig.name: (log.info("worker.signal_received", signal=s), task.cancel()),
+            )
+
+    try:
+        await task
+    except asyncio.CancelledError:
+        log.info("query_worker.shutdown_graceful")
+    finally:
+        await health.stop()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
