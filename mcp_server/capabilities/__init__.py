@@ -20,6 +20,7 @@ def build_registry() -> CapabilityRegistry:
     from mcp_server.capabilities.facts_query import register as register_facts_query
     from mcp_server.capabilities.graph_stats import register as register_graph_stats
     from mcp_server.capabilities.workorder_create import register as register_workorder_create
+    from mcp_server.capabilities.workorder_compensate import register as register_workorder_compensate
 
     register_graph_stats(registry)
     register_facts_query(registry)
@@ -27,5 +28,6 @@ def build_registry() -> CapabilityRegistry:
     register_entity_lookup(registry)
     register_context_precedent(registry)
     register_workorder_create(registry)
+    register_workorder_compensate(registry)
     register_discover(registry)
     return registry

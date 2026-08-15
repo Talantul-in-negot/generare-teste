@@ -26,4 +26,8 @@ BUSINESS_SCHEMA = (
     "FOR (n:BizApproval) ON (n.tenant, n.command_id)",
     "CREATE CONSTRAINT biz_command_receipt_id IF NOT EXISTS "
     "FOR (n:BizCommandReceipt) REQUIRE (n.tenant, n.command_id) IS UNIQUE",
+    "CREATE CONSTRAINT biz_compensation_id IF NOT EXISTS "
+    "FOR (n:BizCompensation) REQUIRE (n.tenant, n.id) IS UNIQUE",
+    "CREATE INDEX biz_compensation_original_command IF NOT EXISTS "
+    "FOR (n:BizCompensation) ON (n.tenant, n.original_command_id)",
 )

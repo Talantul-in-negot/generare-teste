@@ -41,6 +41,11 @@ _evaluation_duration = Histogram(
     "End-to-end evaluation job duration",
     ["outcome"],
 ) if Histogram else None
+_operational_write_receipts = Counter(
+    "graphrag_operational_write_receipts_total",
+    "Governed operational write receipts by capability and outcome",
+    ["capability", "outcome"],
+) if Counter else None
 
 _transport: ContextVar[str] = ContextVar("agent_transport", default="stdio")
 
@@ -113,5 +118,24 @@ def record_evaluation_job(*, outcome: str, tenant: str, job_id: str, started_at:
         tenant=tenant,
         job_id=job_id,
         duration_ms=round(elapsed * 1000, 2),
+        correlation_id=current_correlation_id(),
+    )
+
+
+def record_operational_write_receipt(*, capability: str, outcome: str, tenant: str) -> None:
+    """Record the business outcome returned by a governed write receipt.
+
+    Capability timing alone cannot distinguish an executed write from an
+    approval request, a stale version, or an idempotent denial. This bounded
+    metric closes that observability gap without adding tenant as a Prometheus
+    label.
+    """
+    if _operational_write_receipts:
+        _operational_write_receipts.labels(capability, outcome).inc()
+    log.info(
+        "observability.operational_write_receipt",
+        capability=capability,
+        outcome=outcome,
+        tenant=tenant,
         correlation_id=current_correlation_id(),
     )

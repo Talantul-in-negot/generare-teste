@@ -31,6 +31,7 @@ from graphrag.core.tenancy import require_tenant
 from graphrag.graph.corpus_revision import CorpusMutation
 
 WORKORDER_CREATE_CAPABILITY = "biz.workorder.create@1.0.0"
+WORKORDER_COMPENSATE_CAPABILITY = "biz.workorder.compensate@1.0.0"
 
 # Receipts are only persisted for outcomes that represent a permanent
 # decision -- retrying the identical command_id must return the identical
@@ -53,6 +54,14 @@ class WorkOrderCreateArgs(BaseModel):
     title: str = Field(min_length=1)
     description: str = ""
     assignee: str = ""
+
+
+class WorkOrderCompensateArgs(BaseModel):
+    """Inputs required to reverse a prior work-order creation safely."""
+
+    work_order_id: str = Field(min_length=1)
+    original_command_id: str = Field(min_length=1)
+    expected_finding_version: int = Field(ge=1)
 
 
 class WorkOrderService:
@@ -194,6 +203,120 @@ class WorkOrderService:
             raise PermissionError("an approver cannot decide their own request")
         return await self._repo.decide_approval(
             tenant, approval_id, approved=approved, approved_by=actor_id,
+        )
+
+    async def compensate_work_order(self, envelope: CommandEnvelope) -> CommandReceipt:
+        """Reverse an uncompleted work-order creation through a new approval.
+
+        Compensation is intentionally stricter than creation: every caller,
+        including a human, needs an out-of-band ``biz:approve`` decision.
+        That makes a reversal reviewable and prevents an agent from using a
+        correction path to bypass the original write's governance boundary.
+        """
+        tenant = require_tenant(envelope.tenant)
+        if envelope.capability != WORKORDER_COMPENSATE_CAPABILITY:
+            return await self._finalize(
+                envelope, CommandOutcome.DENIED, denial_reason="capability_mismatch",
+                detail=f"expected {WORKORDER_COMPENSATE_CAPABILITY!r}, got {envelope.capability!r}",
+            )
+        existing = await self._repo.get_command_receipt(tenant, envelope.command_id)
+        if existing:
+            return CommandReceipt(**existing)
+        try:
+            args = WorkOrderCompensateArgs(**envelope.args)
+        except ValidationError as exc:
+            return await self._finalize(
+                envelope, CommandOutcome.DENIED, denial_reason="invalid_args", detail=str(exc),
+            )
+        original = await self._repo.get_command_receipt(tenant, args.original_command_id)
+        if (
+            not original
+            or original.get("capability") != WORKORDER_CREATE_CAPABILITY
+            or original.get("outcome") != CommandOutcome.EXECUTED.value
+        ):
+            return await self._finalize(
+                envelope, CommandOutcome.DENIED, denial_reason="original_command_not_found",
+                detail="original_command_id must reference an executed work-order creation in this tenant",
+            )
+        if original.get("object_id") != args.work_order_id:
+            return await self._finalize(
+                envelope, CommandOutcome.DENIED, denial_reason="original_command_mismatch",
+                detail="original command did not create the requested work order",
+            )
+        work_order = await self._repo.get_work_order(tenant, args.work_order_id)
+        if work_order is None:
+            return await self._finalize(
+                envelope, CommandOutcome.DENIED, denial_reason="work_order_not_found",
+                detail=f"no work order {args.work_order_id!r} for this tenant",
+            )
+        if envelope.expected_version is None:
+            return await self._finalize(
+                envelope, CommandOutcome.DENIED, denial_reason="missing_expected_version",
+                detail="expected_version is required for a compensation command",
+            )
+
+        approval: dict[str, Any] | None = None
+        if envelope.approval_id:
+            approval = await self._repo.get_approval(tenant, envelope.approval_id)
+            if approval is None or approval["capability"] != envelope.capability:
+                return await self._finalize(
+                    envelope, CommandOutcome.DENIED, denial_reason="approval_not_found",
+                    detail="referenced approval does not exist for this compensation and tenant",
+                )
+            if approval["status"] != ApprovalStatus.APPROVED.value:
+                return await self._finalize(
+                    envelope, CommandOutcome.DENIED, denial_reason="approval_not_granted",
+                    detail=f"approval status is {approval['status']!r}, not approved",
+                )
+        if approval is None:
+            pending = BizApproval(
+                tenant=tenant, command_id=envelope.command_id, capability=envelope.capability,
+                requested_by=envelope.actor_id, reason_code="compensation_requires_approval",
+                rationale="Compensation cancels an operational work order and reopens its finding.",
+            )
+            await self._repo.create_approval(pending)
+            return CommandReceipt(
+                tenant=tenant, command_id=envelope.command_id, capability=envelope.capability,
+                outcome=CommandOutcome.APPROVAL_REQUIRED, policy_result=PolicyResult.ESCALATE.value,
+                approval_id=pending.id, detail=pending.rationale,
+            ).with_receipt_hash()
+        if envelope.dry_run:
+            return CommandReceipt(
+                tenant=tenant, command_id=envelope.command_id, capability=envelope.capability,
+                outcome=CommandOutcome.DRY_RUN, policy_result=PolicyResult.ESCALATE.value,
+                approval_id=envelope.approval_id,
+                detail=(f"dry-run — WorkOrder {args.work_order_id} would transition "
+                        "to cancelled and its originating finding to open"),
+            ).with_receipt_hash()
+
+        mutation = CorpusMutation(self._neo4j, tenant, reason="business.workorder.compensate")
+        try:
+            async with mutation:
+                result = await self._repo.compensate_work_order_creation(
+                    tenant, args.work_order_id,
+                    expected_work_order_version=envelope.expected_version,
+                    expected_finding_version=args.expected_finding_version,
+                    original_command_id=args.original_command_id, actor_id=envelope.actor_id,
+                    actor_type=envelope.actor_type, reason_code=envelope.reason_code,
+                )
+        except StaleVersionError as exc:
+            return await self._finalize(
+                envelope, CommandOutcome.STALE_VERSION, denial_reason="stale_version",
+                detail=f"expected version {exc.expected}, actual {exc.actual}",
+                from_version=exc.expected, to_version=exc.actual,
+            )
+        except (NotFoundError, ValueError) as exc:
+            return await self._finalize(
+                envelope, CommandOutcome.DENIED, denial_reason="compensation_not_allowed", detail=str(exc),
+            )
+        return await self._finalize(
+            envelope, CommandOutcome.EXECUTED, object_id=args.work_order_id,
+            object_type="WorkOrder", from_state=result["work_order_from_state"],
+            to_state="cancelled", from_version=envelope.expected_version,
+            to_version=result["work_order_version"], policy_result=PolicyResult.ESCALATE.value,
+            approval_id=envelope.approval_id, corpus_revision=mutation.revision,
+            detail=(f"compensation_id={result['compensation_id']}; originating finding "
+                    f"reopened at version {result['finding_version']}"),
         )
 
     async def _finalize(self, envelope: CommandEnvelope, outcome: CommandOutcome, **fields) -> CommandReceipt:

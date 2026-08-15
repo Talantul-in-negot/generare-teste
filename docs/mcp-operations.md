@@ -24,7 +24,7 @@ Invoke-WebRequest http://localhost:8002/metrics -Headers @{ Authorization = "Bea
 
 # Deterministic capability and router safety gates (no external services).
 python scripts/run_capability_eval.py
-python -m pytest tests/unit/test_mcp_identity.py tests/unit/test_mcp_remote.py tests/unit/test_mcp_contract_compat.py -q
+python -m pytest tests/unit/test_mcp_identity.py tests/unit/test_mcp_remote.py tests/unit/test_mcp_contract_compat.py tests/unit/test_workorder_compensation.py -q
 ```
 
 For local stdio clients, launch `python mcp_server/server.py` with a scoped
@@ -67,6 +67,24 @@ kubectl kustomize deploy/kubernetes
 | Structured `tenant_mismatch` denial | Client-provided tenant vs signed claim | Correct the client configuration; never override the claim |
 | Missing write capability in discovery | `biz:write` entitlement | Grant through the identity provider approval process, not application config |
 | Long-lived session disconnects after scale | Service affinity / rollout events | Drain client sessions; do not remove affinity without shared-session validation |
+
+## Evidence collection
+
+The gateway already emits protected Prometheus metrics for versioned MCP
+capability calls and governed-write receipt outcomes. To prepare a truthful
+portfolio or operational report, save an authenticated `/metrics` response,
+copy `docs/production-evidence-template.json`, fill only measured fields, and
+generate a source-linked report:
+
+```powershell
+python scripts/export_operational_evidence.py `
+  --metrics artifacts/mcp.prom `
+  --metadata artifacts/production-evidence.json `
+  --output artifacts/operational-evidence.json
+```
+
+`null` means “not measured.” It must never become an implied production,
+customer, availability, or business-impact claim.
 
 ## Context Graph outcome demo
 

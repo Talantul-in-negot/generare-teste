@@ -1,0 +1,5 @@
+# Synthetic fixture only. It is not a production metric export.
+graphrag_capability_calls_total{transport="remote",capability="biz.workorder.create@1.0.0",outcome="executed"} 3
+graphrag_capability_calls_total{transport="remote",capability="biz.workorder.compensate@1.0.0",outcome="approval_required"} 1
+graphrag_operational_write_receipts_total{capability="biz.workorder.create@1.0.0",outcome="executed"} 3
+graphrag_operational_write_receipts_total{capability="biz.workorder.compensate@1.0.0",outcome="approval_required"} 1
