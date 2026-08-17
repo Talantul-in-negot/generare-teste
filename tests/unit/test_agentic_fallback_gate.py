@@ -9,7 +9,7 @@ looser hedge-only gate.
 
 from __future__ import annotations
 
-from graphrag.retrieval.agentic_retriever import _is_low_confidence
+from graphrag.retrieval.fallback_policy import is_low_confidence as _is_low_confidence
 
 
 class TestStrictGateIsDefault:

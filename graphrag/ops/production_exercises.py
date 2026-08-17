@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from collections.abc import Awaitable, Callable
 
 from graphrag.ops.exercises import recovery_check, security_matrix
+
+
+def _percentile(values: list[float], percentile: float) -> float:
+    """Nearest-rank percentile, kept dependency-free for ops scripts."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    index = max(0, min(len(ordered) - 1, math.ceil(percentile * len(ordered)) - 1))
+    return ordered[index]
 
 
 async def run_load_exercise(
@@ -17,6 +27,7 @@ async def run_load_exercise(
     """Run concurrent tenant cases and report failures and latency percentiles."""
     semaphore = asyncio.Semaphore(max(1, concurrency))
     results: list[dict] = []
+    run_started = time.perf_counter()
 
     async def one(case: dict) -> None:
         started = time.perf_counter()
@@ -32,11 +43,17 @@ async def run_load_exercise(
 
     await asyncio.gather(*(one(case) for case in cases))
     latencies = sorted(item["latency_ms"] for item in results)
-    p95_index = min(len(latencies) - 1, max(0, int(len(latencies) * 0.95) - 1)) if latencies else 0
+    elapsed_seconds = max(time.perf_counter() - run_started, 1e-9)
+    passed = sum(item["ok"] for item in results)
     return {
-        "total": len(results), "passed": sum(item["ok"] for item in results),
+        "total": len(results), "passed": passed,
         "failed": sum(not item["ok"] for item in results),
-        "p95_latency_ms": latencies[p95_index] if latencies else 0.0,
+        "error_rate": (len(results) - passed) / len(results) if results else 0.0,
+        "elapsed_seconds": elapsed_seconds,
+        "throughput_rps": len(results) / elapsed_seconds,
+        "p50_latency_ms": _percentile(latencies, 0.50),
+        "p95_latency_ms": _percentile(latencies, 0.95),
+        "p99_latency_ms": _percentile(latencies, 0.99),
         "results": results,
     }
 

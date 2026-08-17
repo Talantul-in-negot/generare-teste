@@ -35,10 +35,10 @@ deployed workload and monitoring data behind the claim.
 
 | Capability | Notes |
 |---|---|
-| Graph ingestion (document → chunk → entity → relation) | DeepSeek extraction by default (`get_llm()`); Groq opt-in via `LLM_INGEST_PROVIDER=groq`; OpenAI `text-embedding-3-large`, 3072 dimensions |
-| LLM provider circuit breaker | Fail-fast after 3 consecutive failures or an 80% error rate over the last 20 calls; `FallbackLLM` uses DeepSeek primary and Groq fallback; surfaced on `/health/ready` |
+| Graph ingestion (document → chunk → entity → relation) | Cerebras extraction by default (`get_llm()`, free tier); `LLM_INGEST_PROVIDER=deepseek`/`groq` opt-in overrides; OpenAI `text-embedding-3-large`, 3072 dimensions |
+| LLM provider circuit breaker | Fail-fast after 3 consecutive failures or an 80% error rate over the last 20 calls; `FallbackLLM` chain is Cerebras → DeepSeek → Groq; surfaced on `/health/ready` |
 | Six-stage hybrid retrieval | Vector + BM25 + reranker + GNN + multi-hop + LLM synthesis; high-level community summaries are retrieved directly into final synthesis (legacy map-reduce remains an ablation fallback) |
-| Agentic IRCoT fallback | Two-step maximum; Groq 8B routing + DeepSeek large-model synthesis |
+| Agentic IRCoT fallback | Two-step maximum; Groq 8B routing + Cerebras large-model synthesis (DeepSeek → Groq fallback) |
 | Forward-chaining inference | Transitivity, symmetry, inverse, and composition to fixpoint after ingestion |
 | OWL-RL reasoning | `owlrl` + `rdflib` over RDF export |
 | SPARQL bridge | In-process SPARQL 1.1 SELECT over Turtle export |

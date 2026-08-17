@@ -115,6 +115,44 @@ Fix B (prod): Restore Redis connectivity; sessions and query results will be los
 
 ### Live E2E tests are skipped
 
+### Deterministic full test collection
+
+Use the repository launcher for the complete suite. It disables unrelated
+auto-discovered plugins and explicitly enables `pytest-asyncio`, avoiding
+desktop-plugin startup variance while preserving async test behavior:
+
+```bash
+python scripts/run_pytest.py --collect-only -q tests/
+python scripts/run_pytest.py -q tests/
+```
+
+The launcher is also used by the `make test*` targets. Third-party plugins can
+still be enabled explicitly when a test requires them.
+
+### Local Kubernetes manifest validation
+
+With Docker Desktop and Minikube available, validate the manifests against a
+real Kubernetes API server:
+
+```powershell
+.\scripts\validate_minikube.ps1
+```
+
+The check creates or reuses a local `graphrag-local` profile, renders the
+Kustomize tree, and runs a server-side dry-run. It validates admission and API
+compatibility without pretending that placeholder production images or cloud
+secrets are deployable locally.
+
+For a real local MCP pod smoke test, use the disposable-secret workflow:
+
+```powershell
+.\scripts\run_minikube_smoke.ps1
+```
+
+It loads the existing local API/MCP images into Minikube, creates only
+local-only credentials, scales the background workers to zero, waits for MCP
+readiness, and checks `/health` through a port-forward.
+
 The five Docker-backed service tests in `tests/e2e/test_live_services.py`
 require Docker Desktop and `testcontainers-python`. Install project
 dependencies and verify Docker before running them:

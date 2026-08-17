@@ -1,0 +1,22 @@
+[
+  {"tenant": "tenant-a", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-b", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-c", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-a", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-b", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-c", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-a", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-b", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-c", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-a", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-b", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-c", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-a", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-b", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-c", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-a", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-b", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-c", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-a", "url": "http://localhost:8000/health"},
+  {"tenant": "tenant-b", "url": "http://localhost:8000/health"}
+]

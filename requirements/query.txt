@@ -1,7 +1,11 @@
 -r base.txt
 
 # ── Reranking + GNN ────────────────────────────────────────────────────────────
-sentence-transformers>=3.0.0
+# The query image is CPU-only.  Without this explicit wheel, current PyPI torch
+# releases pull a multi-gigabyte CUDA toolkit into the production image.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.3.1+cpu
+sentence-transformers>=3.0.0,<4.0.0
 networkx>=3.3
 
 # ── RDF / Ontology ─────────────────────────────────────────────────────────────

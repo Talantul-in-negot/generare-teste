@@ -21,6 +21,7 @@ from graphrag.core.models import QueryResult
 from graphrag.retrieval.local_search import LocalSearch
 from graphrag.retrieval.context_builder import ContextBuilder
 from graphrag.retrieval.claim_verifier import ClaimVerifier
+from graphrag.retrieval.fallback_policy import is_low_confidence as _is_low_confidence  # noqa: F401
 
 log = structlog.get_logger(__name__)
 
@@ -64,54 +65,6 @@ Context:
 Question: {question}
 
 Answer:"""
-
-_LOW_CONFIDENCE_SIGNALS = (
-    "i don't know",
-    "i do not know",
-    "not enough information",
-    "cannot answer",
-    "insufficient",
-    "no information",
-    "context does not",
-    "not mentioned",
-    "not provided",
-    "no relevant",
-)
-
-
-def _is_low_confidence(
-    answer: str, citations: list[str], require_no_citations: bool = True
-) -> bool:
-    """Heuristic: answer is weak if it explicitly hedges AND has no citations.
-
-    Requiring BOTH conditions (not just one) prevents aggressive agentic
-    fallback on answers that are confident but happen to have no citation IDs
-    (common on small or freshly-ingested corpora). With only the hedge-signal
-    requirement, ~30% of queries triggered agentic fallback unnecessarily,
-    inflating p95 latency to ~6s. With the stricter gate, the trigger rate
-    drops to ~10-15% on real corpora, keeping combined p95 near 2.5s.
-
-    ``require_no_citations=False`` relaxes the gate to the hedge signal alone.
-    The strict gate has a blind spot: a multi-hop question where retrieval
-    surfaced *something* (so citations are non-empty) but not the bridging
-    document that actually answers it. The answer then hedges — "the context
-    does not specify which airlines..." — while carrying citations, so the
-    IRCoT agent that exists precisely to sub-search for the missing hop never
-    fires. Corpora whose questions lean multi-hop can opt into the looser gate
-    per tenant (retrieval.tenant_overrides.<tenant>.agentic_hedge_only_fallback),
-    accepting the higher trigger rate and latency in exchange for that recall.
-    Defaults to the strict behavior, so global behavior is unchanged.
-    """
-    lower = answer.lower()
-    hedges = any(sig in lower for sig in _LOW_CONFIDENCE_SIGNALS)
-    if not require_no_citations:
-        # Hedge alone is enough — retrieval may have returned citations that
-        # simply don't contain the answer.
-        return hedges
-    no_citations = len(citations) == 0
-    # Trigger only when both signals are present: weak language + no evidence
-    return hedges and no_citations
-
 
 class AgenticRetriever:
     """

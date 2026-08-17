@@ -131,4 +131,19 @@ fallback), consistent with the "Two-model design" section above.
 The original reasoning in this ADR (why Groq was chosen over Gemini at the time,
 the quota/speed tradeoffs) remains an accurate record of that decision and is
 left unchanged. This update only corrects which provider is primary for
-generation *today*.
+generation as of 2026-07-24.
+
+## Update 2026-08-17 — Cerebras became the default primary generation engine
+
+`get_llm()` in `graphrag/core/llm_client.py` now defaults to a 3-tier
+`FallbackLLM` chain: Cerebras (free tier, 1M tokens/day, no card required) →
+DeepSeek → Groq, replacing the bare `DeepSeekLLM` default from the update
+above. Motivation: DeepSeek billed against paid balance on every call, even
+when a free provider would have sufficed. DeepSeek and Groq remain automatic
+fallbacks — no change to the ordering between them, and Groq's opt-in
+override (`LLM_INGEST_PROVIDER=groq`) is unchanged. A new
+`LLM_INGEST_PROVIDER=deepseek` override skips Cerebras and restores the
+2026-07-24 default (DeepSeek primary, Groq fallback) without a code change.
+
+`get_fast_llm()` is unaffected and still defaults to Groq's
+`llama-3.1-8b-instant` (DeepSeek fallback).

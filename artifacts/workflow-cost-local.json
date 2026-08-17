@@ -1,0 +1,14 @@
+{
+  "report_schema_version": "workflow-evidence/v1",
+  "workflow_runs": 3,
+  "outcomes": {
+    "completed": 2,
+    "failed": 1
+  },
+  "cost_usd_by_correlation_id": {
+    "local-evidence-workflow": 0.02,
+    "local-evidence-workflow-2": 0.011
+  },
+  "total_cost_usd": 0.031,
+  "claim_policy": "Costs are supplied local observations, not infrastructure savings claims."
+}

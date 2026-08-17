@@ -37,6 +37,9 @@ async def test_p3_load_security_and_backup_exercises():
 
     load = await run_load_exercise(operation, [{"tenant": "a"}, {"tenant": "b", "fail": True}], 2)
     assert load["total"] == 2 and load["failed"] == 1
+    assert load["p50_latency_ms"] >= 0 and load["p95_latency_ms"] >= load["p50_latency_ms"]
+    assert load["p99_latency_ms"] >= load["p95_latency_ms"]
+    assert load["throughput_rps"] > 0 and load["error_rate"] == 0.5
     security = run_security_exercise([
         {"name": "restricted", "expected_tenant": "a", "observed_tenant": "a",
          "restricted": True, "allowed": False},

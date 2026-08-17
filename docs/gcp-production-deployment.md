@@ -8,7 +8,7 @@ appropriate substitute for Neo4j Enterprise clustering or managed backups.
 
 ## Prerequisites
 
-- Terraform 1.6+, Google Cloud SDK, `kubectl`, and `gke-gcloud-auth-plugin`.
+- Terraform 1.7+, Google Cloud SDK, `kubectl`, and `gke-gcloud-auth-plugin`.
 - A GCP project and permission to create GKE, Artifact Registry, service
   accounts, and enable APIs.
 - Production endpoints and credentials for Neo4j, RabbitMQ, Redis, TimescaleDB
@@ -28,6 +28,19 @@ terraform apply
 gcloud container clusters get-credentials graphrag-prod \
   --region europe-west3 --project YOUR_PROJECT_ID
 ```
+
+Run the local infrastructure checks before applying:
+
+```bash
+make terraform-fmt
+make terraform-validate
+make terraform-test
+checkov -d infra/terraform --framework terraform
+```
+
+`terraform test` uses a mocked Google provider and checks platform invariants
+without creating GCP resources. Checkov is a static security scan and does not
+need cloud credentials.
 
 Build and push one image per runtime service. The Dockerfile already supports
 the service-specific dependency sets through `--build-arg SERVICE=...`.

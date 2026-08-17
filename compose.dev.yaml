@@ -22,6 +22,8 @@ x-worker-env: &worker-env      # shared env for all Python services
   NEO4J_URI:                bolt://neo4j:7687
   RABBITMQ_URL:             amqp://graphrag:graphrag_dev@rabbitmq:5672/
   REDIS_URL:                redis://redis:6379/0
+  HF_HOME:                  /tmp/huggingface
+  TRANSFORMERS_CACHE:       /tmp/huggingface
   KPI_DB_PATH:              /data/kpis.db
   KPI_BACKEND:              timescale
   TIMESCALE_DB_URL:         postgresql+asyncpg://graphrag:graphrag_dev@timescaledb:5432/graphrag
@@ -111,6 +113,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: api
     container_name: dev_api
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
@@ -129,10 +133,34 @@ services:
       timeout: 5s
       retries: 5
 
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: api
+    container_name: dev_mcp
+    command: python -m mcp_server.remote
+    ports:
+      - "8002:8002"
+    env_file: .env
+    environment:
+      <<: *worker-env
+      GRAPHRAG_MCP_PORT: "8002"
+    volumes:
+      - .:/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   ingestion_worker:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: ingestion
     command: python workers/ingestion_worker.py
     env_file: .env
     environment:
@@ -154,6 +182,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: query
     container_name: dev_query_worker
     command: python workers/query_worker.py
     ports:
@@ -177,6 +207,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: evaluation
     container_name: dev_evaluation_worker
     command: python workers/evaluation_worker.py
     ports:
@@ -194,6 +226,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: api
     container_name: dev_admin_dashboard
     command: uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload
     ports:
@@ -212,6 +246,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: dashboard
     container_name: dev_dashboard
     command: python graphrag/business_matrix/dashboard_server.py
     ports:

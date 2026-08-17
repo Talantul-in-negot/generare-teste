@@ -13,6 +13,7 @@ not enabled.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import os
 import string
 
@@ -181,7 +182,16 @@ def create_remote_app() -> ASGIApp:
     except ImportError:  # pragma: no cover - Prometheus is a production dep
         pass
     routes.append(Mount("/", app=mcp.streamable_http_app()))
-    app = Starlette(routes=routes)
+
+    @asynccontextmanager
+    async def lifespan(_app: Starlette):
+        # A mounted Starlette application does not automatically run its
+        # lifespan. FastMCP's Streamable HTTP session manager needs its task
+        # group entered before it can accept initialize/tools/list requests.
+        async with mcp.session_manager.run():
+            yield
+
+    app = Starlette(routes=routes, lifespan=lifespan)
     return RemoteMCPAuthMiddleware(app)
 
 

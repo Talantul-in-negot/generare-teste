@@ -221,11 +221,11 @@ raw docs → chunker → LLM extractor → validation → entity resolution
 1. **Chunking** — `graphrag/ingestion/chunker.py`, heading-aware section
    splitting (512 tokens, 64 overlap), so table rows keep their section
    headings for embedding quality.
-2. **Extraction** — DeepSeek by default (`get_llm()`; Groq is opt-in via
-   `LLM_INGEST_PROVIDER=groq`, and always the fast-routing model for
-   agentic retrieval) produces entities + relations as JSON with
-   per-relation confidence; clamped and schema-validated in
-   `extractor.py`.
+2. **Extraction** — Cerebras by default (`get_llm()`, free tier; falls back
+   to DeepSeek then Groq; `LLM_INGEST_PROVIDER=deepseek`/`groq` opt in to
+   skip Cerebras, and Groq is always the fast-routing model for agentic
+   retrieval) produces entities + relations as JSON with per-relation
+   confidence; clamped and schema-validated in `extractor.py`.
 3. **Ontology validation** — domain/range check per triplet.
 4. **Entity resolution** — 4-stage alias pipeline: exact → normalized →
    embedding similarity → human review queue (`alias_registry.py`).

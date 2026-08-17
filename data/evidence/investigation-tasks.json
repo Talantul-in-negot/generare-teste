@@ -1,0 +1,21 @@
+{
+  "study_version": "local-investigation-study/v1",
+  "claim_policy": "Complete each matched task locally with a human operator before citing results.",
+  "tasks": [
+    {
+      "id": "graph-contradiction",
+      "prompt": "Identify the conflicting compliance relations for Boeing 737 MAX and cite both source documents.",
+      "success_rubric": "Names both IS_COMPLIANT_WITH and IS_NON_COMPLIANT_WITH relations and both source document IDs."
+    },
+    {
+      "id": "approval-write",
+      "prompt": "Explain why an agent work-order request requires approval and identify the immutable receipt fields that prove the final action.",
+      "success_rubric": "Mentions agent-initiated approval policy, command ID, approval ID, receipt hash, and object version."
+    },
+    {
+      "id": "stale-write",
+      "prompt": "Diagnose a stale-version refusal and state the safe next action.",
+      "success_rubric": "Explains optimistic concurrency and recommends re-reading current version before a new command."
+    }
+  ]
+}

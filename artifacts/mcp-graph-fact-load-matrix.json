@@ -1,0 +1,95 @@
+{
+  "scenarios": [
+    {
+      "total": 100,
+      "passed": 100,
+      "failed": 0,
+      "error_rate": 0.0,
+      "elapsed_seconds": 3.0393308000020625,
+      "throughput_rps": 32.90197960680428,
+      "p50_latency_ms": 1442.2999000016716,
+      "p95_latency_ms": 2869.3702000018675,
+      "p99_latency_ms": 3017.8330999988248,
+      "sample_results": [
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 108.57490000125836
+        },
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 143.48040000186302
+        },
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 149.35719999994035
+        },
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 174.9937000022328
+        },
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 213.53500000259373
+        }
+      ]
+    },
+    {
+      "total": 1000,
+      "passed": 1000,
+      "failed": 0,
+      "error_rate": 0.0,
+      "elapsed_seconds": 38.10948250000001,
+      "throughput_rps": 26.240188383560433,
+      "p50_latency_ms": 18165.268700002343,
+      "p95_latency_ms": 36274.792200001684,
+      "p99_latency_ms": 37654.39960000003,
+      "sample_results": [
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 347.18050000083167
+        },
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 342.1753999973589
+        },
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 360.7393000020238
+        },
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 371.2059000026784
+        },
+        {
+          "tenant": "local-evidence",
+          "ok": true,
+          "latency_ms": 396.3277000002563
+        }
+      ]
+    }
+  ],
+  "report_schema_version": "mcp-operation-load/v1",
+  "operation": "query_graph_facts",
+  "query": "What are relations for Boeing 737 MAX?",
+  "tenant": "local-evidence",
+  "claim_policy": "Local MCP/Neo4j measurement; not production traffic or availability.",
+  "scenario_matrix": [
+    {
+      "requests": 100,
+      "concurrency": 5
+    },
+    {
+      "requests": 1000,
+      "concurrency": 25
+    }
+  ]
+}

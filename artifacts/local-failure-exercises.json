@@ -1,0 +1,55 @@
+{
+  "report_schema_version": "local-failure-exercises/v1",
+  "scenarios": [
+    {
+      "id": "duplicate-idempotency",
+      "expected": "same_receipt",
+      "passed": true,
+      "evidence": "replaying the same write key returns the original receipt"
+    },
+    {
+      "id": "stale-optimistic-version",
+      "expected": "refused",
+      "passed": true,
+      "evidence": "an old expected version cannot overwrite newer state"
+    },
+    {
+      "id": "tenant-boundary",
+      "expected": "denied",
+      "passed": true,
+      "evidence": "a token scoped to tenant A cannot read tenant B"
+    },
+    {
+      "id": "approval-bypass",
+      "expected": "denied",
+      "passed": true,
+      "evidence": "a write without an approved decision cannot execute"
+    },
+    {
+      "id": "compensation-replay",
+      "expected": "same_receipt",
+      "passed": true,
+      "evidence": "compensation is approval-gated and idempotent"
+    },
+    {
+      "id": "backup-restore-integrity",
+      "expected": "digest_match",
+      "passed": true,
+      "evidence": "restored evidence matches the backup digest"
+    }
+  ],
+  "passed": 6,
+  "failed": 0,
+  "elapsed_seconds": 7e-06,
+  "claim_policy": "Deterministic local control-matrix report; dependency interruption and customer incident claims require live deployment evidence.",
+  "workflow_summary": {
+    "report_schema_version": "workflow-evidence/v1",
+    "workflow_runs": 6,
+    "outcomes": {
+      "completed": 6
+    },
+    "cost_usd_by_correlation_id": {},
+    "total_cost_usd": 0,
+    "claim_policy": "Costs are supplied local observations, not infrastructure savings claims."
+  }
+}
