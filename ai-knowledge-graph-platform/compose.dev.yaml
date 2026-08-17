@@ -26,6 +26,12 @@ x-worker-env: &worker-env      # shared env for all Python services
   KPI_BACKEND:              timescale
   TIMESCALE_DB_URL:         postgresql+asyncpg://graphrag:graphrag_dev@timescaledb:5432/graphrag
   QUERY_RESULT_TTL_SECONDS: "3600"   # override at deploy time; no redeploy needed
+  # The Dockerfile's non-root "app" user has no real home directory
+  # (HOME=/nonexistent), so huggingface_hub's default ~/.cache/huggingface
+  # cache-dir resolution fails with PermissionError on query_worker's first
+  # model load. Harmless on services that never touch huggingface_hub.
+  HF_HOME:                  /tmp/huggingface
+  TRANSFORMERS_CACHE:       /tmp/huggingface
 
 x-worker-depends: &worker-depends
   neo4j:
@@ -111,6 +117,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: api
     container_name: dev_api
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
@@ -133,6 +141,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: api
     container_name: dev_mcp
     command: python -m mcp_server.remote
     ports:
@@ -153,6 +163,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: ingestion
     command: python workers/ingestion_worker.py
     env_file: .env
     environment:
@@ -174,6 +186,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: query
     container_name: dev_query_worker
     command: python workers/query_worker.py
     ports:
@@ -197,6 +211,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: evaluation
     container_name: dev_evaluation_worker
     command: python workers/evaluation_worker.py
     ports:
@@ -214,6 +230,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: api
     container_name: dev_admin_dashboard
     command: uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload
     ports:
@@ -232,6 +250,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: dashboard
     container_name: dev_dashboard
     command: python graphrag/business_matrix/dashboard_server.py
     ports:

@@ -79,6 +79,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: api
     container_name: graphrag_api
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
@@ -108,6 +110,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: ingestion
     command: python workers/ingestion_worker.py
     env_file: .env
     environment:
@@ -128,6 +132,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: query
     container_name: graphrag_query_worker
     command: python workers/query_worker.py
     env_file: .env
@@ -138,6 +144,12 @@ services:
       KPI_DB_PATH: /data/kpis.db
       KPI_BACKEND: timescale
       TIMESCALE_DB_URL: postgresql+asyncpg://graphrag:graphrag_dev@timescaledb:5432/graphrag
+      # The Dockerfile's non-root "app" user has no real home directory
+      # (HOME=/nonexistent), so huggingface_hub's default ~/.cache/huggingface
+      # cache-dir resolution fails with PermissionError on first model load.
+      # Point it at a writable path instead.
+      HF_HOME: /tmp/huggingface
+      TRANSFORMERS_CACHE: /tmp/huggingface
     depends_on:
       neo4j:
         condition: service_healthy
@@ -155,6 +167,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: evaluation
     container_name: graphrag_eval_worker
     command: python workers/evaluation_worker.py
     env_file: .env
@@ -176,6 +190,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE: dashboard
     container_name: graphrag_dashboard
     command: python graphrag/business_matrix/dashboard_server.py
     ports:

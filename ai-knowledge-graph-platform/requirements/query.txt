@@ -1,5 +1,12 @@
 -r base.txt
 
+# ── Worker health server (graphrag/workers/health_server.py) ───────────────────
+# Direct dependency, not just a transitive pull-in — was missing here (only
+# present in requirements.lock via some other package's own dependency chain),
+# which left every worker image silently broken until first actually run
+# against a correctly-built image.
+aiohttp>=3.9.0
+
 # ── Reranking + GNN ────────────────────────────────────────────────────────────
 sentence-transformers>=3.0.0
 networkx>=3.3
