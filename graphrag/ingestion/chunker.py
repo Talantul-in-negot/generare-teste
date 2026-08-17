@@ -69,6 +69,8 @@ def _heading_boundaries(raw_text: str) -> tuple[list[int], dict[int, str]]:
 
 
 def chunk_document(document: Document) -> list[Chunk]:
+    from pathlib import Path
+
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
     cfg = get_settings().ingestion
@@ -113,6 +115,18 @@ def chunk_document(document: Document) -> list[Chunk]:
                 if heading and not sub.lstrip().startswith(heading):
                     sub = f"{heading}\n\n{sub}"
                 texts.append(sub)
+
+    # Prepend the document's own identifier to every chunk. Sections that
+    # only ever refer to their own document as "this AD" / "this directive"
+    # (routine in REFERENCES/cross-reference sections — see INF-01 in
+    # evals/golden_set.json) are otherwise unsearchable on that document's ID:
+    # BM25 and embedding similarity for a query naming the document score
+    # against a chunk that never contains the name. Filename is the
+    # identifier convention already used throughout the corpus (e.g.
+    # "FAA-AD-2024-01-02.txt" -> "FAA-AD-2024-01-02", matching
+    # expected_citations exactly), so no new metadata is required.
+    doc_label = Path(document.filename).stem
+    texts = [f"[{doc_label}]\n\n{text}" for text in texts]
 
     return [
         Chunk(
