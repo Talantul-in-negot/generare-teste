@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     # ── DeepSeek (text generation fallback) ─────────────────────────────────────
     deepseek_api_key: str = ""
 
+    # ── Cerebras (text generation primary — free tier: 1M tokens/day, no card) ──
+    cerebras_api_key: str = ""
+    cerebras_model: str = "llama-3.3-70b"
+
     # ── Groq (text generation) ───────────────────────────────────────────────────
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
@@ -108,9 +112,15 @@ class Settings(BaseSettings):
     # corpus — mixing providers mid-run (which happens naturally whenever the
     # primary fails over) pollutes the cache with two different models'
     # outputs for what should be one deterministic baseline (see llm_cache.py).
-    # "" = default: get_llm() uses FallbackLLM.deepseek_primary() — DeepSeek-V4
-    #      primary (generous rate limits, ~$0.07/1M input tokens, no Groq
-    #      daily-cap risk), Groq as automatic fallback on failure.
+    # "" = default: get_llm() uses FallbackLLM.cerebras_primary() — Cerebras
+    #      primary (free tier: 1M tokens/day, no card, LPU-fast) falling over
+    #      to DeepSeek, then Groq, on failure/quota. Keeps token spend on the
+    #      paid DeepSeek key to the cases where Cerebras itself is down or
+    #      over its daily cap, instead of every call.
+    # "deepseek" = get_llm() uses FallbackLLM.deepseek_primary() — skips
+    #          Cerebras entirely, DeepSeek-V4 primary with Groq fallback.
+    #          This was the default before 2026-08-17; use it if Cerebras
+    #          quality/latency doesn't hold up for a given workload.
     # "groq" = get_llm() uses FallbackLLM.groq_primary() instead — Groq
     #          primary (~280 tok/s) with instant DeepSeek fallback. Useful
     #          for quick/low-volume dev runs. Enable with
