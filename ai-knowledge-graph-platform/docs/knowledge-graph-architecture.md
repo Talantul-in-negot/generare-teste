@@ -231,60 +231,70 @@ exported from it, not a second production database running in parallel.
 
 ---
 
-## 9. LLM Routing — DeepSeek for Generation, Groq for Fast Routing, OpenAI for Embeddings
+## 9. LLM Routing — Cerebras for Generation, Groq for Fast Routing, OpenAI for Embeddings
 
 All LLM calls are centralised through `graphrag/core/llm_client.py`. This module
-routes text generation (`get_llm()`) to a bare `DeepSeekLLM` by default — one
-provider's extraction/synthesis voice for the whole corpus, no Groq round-trip.
-Groq is an opt-in override only, via `LLM_INGEST_PROVIDER=groq`, for quick,
-low-volume dev runs. The agentic retriever's intermediate SEARCH/ANSWER routing
-decisions (`get_fast_llm()`) default to Groq's small `llama-3.1-8b-instant`
-model (DeepSeek fallback), since that path is genuinely latency-bound.
-Embeddings go to OpenAI `text-embedding-3-large`, with a clean singleton
-interface used across all pipeline stages.
+routes text generation (`get_llm()`) to a 3-tier `FallbackLLM` chain by
+default: Cerebras (free tier, 1M tokens/day, no card) → DeepSeek → Groq.
+Cerebras became primary on 2026-08-17, replacing a bare `DeepSeekLLM` default,
+because DeepSeek billed against paid balance on every call even when a free
+provider would have sufficed; DeepSeek and Groq remain as automatic fallbacks
+on rate limit / error. `LLM_INGEST_PROVIDER=deepseek` skips Cerebras and
+restores the pre-2026-08-17 default (DeepSeek primary, Groq fallback);
+`LLM_INGEST_PROVIDER=groq` makes Groq primary with DeepSeek fallback, unchanged.
+The agentic retriever's intermediate SEARCH/ANSWER routing decisions
+(`get_fast_llm()`) default to Groq's small `llama-3.1-8b-instant` model
+(DeepSeek fallback), since that path is genuinely latency-bound and untouched
+by this change. Embeddings go to OpenAI `text-embedding-3-large`, with a clean
+singleton interface used across all pipeline stages.
 
 ```
                 ┌─────────────────────────────────────┐
                 │          llm_client.py               │
                 │                                      │
-                │  get_llm()      → DeepSeekLLM        │
-                │                    (bare; primary)   │
+                │  get_llm()      → FallbackLLM        │
+                │                    (Cerebras primary)│
                 │  get_fast_llm() → FallbackLLM        │
                 │                    (Groq 8B primary) │
                 │  get_embedder() → OpenAIEmbedder     │
                 └───────────┬──────────────┬───────────┘
                             │              │
                ┌────────────▼──┐   ┌───────▼──────────────┐
-               │ DeepSeek API  │   │ OpenAI API            │
-               │ deepseek-v4-  │   │ text-embedding-3-     │
-               │ pro (default) │   │ large (3072d vectors) │
+               │ Cerebras API  │   │ OpenAI API            │
+               │ llama-3.3-70b │   │ text-embedding-3-     │
+               │ (default)     │   │ large (3072d vectors) │
                └──────┬────────┘   └──────────────────────┘
-                      │ opt-in dev override
+                      │ on failure
+               ┌──────▼────────┐
+               │ DeepSeek API  │
+               │ deepseek-v4-  │
+               │ pro           │
+               └──────┬────────┘
+                      │ on failure, or LLM_INGEST_PROVIDER=deepseek/groq
                ┌──────▼────────┐
                │ Groq API      │
-               │ (via          │
-               │ LLM_INGEST_   │
-               │ PROVIDER=groq)│
+               │ llama-3.3-70b-│
+               │ versatile     │
                └───────────────┘
 ```
 
 ### Why this split?
 
-| Concern | DeepSeek + Groq | OpenAI |
+| Concern | Cerebras + DeepSeek + Groq | OpenAI |
 |---|---|---|
-| Text generation (synthesis + extraction) | DeepSeek `deepseek-v4-pro` (default via `get_llm()`); Groq available as opt-in dev override | — |
+| Text generation (synthesis + extraction) | Cerebras `llama-3.3-70b` (default via `get_llm()`, free tier); falls to DeepSeek `deepseek-v4-pro`, then Groq on failure | — |
 | Routing steps | `llama-3.1-8b-instant` via Groq (default), ~800 tok/s; DeepSeek fallback | — |
 | Embedding | — | `text-embedding-3-large` (3072d), cosine-compatible, same schema as prior Gemini index |
-| Cost | DeepSeek generation is the paid default; Groq free tier available for dev | ~$0.13/1M tokens |
+| Cost | Cerebras generation is free-tier by default (1M tokens/day); DeepSeek/Groq only billed on fallback | ~$0.13/1M tokens |
 
-### What uses DeepSeek / Groq
+### What uses Cerebras / DeepSeek / Groq
 
-- `graphrag/ingestion/extractor.py` — entity + relation extraction from chunks (DeepSeek default)
-- `graphrag/retrieval/local_search.py` — answer synthesis from retrieved context (DeepSeek default)
+- `graphrag/ingestion/extractor.py` — entity + relation extraction from chunks (Cerebras default)
+- `graphrag/retrieval/local_search.py` — answer synthesis from retrieved context (Cerebras default)
 - `graphrag/retrieval/global_search.py` — direct community-summary retrieval and bounded synthesis context; legacy map-reduce is configuration-gated
-- `graphrag/retrieval/agentic_retriever.py` — IRCoT routing (Groq 8B, genuinely primary here) and final synthesis (DeepSeek default via `get_llm()`)
-- `graphrag/graph/community_summarizer.py` — LLM community summaries (DeepSeek default)
-- `graphrag/evaluation/ragas_evaluator.py` — RAGAS judge LLM (DeepSeek first, Groq fallback, Gemini only as a final compatibility fallback — independent of the generation and fast-routing tiers)
+- `graphrag/retrieval/agentic_retriever.py` — IRCoT routing (Groq 8B, genuinely primary here) and final synthesis (Cerebras default via `get_llm()`)
+- `graphrag/graph/community_summarizer.py` — LLM community summaries (Cerebras default)
+- `graphrag/evaluation/ragas_evaluator.py` — RAGAS judge LLM (DeepSeek first, Groq fallback, Gemini only as a final compatibility fallback — independent of the generation and fast-routing tiers, not yet updated to include Cerebras)
 
 ### What uses OpenAI (embeddings only)
 
@@ -295,7 +305,7 @@ interface used across all pipeline stages.
 > **RAGAS evaluator note:** The judge LLM for RAGAS metrics is resolved in priority
 > order: DeepSeek → Groq (`langchain-groq`) → Gemini compatibility fallback → None. This ordering is specific to
 > the evaluation judge and is separate from `get_llm()`'s generation-primary
-> choice (DeepSeek by default).
+> choice (Cerebras by default as of 2026-08-17).
 > Install with `pip install langchain-groq`.
 
 ### Cross-process result store

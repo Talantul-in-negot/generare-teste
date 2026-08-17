@@ -133,3 +133,16 @@ fallback), so the "8B routing / large-model synthesis" split and the latency
 analysis above remain accurate. Only the specific model name behind "final
 synthesis" in the table and code comments should now be read as DeepSeek,
 not `llama-3.3-70b-versatile`.
+
+## Update 2026-08-17 — synthesis primary changed from DeepSeek to Cerebras
+
+`get_llm()` now defaults to a 3-tier `FallbackLLM` chain: Cerebras
+(`llama-3.3-70b`, free tier) → DeepSeek (`deepseek-v4-pro`) → Groq, replacing
+the bare `DeepSeekLLM` default from the update above. DeepSeek was billing
+paid balance on every synthesis call even when a free provider would have
+sufficed. DeepSeek and Groq remain automatic fallbacks in the same order as
+before. `LLM_INGEST_PROVIDER=deepseek` skips Cerebras and restores the
+2026-07-24 default; `LLM_INGEST_PROVIDER=groq` is unchanged.
+
+`get_fast_llm()` is unaffected — still Groq `llama-3.1-8b-instant` primary,
+DeepSeek fallback.
