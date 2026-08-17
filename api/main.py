@@ -206,24 +206,34 @@ async def health_ready():
 
     # ── LLM provider ─────────────────────────────────────────────────────────
     # Unlike Redis (no fallback exists — a Redis failure is always gating),
-    # get_llm() is now a redundant, multi-provider FallbackLLM (see
-    # llm_client.py, 2026-07-24 — the primary having zero fallback is what
-    # let a deprecated DeepSeek model id take down synthesis for ~40min
-    # undetected). If the primary is unhealthy but the secondary is serving,
-    # the service is degraded, not down — only gate readiness when BOTH are
-    # unhealthy, i.e. there is truly no viable synthesis path left.
+    # get_llm() is now a redundant, multi-provider FallbackLLM chain (see
+    # llm_client.py — the 2026-07-24 incident is what motivated the primary
+    # never having zero fallback again). Default chain is
+    # Cerebras -> DeepSeek -> Groq (changed 2026-08-17, was DeepSeek -> Groq);
+    # LLM_INGEST_PROVIDER overrides which provider leads. Only gate readiness
+    # when EVERY provider in the chain is unhealthy, i.e. there is truly no
+    # viable synthesis path left — a single link being down is degraded, not
+    # down.
     try:
         from graphrag.core.provider_health import is_healthy
         from graphrag.core.config import get_settings
         cfg = get_settings()
-        primary = "groq" if cfg.llm_ingest_provider == "groq" else "deepseek"
-        secondary = "deepseek" if primary == "groq" else "groq"
-        if is_healthy(primary):
-            checks["llm_provider"] = f"ok (primary={primary})"
-        elif is_healthy(secondary):
-            checks["llm_provider"] = f"degraded — {primary} unhealthy, serving via {secondary} fallback"
+        if cfg.llm_ingest_provider == "groq":
+            chain = ["groq", "deepseek"]
+        elif cfg.llm_ingest_provider == "deepseek":
+            chain = ["deepseek", "groq"]
         else:
-            checks["llm_provider"] = f"error — both {primary} and {secondary} unhealthy, no viable LLM path"
+            chain = ["cerebras", "deepseek", "groq"]
+        healthy = [p for p in chain if is_healthy(p)]
+        if healthy and healthy[0] == chain[0]:
+            checks["llm_provider"] = f"ok (primary={chain[0]})"
+        elif healthy:
+            checks["llm_provider"] = (
+                f"degraded — {'/'.join(p for p in chain if p not in healthy)} unhealthy, "
+                f"serving via {healthy[0]} fallback"
+            )
+        else:
+            checks["llm_provider"] = f"error — all of {'/'.join(chain)} unhealthy, no viable LLM path"
             failed = True
     except Exception as exc:  # noqa: BLE001
         checks["llm_provider"] = f"error: {exc}"

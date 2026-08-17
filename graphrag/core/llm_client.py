@@ -1,5 +1,6 @@
-"""Central LLM client — routes large generation to DeepSeek with Groq fallback;
-embeddings use OpenAI text-embedding-3-large (3072d).
+"""Central LLM client — routes large generation to Cerebras (free) with a
+DeepSeek -> Groq fallback chain; embeddings use OpenAI text-embedding-3-large
+(3072d).
 
 Usage:
     from graphrag.core.llm_client import get_llm, get_embedder
@@ -9,17 +10,20 @@ Usage:
 
 Provider strategy
 -----------------
-Primary:  DeepSeek-V4 (deepseek-v4-pro) via ``FallbackLLM.deepseek_primary()``
-          — single provider for the full ingestion run gives a consistent
-          extraction "voice" (entity/relation style, confidence calibration)
-          across the whole graph — important for reproducibility. Falls over
-          to Groq transparently on rate-limit, timeout, or an API error (e.g.
-          a bad/deprecated model id — see the 2026-07-24 incident note on
-          ``DeepSeekLLM``).
-Opt-in:   Groq (llama-3.3-70b-versatile) — set ``LLM_INGEST_PROVIDER=groq`` to
-          use ``FallbackLLM.groq_primary()`` instead: Groq-primary with
-          instant DeepSeek fallback on rate-limit, e.g. for quick
-          low-volume/dev runs.
+Primary:  Cerebras (llama-3.3-70b) via ``FallbackLLM.cerebras_primary()`` —
+          free tier (1M tokens/day, no card required), LPU-fast. Falls over
+          to DeepSeek-V4, then Groq, transparently on rate-limit, timeout, or
+          quota exhaustion (composition of two ``FallbackLLM`` instances —
+          see the classmethod). Changed 2026-08-17: DeepSeek was primary
+          before this, but was consuming paid balance on every ingestion/
+          query call even when Cerebras's free tier would have covered it.
+Opt-in:   ``LLM_INGEST_PROVIDER=deepseek`` — ``FallbackLLM.deepseek_primary()``,
+          skipping Cerebras entirely (DeepSeek primary, Groq fallback — this
+          was the pre-2026-08-17 default). Use if Cerebras quality/latency
+          doesn't hold up for a given workload.
+          ``LLM_INGEST_PROVIDER=groq`` — ``FallbackLLM.groq_primary()``:
+          Groq-primary with instant DeepSeek fallback on rate-limit, e.g. for
+          quick low-volume/dev runs.
 Embeddings: OpenAI text-embedding-3-large (3072d) — replaced Gemini; same
           dimensions, same Neo4j schema, no re-indexing required.
 
@@ -357,6 +361,89 @@ class DeepSeekLLM(BaseLLM):
         raise last_exc  # type: ignore[misc]
 
 
+# ── Cerebras text-generation client ──────────────────────────────────────────
+
+class CerebrasLLM(BaseLLM):
+    """Async wrapper around Cerebras chat completions via OpenAI-compatible API.
+
+    Free tier: 1M tokens/day, no credit card required, runs on Cerebras's own
+    LPU hardware (faster than Groq, more relaxed rate limits). Same
+    request/response shape as DeepSeek — both are OpenAI-compatible — so this
+    mirrors ``DeepSeekLLM`` almost exactly.
+    """
+
+    _BASE_URL      = "https://api.cerebras.ai/v1"
+    _DEFAULT_MODEL = "llama-3.3-70b"
+    _MAX_RETRIES   = 3
+    _RETRY_WAIT    = 10.0  # seconds between retries on 429/503/timeout
+    _TIMEOUT       = 60.0  # seconds — same rationale as DeepSeekLLM: without
+                            # this a stalled response hangs forever and
+                            # FallbackLLM never gets a chance to fall back.
+    _PROVIDER_NAME = "cerebras"
+
+    def __init__(self, api_key: str, default_model: str = _DEFAULT_MODEL,
+                 max_retries: int = _MAX_RETRIES):
+        from openai import OpenAI
+        self._client = OpenAI(api_key=api_key, base_url=self._BASE_URL, timeout=self._TIMEOUT)
+        self._default_model = default_model
+        self._max_retries = max_retries
+
+    async def generate(
+        self,
+        prompt: str,
+        model: str | None = None,
+        json_mode: bool = False,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+    ) -> str:
+        from openai import RateLimitError, APIStatusError, APITimeoutError, APIConnectionError
+
+        model = model or self._default_model
+        kwargs: dict[str, Any] = {
+            "model":    model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+
+        loop = asyncio.get_running_loop()
+        last_exc: Exception | None = None
+
+        # See GroqLLM.generate() / DeepSeekLLM.generate() — same fail-fast
+        # pattern once this provider looks broken.
+        effective_max_retries = (
+            self._max_retries if is_healthy(self._PROVIDER_NAME) else 1
+        )
+
+        for attempt in range(1, effective_max_retries + 1):
+            try:
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: self._client.chat.completions.create(**kwargs),
+                )
+                record_result(self._PROVIDER_NAME, True)
+                return response.choices[0].message.content or ""
+
+            except (RateLimitError, APIStatusError, APITimeoutError, APIConnectionError) as exc:
+                record_result(self._PROVIDER_NAME, False)
+                log.warning(
+                    "llm_client.cerebras_retry",
+                    attempt=attempt,
+                    max_retries=effective_max_retries,
+                    wait_seconds=self._RETRY_WAIT,
+                    model=model,
+                    error=type(exc).__name__,
+                )
+                last_exc = exc
+                if attempt < effective_max_retries:
+                    await asyncio.sleep(self._RETRY_WAIT)
+
+        raise last_exc  # type: ignore[misc]
+
+
 # ── Fallback LLM — primary provider (fail-fast) → secondary on failure ───────
 
 class FallbackLLM(BaseLLM):
@@ -450,6 +537,29 @@ class FallbackLLM(BaseLLM):
             fallback_exceptions=(RateLimitError, APIStatusError, APITimeoutError, APIConnectionError),
         )
 
+    @classmethod
+    def cerebras_primary(cls, cfg) -> "FallbackLLM":
+        """Cerebras primary (free tier, fail-fast) -> DeepSeek -> Groq chain.
+
+        Built by wrapping ``deepseek_primary()``'s own DeepSeek->Groq
+        FallbackLLM as the *secondary* of an outer FallbackLLM — no changes
+        needed to this class's binary primary/secondary shape, since
+        FallbackLLM itself already implements BaseLLM.generate(). Cerebras
+        and DeepSeek share the same OpenAI-compatible exception surface, so
+        the same fallback_exceptions tuple applies at both hops.
+        """
+        from openai import RateLimitError, APIStatusError, APITimeoutError, APIConnectionError
+        return cls(
+            primary=CerebrasLLM(
+                api_key=cfg.cerebras_api_key,
+                default_model=cfg.cerebras_model,
+                max_retries=1,  # fail fast: same philosophy as the other *_primary() methods
+            ),
+            primary_name="cerebras",
+            secondary=cls.deepseek_primary(cfg),  # DeepSeek -> Groq, reused as-is
+            fallback_exceptions=(RateLimitError, APIStatusError, APITimeoutError, APIConnectionError),
+        )
+
 
 # ── OpenAI embedding client ───────────────────────────────────────────────────
 
@@ -523,12 +633,15 @@ def get_generation_route() -> dict[str, str]:
     from graphrag.core.config import get_settings
 
     cfg = get_settings()
+    cerebras = f"cerebras:{cfg.cerebras_model}"
     deepseek = f"deepseek:{DeepSeekLLM._DEFAULT_MODEL}"
     groq = f"groq:{cfg.groq_model}"
     if cfg.llm_ingest_provider == "groq":
         primary, fallback = groq, deepseek
-    else:
+    elif cfg.llm_ingest_provider == "deepseek":
         primary, fallback = deepseek, groq
+    else:
+        primary, fallback = cerebras, f"{deepseek} -> {groq}"
     return {
         "primary": primary,
         "fallback": fallback,
@@ -537,15 +650,21 @@ def get_generation_route() -> dict[str, str]:
 
 
 def get_llm() -> BaseLLM:
-    """Return the primary (large) LLM — DeepSeek-V4 primary, Groq fallback.
+    """Return the primary (large) LLM — Cerebras primary, DeepSeek -> Groq fallback chain.
 
-    Normal path: ``FallbackLLM.deepseek_primary()`` — DeepSeek (deepseek-v4-pro)
-    handles the call for one provider's consistent extraction "voice" across
-    the whole corpus; Groq is used transparently if DeepSeek fails (rate
-    limit, timeout, or an API error like the 2026-07-24 incident where
-    DeepSeek's model id was deprecated and every call 400'd). Before
-    2026-07-24 this was a bare ``DeepSeekLLM`` with no fallback at all — that
-    gap is why the incident took down synthesis for ~40 minutes.
+    Normal path: ``FallbackLLM.cerebras_primary()`` — Cerebras (free tier,
+    1M tokens/day, no card) handles the call; DeepSeek-V4 is used
+    transparently if Cerebras fails or its daily cap is hit, with Groq as a
+    further fallback behind that. Changed 2026-08-17 (was DeepSeek-primary
+    before this — see the 2026-07-24 incident note on ``DeepSeekLLM`` for why
+    that path itself always has a fallback): DeepSeek-primary was consuming
+    paid balance on every single call, even during runs that fit easily in
+    Cerebras's free tier.
+
+    Opt-in override — ``LLM_INGEST_PROVIDER=deepseek``:
+        ``FallbackLLM.deepseek_primary()`` — skips Cerebras entirely,
+        DeepSeek primary with Groq fallback (the pre-2026-08-17 default).
+        Use if Cerebras quality/latency doesn't hold up for a given workload.
 
     Opt-in override — ``LLM_INGEST_PROVIDER=groq``:
         ``FallbackLLM.groq_primary()`` — Groq llama-3.3-70b as primary
@@ -563,8 +682,15 @@ def get_llm() -> BaseLLM:
                 reason="LLM_INGEST_PROVIDER=groq — Groq-primary with DeepSeek fallback for this run",
             )
             _llm = FallbackLLM.groq_primary(cfg)
-        else:
+        elif cfg.llm_ingest_provider == "deepseek":
+            log.warning(
+                "llm_client.single_provider_override",
+                provider="deepseek",
+                reason="LLM_INGEST_PROVIDER=deepseek — Cerebras skipped for this run",
+            )
             _llm = FallbackLLM.deepseek_primary(cfg)
+        else:
+            _llm = FallbackLLM.cerebras_primary(cfg)
     return _llm
 
 
