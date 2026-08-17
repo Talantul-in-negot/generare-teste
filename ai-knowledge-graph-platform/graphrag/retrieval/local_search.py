@@ -381,6 +381,15 @@ class LocalSearch:
         all_chunks   = seed_chunks + extra_chunks
         all_ids      = [c["chunk_id"] for c in all_chunks]
 
+        # Populated inside the GNN branch below (needs an embedding + chunks
+        # to know which entities to fetch edges for); stays empty otherwise
+        # so it's always safe to return. Previously computed for GNN scoring
+        # only and discarded — now also carried through to ContextBuilder so
+        # graph facts (e.g. an inferred SUPERSEDES edge) can be surfaced as
+        # explicit text in the synthesis prompt instead of being silently
+        # dropped after scoring. See INF-01/CON-02 in evals/golden_set.json.
+        entity_edges: list[dict] = []
+
         # Step 5 — GNN scoring with authority-weighted edges (requires query embedding)
         if use_gnn and all_chunks and embedding is not None:
             alpha, beta = _adaptive_weights(
@@ -541,6 +550,7 @@ class LocalSearch:
         return {
             "chunks": all_chunks,
             "entities": entities,
+            "entity_edges": entity_edges,
             # Returned so hybrid_retriever can record the turn with the real answer
             "referenced_entities": referenced_entities,
             "referenced_chunks": all_ids,

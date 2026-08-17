@@ -89,6 +89,36 @@ class ContextBuilder:
                 )
             sections.append("Entity context:\n" + "\n".join(entity_lines))
 
+        # Known graph relationships: entity/document edges established
+        # elsewhere in the corpus — directly extracted or, notably, derived
+        # by forward-chaining inference (e.g. supersedes_transitivity, see
+        # inference_engine.py). Chunk text alone often states only pairwise
+        # facts (A supersedes B, B supersedes C); the transitive fact (A
+        # supersedes C) may exist only as an inferred graph edge, never as a
+        # sentence any single chunk contains. Without surfacing it here as
+        # explicit text, a prompt that instructs the model to answer "ONLY"
+        # from context has no anchor for that fact and reasons "no direct
+        # reference" even when the graph already establishes it. See
+        # INF-01/CON-02 in evals/golden_set.json.
+        entity_edges = local_results.get("entity_edges", [])
+        if entity_edges:
+            edge_lines = []
+            for e in entity_edges[:10]:  # generous vs. the 5-cap above — chain
+                                          # questions (e.g. MH-01) legitimately
+                                          # need several hops to answer
+                relation = e.get("relation")
+                if not relation:
+                    continue  # no label to report — nothing informative to add
+                line = f"{e['src']} —{relation}→ {e['tgt']}"
+                if e.get("source_type") == "inferred":
+                    rule = e.get("inferred_by")
+                    line += f" (inferred{f' via {rule}' if rule else ''})"
+                edge_lines.append(line)
+            if edge_lines:
+                sections.append(
+                    "Known graph relationships:\n" + "\n".join(edge_lines)
+                )
+
         # Unresolved conflicts: an entity in this result set is the subject of
         # an open contradiction (see ContradictionDetector) — two sources
         # disagree on a fact. Surfaced explicitly here rather than left for

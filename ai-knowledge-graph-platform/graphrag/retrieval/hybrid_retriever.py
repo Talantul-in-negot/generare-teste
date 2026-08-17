@@ -133,6 +133,12 @@ reliable — prefer it.
 - A "⚠ Unresolved conflicts:" section lists entities/relations where two sources disagree and no \
 resolution has been recorded. If your answer touches one of these, explicitly state that sources \
 disagree rather than presenting either side as settled fact.
+- A "Known graph relationships:" section lists entity/document relationships established \
+elsewhere in the corpus — some directly stated, some derived by transitive inference across \
+multiple documents (marked "(inferred)"). Treat every line in this section as an established \
+fact, exactly as reliable as a fact stated in a chunk, even if no single chunk above states it \
+directly or explicitly. Do NOT say a relationship is unstated, unconfirmed, or not directly \
+referenced if it appears in this section.
 
 Context:
 {context}

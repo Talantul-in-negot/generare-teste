@@ -1367,7 +1367,13 @@ class Neo4jClient:
         matches when a tenant has two entities with the same name but
         different types (e.g. "Apple" as ORG vs. PRODUCT).
 
-        Used by GNNScorer to build the adjacency matrix A.
+        Used by GNNScorer to build the adjacency matrix A, and by
+        ContextBuilder to surface labeled graph facts (e.g. a transitively
+        inferred SUPERSEDES edge) in the synthesis prompt — see INF-01/CON-02
+        in evals/golden_set.json: chunk text alone states only pairwise
+        supersession, and without the relation label + inferred/asserted
+        distinction here, the LLM has no textual anchor to affirm a
+        transitive fact it's told to answer "ONLY" from context.
         Only intra-subgraph edges are returned (both endpoints in the list).
         Optionally filters edges by temporal validity.
         """
@@ -1397,10 +1403,13 @@ class Neo4jClient:
                    s.type                             AS src_type,
                    t.name                             AS tgt,
                    t.type                             AS tgt_type,
+                   r.relation                         AS relation,
                    r.weight                           AS weight,
                    coalesce(r.confidence, 1.0)        AS confidence,
                    r.extracted_at                     AS extracted_at,
-                   r.source_doc_id                    AS source_doc_id
+                   r.source_doc_id                    AS source_doc_id,
+                   coalesce(r.source_type, 'asserted') AS source_type,
+                   r.inferred_by                      AS inferred_by
             """,
             entities=entities,
             entity_keys=[f"{e['name']}:{e['type']}" for e in entities],
