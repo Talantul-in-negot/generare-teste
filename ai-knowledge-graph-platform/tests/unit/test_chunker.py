@@ -104,7 +104,49 @@ class TestSectionSoftCap:
 
         chunks = chunk_document(doc)
 
-        assert all(c.text.startswith("APPENDIX") for c in chunks)
+        # Doc-identity prefix (see TestDocumentIdentityPrefix) comes first,
+        # heading immediately after it.
+        assert all(c.text.startswith("[test]\n\nAPPENDIX") for c in chunks)
+
+
+class TestDocumentIdentityPrefix:
+    """A chunk that only ever refers to its own document as "this AD" is
+    unsearchable on that document's ID otherwise — see INF-01 in
+    evals/golden_set.json, root-caused in docs/audit-2026-08-13.md."""
+
+    def test_every_chunk_starts_with_the_document_label(self):
+        doc = Document(
+            filename="FAA-AD-2024-01-02.txt",
+            source_path="FAA-AD-2024-01-02.txt",
+            raw_text="REFERENCES:\n\n- AD 2020-05-11: fully superseded by this AD.",
+            tenant="test",
+            ingested_at=datetime.now(timezone.utc),
+        )
+
+        chunks = chunk_document(doc)
+
+        assert all(c.text.startswith("[FAA-AD-2024-01-02]") for c in chunks)
+
+    def test_label_is_the_filename_without_extension(self):
+        doc = Document(
+            filename="G-ABCD_AD_compliance_2024-03.txt",
+            source_path="G-ABCD_AD_compliance_2024-03.txt",
+            raw_text="Some content.",
+            tenant="test",
+            ingested_at=datetime.now(timezone.utc),
+        )
+
+        chunks = chunk_document(doc)
+
+        assert chunks[0].text.startswith("[G-ABCD_AD_compliance_2024-03]")
+        assert ".txt" not in chunks[0].text.split("\n", 1)[0]
+
+    def test_prefix_does_not_hide_the_original_content(self):
+        doc = _doc("Filler prose with no section titles at all. " * 40)
+
+        chunks = chunk_document(doc)
+
+        assert all("Filler prose" in c.text for c in chunks)
 
 
 class TestUnheadedDocument:

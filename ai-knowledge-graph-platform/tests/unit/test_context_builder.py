@@ -5,8 +5,12 @@ from __future__ import annotations
 from graphrag.retrieval.context_builder import ContextBuilder
 
 
-def _local(chunks: list[dict], entities: list[dict] | None = None) -> dict:
-    return {"chunks": chunks, "entities": entities or []}
+def _local(
+    chunks: list[dict],
+    entities: list[dict] | None = None,
+    entity_edges: list[dict] | None = None,
+) -> dict:
+    return {"chunks": chunks, "entities": entities or [], "entity_edges": entity_edges or []}
 
 
 class TestContextBuilderRanking:
@@ -121,4 +125,54 @@ class TestContextBuilderConflicts:
         for i in range(5):
             assert f"E{i}" in context
         for i in range(5, 8):
+            assert f"E{i}" not in context
+
+
+class TestContextBuilderGraphRelationships:
+    """A graph edge (asserted or transitively inferred) between retrieved
+    entities must be surfaced as an explicit fact — chunk text alone often
+    states only pairwise facts, never the transitive one. See
+    INF-01/CON-02 in evals/golden_set.json."""
+
+    def test_no_section_when_no_edges(self):
+        chunks = [{"chunk_id": "a", "text": "text", "final_score": 1.0}]
+        context, _ = ContextBuilder().build(_local(chunks), {}, top_k=1)
+        assert "Known graph relationships" not in context
+
+    def test_asserted_edge_rendered_without_inferred_label(self):
+        chunks = [{"chunk_id": "a", "text": "text", "final_score": 1.0}]
+        edges = [{"src": "FAA-AD-2024-01-02", "tgt": "FAA-AD-2022-03-07", "relation": "SUPERSEDES"}]
+        context, _ = ContextBuilder().build(_local(chunks, entity_edges=edges), {}, top_k=1)
+        assert "Known graph relationships" in context
+        assert "FAA-AD-2024-01-02 —SUPERSEDES→ FAA-AD-2022-03-07" in context
+        assert "(inferred" not in context
+
+    def test_inferred_edge_labeled_with_rule(self):
+        chunks = [{"chunk_id": "a", "text": "text", "final_score": 1.0}]
+        edges = [{
+            "src": "FAA-AD-2024-01-02", "tgt": "FAA-AD-2020-05-11", "relation": "SUPERSEDES",
+            "source_type": "inferred", "inferred_by": "supersedes_transitivity",
+        }]
+        context, _ = ContextBuilder().build(_local(chunks, entity_edges=edges), {}, top_k=1)
+        assert "FAA-AD-2024-01-02 —SUPERSEDES→ FAA-AD-2020-05-11" in context
+        assert "(inferred via supersedes_transitivity)" in context
+
+    def test_edge_without_relation_label_skipped(self):
+        """No relation string means nothing informative to report — must not
+        render a blank/garbled line."""
+        chunks = [{"chunk_id": "a", "text": "text", "final_score": 1.0}]
+        edges = [{"src": "A", "tgt": "B", "relation": None}]
+        context, _ = ContextBuilder().build(_local(chunks, entity_edges=edges), {}, top_k=1)
+        assert "Known graph relationships" not in context
+
+    def test_edges_capped_at_ten(self):
+        chunks = [{"chunk_id": "a", "text": "text", "final_score": 1.0}]
+        edges = [
+            {"src": f"E{i}", "tgt": f"F{i}", "relation": "REL"}
+            for i in range(15)
+        ]
+        context, _ = ContextBuilder().build(_local(chunks, entity_edges=edges), {}, top_k=1)
+        for i in range(10):
+            assert f"E{i}" in context
+        for i in range(10, 15):
             assert f"E{i}" not in context
