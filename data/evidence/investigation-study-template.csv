@@ -1,3 +1,0 @@
-task_id,condition,duration_seconds,evidence_score,success
-task-01,manual,,,true
-task-01,agent_assisted,,,true

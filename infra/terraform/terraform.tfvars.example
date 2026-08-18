@@ -1,8 +1,0 @@
-# Copy to terraform.tfvars; do not commit environment-specific values.
-project_id        = "your-gcp-project-id"
-region            = "europe-west3"
-cluster_name      = "graphrag-prod"
-node_machine_type = "e2-standard-4"
-min_nodes         = 3
-max_nodes         = 9
-backup_retention_days = 35
