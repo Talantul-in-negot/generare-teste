@@ -11,6 +11,7 @@ import structlog
 
 from graphrag.core.config import get_settings, resolve_tenant_config
 from graphrag.core.llm_client import get_generation_route, get_llm
+from graphrag.core.llm_utils import normalize_dashes
 from graphrag.core.models import QueryResult
 from graphrag.context_graph.models import (
     AgentRun, Case, CGEpisode, ConditionOperator, ContextManifest, Decision,
@@ -412,6 +413,29 @@ class HybridRetriever:
             routing_reason = "retrieval_profile"
         plan = retrieval_plan(question)
         if mode == "hybrid" and cfg.get("query_planner_enabled", False):
+            # Bug fix 2026-08-17 (found while diagnosing NEG-03, see
+            # docs/audit-2026-08-13.md "What's left"): this block has computed
+            # a per-query-class top_k since the planner/adaptive-router were
+            # added, but every downstream self._local.search()/
+            # self._global.search() call below passed config_overrides=
+            # profile_overrides (the ORIGINAL, pre-planner dict) instead of
+            # this updated `cfg` — so the computed top_k never reached
+            # LocalSearch, and separately never touched `rerank_top_k`
+            # either (a same-named but distinct cutoff LocalSearch's own
+            # internal reranker and this function's context_builder call
+            # both read independently). Net effect: query_planner_enabled
+            # has been a no-op for top_k since it shipped — it correctly
+            # switched `mode` (confirmed: query_class-appropriate steps like
+            # "Graph expansion" do appear in live traces) but never widened
+            # or narrowed how many chunks reach the LLM. Only "negative"
+            # (added this session for NEG-03) is scoped tightly enough (1 of
+            # 34 golden questions matches its trigger) to fix here with a
+            # bounded, auditable blast radius; before touching this for
+            # relational/contradiction/multi_hop too, rerun the full golden
+            # eval — this exact lever has a documented regression history
+            # (see rerank_top_k's and local_top_k's comments below in
+            # settings.yml: A124/A125, and local_top_k=15 breaking AUT-02/
+            # NEG-02 on 2026-08-14).
             if cfg.get("adaptive_router_enabled", True):
                 try:
                     route = await self._adaptive_router.choose(question, tenant)
@@ -427,6 +451,9 @@ class HybridRetriever:
                 mode = plan["mode"]
                 routing_reason = "keyword_planner"
                 cfg = {**cfg, "local_top_k": plan["top_k"]}
+            if plan["query_class"] == "negative":
+                cfg = {**cfg, "rerank_top_k": cfg["local_top_k"]}
+                profile_overrides = {**profile_overrides, **cfg}
             log.info("hybrid_retriever.query_plan", query_class=plan["query_class"], mode=mode,
                      top_k=cfg["local_top_k"], fallback=plan["fallback"],
                      routing_reason=routing_reason)
@@ -607,9 +634,24 @@ class HybridRetriever:
             policy_result = PolicyResult.ALLOW
             policy_reason_code = "evidence_captured"
 
+        # Corpus document names, so ContextBuilder can resolve entity-form
+        # citations ("AD 2024-01-02") back to the document they name
+        # ("FAA-AD-2024-01-02") — see its build() comment. Fetched per query
+        # rather than cached: the set changes on re-ingestion, and this
+        # mirrors the existing per-query fetch the named-document boost
+        # already does (local_search.py). Small indexed lookup. Fails open —
+        # citations simply keep their pre-2026-08-17 form if it errors, since
+        # a citation-naming refinement must never take down a query.
+        document_names: list[str] = []
+        try:
+            document_names = await get_neo4j().get_document_filenames(tenant=tenant)
+        except Exception as exc:  # noqa: BLE001 — cosmetic enrichment, never fatal
+            log.warning("hybrid_retriever.document_names_failed", error=str(exc)[:160])
+
         context, citations = self._context_builder.build(
             local_results=local_results,
             global_results=global_results,
+            document_names=document_names,
             weights=(
                 cfg.get("hybrid_weight_local", 0.6),
                 cfg.get("hybrid_weight_global", 0.4),
@@ -623,6 +665,10 @@ class HybridRetriever:
         answer = await get_llm().generate(
             _ANSWER_PROMPT.format(context=context, question=question),
         ) or "Insufficient context to answer this question."
+        # See llm_utils.normalize_dashes — Groq's gpt-oss models write
+        # document IDs/dates with U+2011 NON-BREAKING HYPHEN instead of
+        # ASCII "-", found 2026-08-17 diagnosing golden-eval failures.
+        answer = normalize_dashes(answer)
 
         # ── Claim verification — strip ungrounded sentences ────────────────────
         if cfg.get("claim_verification", False):
@@ -649,6 +695,7 @@ class HybridRetriever:
                 answer=answer,
                 referenced_entities=local_results.get("referenced_entities", []),
                 referenced_chunks=local_results.get("referenced_chunks", []),
+                tenant=tenant,
             )
 
         # ── Agentic fallback ───────────────────────────────────────────────────
