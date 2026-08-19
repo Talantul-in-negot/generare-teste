@@ -35,7 +35,11 @@ _CLAIM_RETURN = (
     "cl.resolved_entity_id AS resolved_entity_id, "
     "cl.resolved_entity_type AS resolved_entity_type, "
     "cl.resolution_status AS resolution_status, "
-    "cl.resolution_score AS resolution_score"
+    "cl.resolution_score AS resolution_score, "
+    # Extraction provenance (P3.2). Same null-safe story as the resolution
+    # fields above: nodes written before this existed return null, which is
+    # exactly Claim's default.
+    "cl.extraction_run_id AS extraction_run_id"
 )
 
 
@@ -75,6 +79,7 @@ def _claim_params(claim: Claim) -> dict:
         "resolved_entity_type": claim.resolved_entity_type,
         "resolution_status": claim.resolution_status.value if claim.resolution_status else None,
         "resolution_score": claim.resolution_score,
+        "extraction_run_id": claim.extraction_run_id,
     }
 
 
@@ -127,7 +132,8 @@ class ClaimRepository:
                     cl.resolved_entity_id = $resolved_entity_id,
                     cl.resolved_entity_type = $resolved_entity_type,
                     cl.resolution_status = $resolution_status,
-                    cl.resolution_score = $resolution_score
+                    cl.resolution_score = $resolution_score,
+                    cl.extraction_run_id = $extraction_run_id
                 MERGE (seg)-[:HAS_CLAIM]->(cl)
                 """,
                 **params,
@@ -168,7 +174,8 @@ class ClaimRepository:
                 cl.resolved_entity_id = $resolved_entity_id,
                 cl.resolved_entity_type = $resolved_entity_type,
                 cl.resolution_status = $resolution_status,
-                cl.resolution_score = $resolution_score
+                cl.resolution_score = $resolution_score,
+                cl.extraction_run_id = $extraction_run_id
             """,
             **params,
         )

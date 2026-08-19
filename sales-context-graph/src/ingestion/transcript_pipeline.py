@@ -20,20 +20,23 @@ from __future__ import annotations
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
+from uuid import uuid4
 
 import structlog
 
 from src.core.telemetry import RESOLUTION_CANDIDATES_CONSIDERED, RESOLUTION_DURATION_SECONDS
-from src.domain.assertion import Claim
+from src.domain.assertion import Claim, ExtractionRun
 from src.domain.conversation import Mention
 from src.domain.enums import AdjudicationStatus, ResolutionStatus, SpeakerRole
 from src.domain.identity import assertion_id as _assertion_id
+from src.domain.identity import extraction_run_id as _extraction_run_id
 from src.domain.identity import mention_id as _mention_id
 from src.extraction.provider import ExtractionInput, ExtractionProvider, WindowSegmentText
 from src.extraction.windowing import build_windows
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
+from src.graph.repositories.extraction_run_repository import ExtractionRunRepository
 from src.graph.repositories.review_repository import ReviewRepository
 from src.graph.repositories.source_repository import SourceRepository
 from src.graph.sales_ontology import validate_claim_predicate
@@ -97,6 +100,11 @@ class TranscriptIngestionPipeline:
         extraction_provider: ExtractionProvider,
         candidate_generator: CandidateGenerator | None = None,
         review_repo: ReviewRepository | None = None,
+        extraction_run_repo: ExtractionRunRepository | None = None,
+        provider_name: str = "unknown",
+        model_name: str = "unknown",
+        prompt_version: str = "v1",
+        extractor_version: str = "v1",
     ):
         self._conversation_repo = conversation_repo
         self._source_repo = source_repo
@@ -114,6 +122,16 @@ class TranscriptIngestionPipeline:
         # reachable by ReviewService.list_pending() -- without it, an ambiguous
         # speaker would be scored and then silently forgotten.
         self._review_repo = review_repo
+        # P3.2 extraction provenance -- optional and additive, same story as
+        # candidate_generator/review_repo above. ExtractionProvider is a bare
+        # Protocol with no model/prompt_version attributes to introspect
+        # (src/extraction/provider.py), so these are caller-supplied config,
+        # the same shape as confidence_default below.
+        self._extraction_run_repo = extraction_run_repo
+        self._provider_name = provider_name
+        self._model_name = model_name
+        self._prompt_version = prompt_version
+        self._extractor_version = extractor_version
 
     async def _resolve_speaker_identity(
         self,
@@ -125,6 +143,7 @@ class TranscriptIngestionPipeline:
         speaker_resolution,
         segments: list,
         decided_at: datetime,
+        occurred_at: datetime,
         account_id: str | None,
         email: str | None,
     ) -> _SpeakerSubject:
@@ -189,7 +208,24 @@ class TranscriptIngestionPipeline:
             # safely to the ordinary fuzzy path.
             normalized_surface=speaker_label,
             entity_type="PERSON",
+            # The call's actual occurred-at time, not ingestion wall-clock
+            # (`decided_at`/`observed_at` below) -- P3.1's whole point is a
+            # source timestamp distinct from write time.
+            source_timestamp=occurred_at,
         )
+
+        # P4.6 -- a mention re-resolved after a human rejected every candidate
+        # last time must not re-propose the same rejected set. Only the most
+        # recent ReviewDecision matters: an older rejection superseded by a
+        # later confirmation (or a later, different rejection) no longer
+        # reflects what's actually excluded.
+        excluded_entity_ids: frozenset[str] = frozenset()
+        if self._review_repo is not None:
+            history = await self._review_repo.list_review_decisions_for_mention(
+                workspace_id, mention.mention_id
+            )
+            if history and history[0].rejected:
+                excluded_entity_ids = frozenset(history[0].candidates_shown)
 
         started_at = time.monotonic()
         outcome = await resolve_mention(
@@ -198,6 +234,7 @@ class TranscriptIngestionPipeline:
             entity_type="Contact",  # PERSON -> Contact, same mapping the review route uses
             candidate_generator=self._candidate_generator,
             decided_at=decided_at,
+            excluded_entity_ids=excluded_entity_ids,
         )
         status = outcome.decision.status
         RESOLUTION_DURATION_SECONDS.labels(status=status.value.lower()).observe(
@@ -327,6 +364,7 @@ class TranscriptIngestionPipeline:
                 speaker_resolution=resolution,
                 segments=segments,
                 decided_at=observed_at,
+                occurred_at=parsed_conv.entity.occurred_at,
                 account_id=account_id,
                 email=party_emails.get(participant.speaker_label),
             )
@@ -365,7 +403,42 @@ class TranscriptIngestionPipeline:
         if on_progress is not None:
             await on_progress(0, len(inputs))
 
+        # P3.2 -- one ExtractionRun per actual extraction call, persisted
+        # before the call starts so a run that never completes (crash,
+        # timeout) is still visible as "started" rather than untraceable.
+        # Unwired (extraction_run_repo=None) stays additive like
+        # candidate_generator/review_repo above: no run is constructed at all,
+        # so Claim.extraction_run_id keeps its default rather than pointing at
+        # an id that was never actually persisted anywhere.
+        extraction_run: ExtractionRun | None = None
+        if self._extraction_run_repo is not None:
+            run_nonce = uuid4().hex
+            extraction_run = ExtractionRun(
+                extraction_run_id=_extraction_run_id(
+                    self._provider_name, self._model_name, self._prompt_version,
+                    self._extractor_version, run_nonce,
+                ),
+                workspace_id=workspace_id,
+                provider=self._provider_name,
+                model=self._model_name,
+                prompt_version=self._prompt_version,
+                extractor_version=self._extractor_version,
+                run_nonce=run_nonce,
+                # Real wall-clock time the call actually started, not
+                # observed_at (a caller-supplied ingestion timestamp that's
+                # identical for started_at and completed_at) -- using
+                # observed_at for both left every run showing zero duration
+                # regardless of how long extraction actually took.
+                started_at=datetime.now(timezone.utc),
+            )
+            await self._extraction_run_repo.create_extraction_run(extraction_run)
+
         results = await self._extraction_provider.extract(inputs)
+
+        if self._extraction_run_repo is not None and extraction_run is not None:
+            await self._extraction_run_repo.complete_extraction_run(
+                workspace_id, extraction_run.extraction_run_id, completed_at=datetime.now(timezone.utc)
+            )
 
         # The provider owns fan-out (and its own bounded concurrency), so the
         # honest report is one update after it returns rather than a
@@ -415,6 +488,7 @@ class TranscriptIngestionPipeline:
                     adjudication_status=AdjudicationStatus.UNREVIEWED,
                     retention_class=retention_class,
                     created_at=observed_at,
+                    extraction_run_id=extraction_run.extraction_run_id if extraction_run else None,
                     resolved_entity_id=subject.entity_id,
                     resolved_entity_type=subject.entity_type,
                     resolution_status=subject.status,

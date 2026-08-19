@@ -67,6 +67,7 @@ from src.ingestion.pipeline import CrmIngestionPipeline
 from src.ingestion.transcript_pipeline import TranscriptIngestionPipeline
 from src.resolution.candidates import CandidateGenerator
 from src.resolution.pipeline import gather_relational_signals, resolve_mention
+from src.resolution.policy import POLICY_VERSION
 from src.usecases.objection_content_recommendation import ObjectionContentRecommendationUseCase
 
 _T0 = datetime(2026, 6, 15, 14, 0, tzinfo=timezone.utc)
@@ -236,7 +237,7 @@ async def main() -> None:
         mention_id=review_mention_id, status=ResolutionStatus.PENDING_REVIEW,
         lexical_score=review["lexical_score"], semantic_score=review["semantic_score"], base_score=review["lexical_score"],
         relational_bonus=0.0, final_score=review["final_score"], margin=review["margin"],
-        relational_signals=[], decided_at=_T0,
+        relational_signals=[], decided_at=_T0, policy_version=POLICY_VERSION,
     ))
 
     # Workflow records keep Readiness, Buyer Spaces, Revenue Intelligence and

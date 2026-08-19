@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import pytest
 
-from src.domain.assertion import Claim
+from src.domain.assertion import CandidateScore, Claim, ResolutionDecision
 from src.domain.conversation import Mention
 from src.domain.enums import AdjudicationStatus, Polarity, ResolutionStatus, SpeakerRole
 from src.domain.identity import mention_id, segment_id
@@ -153,6 +153,75 @@ async def test_resolving_an_unknown_mention_raises():
             decided_at=_T0, selected_entity_id="account-1", rejected=False,
             candidates_shown=[], original_scores={},
         )
+
+
+async def test_mention_source_timestamp_round_trips(executor):
+    """P3.1 -- source_timestamp survives upsert_mention/get_mention, distinct
+    from the repository-stamped created_at write time."""
+    workspace_id = _ws()
+    review_repo = ReviewRepository(executor)
+    seg_id = segment_id("conv-ts", 0)
+    mention = Mention(
+        mention_id=mention_id(seg_id, 0, 5, "acme", "ORG"), workspace_id=workspace_id,
+        segment_id=seg_id, char_start=0, char_end=5, surface_text="Acme",
+        normalized_surface="acme", entity_type="ORG", source_timestamp=_T0,
+    )
+    await review_repo.upsert_mention(mention)
+
+    fetched = await review_repo.get_mention(workspace_id, mention.mention_id)
+    assert fetched.source_timestamp == _T0
+
+
+async def test_mention_without_source_timestamp_round_trips_as_none(executor):
+    workspace_id = _ws()
+    review_repo = ReviewRepository(executor)
+    seg_id = segment_id("conv-no-ts", 0)
+    mention = Mention(
+        mention_id=mention_id(seg_id, 0, 5, "acme", "ORG"), workspace_id=workspace_id,
+        segment_id=seg_id, char_start=0, char_end=5, surface_text="Acme",
+        normalized_surface="acme", entity_type="ORG",
+    )
+    await review_repo.upsert_mention(mention)
+
+    fetched = await review_repo.get_mention(workspace_id, mention.mention_id)
+    assert fetched.source_timestamp is None
+
+
+async def test_resolution_decision_candidates_and_policy_version_round_trip(executor):
+    """P4.2/P4.3/P4.4 -- the full candidate set (with scores) and the policy
+    version survive upsert_resolution_decision/get_resolution_decision."""
+    workspace_id = _ws()
+    review_repo = ReviewRepository(executor)
+    seg_id = segment_id("conv-rd", 0)
+    mention = Mention(
+        mention_id=mention_id(seg_id, 0, 5, "acme", "ORG"), workspace_id=workspace_id,
+        segment_id=seg_id, char_start=0, char_end=5, surface_text="Acme",
+        normalized_surface="acme", entity_type="ORG", resolution_status=ResolutionStatus.PENDING_REVIEW,
+    )
+    await review_repo.upsert_mention(mention)
+
+    decision = ResolutionDecision(
+        resolution_decision_id="rd-1", workspace_id=workspace_id, mention_id=mention.mention_id,
+        status=ResolutionStatus.PENDING_REVIEW, final_score=0.6, margin=0.05, decided_at=_T0,
+        candidates=[
+            CandidateScore(
+                entity_id="account-1", entity_type="Account", lexical_score=0.6,
+                semantic_score=None, base_score=0.6, relational_bonus=0.0, final_score=0.6, rank=1,
+            ),
+            CandidateScore(
+                entity_id="account-2", entity_type="Account", lexical_score=0.55,
+                semantic_score=None, base_score=0.55, relational_bonus=0.0, final_score=0.55, rank=2,
+            ),
+        ],
+        policy_version="v1",
+    )
+    await review_repo.upsert_resolution_decision(decision)
+
+    fetched = await review_repo.get_resolution_decision(workspace_id, "rd-1")
+    assert fetched is not None
+    assert fetched.policy_version == "v1"
+    assert [c.entity_id for c in fetched.candidates] == ["account-1", "account-2"]
+    assert fetched.candidates[1].final_score == 0.55
 
 
 async def test_list_pending_returns_only_pending_review_mentions(executor):

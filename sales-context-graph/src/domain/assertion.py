@@ -68,6 +68,14 @@ class Claim(BaseModel):
     resolution_status: ResolutionStatus | None = None
     resolution_score: float | None = None
 
+    # --- Extraction provenance (P3.2) --------------------------------------
+    # Which ExtractionRun produced this Claim -- distinct from assertion_id
+    # (§6), which deliberately excludes extraction-execution details so a
+    # re-extraction by a newer model links to the same Claim. This field is
+    # the other half: additive provenance that lets "which model/prompt
+    # version produced this specific assertion" actually be queried.
+    extraction_run_id: str | None = None
+
     @model_validator(mode="after")
     def _resolved_entity_requires_auto_link(self) -> "Claim":
         """Mirror of ResolutionDecision's own invariant.
@@ -123,6 +131,20 @@ class ExtractionRun(BaseModel):
     completed_at: datetime | None = None
 
 
+class CandidateScore(BaseModel):
+    """P4.2/P4.3 — one scored candidate as considered during resolution, kept
+    alongside the winner so a genuine multi-way ambiguity is recoverable after
+    the fact, not collapsed to a single top-1 score breakdown."""
+    entity_id: str
+    entity_type: str
+    lexical_score: float
+    semantic_score: float | None = None
+    base_score: float
+    relational_bonus: float
+    final_score: float
+    rank: int
+
+
 class ResolutionDecision(BaseModel):
     """§8 — the automated entity-resolution outcome for one Mention, with the full
     component-score breakdown required for explainability."""
@@ -139,6 +161,18 @@ class ResolutionDecision(BaseModel):
     margin: float | None = None
     relational_signals: list[str] = []
     decided_at: datetime
+    # P4.2/P4.3 — the full ranked candidate set (bounded, see
+    # src/resolution/pipeline.py's _CANDIDATE_SCORES_CAP), not just the
+    # winner. Empty for a Stage A deterministic match, which has no runner-up
+    # to show. Deliberately a property, not a (:ResolutionDecision)-
+    # [:POSSIBLY_REFERS_TO]->(:Account|:Contact) edge fan-out — see §10 as
+    # quoted in claim_repository.py.
+    candidates: list[CandidateScore] = []
+    # P4.4 — which threshold set produced this decision, so re-tuning
+    # src/resolution/policy.py's defaults can be traced back to affected
+    # records. "deterministic" for Stage A matches, which never go through
+    # decide()/PolicyThresholds at all.
+    policy_version: str
 
     @model_validator(mode="after")
     def _auto_linked_requires_resolved_entity(self) -> "ResolutionDecision":

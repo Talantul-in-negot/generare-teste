@@ -197,6 +197,19 @@ async def test_distractor_is_present_but_never_selected(executor):
     assert vw_financial.account_id in outcome.candidates_shown  # present...
     assert outcome.decision.resolved_entity_id != vw_financial.account_id  # ...never confused for the match
 
+    # P4.2/P4.3 — the distractor's full score breakdown must survive on the
+    # decision itself, not just in the ephemeral candidates_shown id list.
+    candidate_ids = {c.entity_id for c in outcome.decision.candidates}
+    assert vw_group.account_id in candidate_ids
+    assert vw_financial.account_id in candidate_ids
+    distractor_score = next(c for c in outcome.decision.candidates if c.entity_id == vw_financial.account_id)
+    assert distractor_score.final_score is not None
+    assert distractor_score.rank >= 1
+    # ranks are unique and dense over the persisted (capped) set
+    ranks = [c.rank for c in outcome.decision.candidates]
+    assert ranks == sorted(ranks)
+    assert outcome.decision.policy_version == "v1"
+
 
 async def test_weak_base_candidate_cannot_autolink_through_relational_bonus_alone(executor):
     workspace_id = _ws()
@@ -309,6 +322,77 @@ async def test_duplicate_exact_names_do_not_deterministic_link_and_tied_margin_f
     # picking one arbitrarily).
     assert outcome.decision.status != ResolutionStatus.AUTO_LINKED
     assert outcome.decision.margin is not None and outcome.decision.margin < 0.08
+
+
+async def test_unique_exact_name_deterministic_match_has_no_candidates_and_a_sentinel_policy_version(executor):
+    """Stage A never goes through decide()/PolicyThresholds -- the persisted
+    decision must say so honestly (policy_version="deterministic") rather than
+    a numbered version that implies threshold tuning was involved, and must
+    not carry a fabricated candidate list (there is no runner-up to show)."""
+    workspace_id = _ws()
+    crm_repo = CrmRepository(executor)
+    candidate_generator = CandidateGenerator(executor)
+
+    account = Account(
+        account_id=crm_entity_id(workspace_id, "salesforce", "Account", "001UNIQUE"),
+        workspace_id=workspace_id, source_record_id="rec-unique", name="Uniquely Named Corp",
+    )
+    await crm_repo.upsert_account(account)
+
+    seg_id = segment_id("conv-unique", 0)
+    mention = Mention(
+        # exact_name_candidates() matches n.name = $name by exact string
+        # equality (see src/resolution/candidates.py) -- normalized_surface
+        # must match the account's stored name's exact casing, same as the
+        # existing "Acme Corp" duplicate-exact-name fixture above.
+        mention_id=mention_id(seg_id, 0, 19, "Uniquely Named Corp", "ORG"),
+        workspace_id=workspace_id, segment_id=seg_id, char_start=0, char_end=19,
+        surface_text="Uniquely Named Corp", normalized_surface="Uniquely Named Corp", entity_type="ORG",
+    )
+
+    outcome = await resolve_mention(
+        workspace_id=workspace_id, mention=mention, entity_type="Account",
+        candidate_generator=candidate_generator, decided_at=_T0,
+    )
+
+    assert outcome.decision.status == ResolutionStatus.AUTO_LINKED
+    assert outcome.decision.resolved_entity_id == account.account_id
+    assert outcome.decision.candidates == []
+    assert outcome.decision.policy_version == "deterministic"
+
+
+async def test_rejected_candidate_is_never_reproposed_on_reresolution(executor):
+    """P4.6 -- a candidate a human explicitly rejected for this mention must
+    not resurface, deterministically or probabilistically, on a later
+    resolve_mention call for the same mention."""
+    workspace_id = _ws()
+    crm_repo = CrmRepository(executor)
+    candidate_generator = CandidateGenerator(executor)
+    vw_group, _ = await _seed_vw_accounts(crm_repo, workspace_id)
+
+    mention = _vw_mention(workspace_id, segment_id("conv-rejected", 0))
+
+    # First pass: strong relational evidence would normally auto-link vw_group.
+    signals = {vw_group.account_id: frozenset({"a", "b", "c"})}
+    first = await resolve_mention(
+        workspace_id=workspace_id, mention=mention, entity_type="Account",
+        candidate_generator=candidate_generator, decided_at=_T0,
+        relational_signals_by_entity=signals,
+    )
+    assert first.decision.resolved_entity_id == vw_group.account_id
+
+    # A human then rejects vw_group for this exact mention.
+    excluded = frozenset({vw_group.account_id})
+
+    second = await resolve_mention(
+        workspace_id=workspace_id, mention=mention, entity_type="Account",
+        candidate_generator=candidate_generator, decided_at=_T0,
+        relational_signals_by_entity=signals, excluded_entity_ids=excluded,
+    )
+
+    assert second.decision.resolved_entity_id != vw_group.account_id
+    assert vw_group.account_id not in second.candidates_shown
+    assert vw_group.account_id not in {c.entity_id for c in second.decision.candidates}
 
 
 async def test_domain_equality_alone_never_autolinks(executor):
