@@ -25,9 +25,11 @@ from api.auth import user_provisioning as up
 def _memory_only():
     """Force the in-memory fallback and start each test with a clean table."""
     up._users_mem.clear()
+    up._identities_mem.clear()
     with patch("api.auth.user_provisioning._get_redis_sync", return_value=None):
         yield
     up._users_mem.clear()
+    up._identities_mem.clear()
 
 
 class TestNormalizeEmail:
@@ -64,6 +66,23 @@ class TestGetSetDelete:
 
     def test_delete_of_unprovisioned_returns_false(self):
         assert up.delete_user_record("nobody@example.com") is False
+
+    def test_verified_subject_binding_is_stable_and_removed_on_revoke(self):
+        up.set_user_record("alice@example.com", tenant="acme", scopes=["read"], added_by="a")
+        bound = up.bind_user_identity(
+            "alice@example.com", issuer="https://accounts.google.com", subject="google-sub-1",
+        )
+        assert bound["subject"] == "google-sub-1"
+        assert up.get_user_record_by_identity("https://accounts.google.com", "google-sub-1")["email"] == "alice@example.com"
+
+        assert up.delete_user_record("alice@example.com") is True
+        assert up.get_user_record_by_identity("https://accounts.google.com", "google-sub-1") is None
+
+    def test_different_subject_cannot_replace_bound_email(self):
+        up.set_user_record("alice@example.com", tenant="acme", scopes=["read"], added_by="a")
+        up.bind_user_identity("alice@example.com", issuer="https://accounts.google.com", subject="google-sub-1")
+        with pytest.raises(up.UserIdentityConflict):
+            up.bind_user_identity("alice@example.com", issuer="https://accounts.google.com", subject="google-sub-2")
 
 
 class TestListUserRecordsTenantScoped:

@@ -144,6 +144,45 @@ def test_alert_dict_has_required_fields():
     assert required.issubset(a.keys())
 
 
+def test_recent_alerts_are_filtered_by_tenant_before_pagination():
+    """Tenant B's recent alerts must neither appear in nor crowd out tenant A's
+    requested page when the in-process fallback is in use."""
+    import graphrag.monitoring.alerts as alerts_module
+
+    alerts_module._recent_alerts.clear()
+    alerts_module._recent_alerts.extend([
+        {"tenant": "acme", "metric": "old-acme"},
+        {"tenant": "other", "metric": "other-1"},
+        {"tenant": "other", "metric": "other-2"},
+        {"tenant": "acme", "metric": "new-acme"},
+    ])
+    with patch.object(alerts_module, "_read_from_redis", return_value=None):
+        alerts = get_recent_alerts(tenant="acme", limit=2)
+
+    assert [alert["metric"] for alert in alerts] == ["new-acme", "old-acme"]
+    assert {alert["tenant"] for alert in alerts} == {"acme"}
+
+
+def test_health_alert_route_uses_the_token_tenant():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from api.auth.dependencies import get_current_user
+    from api.routes.kg import health as health_routes
+
+    app = FastAPI()
+    app.include_router(health_routes.router, prefix="/kg")
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "reader", "scope": "read", "tenant": "acme",
+    }
+    with patch("graphrag.monitoring.alerts.get_recent_alerts", return_value=[]) as recent:
+        response = TestClient(app).get("/kg/health/alerts?limit=7")
+
+    assert response.status_code == 200
+    assert response.json() == {"alerts": [], "tenant": "acme"}
+    recent.assert_called_once_with(tenant="acme", limit=7)
+
+
 def test_threshold_property_returns_copy():
     """Mutating the returned thresholds dict does not affect the service."""
     svc = AlertService()

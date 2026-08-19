@@ -2,23 +2,63 @@
 
 from __future__ import annotations
 
+import secrets
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from api.auth.jwt import decode_access_token
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+ACCESS_TOKEN_COOKIE = "access_token"
+CSRF_TOKEN_COOKIE = "csrf_token"
+CSRF_TOKEN_HEADER = "x-csrf-token"
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+
+
+def request_access_token(request: Request) -> tuple[str | None, bool]:
+    """Return the request token and whether it came from a browser cookie.
+
+    An explicit Authorization header always wins.  This keeps programmatic
+    clients deterministic while allowing the Google browser callback to issue
+    an HttpOnly session cookie.
+    """
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[len("bearer "):].strip()
+        return (token or None, False)
+    token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+    return (token or None, bool(token))
+
+
+def validate_cookie_csrf(request: Request) -> bool:
+    """Validate double-submit CSRF protection for unsafe cookie requests."""
+    if request.method.upper() in _SAFE_METHODS:
+        return True
+    expected = request.cookies.get(CSRF_TOKEN_COOKIE)
+    supplied = request.headers.get(CSRF_TOKEN_HEADER)
+    return bool(expected and supplied and secrets.compare_digest(expected, supplied))
+
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Security(bearer_scheme),
 ) -> dict:
-    """Accept Bearer header only — no cookie/browser session."""
-    token: Optional[str] = None
-    if credentials:
-        token = credentials.credentials
+    """Resolve a Bearer token or CSRF-protected browser-session cookie."""
+    cached_user = getattr(request.state, "user", None)
+    cookie_authenticated = bool(getattr(request.state, "auth_via_cookie", False))
+    if cached_user is not None:
+        if cookie_authenticated and not validate_cookie_csrf(request):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token")
+        return cached_user
+
+    token: Optional[str] = credentials.credentials if credentials else None
+    if token:
+        cookie_authenticated = False
+    else:
+        token, cookie_authenticated = request_access_token(request)
 
     if not token:
         raise HTTPException(
@@ -27,13 +67,26 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     try:
-        return decode_access_token(token)
+        claims = decode_access_token(token)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    if cookie_authenticated:
+        # Cookies are only for the browser OAuth flow.  M2M tokens must remain
+        # explicit Bearer credentials and never become ambient authority.
+        if claims.get("type") != "browser":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Cookie authentication requires a browser token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if not validate_cookie_csrf(request):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token")
+    return claims
 
 
 async def get_tenant(user: dict = Depends(get_current_user)) -> str:

@@ -328,7 +328,7 @@ class Neo4jClient:
         return rows[0]["tombstoned"] if rows else 0
 
     async def merge_chunk(self, chunk: Chunk, tenant: str = "default"):
-        """MERGE on (document_id, chunk_index) — stable across re-ingestion and
+        """MERGE on (tenant, document_id, chunk_index) — stable across re-ingestion and
         re-chunking, unlike chunk.id (fresh uuid4() every run). Also writes
         document_id itself, which chunks never carried before this change
         (see backfill_chunk_document_id.py) — this activates the existing
@@ -337,13 +337,12 @@ class Neo4jClient:
         """
         await self.run(
             """
-            MERGE (c:Chunk {document_id: $doc_id, chunk_index: $chunk_index})
+            MERGE (c:Chunk {tenant: $tenant, document_id: $doc_id, chunk_index: $chunk_index})
             ON CREATE SET c.id = $id
             SET c.text      = $text,
-                c.embedding = $embedding,
-                c.tenant    = $tenant
+                c.embedding = $embedding
             WITH c
-            MATCH (d:Document {id: $doc_id})
+            MATCH (d:Document {id: $doc_id, tenant: $tenant})
             MERGE (c)-[:PART_OF]->(d)
             """,
             id=chunk.id,
@@ -375,13 +374,12 @@ class Neo4jClient:
         await self.run(
             """
             UNWIND $rows AS row
-            MERGE (c:Chunk {document_id: row.doc_id, chunk_index: row.chunk_index})
+            MERGE (c:Chunk {tenant: $tenant, document_id: row.doc_id, chunk_index: row.chunk_index})
             ON CREATE SET c.id = row.id
             SET c.text      = row.text,
-                c.embedding = row.embedding,
-                c.tenant    = $tenant
+                c.embedding = row.embedding
             WITH c, row
-            MATCH (d:Document {id: row.doc_id})
+            MATCH (d:Document {id: row.doc_id, tenant: $tenant})
             MERGE (c)-[:PART_OF]->(d)
             """,
             rows=rows,
@@ -447,7 +445,7 @@ class Neo4jClient:
     async def merge_mentions(self, chunk_id: str, entity_name: str, entity_type: str, tenant: str = "default"):
         await self.run(
             """
-            MATCH (c:Chunk {id: $chunk_id})
+            MATCH (c:Chunk {id: $chunk_id, tenant: $tenant})
             MATCH (e:Entity {name: $entity_name, type: $entity_type, tenant: $tenant})
             MERGE (c)-[:MENTIONS]->(e)
             """,
@@ -528,7 +526,7 @@ class Neo4jClient:
         rows = [{"name": name, "type": etype} for name, etype in entity_refs]
         await self.run(
             """
-            MATCH (c:Chunk {id: $chunk_id})
+            MATCH (c:Chunk {id: $chunk_id, tenant: $tenant})
             UNWIND $rows AS row
             MATCH (e:Entity {name: row.name, type: row.type, tenant: $tenant})
             MERGE (c)-[:MENTIONS]->(e)
@@ -689,12 +687,11 @@ class Neo4jClient:
     async def merge_community(self, community: Community):
         await self.run(
             """
-            MERGE (c:Community {id: $id})
+            MERGE (c:Community {id: $id, tenant: $tenant})
             SET c.level = $level,
                 c.summary = $summary,
                 c.embedding = $embedding,
-                c.member_count = $member_count,
-                c.tenant = $tenant
+                c.member_count = $member_count
             """,
             id=community.id,
             level=community.level,

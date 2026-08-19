@@ -137,7 +137,7 @@ async def cache_stats():
     dependencies=[Depends(require_scope("read"))],
     summary="Return the most recently fired threshold-breach alerts (newest first)",
 )
-async def get_health_alerts(limit: int = 50):
+async def get_health_alerts(limit: int = 50, tenant: str = Depends(get_tenant)):
     """
     Return recently fired GraphHealthSnapshot threshold-breach alerts.
 
@@ -146,4 +146,4 @@ async def get_health_alerts(limit: int = 50):
     process-local — for multi-worker deployments use a shared Redis list.
     """
     from graphrag.monitoring.alerts import get_recent_alerts
-    return {"alerts": get_recent_alerts(limit=limit)}
+    return {"alerts": get_recent_alerts(tenant=tenant, limit=limit), "tenant": tenant}

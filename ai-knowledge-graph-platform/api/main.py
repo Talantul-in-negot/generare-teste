@@ -140,7 +140,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-Requested-With", "X-Correlation-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-CSRF-Token", "X-Requested-With", "X-Correlation-ID"],
     expose_headers=["X-Correlation-ID"],
 )
 
@@ -185,7 +185,8 @@ async def health_ready():
         await get_neo4j().run("RETURN 1 AS ok")
         checks["neo4j"] = "ok"
     except Exception as exc:  # noqa: BLE001
-        checks["neo4j"] = f"error: {exc}"
+        log.warning("health.ready_check_failed", component="neo4j", error=str(exc))
+        checks["neo4j"] = "unavailable"
         failed = True
 
     # ── Redis ──────────────────────────────────────────────────────────────────
@@ -201,7 +202,8 @@ async def health_ready():
             checks["redis"] = "unavailable (in-memory fallback active — result delivery broken in multi-process deployments)"
             failed = True
     except Exception as exc:  # noqa: BLE001
-        checks["redis"] = f"error: {exc}"
+        log.warning("health.ready_check_failed", component="redis", error=str(exc))
+        checks["redis"] = "unavailable"
         failed = True
 
     # ── LLM provider ─────────────────────────────────────────────────────────
@@ -236,7 +238,8 @@ async def health_ready():
             checks["llm_provider"] = f"error — all of {'/'.join(chain)} unhealthy, no viable LLM path"
             failed = True
     except Exception as exc:  # noqa: BLE001
-        checks["llm_provider"] = f"error: {exc}"
+        log.warning("health.ready_check_failed", component="llm_provider", error=str(exc))
+        checks["llm_provider"] = "unavailable"
         failed = True
 
     if failed:

@@ -5,11 +5,11 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from api.auth.default_auth import RequireAuthMiddleware, _is_public
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_current_user, require_scope
 from api.auth.jwt import create_access_token
 from api.routes.auth import _safe_next
 
@@ -148,6 +148,14 @@ def _middleware_client() -> TestClient:
     async def protected():
         return {"ok": True}
 
+    @app.post("/kg/some-protected-thing")
+    async def protected_write():
+        return {"ok": True}
+
+    @app.get("/auth/whoami")
+    async def whoami(user: dict = Depends(get_current_user)):
+        return {"sub": user["sub"]}
+
     @app.get("/auth/dev-token")
     async def dev_token_stub():
         return {"ok": True}
@@ -255,3 +263,30 @@ class TestRequireAuthMiddleware:
             headers={"Authorization": f"BEARER {token}"},
         )
         assert resp.status_code == 200
+
+    def test_browser_cookie_authenticates_protected_routes_and_dependencies(self):
+        client = _middleware_client()
+        token = create_access_token({"sub": "browser-user", "type": "browser", "scope": "read", "tenant": "t1"})
+        client.cookies.set("access_token", token)
+        response = client.get("/auth/whoami")
+        assert response.status_code == 200
+        assert response.json() == {"sub": "browser-user"}
+
+    def test_cookie_authenticated_write_requires_double_submit_csrf_token(self):
+        client = _middleware_client()
+        token = create_access_token({"sub": "browser-user", "type": "browser", "scope": "write", "tenant": "t1"})
+        client.cookies.set("access_token", token)
+
+        assert client.post("/kg/some-protected-thing").status_code == 403
+        client.cookies.set("csrf_token", "csrf-test-token")
+        allowed = client.post(
+            "/kg/some-protected-thing",
+            headers={"X-CSRF-Token": "csrf-test-token"},
+        )
+        assert allowed.status_code == 200
+
+    def test_m2m_token_cannot_be_used_as_an_ambient_cookie(self):
+        client = _middleware_client()
+        token = create_access_token({"sub": "m2m", "type": "m2m", "scope": "read", "tenant": "t1"})
+        client.cookies.set("access_token", token)
+        assert client.get("/kg/some-protected-thing").status_code == 401

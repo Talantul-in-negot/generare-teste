@@ -23,6 +23,9 @@ ignore = ["E501"]          # line length is not enforced; see CONTRIBUTING
 # graphrag, so their imports legitimately follow executable statements.
 "scripts/*.py"     = ["E402"]
 "scripts/**/*.py"  = ["E402"]
+# Worker entry points must configure Windows stdout/stderr before importing
+# logging and worker modules, so their imports intentionally follow setup.
+"workers/*.py"     = ["E402"]
 
 [tool.pytest.ini_options]
 asyncio_mode        = "auto"          # no need for @pytest.mark.asyncio on every test

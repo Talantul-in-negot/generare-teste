@@ -31,6 +31,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from api.auth.dependencies import request_access_token, validate_cookie_csrf
 from api.auth.jwt import decode_access_token
 from graphrag.core.config import get_settings, is_dev_env
 
@@ -44,7 +45,6 @@ _ALWAYS_PUBLIC = frozenset({
     "/auth/token",
     "/auth/login",
     "/auth/callback",
-    "/auth/logout",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -86,7 +86,7 @@ def _is_public(path: str, dev: bool) -> bool:
 
 
 class RequireAuthMiddleware(BaseHTTPMiddleware):
-    """401s any request to a non-public path with no decodable Bearer token.
+    """401s requests with no decodable Bearer token or browser session.
 
     Decoded claims are attached to ``request.state.user`` so downstream
     dependencies (``get_current_user`` et al.) can cheaply reuse them
@@ -110,16 +110,15 @@ class RequireAuthMiddleware(BaseHTTPMiddleware):
             # that a dev-only route exists on this deployment at all.
             return JSONResponse({"detail": "Not Found"}, status_code=404)
 
-        auth_header = request.headers.get("authorization", "")
-        if not auth_header.lower().startswith("bearer "):
-            log.info("auth.middleware_denied", path=path, reason="no_bearer_token")
+        token, cookie_authenticated = request_access_token(request)
+        if not token:
+            log.info("auth.middleware_denied", path=path, reason="no_access_token")
             return JSONResponse(
                 {"detail": "Not authenticated"},
                 status_code=401,
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        token = auth_header[len("bearer "):].strip()
         try:
             claims = decode_access_token(token)
         except ValueError as exc:
@@ -130,5 +129,18 @@ class RequireAuthMiddleware(BaseHTTPMiddleware):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        if cookie_authenticated:
+            if claims.get("type") != "browser":
+                log.info("auth.middleware_denied", path=path, reason="non_browser_cookie")
+                return JSONResponse(
+                    {"detail": "Cookie authentication requires a browser token"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            if not validate_cookie_csrf(request):
+                log.info("auth.middleware_denied", path=path, reason="invalid_csrf")
+                return JSONResponse({"detail": "Invalid CSRF token"}, status_code=403)
+
         request.state.user = claims
+        request.state.auth_via_cookie = cookie_authenticated
         return await call_next(request)

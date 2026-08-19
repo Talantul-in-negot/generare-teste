@@ -120,7 +120,7 @@ class SubclassRegisterRequest(BaseModel):
 
 @router.post(
     "/taxonomy/register",
-    dependencies=[Depends(require_scope("write"))],
+    dependencies=[Depends(require_scope("admin"))],
     summary="Add a SUBCLASS_OF edge to the entity type hierarchy",
 )
 async def register_subclass(request: SubclassRegisterRequest):

@@ -6,7 +6,10 @@ CREATE CONSTRAINT chunk_id IF NOT EXISTS FOR (c:Chunk) REQUIRE c.id IS UNIQUE;
 -- The new constraint scopes entity identity per tenant.
 CREATE CONSTRAINT entity_name_type_tenant IF NOT EXISTS FOR (e:Entity) REQUIRE (e.name, e.type, e.tenant) IS UNIQUE;
 CREATE INDEX entity_tenant IF NOT EXISTS FOR (e:Entity) ON (e.tenant);
-CREATE CONSTRAINT community_id IF NOT EXISTS FOR (c:Community) REQUIRE c.id IS UNIQUE;
+-- Community IDs are only unique within a tenant.  Drop the legacy global
+-- constraint so two tenants can safely use the same community identifier.
+DROP CONSTRAINT community_id IF EXISTS;
+CREATE CONSTRAINT community_tenant_id IF NOT EXISTS FOR (c:Community) REQUIRE (c.tenant, c.id) IS UNIQUE;
 CREATE CONSTRAINT alias_id IF NOT EXISTS FOR (a:Alias) REQUIRE a.id IS UNIQUE;
 CREATE CONSTRAINT changelog_id IF NOT EXISTS FOR (c:ChangeLog) REQUIRE c.id IS UNIQUE;
 CREATE CONSTRAINT canonical_part_id IF NOT EXISTS FOR (p:CanonicalPart) REQUIRE p.part_number IS UNIQUE;
@@ -76,4 +79,4 @@ CREATE INDEX conflict_tenant IF NOT EXISTS FOR (c:Conflict) ON (c.tenant);
 -- id constraints above (doc_id, chunk_id) are untouched — id stays unique,
 -- it just stops being the merge key.
 CREATE INDEX doc_natural IF NOT EXISTS FOR (d:Document) ON (d.tenant, d.filename);
-CREATE INDEX chunk_natural IF NOT EXISTS FOR (c:Chunk) ON (c.document_id, c.chunk_index);
+CREATE INDEX chunk_tenant_natural IF NOT EXISTS FOR (c:Chunk) ON (c.tenant, c.document_id, c.chunk_index);

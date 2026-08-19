@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
+import sys
 
 import networkx as nx
 import structlog
@@ -105,7 +107,16 @@ class CommunityBuilder:
 
     def _run_leiden(self, G: nx.Graph) -> list[Community]:
         try:
-            from graspologic.partition import leiden
+            # Import the native kernel directly.  `graspologic.partition`
+            # first executes graspologic's package initializer, which eagerly
+            # imports optional alignment/optimal-transport/Torch modules and
+            # can take minutes or hang on Windows.  The native Leiden kernel
+            # is the only part needed here.
+            if sys.modules.get("graspologic", object()) is None:
+                raise ImportError("graspologic is intentionally unavailable")
+            if importlib.util.find_spec("graspologic") is None:
+                raise ImportError("graspologic is not installed")
+            import graspologic_native as native_leiden
         except ImportError:
             require_leiden = self._cfg.get("require_leiden", False)
             if require_leiden:
@@ -142,7 +153,15 @@ class CommunityBuilder:
         ]
 
         for level, resolution in enumerate(resolutions):
-            partition = leiden(G, resolution=resolution, random_seed=42)
+            edges = [
+                (str(source), str(target), float(data.get("weight", 1.0)))
+                for source, target, data in G.edges(data=True)
+            ]
+            _, partition = native_leiden.leiden(
+                edges=edges,
+                resolution=resolution,
+                seed=42,
+            )
             # partition maps node_id -> community_int
             community_map: dict[int, list[str]] = {}
             for node_id, community_int in partition.items():

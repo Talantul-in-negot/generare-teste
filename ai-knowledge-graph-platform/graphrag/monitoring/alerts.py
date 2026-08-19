@@ -284,18 +284,20 @@ class AlertService:
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
 
-def get_recent_alerts(limit: int = ALERT_HISTORY) -> list[dict]:
-    """Return the most recently fired alerts (newest first).
+def get_recent_alerts(*, tenant: str, limit: int = ALERT_HISTORY) -> list[dict]:
+    """Return one tenant's most recently fired alerts (newest first).
 
     Reads from Redis when available so multi-worker deployments return a
-    unified view.  Falls back to the in-process deque.
+    unified view.  Falls back to the in-process deque.  Read the full bounded
+    history before filtering so alerts for busy tenants cannot crowd another
+    tenant's alerts out of a small requested page.
     """
-    redis_items = _read_from_redis(limit)
+    redis_items = _read_from_redis(ALERT_HISTORY)
     if redis_items is not None:
-        return redis_items[:limit]
+        return [alert for alert in redis_items if alert.get("tenant") == tenant][:limit]
     items = list(_recent_alerts)
     items.reverse()
-    return items[:limit]
+    return [alert for alert in items if alert.get("tenant") == tenant][:limit]
 
 
 _svc: AlertService | None = None

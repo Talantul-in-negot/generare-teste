@@ -42,9 +42,11 @@ def _make_client(*, scope: str = "admin", tenant: str = "acme", email: str = "ad
 @pytest.fixture(autouse=True)
 def _memory_only():
     up._users_mem.clear()
+    up._identities_mem.clear()
     with patch("api.auth.user_provisioning._get_redis_sync", return_value=None):
         yield
     up._users_mem.clear()
+    up._identities_mem.clear()
 
 
 # ── POST /auth/users ────────────────────────────────────────────────────────
@@ -79,12 +81,12 @@ class TestProvisionUser:
         client_a.post("/auth/users", json={"email": "shared@example.com"})
 
         client_b = _make_client(scope="admin", tenant="tenant-b")
-        client_b.post("/auth/users", json={"email": "shared@example.com"})
+        response_b = client_b.post("/auth/users", json={"email": "shared@example.com"})
 
-        assert up.get_user_record("shared@example.com")["tenant"] == "tenant-b"  # last write wins
-        # Each admin's own view is still scoped correctly:
-        assert [r["tenant"] for r in up.list_user_records(tenant="tenant-a")] == []
-        assert [r["tenant"] for r in up.list_user_records(tenant="tenant-b")] == ["tenant-b"]
+        assert response_b.status_code == 409
+        assert up.get_user_record("shared@example.com")["tenant"] == "tenant-a"
+        assert [r["tenant"] for r in up.list_user_records(tenant="tenant-a")] == ["tenant-a"]
+        assert up.list_user_records(tenant="tenant-b") == []
 
     def test_granted_scopes_cannot_exceed_callers_own(self):
         """Escalation guard, same shape as register_client: an admin holding
@@ -156,6 +158,7 @@ def _login_then_callback(client: TestClient, userinfo: dict):
     location = login_resp.headers["location"]
     state = dict(p.split("=", 1) for p in location.split("?", 1)[1].split("&"))["state"]
 
+    userinfo.setdefault("email_verified", True)
     with patch("api.routes.auth.exchange_code_for_userinfo", AsyncMock(return_value=userinfo)):
         return client.get(f"/auth/callback?code=fake-code&state={state}", follow_redirects=False)
 
@@ -212,3 +215,39 @@ class TestCallbackRejectsUnprovisionedAccount:
         granted = set(payload["scope"].split())
         assert granted == {"read", "tenant:acme"}
         assert "write" not in granted
+
+    def test_unverified_google_email_is_rejected(self):
+        up.set_user_record("alice@acme.com", tenant="acme", scopes=["read"], added_by="admin")
+        client = _make_client()
+        resp = _login_then_callback(client, {
+            "sub": "google-uid-unverified", "email": "alice@acme.com",
+            "email_verified": False,
+        })
+        assert resp.status_code == 403
+        assert up.get_user_record("alice@acme.com").get("subject") is None
+
+    def test_bound_google_subject_survives_an_email_change(self):
+        up.set_user_record("alice@acme.com", tenant="acme", scopes=["read"], added_by="admin")
+        client = _make_client()
+        first = _login_then_callback(client, {
+            "sub": "google-uid-stable", "email": "alice@acme.com",
+        })
+        assert first.status_code in (302, 307)
+
+        second = _login_then_callback(client, {
+            "sub": "google-uid-stable", "email": "alice.new@acme.com",
+        })
+        assert second.status_code in (302, 307)
+        from api.auth.jwt import decode_access_token
+        assert decode_access_token(second.cookies["access_token"])["email"] == "alice.new@acme.com"
+
+    def test_different_google_subject_cannot_claim_bound_email(self):
+        up.set_user_record("alice@acme.com", tenant="acme", scopes=["read"], added_by="admin")
+        client = _make_client()
+        assert _login_then_callback(client, {
+            "sub": "google-uid-original", "email": "alice@acme.com",
+        }).status_code in (302, 307)
+        rejected = _login_then_callback(client, {
+            "sub": "google-uid-attacker", "email": "alice@acme.com",
+        })
+        assert rejected.status_code == 403

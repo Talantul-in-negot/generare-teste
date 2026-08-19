@@ -4,9 +4,9 @@ Document.id and Chunk.id are Field(default_factory=uuid4) — a fresh id every
 run — while the old write path MERGEd on that id, so a MERGE could never match
 an existing node and every re-ingest created a full duplicate (measured live:
 4 aerospace documents duplicated, 38% of that tenant's chunks). The fix MERGEs
-on natural keys instead: (tenant, filename) for documents, (document_id,
-chunk_index) for chunks, assigning `id` only ON CREATE and returning the
-canonical id to the caller.
+on tenant-scoped natural keys instead: (tenant, filename) for documents and
+(tenant, document_id, chunk_index) for chunks, assigning `id` only ON CREATE
+and returning the canonical id to the caller.
 
 These tests mock Neo4jClient.run and assert on the Cypher/params it was called
 with — no live database needed, matching the pattern in test_data_path_fixes.py.
@@ -98,7 +98,7 @@ class TestMergeDocumentNaturalKey:
 
 class TestMergeChunkNaturalKey:
     @pytest.mark.asyncio
-    async def test_merges_on_document_id_and_chunk_index(self):
+    async def test_merges_on_tenant_document_id_and_chunk_index(self):
         from graphrag.graph.neo4j_client import Neo4jClient
 
         client = Neo4jClient.__new__(Neo4jClient)
@@ -107,7 +107,8 @@ class TestMergeChunkNaturalKey:
 
         await client.merge_chunk(chunk, tenant="aerospace")
         cypher = client.run.call_args[0][0]
-        assert "MERGE (c:Chunk {document_id: $doc_id, chunk_index: $chunk_index})" in cypher
+        assert "MERGE (c:Chunk {tenant: $tenant, document_id: $doc_id, chunk_index: $chunk_index})" in cypher
+        assert "MATCH (d:Document {id: $doc_id, tenant: $tenant})" in cypher
         assert "MERGE (c:Chunk {id:" not in cypher
 
     @pytest.mark.asyncio
@@ -134,7 +135,8 @@ class TestMergeChunkNaturalKey:
 
         await client.merge_chunks_batch(chunks, tenant="aerospace")
         cypher = client.run.call_args[0][0]
-        assert "MERGE (c:Chunk {document_id: row.doc_id, chunk_index: row.chunk_index})" in cypher
+        assert "MERGE (c:Chunk {tenant: $tenant, document_id: row.doc_id, chunk_index: row.chunk_index})" in cypher
+        assert "MATCH (d:Document {id: row.doc_id, tenant: $tenant})" in cypher
         assert "ON CREATE SET c.id = row.id" in cypher
 
     @pytest.mark.asyncio
@@ -316,7 +318,7 @@ class TestReingestionDoesNotDuplicate:
 
         # Minimal fake store keyed exactly like the real MERGE targets.
         documents: dict[tuple[str, str], dict] = {}   # (tenant, filename) -> row
-        chunks: dict[tuple[str, int], dict] = {}       # (document_id, chunk_index) -> row
+        chunks: dict[tuple[str, str, int], dict] = {}  # (tenant, document_id, chunk_index) -> row
 
         client = Neo4jClient.__new__(Neo4jClient)
 
@@ -328,7 +330,7 @@ class TestReingestionDoesNotDuplicate:
                 return [{"doc_id": documents[key]["id"]}]
             if "UNWIND $rows AS row" in cypher and "Chunk" in cypher:
                 for row in params["rows"]:
-                    key = (row["doc_id"], row["chunk_index"])
+                    key = (params["tenant"], row["doc_id"], row["chunk_index"])
                     if key not in chunks:
                         chunks[key] = {"id": row["id"]}
                 return []
@@ -407,6 +409,53 @@ class TestReingestionDoesNotDuplicate:
 
         assert id_a != id_b
         assert len(documents) == 2
+
+    @pytest.mark.asyncio
+    async def test_same_chunk_natural_key_in_different_tenants_stays_distinct(self):
+        """A shared document identifier must never merge or relabel a chunk
+        from another tenant, even if an upstream caller supplies that ID."""
+        from graphrag.graph.neo4j_client import Neo4jClient
+
+        chunks: dict[tuple[str, str, int], dict] = {}
+        client = Neo4jClient.__new__(Neo4jClient)
+
+        async def fake_run(cypher, **params):
+            for row in params.get("rows", []):
+                key = (params["tenant"], row["doc_id"], row["chunk_index"])
+                chunks.setdefault(key, {"id": row["id"]})
+            return []
+
+        client.run = fake_run
+        await client.merge_chunks_batch([_make_chunk("shared-doc", chunk_index=0)], tenant="aerospace")
+        await client.merge_chunks_batch([_make_chunk("shared-doc", chunk_index=0)], tenant="automotive")
+
+        assert set(chunks) == {
+            ("aerospace", "shared-doc", 0),
+            ("automotive", "shared-doc", 0),
+        }
+
+
+class TestTenantScopedGraphMutations:
+    @pytest.mark.asyncio
+    async def test_mentions_match_chunk_with_tenant(self):
+        from graphrag.graph.neo4j_client import Neo4jClient
+
+        client = Neo4jClient.__new__(Neo4jClient)
+        client.run = AsyncMock(return_value=[])
+        await client.merge_mentions("chunk-1", "Alice", "PERSON", tenant="aerospace")
+        cypher = client.run.call_args[0][0]
+        assert "MATCH (c:Chunk {id: $chunk_id, tenant: $tenant})" in cypher
+
+    @pytest.mark.asyncio
+    async def test_communities_merge_on_tenant_and_id(self):
+        from graphrag.core.models import Community
+        from graphrag.graph.neo4j_client import Neo4jClient
+
+        client = Neo4jClient.__new__(Neo4jClient)
+        client.run = AsyncMock(return_value=[])
+        await client.merge_community(Community(id="shared-community", level=1, tenant="aerospace"))
+        cypher = client.run.call_args_list[0].args[0]
+        assert "MERGE (c:Community {id: $id, tenant: $tenant})" in cypher
 
 
 # ── Relation confidence must not inflate on re-ingest ─────────────────────────

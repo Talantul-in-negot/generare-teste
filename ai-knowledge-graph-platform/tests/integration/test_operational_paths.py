@@ -214,9 +214,9 @@ class TestLeidenStartupPath:
     async def test_leiden_present_returns_communities(self):
         """When graspologic is available, _run_leiden returns a non-empty list."""
         try:
-            import graspologic  # noqa: F401  — skip if not installed
+            import graspologic_native  # noqa: F401  — skip if not installed
         except ImportError:
-            pytest.skip("graspologic not installed — skipping happy-path test")
+            pytest.skip("graspologic_native not installed — skipping happy-path test")
 
         builder = self._make_builder(require_leiden=True)
         G = self._tiny_graph()

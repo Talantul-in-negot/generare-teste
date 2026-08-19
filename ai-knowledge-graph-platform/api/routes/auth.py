@@ -32,14 +32,18 @@ from graphrag.core.scopes import FIXED_SCOPES, tenant_scope, validate_scopes
 from api.auth.google import build_authorization_url, exchange_code_for_userinfo  # pop_state removed (was dead code)
 from api.auth.jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
 from api.auth.user_provisioning import (
+    UserIdentityConflict,
+    bind_user_identity,
     delete_user_record,
     get_user_record,
+    get_user_record_by_identity,
     list_user_records,
     normalize_email,
     set_user_record,
 )
 
 router = APIRouter()
+_GOOGLE_ISSUER = "https://accounts.google.com"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -225,8 +229,27 @@ async def callback(request: Request, code: str, state: str):
     # exercised by real users (only dev-token/M2M ever produced a non-default
     # tenant). An unprovisioned account now gets NO access rather than
     # shared access. See docs/context_graph_gap_plan.md F14.
-    email = normalize_email(userinfo["email"])
-    record = get_user_record(email)
+    subject = userinfo.get("sub")
+    email_value = userinfo.get("email")
+    if not isinstance(subject, str) or not subject or not isinstance(email_value, str) or not email_value:
+        raise HTTPException(status_code=400, detail="Google account is missing a stable identity or email")
+    if userinfo.get("email_verified") is not True:
+        raise HTTPException(status_code=403, detail="Google account email is not verified")
+
+    # Google documents `sub` as the stable, never-reassigned account key.  An
+    # email only bootstraps a new binding after Google verifies ownership.
+    record = get_user_record_by_identity(_GOOGLE_ISSUER, subject)
+    email = normalize_email(email_value)
+    if record is None:
+        try:
+            record = bind_user_identity(email, issuer=_GOOGLE_ISSUER, subject=subject)
+        except KeyError:
+            record = None
+        except UserIdentityConflict:
+            raise HTTPException(
+                status_code=403,
+                detail="This Google identity is not authorized for the provisioned account",
+            )
     if record is None:
         raise HTTPException(
             status_code=403,
@@ -239,8 +262,8 @@ async def callback(request: Request, code: str, state: str):
     # same escalation guard register_client uses), so nothing further to
     # intersect here; tenant_scope is always included by that same guard.
     token = create_access_token({
-        "sub":     userinfo["sub"],
-        "email":   userinfo["email"],
+        "sub":     subject,
+        "email":   email_value,
         "name":    userinfo.get("name", ""),
         "picture": userinfo.get("picture", ""),
         "type":    "browser",
@@ -259,6 +282,14 @@ async def callback(request: Request, code: str, state: str):
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         secure=secure,
     )
+    response.set_cookie(
+        key="csrf_token",
+        value=secrets.token_urlsafe(32),
+        httponly=False,
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        secure=secure,
+    )
     return response
 
 
@@ -270,6 +301,7 @@ async def me(user: dict = Depends(get_current_user)):
 @router.post("/logout", summary="Clear session cookie")
 async def logout(response: Response):
     response.delete_cookie("access_token")
+    response.delete_cookie("csrf_token")
     return {"status": "logged_out"}
 
 
@@ -457,6 +489,13 @@ async def provision_user(
     caller_scopes = set(user.get("scope", "").split())
     requested = set(validate_scopes(req.scopes))
     granted = sorted((requested & caller_scopes) | {tenant_scope(tenant)})
+
+    existing = get_user_record(req.email)
+    if existing is not None and existing.get("tenant") != tenant:
+        raise HTTPException(
+            status_code=409,
+            detail="This Google account is already provisioned for another tenant",
+        )
 
     record = set_user_record(
         req.email,
