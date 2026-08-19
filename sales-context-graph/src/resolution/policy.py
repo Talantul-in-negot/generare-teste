@@ -42,6 +42,12 @@ DEFAULT_MIN_RELATIONAL_SIGNALS = 1
 DEFAULT_MIN_MARGIN = 0.08
 DEFAULT_REVIEW_THRESHOLD = 0.55
 
+# P4.4 — bump this whenever any DEFAULT_* threshold above changes. Stamped
+# onto every ResolutionDecision (src/resolution/pipeline.py) so a later
+# re-tuning of these defaults can be traced back to exactly which stored
+# decisions were made under which threshold set.
+POLICY_VERSION = "v1"
+
 
 @dataclass(frozen=True)
 class PolicyThresholds:
@@ -50,6 +56,7 @@ class PolicyThresholds:
     min_relational_signals: int = DEFAULT_MIN_RELATIONAL_SIGNALS
     min_margin: float = DEFAULT_MIN_MARGIN
     review_threshold: float = DEFAULT_REVIEW_THRESHOLD
+    policy_version: str = POLICY_VERSION
 
 
 def decide(

@@ -93,6 +93,11 @@ class Mention(BaseModel):
     entity_type: str
     resolved_entity_id: str | None = None
     resolution_status: ResolutionStatus = ResolutionStatus.UNRESOLVED
+    # When the underlying utterance was actually spoken, distinct from
+    # created_at (write time, stamped by the repository) -- P3.1. Optional
+    # because segment-level timing isn't always available to every caller
+    # that constructs a Mention.
+    source_timestamp: datetime | None = None
 
     @model_validator(mode="after")
     def _span_is_well_formed(self) -> "Mention":

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from src.core.telemetry import CANDIDATE_GENERATION_DURATION_SECONDS, RESOLUTION_DECISIONS_TOTAL
-from src.domain.assertion import ResolutionDecision
+from src.domain.assertion import CandidateScore, ResolutionDecision
 from src.domain.conversation import Mention
 from src.domain.enums import ResolutionStatus
 from src.embedding.provider import EmbeddingProvider
@@ -20,7 +20,27 @@ from src.resolution.alias_derivation import normalize as alias_normalize
 from src.resolution.candidates import Candidate, CandidateGenerator, union_candidates
 from src.resolution.deterministic import DeterministicRule, resolve_deterministic
 from src.resolution.policy import PolicyThresholds, decide, decide_deterministic
-from src.resolution.scoring import cosine_similarity, rank_candidates, score_candidate
+from src.resolution.scoring import (
+    ScoredCandidate,
+    cosine_similarity,
+    rank_candidates,
+    score_candidate,
+)
+
+# P4.2/P4.3 — cap on how many scored candidates are persisted per
+# ResolutionDecision. Bounded independently of candidate_cap (which bounds how
+# many are *scored*): storing the full 50-candidate pool on every decision is
+# unnecessary — a reviewer or auditor only ever needs to see the plausible
+# contenders near the top.
+_CANDIDATE_SCORES_CAP = 10
+
+
+def _excluding(candidates: list[Candidate], excluded_entity_ids: frozenset[str]) -> list[Candidate]:
+    """P4.6 -- drop candidates a human already rejected for this mention.
+    Factored out so every candidate source filters through the same one
+    place, rather than three inline comprehensions that could individually
+    drift out of sync."""
+    return [c for c in candidates if c.entity_id not in excluded_entity_ids]
 
 
 @dataclass(frozen=True)
@@ -70,11 +90,22 @@ async def resolve_mention(
     thresholds: PolicyThresholds = PolicyThresholds(),  # noqa: B008 -- PolicyThresholds is @dataclass(frozen=True), immutable, no shared-mutable-default risk
     candidate_cap: int = 50,
     embedding_provider: EmbeddingProvider | None = None,
+    excluded_entity_ids: frozenset[str] = frozenset(),
 ) -> ResolutionOutcome:
+    """P4.6: `excluded_entity_ids` is populated by the caller from a prior
+    rejected ReviewDecision's `candidates_shown` (see
+    src/ingestion/transcript_pipeline.py) — a human already ruled these out
+    for this mention, so neither the deterministic nor the scored path may
+    re-propose them. This function stays a pure computation over its
+    arguments (no I/O), consistent with embedding_provider/
+    relational_signals_by_entity above: the caller does the review-history
+    lookup, this just filters.
+    """
     relational_signals_by_entity = relational_signals_by_entity or {}
 
-    exact_matches = await candidate_generator.exact_name_candidates(
-        workspace_id, entity_type, mention.normalized_surface
+    exact_matches = _excluding(
+        await candidate_generator.exact_name_candidates(workspace_id, entity_type, mention.normalized_surface),
+        excluded_entity_ids,
     )
     deterministic = resolve_deterministic(
         DeterministicRule.A3_EXACT_CANONICAL_NAME, [c.entity_id for c in exact_matches]
@@ -88,8 +119,9 @@ async def resolve_mention(
     # docs/external-audit-2026-08-12.md Findings 1 and 5.
     alias_matches: list[Candidate] = []
     if deterministic is None:
-        alias_matches = await candidate_generator.alias_candidates(
-            workspace_id, entity_type, alias_normalize(mention.surface_text)
+        alias_matches = _excluding(
+            await candidate_generator.alias_candidates(workspace_id, entity_type, alias_normalize(mention.surface_text)),
+            excluded_entity_ids,
         )
         deterministic = resolve_deterministic(
             DeterministicRule.A4_EXACT_APPROVED_ALIAS, [c.entity_id for c in alias_matches]
@@ -102,6 +134,7 @@ async def resolve_mention(
             mention=mention, workspace_id=workspace_id, decided_at=decided_at,
             resolved_entity_id=deterministic.entity_id, status=status,
             top1=None, margin=None, candidates_shown=[deterministic.entity_id],
+            scored_candidates=[], policy_version="deterministic",
         )
 
     _candidate_gen_started = time.monotonic()
@@ -114,8 +147,11 @@ async def resolve_mention(
     # would otherwise be dropped, since a pure abbreviation like "GM" scores
     # near-zero lexically against "General Motors Company" and would never
     # surface through the fulltext/prefix pool.
-    candidates: list[Candidate] = union_candidates(
-        exact_matches, alias_matches, pool, cap=candidate_cap, mention_surface=mention.normalized_surface
+    candidates: list[Candidate] = _excluding(
+        union_candidates(
+            exact_matches, alias_matches, pool, cap=candidate_cap, mention_surface=mention.normalized_surface
+        ),
+        excluded_entity_ids,
     )
     CANDIDATE_GENERATION_DURATION_SECONDS.observe(time.monotonic() - _candidate_gen_started)
 
@@ -153,11 +189,13 @@ async def resolve_mention(
         resolved_entity_id=resolved_entity_id, status=status,
         top1=top1, margin=ranking.margin if top1 else None,
         candidates_shown=[c.entity_id for c in candidates],
+        scored_candidates=ranking.ranked, policy_version=thresholds.policy_version,
     )
 
 
 def _build_outcome(
     *, mention, workspace_id, decided_at, resolved_entity_id, status, top1, margin, candidates_shown,
+    scored_candidates: list[ScoredCandidate], policy_version: str,
 ) -> ResolutionOutcome:
     decision = ResolutionDecision(
         resolution_decision_id=_resolution_decision_id(mention.mention_id),
@@ -173,6 +211,16 @@ def _build_outcome(
         margin=margin,
         relational_signals=list(top1.relational_signals) if top1 else [],
         decided_at=decided_at,
+        candidates=[
+            CandidateScore(
+                entity_id=c.entity_id, entity_type=c.entity_type,
+                lexical_score=c.lexical, semantic_score=c.semantic,
+                base_score=c.base, relational_bonus=c.rel_bonus, final_score=c.final,
+                rank=rank,
+            )
+            for rank, c in enumerate(scored_candidates[:_CANDIDATE_SCORES_CAP], start=1)
+        ],
+        policy_version=policy_version,
     )
     resolved_mention = mention.model_copy(update={
         "resolved_entity_id": resolved_entity_id,

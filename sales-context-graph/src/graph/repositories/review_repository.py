@@ -16,7 +16,8 @@ _MENTION_RETURN = (
     "m.mention_id AS mention_id, m.workspace_id AS workspace_id, m.segment_id AS segment_id, "
     "m.char_start AS char_start, m.char_end AS char_end, m.surface_text AS surface_text, "
     "m.normalized_surface AS normalized_surface, m.entity_type AS entity_type, "
-    "m.resolved_entity_id AS resolved_entity_id, m.resolution_status AS resolution_status"
+    "m.resolved_entity_id AS resolved_entity_id, m.resolution_status AS resolution_status, "
+    "m.source_timestamp AS source_timestamp"
 )
 
 _RESOLUTION_DECISION_RETURN = (
@@ -25,7 +26,8 @@ _RESOLUTION_DECISION_RETURN = (
     "rd.lexical_score AS lexical_score, rd.semantic_score AS semantic_score, "
     "rd.base_score AS base_score, rd.relational_bonus AS relational_bonus, "
     "rd.final_score AS final_score, rd.margin AS margin, "
-    "rd.relational_signals AS relational_signals, rd.decided_at AS decided_at"
+    "rd.relational_signals AS relational_signals, rd.decided_at AS decided_at, "
+    "rd.candidates AS candidates, rd.policy_version AS policy_version"
 )
 
 _REVIEW_DECISION_RETURN = (
@@ -55,7 +57,8 @@ class ReviewRepository:
                 m.normalized_surface = $normalized_surface,
                 m.entity_type = $entity_type,
                 m.resolved_entity_id = $resolved_entity_id,
-                m.resolution_status = $resolution_status
+                m.resolution_status = $resolution_status,
+                m.source_timestamp = $source_timestamp
             """,
             workspace_id=mention.workspace_id,
             mention_id=mention.mention_id,
@@ -67,6 +70,7 @@ class ReviewRepository:
             entity_type=mention.entity_type,
             resolved_entity_id=mention.resolved_entity_id,
             resolution_status=mention.resolution_status.value,
+            source_timestamp=mention.source_timestamp.isoformat() if mention.source_timestamp else None,
         )
 
     async def get_mention(self, workspace_id: str, mention_id: str) -> Mention | None:
@@ -108,7 +112,9 @@ class ReviewRepository:
                 rd.final_score = $final_score,
                 rd.margin = $margin,
                 rd.relational_signals = $relational_signals,
-                rd.decided_at = $decided_at
+                rd.decided_at = $decided_at,
+                rd.candidates = $candidates,
+                rd.policy_version = $policy_version
             MERGE (m)-[:HAS_RESOLUTION_DECISION]->(rd)
             """,
             workspace_id=decision.workspace_id,
@@ -124,6 +130,8 @@ class ReviewRepository:
             margin=decision.margin,
             relational_signals=decision.relational_signals,
             decided_at=decision.decided_at.isoformat(),
+            candidates=json.dumps([c.model_dump() for c in decision.candidates]),
+            policy_version=decision.policy_version,
         )
 
     async def get_resolution_decision(
@@ -139,7 +147,18 @@ class ReviewRepository:
             workspace_id=workspace_id,
             resolution_decision_id=resolution_decision_id,
         )
-        return ResolutionDecision(**rows[0]) if rows else None
+        if not rows:
+            return None
+        row = dict(rows[0])
+        row["candidates"] = json.loads(row["candidates"]) if row.get("candidates") else []
+        # Nodes written before policy_version existed have no property here --
+        # null-safe fallback to the same "deterministic" sentinel Stage A
+        # matches use, rather than crashing on the required str field. Not
+        # strictly accurate (an old node may have gone through decide()
+        # under an unrecorded threshold set), but it's honest that the real
+        # version is unknown, and it keeps reads working for pre-existing data.
+        row["policy_version"] = row.get("policy_version") or "unknown"
+        return ResolutionDecision(**row)
 
     async def create_review_decision(self, decision: ReviewDecision) -> None:
         mention_match = scoped_match("Mention", "m", mention_id="mention_id")

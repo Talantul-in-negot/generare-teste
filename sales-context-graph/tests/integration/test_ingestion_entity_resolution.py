@@ -27,6 +27,7 @@ from src.extraction.fixture_provider import FixtureExtractionProvider
 from src.graph.repositories.claim_repository import ClaimRepository
 from src.graph.repositories.conversation_repository import ConversationRepository
 from src.graph.repositories.crm_repository import CrmRepository
+from src.graph.repositories.extraction_run_repository import ExtractionRunRepository
 from src.graph.repositories.review_repository import ReviewRepository
 from src.graph.repositories.source_repository import SourceRepository
 from src.ingestion.adapters.gong import GongAdapter
@@ -376,6 +377,94 @@ async def test_resolution_logs_carry_no_transcript_text_pii_or_secrets(executor,
         assert entry["speaker_label"] == "spk_1"
         assert "resolution_status" in entry
         assert "candidates" in entry
+
+
+# --- extraction provenance (P3.2) -------------------------------------------
+
+async def test_claim_carries_the_extraction_run_that_produced_it(executor):
+    workspace_id = _ws()
+    extraction_run_repo = ExtractionRunRepository(executor)
+    pipeline = TranscriptIngestionPipeline(
+        ConversationRepository(executor), SourceRepository(executor), ClaimRepository(executor),
+        GongAdapter(), FixtureExtractionProvider(),
+        extraction_run_repo=extraction_run_repo,
+        provider_name="fixture", model_name="fixture-model",
+        prompt_version="v1", extractor_version="v1",
+    )
+
+    result = await pipeline.ingest_call(
+        workspace_id, _raw_call("call-er-provenance", speaker_name=None, email=None),
+        ingestion_run_id="run-1", observed_at=_T0,
+    )
+
+    claim = (await _claims(executor, workspace_id, result.conversation_id))[0]
+    assert claim.extraction_run_id is not None
+
+    run = await extraction_run_repo.get_extraction_run(workspace_id, claim.extraction_run_id)
+    assert run is not None
+    assert run.provider == "fixture"
+    assert run.model == "fixture-model"
+    assert run.completed_at is not None  # marked complete after extract() returned
+
+
+async def test_claim_extraction_run_id_is_none_when_repo_unwired(executor):
+    """Additive: a pipeline built without extraction_run_repo behaves exactly
+    as before -- Claim.extraction_run_id stays the field's own default."""
+    workspace_id = _ws()
+    result = await _pipeline(executor, with_resolution=False).ingest_call(
+        workspace_id, _raw_call("call-er-no-provenance", speaker_name=None, email=None),
+        ingestion_run_id="run-1", observed_at=_T0,
+    )
+
+    claim = (await _claims(executor, workspace_id, result.conversation_id))[0]
+    assert claim.extraction_run_id is None
+
+
+# --- rejection suppression (P4.6) --------------------------------------------
+
+async def test_rejected_speaker_candidate_is_not_reproposed_on_reingest(executor):
+    """A reviewer rejects every candidate shown for an ambiguous speaker
+    mention; re-ingesting the same call must not resolve that speaker back to
+    one of the rejected candidates."""
+    workspace_id = _ws()
+    await _seed_contact(executor, workspace_id, "contact-elena", "Elena Popescu")
+    review_repo = ReviewRepository(executor)
+    service = ReviewService(review_repo, ClaimRepository(executor))
+    pipeline = _pipeline(executor)
+    call = _raw_call("call-er-rejected", speaker_name="Elena Popescu", email=None)
+
+    first = await pipeline.ingest_call(
+        workspace_id, call, ingestion_run_id="run-1", observed_at=_T0,
+    )
+    pending = await service.list_pending(workspace_id)
+    assert len(pending) == 1
+    rejected_mention_id = pending[0].mention_id
+
+    await service.resolve(
+        workspace_id=workspace_id, mention_id=rejected_mention_id,
+        reviewer_id="reviewer@example.com", decided_at=_T0,
+        selected_entity_id=None, rejected=True,
+        candidates_shown=["contact-elena"], original_scores={},
+        reason="Wrong person -- different Elena.",
+    )
+
+    # Re-ingesting the same call re-runs speaker resolution for spk_1 against
+    # the same deterministic mention_id. It must not re-resolve to the
+    # rejected contact, deterministically or via scoring.
+    second_call = _raw_call("call-er-rejected", speaker_name="Elena Popescu", email=None)
+    second_call["transcript"][0]["sentences"].append(
+        {"text": "Following up on pricing.", "start": 2000, "end": 4000}
+    )
+    second = await pipeline.ingest_call(
+        workspace_id, second_call, ingestion_run_id="run-2", observed_at=_T0,
+    )
+    assert second.outcome.value == "SUPERSEDED"  # really re-extracted, not skipped
+
+    claims = await _claims(executor, workspace_id, first.conversation_id)
+    assert all(c.resolved_entity_id != "contact-elena" for c in claims)
+
+    still_pending = await service.list_pending(workspace_id)
+    assert all(m.resolved_entity_id != "contact-elena" for m in still_pending)
 
 
 async def test_reresolution_after_review_does_not_duplicate_claims(executor):

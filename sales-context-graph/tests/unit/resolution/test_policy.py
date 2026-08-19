@@ -6,7 +6,7 @@ auto-links', 'a weak-base candidate cannot auto-link only through bonuses'.
 from __future__ import annotations
 
 from src.domain.enums import ResolutionStatus
-from src.resolution.policy import PolicyThresholds, decide, decide_deterministic
+from src.resolution.policy import POLICY_VERSION, PolicyThresholds, decide, decide_deterministic
 from src.resolution.scoring import ScoredCandidate
 
 
@@ -76,3 +76,15 @@ def test_deterministic_unique_match_auto_links():
 
 def test_deterministic_no_match_is_unresolved():
     assert decide_deterministic(None) == ResolutionStatus.UNRESOLVED
+
+
+def test_default_thresholds_carry_the_current_policy_version():
+    """P4.4 — every ResolutionDecision stamps thresholds.policy_version, so the
+    default instance must actually carry POLICY_VERSION, not an empty/stale
+    default that silently drifts from the module constant."""
+    assert PolicyThresholds().policy_version == POLICY_VERSION
+
+
+def test_custom_thresholds_can_carry_a_distinct_policy_version():
+    custom = PolicyThresholds(base_threshold=0.9, policy_version="v2-experimental")
+    assert custom.policy_version == "v2-experimental"
