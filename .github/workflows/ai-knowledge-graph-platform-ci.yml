@@ -70,6 +70,9 @@ jobs:
       - name: Run load tests
         run: pytest tests/load/ -v --tb=short
 
+      - name: Validate evaluation datasets
+        run: python scripts/validate_eval_datasets.py
+
   e2e:
     name: E2E (live Neo4j + Redis via testcontainers)
     runs-on: ubuntu-latest

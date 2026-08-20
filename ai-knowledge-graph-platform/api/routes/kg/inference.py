@@ -11,6 +11,24 @@ from graphrag.graph.neo4j_client import get_neo4j
 router = APIRouter()
 
 
+def _engine_for_tenant(tenant: str):
+    """Build the standard engine plus the tenant's ontology-defined rules."""
+    from graphrag.graph.domain_ontology import (
+        build_inference_rules_from_ontology,
+        get_ontology_path_for_tenant,
+        load_domain_ontology,
+    )
+    from graphrag.graph.inference_engine import ForwardChainingEngine
+
+    engine = ForwardChainingEngine(get_neo4j())
+    ontology_path = get_ontology_path_for_tenant(tenant)
+    if ontology_path is not None:
+        ontology = load_domain_ontology(ontology_path)
+        for rule in build_inference_rules_from_ontology(ontology):
+            engine.add_rule(rule)
+    return engine
+
+
 # ── Forward-Chaining Inference Engine ────────────────────────────────────────
 
 class InferenceRunRequest(BaseModel):
@@ -28,8 +46,7 @@ class InferenceDocRequest(BaseModel):
     summary="Run forward-chaining inference rules and materialise inferred edges",
 )
 async def run_inference(request: InferenceRunRequest, tenant: str = Depends(get_tenant)):
-    from graphrag.graph.inference_engine import ForwardChainingEngine
-    engine = ForwardChainingEngine(get_neo4j())
+    engine = _engine_for_tenant(tenant)
     return await engine.run(
         tenant=tenant,
         max_iterations=request.max_iterations,
@@ -43,8 +60,7 @@ async def run_inference(request: InferenceRunRequest, tenant: str = Depends(get_
     summary="Run forward-chaining rules scoped to a single document",
 )
 async def run_inference_for_doc(request: InferenceDocRequest, tenant: str = Depends(get_tenant)):
-    from graphrag.graph.inference_engine import ForwardChainingEngine
-    engine = ForwardChainingEngine(get_neo4j())
+    engine = _engine_for_tenant(tenant)
     return await engine.run_for_document(
         doc_id=request.doc_id,
         tenant=tenant,

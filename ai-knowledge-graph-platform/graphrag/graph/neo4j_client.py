@@ -235,6 +235,9 @@ class Neo4jClient:
                 d.valid_to        = $valid_to,
                 d.source_id       = $source_id,
                 d.content_hash    = $content_hash,
+                // A queue retry must never mistake an interrupted write for a
+                // completed document merely because the content hash landed.
+                d.ingest_complete = false,
                 // Re-ingesting a file that had been tombstoned resurrects it:
                 // the source reappeared on disk, so its chunks must become
                 // retrievable again. Clearing here (rather than leaving the
@@ -259,6 +262,17 @@ class Neo4jClient:
         if source_id and not rows:
             raise ValueError("document source is missing or belongs to another tenant")
         return rows[0]["doc_id"] if rows else doc_id
+
+    async def mark_document_ingest_complete(self, doc_id: str, tenant: str = "default") -> None:
+        """Mark the durable queue checkpoint only after every write stage succeeds."""
+        await self.run(
+            """
+            MATCH (d:Document {id: $doc_id, tenant: $tenant})
+            SET d.ingest_complete = true, d.ingest_completed_at = datetime()
+            """,
+            doc_id=doc_id,
+            tenant=tenant,
+        )
 
     async def get_document_states(self, tenant: str = "default") -> dict[str, dict]:
         """Return {filename: {"content_hash": str, "is_deleted": bool}} for a tenant.
@@ -411,6 +425,56 @@ class Neo4jClient:
         if deleted:
             log.info("neo4j.stale_chunks_deleted", doc_id=doc_id, deleted=deleted)
         return deleted
+
+    async def reconcile_document_evidence(self, doc_id: str, tenant: str = "default") -> dict[str, int]:
+        """Remove a document's old mentions and relation provenance.
+
+        A changed source is re-extracted in place.  Its old chunks retain their
+        stable identities, so `MERGE` alone cannot remove facts no longer in
+        the revised text.  Relationships supported solely by this document are
+        deleted; multi-source relationships keep their other provenance.
+        """
+        mention_rows = await self.run(
+            """
+            MATCH (c:Chunk {document_id: $doc_id, tenant: $tenant})-[m:MENTIONS]->()
+            DELETE m
+            RETURN count(m) AS removed_mentions
+            """,
+            doc_id=doc_id,
+            tenant=tenant,
+        )
+        deleted_rows = await self.run(
+            """
+            MATCH ()-[r:RELATES_TO {tenant: $tenant}]-()
+            WHERE $doc_id IN coalesce(r.source_doc_ids, [r.source_doc_id])
+            WITH r, [source IN coalesce(r.source_doc_ids, [r.source_doc_id])
+                     WHERE source <> $doc_id] AS remaining_sources
+            WHERE size(remaining_sources) = 0
+            DELETE r
+            RETURN count(*) AS deleted_relations
+            """,
+            doc_id=doc_id,
+            tenant=tenant,
+        )
+        updated_rows = await self.run(
+            """
+            MATCH ()-[r:RELATES_TO {tenant: $tenant}]-()
+            WHERE $doc_id IN coalesce(r.source_doc_ids, [r.source_doc_id])
+            WITH r, [source IN coalesce(r.source_doc_ids, [r.source_doc_id])
+                     WHERE source <> $doc_id] AS remaining_sources
+            WHERE size(remaining_sources) > 0
+            SET r.source_doc_ids = remaining_sources,
+                r.source_doc_id = remaining_sources[0]
+            RETURN count(*) AS retained_relations
+            """,
+            doc_id=doc_id,
+            tenant=tenant,
+        )
+        return {
+            "removed_mentions": int(mention_rows[0].get("removed_mentions", 0)) if mention_rows else 0,
+            "deleted_relations": int(deleted_rows[0].get("deleted_relations", 0)) if deleted_rows else 0,
+            "retained_relations": int(updated_rows[0].get("retained_relations", 0)) if updated_rows else 0,
+        }
 
     async def merge_entity(self, entity: Entity, tenant: str = "default"):
         """Merge entity scoped to tenant — same (name, type) in different tenants are distinct nodes."""

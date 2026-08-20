@@ -28,18 +28,18 @@ class TestTimeseriesMetricAllowlist:
         """The exfiltration vector itself: a non-measurement column must not be
         selectable, even though it is a real attribute of KPIEventRow."""
         with pytest.raises(ValueError, match="unsupported metric"):
-            await KPITracker().get_timeseries(metric=identifier_column)
+            await KPITracker().get_timeseries(tenant="acme", metric=identifier_column)
 
     async def test_unknown_column_is_rejected_not_silently_defaulted(self):
         """The old code fell back to latency_ms for anything unrecognized, so an
         identifier request looked like a successful latency query."""
         with pytest.raises(ValueError, match="unsupported metric"):
-            await KPITracker().get_timeseries(metric="no_such_column")
+            await KPITracker().get_timeseries(tenant="acme", metric="no_such_column")
 
     async def test_dunder_attribute_is_rejected(self):
         """getattr() would otherwise happily return ORM/py internals."""
         with pytest.raises(ValueError, match="unsupported metric"):
-            await KPITracker().get_timeseries(metric="__class__")
+            await KPITracker().get_timeseries(tenant="acme", metric="__class__")
 
     def test_allowlist_contains_only_numeric_measurements(self):
         """Guard against someone widening the set to include an identifier

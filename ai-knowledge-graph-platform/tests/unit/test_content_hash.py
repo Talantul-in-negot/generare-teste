@@ -171,3 +171,29 @@ class TestPartialIngestIsNotSkipped:
         assert safe_to_skip({"content_hash": h, "ingest_complete": True}, h) is True
         # completed before, but the file changed -> must re-ingest
         assert safe_to_skip({"content_hash": "old", "ingest_complete": True}, h) is False
+
+
+class TestReingestEvidenceReconciliation:
+    async def test_removes_old_mentions_and_relation_provenance(self):
+        from graphrag.graph.neo4j_client import Neo4jClient
+
+        client = Neo4jClient.__new__(Neo4jClient)
+        client.run = AsyncMock(return_value=[{"removed_mentions": 2}])
+        await client.reconcile_document_evidence("doc-1", tenant="acme")
+
+        queries = [call.args[0] for call in client.run.await_args_list]
+        assert "DELETE m" in queries[0]
+        assert "source_doc_ids" in queries[1]
+        assert "DELETE r" in queries[1]
+        assert "SET r.source_doc_ids = remaining_sources" in queries[2]
+
+    async def test_document_is_incomplete_until_the_write_finishes(self):
+        from graphrag.graph.neo4j_client import Neo4jClient
+
+        client = Neo4jClient.__new__(Neo4jClient)
+        client.run = AsyncMock(return_value=[{"doc_id": "doc-1"}])
+        await client.merge_document(
+            doc_id="doc-1", filename="source.txt", ingested_at="2026-08-20T00:00:00Z",
+            tenant="acme",
+        )
+        assert "d.ingest_complete = false" in client.run.await_args.args[0]

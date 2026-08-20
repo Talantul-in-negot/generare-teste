@@ -12,8 +12,6 @@ Covers:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -50,7 +48,7 @@ class TestConfidenceClamping:
     def _build_extractor(self, response):
         """Patch the API call so extract() returns our synthetic response."""
         from graphrag.ingestion.extractor import Extractor
-        with patch("graphrag.ingestion.extractor.genai") as mock_genai:
+        with patch("graphrag.ingestion.extractor.genai"):
             e = Extractor.__new__(Extractor)
             e._client = MagicMock()
             e._model_name = "test-model"
@@ -288,7 +286,7 @@ class TestAwareDatetimes:
 
     def test_kpi_event_recorded_at_is_aware(self):
         from graphrag.core.models import KPIEvent
-        kpi = KPIEvent(query_id="q1", latency_ms=100.0)
+        kpi = KPIEvent(query_id="q1", tenant="test", latency_ms=100.0)
         assert kpi.recorded_at.tzinfo is not None
 
     def test_eval_result_scored_at_is_aware(self):

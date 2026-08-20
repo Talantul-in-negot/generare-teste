@@ -225,6 +225,8 @@ class OntologyRegistry:
         self,
         entities: list,
         relations: list,
+        *,
+        strict: bool = False,
     ) -> dict:
         """
         Validate extracted entities and relations against the current schema.
@@ -241,12 +243,19 @@ class OntologyRegistry:
         new_relations: list[str] = []
         corrected = 0
         invalid_relation_pairs: list[str] = []
+        rejected_entity_ids: list[str] = []
+        rejected_relation_ids: list[str] = []
 
         for entity in entities:
             if entity.type not in self._allowed_types:
                 unknown_types.append(f"{entity.name}:{entity.type}")
-                # Fallback to CONCEPT rather than creating a new type
-                entity.type = "CONCEPT"
+                if strict:
+                    rejected_entity_ids.append(entity.id)
+                else:
+                    # Interactive/non-ingestion callers retain the historical
+                    # compatibility behaviour; the LLM ingestion path uses
+                    # strict mode and rejects instead.
+                    entity.type = "CONCEPT"
 
         for relation in relations:
             rel_name = relation.relation
@@ -269,7 +278,10 @@ class OntologyRegistry:
 
             if not _RELATION_RE.match(relation.relation):
                 malformed_relations.append(relation.relation)
-                relation.relation = "RELATED_TO"   # safe fallback
+                if strict:
+                    rejected_relation_ids.append(relation.id)
+                else:
+                    relation.relation = "RELATED_TO"   # compatibility fallback
 
             if relation.relation not in self._known_relations:
                 new_relations.append(relation.relation)
@@ -286,7 +298,10 @@ class OntologyRegistry:
                     invalid_relation_pairs.append(
                         f"{src.name}:{src.type}-{relation.relation}->{tgt.name}:{tgt.type}"
                     )
-                    relation.relation = "RELATED_TO"
+                    if strict:
+                        rejected_relation_ids.append(relation.id)
+                    else:
+                        relation.relation = "RELATED_TO"
 
         drift_detected = bool(unknown_types or new_relations or invalid_relation_pairs)
 
@@ -306,6 +321,8 @@ class OntologyRegistry:
             "corrected_relations": corrected,
             "drift_detected": drift_detected,
             "version_id": self._version_id,
+            "rejected_entity_ids": rejected_entity_ids,
+            "rejected_relation_ids": rejected_relation_ids,
         }
 
     def validate_relation_triplet(

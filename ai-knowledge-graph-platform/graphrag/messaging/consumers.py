@@ -52,7 +52,7 @@ class IngestionConsumer:
                 from graphrag.graph.neo4j_client import get_neo4j
                 threshold = int(__import__("os").environ.get("GNN_CALIBRATION_THRESHOLD", "100"))
                 await GNNCalibrationScheduler(get_neo4j(), threshold).maybe_schedule(
-                    msg.tenant, execute=True
+                    msg.document.tenant, execute=True
                 )
             except Exception as exc:  # maintenance path must not nack ingestion
                 log.warning("gnn_calibration.schedule_failed", error=str(exc)[:200])

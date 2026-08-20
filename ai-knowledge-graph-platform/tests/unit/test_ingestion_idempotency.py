@@ -247,9 +247,11 @@ class TestIngestionAgentReassignsChunkDocumentId:
         writer.write_chunks = AsyncMock()
         writer.write_entities = AsyncMock(return_value=[])
         writer.write_relations = AsyncMock()
+        writer.reconcile_document_evidence = AsyncMock(return_value={})
         writer.validate_and_check_cycles = AsyncMock(return_value={
             "validation": {"total_issues": 0}, "new_conflicts": 0,
         })
+        writer.mark_document_ingest_complete = AsyncMock()
         agent._writer = writer
 
         doc = _make_document(id="fresh-uuid-this-run")
@@ -283,9 +285,11 @@ class TestIngestionAgentReassignsChunkDocumentId:
         writer.write_chunks = AsyncMock()
         writer.write_entities = AsyncMock(return_value=[])
         writer.write_relations = AsyncMock()
+        writer.reconcile_document_evidence = AsyncMock(return_value={})
         writer.validate_and_check_cycles = AsyncMock(return_value={
             "validation": {"total_issues": 0}, "new_conflicts": 0,
         })
+        writer.mark_document_ingest_complete = AsyncMock()
         agent._writer = writer
 
         doc = _make_document(id="same-id-new-doc")

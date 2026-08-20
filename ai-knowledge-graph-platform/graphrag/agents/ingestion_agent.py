@@ -121,6 +121,13 @@ class IngestionAgent(BaseGraphRAGAgent):
         if is_reingest:
             for c in chunks:
                 c.document_id = canonical_id
+            # Existing chunks keep stable identities across re-ingestion. Clear
+            # their old mentions and this document's relation evidence before
+            # writing the newly extracted evidence, so facts that disappeared
+            # from the revised source cannot remain retrievable.
+            await self._writer.reconcile_document_evidence(
+                doc_id=canonical_id, tenant=doc.tenant
+            )
 
         # 2. Write chunks to Neo4j
         await self._writer.write_chunks(chunks)
@@ -175,6 +182,10 @@ class IngestionAgent(BaseGraphRAGAgent):
                 log.warning("ingestion_agent.wikidata_error", error=str(exc)[:120])
 
         corpus_revision = await self._writer.complete_corpus_update(doc.tenant)
+        # This checkpoint is used by both the bulk and RabbitMQ paths.  It is
+        # deliberately written last: retries of interrupted messages must
+        # re-run safely rather than skipping a half-written document.
+        await self._writer.mark_document_ingest_complete(doc.id, tenant=doc.tenant)
 
         log.info(
             "ingestion_agent.done",

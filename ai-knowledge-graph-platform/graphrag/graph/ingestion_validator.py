@@ -22,6 +22,7 @@ from __future__ import annotations
 import structlog
 
 from graphrag.core.tenancy import require_tenant
+from graphrag.graph.ontology_registry import _RELATION_RULES as RELATION_RULES
 
 log = structlog.get_logger(__name__)
 
@@ -33,23 +34,6 @@ log = structlog.get_logger(__name__)
 MAX_DEGREE_MULTIPLIER  = 20.0  # flag if degree > mean * this
 MIN_CONFIDENCE         = 0.1   # flag edges with suspiciously low confidence
 MAX_ORPHAN_RATE        = 0.10  # flag if > 10% of new entities are orphans
-RELATION_RULES: dict[str, set[tuple[str, str]]] = {
-    "FOUNDED": {("PERSON", "ORG"), ("PERSON", "PRODUCT")},
-    "FOUNDED_BY": {("ORG", "PERSON"), ("PRODUCT", "PERSON")},
-    "CEO_OF": {("PERSON", "ORG")},
-    "OWNS": {("PERSON", "ORG"), ("ORG", "ORG"), ("ORG", "PRODUCT")},
-    "ACQUIRED": {("ORG", "ORG"), ("ORG", "PRODUCT")},
-    "MANUFACTURES": {("ORG", "PRODUCT")},
-    "LAUNCHED": {("ORG", "PRODUCT"), ("PERSON", "PRODUCT")},
-    "WORKS_AT": {("PERSON", "ORG")},
-    "LOCATED_IN": {
-        ("ORG", "LOCATION"),
-        ("PERSON", "LOCATION"),
-        ("EVENT", "LOCATION"),
-    },
-}
-
-
 class IngestionValidator:
     """
     Post-ingestion graph health checker.

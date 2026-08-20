@@ -82,6 +82,10 @@ class Entity(BaseModel):
     name: str
     type: str   # PERSON | ORG | PRODUCT | CONCEPT | LOCATION | EVENT
     description: str = ""
+    # Extraction confidence is used by optional post-ingestion enrichment
+    # (for example Wikidata linking).  Keeping it on the model prevents
+    # Pydantic from silently discarding the extractor's value.
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     embedding: list[float] = Field(default_factory=list)
     source_chunk_ids: list[str] = Field(default_factory=list)
     source_type: SourceType = SourceType.DOCUMENT
@@ -296,6 +300,7 @@ class EvalResult(BaseModel):
 class KPIEvent(BaseModel):
     event_id: str = Field(default_factory=lambda: str(uuid4()))
     query_id: str
+    tenant: str
     recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     latency_ms: float
     faithfulness: float = 0.0

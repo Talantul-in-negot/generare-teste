@@ -15,6 +15,21 @@ strongest evidence that actually exists:
 | **exists, unwired** | code present, no production caller |
 | **missing** | not in the repository |
 
+## Current implementation update — 2026-08-20
+
+All remaining findings that belong to this regulatory GraphRAG product are now
+implemented and regression-tested: strict LLM-extraction rejection with an
+ontology audit event; entity confidence for optional Wikidata enrichment;
+tenant-correct queue calibration; tenant ontology inference rules; canonical
+relation-rule validation; tenant-scoped KPI persistence and reads (including a
+schema migration); changed-document evidence retraction; queue-path completion
+checkpoints; and a CI evaluation-dataset validation step.
+
+The P3/P4 conversation, utterance, stakeholder-objection, and `Mention`-node
+requirements remain intentionally out of scope after the documented product
+boundary correction in this plan: they belong to `sales-context-graph`, not
+this regulatory knowledge-graph platform.
+
 ---
 
 ## 1. Baseline (Priority 0) — measured

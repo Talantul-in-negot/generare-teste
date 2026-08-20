@@ -112,6 +112,7 @@ class Extractor:
                 name=e["name"],
                 type=e.get("type", "CONCEPT"),
                 description=e.get("description", ""),
+                confidence=max(0.0, min(1.0, float(e.get("confidence", 1.0)))),
                 source_chunk_ids=[chunk.id],
                 source_doc_id=chunk.document_id,
                 extraction_model=self._model_name,
@@ -162,13 +163,36 @@ class Extractor:
             from graphrag.graph.ontology_registry import get_ontology_registry
             registry = get_ontology_registry(tenant=chunk.tenant)
             if registry.is_loaded:
-                # validate_extraction mutates in place: unknown entity types are
-                # coerced to CONCEPT, relation names normalised to UPPER_SNAKE,
-                # and the deprecation migration map applied. Skipping it writes
-                # unnormalised, unmigrated entities into the graph — so the skip
-                # is logged rather than silent, and the drift report it returns
-                # is surfaced instead of discarded.
-                report = registry.validate_extraction(entities, relations)
+                # The LLM is untrusted input.  Normalisation is useful, but an
+                # unknown type or an invalid domain/range pair must not be
+                # coerced into a plausible-looking fact and written to the KG.
+                report = registry.validate_extraction(entities, relations, strict=True)
+                rejected_entities = set(report.get("rejected_entity_ids", []))
+                rejected_relations = set(report.get("rejected_relation_ids", []))
+                if rejected_entities or rejected_relations:
+                    entities = [e for e in entities if e.id not in rejected_entities]
+                    valid_entity_ids = {e.id for e in entities}
+                    relations = [
+                        r for r in relations
+                        if r.id not in rejected_relations
+                        and r.source_entity_id in valid_entity_ids
+                        and r.target_entity_id in valid_entity_ids
+                    ]
+                    details = (
+                        f"entities={len(rejected_entities)}, "
+                        f"relations={len(rejected_relations)}"
+                    )
+                    await registry.record_schema_event(
+                        event_type="extraction_rejected",
+                        detail=details,
+                        source_doc_id=chunk.document_id,
+                    )
+                    log.warning(
+                        "extractor.ontology_rejected",
+                        chunk_id=chunk.id,
+                        tenant=chunk.tenant,
+                        **report,
+                    )
                 if report and report.get("drift_detected"):
                     log.warning("extractor.ontology_drift", chunk_id=chunk.id, **report)
             else:

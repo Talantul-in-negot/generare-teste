@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from sqlalchemy import Column, DateTime, Float, String
+from sqlalchemy import Column, DateTime, Float, String, inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -22,6 +22,7 @@ class KPIEventRow(Base):
     # allowing the same schema to serve SQLite and TimescaleDB.
     event_id = Column(String, primary_key=True)
     query_id = Column(String, nullable=False, index=True)
+    tenant = Column(String, nullable=False, default="default", index=True)
     recorded_at = Column(DateTime(timezone=True), nullable=False, primary_key=True, index=True)
     latency_ms = Column(Float, nullable=False)
     faithfulness = Column(Float, default=0.0)
@@ -35,6 +36,23 @@ class KPIEventRow(Base):
 
 _engine: AsyncEngine | None = None
 _session_factory = None
+
+
+async def ensure_tenant_column(conn) -> None:
+    """Backfill the tenant column for pre-isolation KPI databases."""
+    has_tenant = await conn.run_sync(
+        lambda sync_conn: "tenant" in {
+            column["name"] for column in inspect(sync_conn).get_columns("kpi_events")
+        }
+    )
+    if not has_tenant:
+        await conn.execute(
+            text("ALTER TABLE kpi_events ADD COLUMN tenant VARCHAR NOT NULL DEFAULT 'default'")
+        )
+    await conn.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_kpi_events_tenant_recorded_at "
+             "ON kpi_events (tenant, recorded_at)")
+    )
 
 
 def _get_db_url() -> str:
@@ -56,6 +74,7 @@ async def get_engine() -> AsyncEngine:
         )
         async with _engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await ensure_tenant_column(conn)
     return _engine
 
 

@@ -17,6 +17,7 @@ from sqlalchemy import select, func
 
 from graphrag.business_matrix.kpi_store import KPIEventRow, get_session
 from graphrag.core.models import KPIEvent
+from graphrag.core.tenancy import require_tenant
 
 log = structlog.get_logger(__name__)
 
@@ -59,6 +60,7 @@ class KPITracker:
             row = KPIEventRow(
                 event_id=kpi.event_id,
                 query_id=kpi.query_id,
+                tenant=kpi.tenant,
                 recorded_at=kpi.recorded_at,
                 latency_ms=kpi.latency_ms,
                 faithfulness=kpi.faithfulness,
@@ -73,7 +75,8 @@ class KPITracker:
             await session.commit()
         log.info("kpi_tracker.recorded", query_id=kpi.query_id)
 
-    async def get_summary(self, window_days: int = 7) -> dict:
+    async def get_summary(self, tenant: str, window_days: int = 7) -> dict:
+        tenant = require_tenant(tenant)
         since = datetime.now(timezone.utc) - timedelta(days=window_days)
         async with await get_session() as session:
             # Aggregate metrics (count, avg, min, max)
@@ -87,7 +90,7 @@ class KPITracker:
                     func.avg(KPIEventRow.answer_relevancy).label("avg_answer_relevancy"),
                     func.avg(KPIEventRow.context_precision).label("avg_context_precision"),
                     func.avg(KPIEventRow.context_recall).label("avg_context_recall"),
-                ).where(KPIEventRow.recorded_at >= since)
+                ).where(KPIEventRow.recorded_at >= since, KPIEventRow.tenant == tenant)
             )
             row = agg.one()
 
@@ -98,7 +101,7 @@ class KPITracker:
             # ensures the WHERE filter doesn't require a full table scan.
             lat_result = await session.execute(
                 select(KPIEventRow.latency_ms)
-                .where(KPIEventRow.recorded_at >= since)
+                .where(KPIEventRow.recorded_at >= since, KPIEventRow.tenant == tenant)
                 .order_by(KPIEventRow.latency_ms)
                 .limit(10_000)
             )
@@ -122,6 +125,7 @@ class KPITracker:
 
     async def get_timeseries(
         self,
+        tenant: str,
         metric: str = "latency_ms",
         window_days: int = 7,
     ) -> list[dict]:
@@ -134,12 +138,13 @@ class KPITracker:
                 f"unsupported metric {metric!r}; "
                 f"allowed: {', '.join(sorted(_ALLOWED_TIMESERIES_METRICS))}"
             )
+        tenant = require_tenant(tenant)
         since = datetime.now(timezone.utc) - timedelta(days=window_days)
         col = getattr(KPIEventRow, metric)
         async with await get_session() as session:
             result = await session.execute(
                 select(KPIEventRow.recorded_at, col)
-                .where(KPIEventRow.recorded_at >= since)
+                .where(KPIEventRow.recorded_at >= since, KPIEventRow.tenant == tenant)
                 .order_by(KPIEventRow.recorded_at)
             )
             return [

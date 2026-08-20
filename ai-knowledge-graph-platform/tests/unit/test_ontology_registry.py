@@ -126,6 +126,20 @@ class TestValidateExtraction:
         assert report["drift_detected"] is True
         assert "PARTNER_OF" in report["new_relations"]
 
+    async def test_strict_mode_rejects_instead_of_coercing_llm_output(self, registry):
+        entity = _entity("Widget", "UNKNOWN_TYPE")
+        report = registry.validate_extraction([entity], [], strict=True)
+        assert entity.type == "UNKNOWN_TYPE"
+        assert report["rejected_entity_ids"] == [entity.id]
+
+    async def test_strict_mode_rejects_invalid_domain_range_pair(self, registry):
+        src = _entity("London", "LOCATION")
+        tgt = _entity("Launch", "EVENT")
+        rel = _relation(src, tgt, "FOUNDED")
+        report = registry.validate_extraction([src, tgt], [rel], strict=True)
+        assert rel.relation == "FOUNDED"
+        assert report["rejected_relation_ids"] == [rel.id]
+
 
 # ── validate_relation_triplet ─────────────────────────────────────────────────
 

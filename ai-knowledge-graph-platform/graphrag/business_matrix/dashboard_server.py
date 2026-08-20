@@ -15,7 +15,7 @@ from dash import dcc, html, Input, Output
 from fastapi import Depends, FastAPI
 from fastapi.middleware.wsgi import WSGIMiddleware
 
-from api.auth.dependencies import require_scope
+from api.auth.dependencies import get_tenant, require_scope
 
 from graphrag.business_matrix.kpi_tracker import KPITracker
 from graphrag.core.config import get_settings
@@ -33,15 +33,17 @@ api = FastAPI(title="GraphRAG Business Matrix")
 
 
 @api.get("/kpis/summary", dependencies=[Depends(require_scope("read"))])
-async def kpi_summary(window_days: int = 7):
+async def kpi_summary(window_days: int = 7, tenant: str = Depends(get_tenant)):
     tracker = KPITracker()
-    return await tracker.get_summary(window_days=window_days)
+    return await tracker.get_summary(tenant=tenant, window_days=window_days)
 
 
 @api.get("/kpis/timeseries", dependencies=[Depends(require_scope("read"))])
-async def kpi_timeseries(metric: str = "latency_ms", window_days: int = 7):
+async def kpi_timeseries(
+    metric: str = "latency_ms", window_days: int = 7, tenant: str = Depends(get_tenant)
+):
     tracker = KPITracker()
-    return await tracker.get_timeseries(metric=metric, window_days=window_days)
+    return await tracker.get_timeseries(tenant=tenant, metric=metric, window_days=window_days)
 
 
 @api.get("/health")
@@ -201,8 +203,9 @@ def _summary_cards(summary: dict) -> html.Div:
 def update_dashboard(metric: str, _):
     tracker = KPITracker()
     loop = asyncio.new_event_loop()
-    ts_data = loop.run_until_complete(tracker.get_timeseries(metric=metric))
-    summary = loop.run_until_complete(tracker.get_summary())
+    tenant = get_settings().default_tenant
+    ts_data = loop.run_until_complete(tracker.get_timeseries(tenant=tenant, metric=metric))
+    summary = loop.run_until_complete(tracker.get_summary(tenant=tenant))
     loop.close()
 
     label, ytitle, _higher = METRIC_META.get(metric, (metric, metric, True))

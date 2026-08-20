@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from graphrag.business_matrix.kpi_store import Base, KPIEventRow
+from graphrag.business_matrix.kpi_store import Base, KPIEventRow, ensure_tenant_column
 from graphrag.core.models import KPIEvent
 
 
@@ -27,6 +27,7 @@ class TimescaleKPIStore:
     async def initialize(self) -> None:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await ensure_tenant_column(conn)
             await conn.execute(text(
                 """
                 DO $$
@@ -54,7 +55,7 @@ class TimescaleKPIStore:
     async def record(self, event: KPIEvent) -> None:
         async with self._sessions() as session:
             session.add(KPIEventRow(
-                event_id=event.event_id, query_id=event.query_id,
+                event_id=event.event_id, query_id=event.query_id, tenant=event.tenant,
                 recorded_at=event.recorded_at, latency_ms=event.latency_ms,
                 faithfulness=event.faithfulness, answer_relevancy=event.answer_relevancy,
                 context_precision=event.context_precision, context_recall=event.context_recall,

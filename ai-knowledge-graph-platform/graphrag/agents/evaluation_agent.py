@@ -69,6 +69,7 @@ class EvaluationAgent(BaseGraphRAGAgent):
                 kpi = KPIEvent(
                     event_id=job.job_id,
                     query_id=qr.query_id,
+                    tenant=job.tenant,
                     latency_ms=qr.latency_ms,
                     faithfulness=eval_result.faithfulness,
                     answer_relevancy=eval_result.answer_relevancy,
