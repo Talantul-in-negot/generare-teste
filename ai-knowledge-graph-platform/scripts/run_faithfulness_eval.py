@@ -107,20 +107,23 @@ async def main():
             flag = "  LOW" if (not isinstance(f, float) or f < 0.8) else ""
             print(f"  [{q['id']:8s}] faith={f:.3f}  ({elapsed:.1f}s)  {res.answer[:60]!r}{flag}")
 
-            # ── Calibration sample: predicted = context_precision, actual = faithfulness
-            try:
-                await cal_svc.add_sample(
-                    predicted_confidence=er.context_precision,
-                    actual_outcome=f,
-                    relation=q.get("type", ""),
-                    source_doc_id=q["id"],
-                    prompt_version="run_faithfulness_eval",
-                    tenant=tenant,
-                    verified_by="ragas",
-                )
-                cal_samples += 1
-            except Exception as _cal_exc:
-                pass  # calibration failure must not abort the eval
+            # Calibration requires both metrics.  Never turn a missing/NaN
+            # context-precision result into a misleading zero-confidence sample.
+            if (isinstance(er.context_precision, (int, float))
+                    and math.isfinite(er.context_precision)):
+                try:
+                    await cal_svc.add_sample(
+                        predicted_confidence=er.context_precision,
+                        actual_outcome=f,
+                        relation=q.get("type", ""),
+                        source_doc_id=q["id"],
+                        prompt_version="run_faithfulness_eval",
+                        tenant=tenant,
+                        verified_by="ragas",
+                    )
+                    cal_samples += 1
+                except Exception:
+                    pass  # calibration failure must not abort the eval
 
         except Exception as e:
             errors += 1

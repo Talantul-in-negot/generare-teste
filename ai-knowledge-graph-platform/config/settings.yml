@@ -203,9 +203,9 @@ retrieval:
 
 evaluation:
   ragas_metrics:
-    - faithfulness          # faithfulness-only to conserve quota; add others when quota is plentiful
+    - faithfulness
     # - answer_relevancy    # requires OpenAI embeddings + extra LLM tokens
-    # - context_precision
+    - context_precision     # calibration prediction; must be present for meaningful confidence samples
     # - context_recall
   eval_sample_rate: 0.2
   min_ground_truth_queries: 50

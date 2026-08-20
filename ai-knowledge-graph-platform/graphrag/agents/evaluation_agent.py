@@ -7,6 +7,8 @@ without a separate manual step.
 
 from __future__ import annotations
 
+import math
+
 import time
 
 import structlog
@@ -82,6 +84,11 @@ class EvaluationAgent(BaseGraphRAGAgent):
         # actual_outcome       = faithfulness      (how correct the answer was)
         # This populates the dashboard Calibration tab automatically after each run.
                 try:
+                    if not all(
+                        isinstance(value, (int, float)) and math.isfinite(value)
+                        for value in (eval_result.context_precision, eval_result.faithfulness)
+                    ):
+                        raise ValueError("calibration metrics are unavailable or non-finite")
                     from graphrag.graph.confidence_calibration import CalibrationService
                     from graphrag.graph.neo4j_client import get_neo4j
                     cal_svc = CalibrationService(get_neo4j())
