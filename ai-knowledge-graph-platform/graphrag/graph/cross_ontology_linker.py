@@ -16,8 +16,8 @@ Strategy — reuses the existing intra-corpus alias-resolution pipeline
 review, see alias_registry.py) against a *second* data source instead of a
 second document:
 
-  1. Parse the external Turtle file; extract (uri, rdfs:label, rdf:type
-     hint) triples.
+  1. Parse the external Turtle file; extract (uri, skos:prefLabel,
+     rdfs:label, or skos:altLabel, rdf:type hint) triples.
   2. Resolve each label against this tenant's AliasRegistry (loaded from
      Neo4j) using the same exact/fuzzy bands already used for intra-corpus
      alias resolution, then fall back to embedding similarity for labels
@@ -74,6 +74,7 @@ from graphrag.graph.alias_registry import AmbiguousMatch, get_alias_registry
 log = structlog.get_logger(__name__)
 
 INST = Namespace("https://graphrag.example.com/entity/")
+SKOS = Namespace("http://www.w3.org/2004/02/skos/core#")
 
 
 def _entity_uri(name: str, etype: str, tenant: str) -> URIRef:
@@ -125,17 +126,33 @@ class CrossOntologyLinker:
     # ── Extraction ───────────────────────────────────────────────────────────
 
     def _extract_candidates(self, external_ttl_path: str | Path) -> list[LinkCandidate]:
-        """Pull (uri, label, type_hint) triples out of the external Turtle file."""
+        """Pull labelled RDF/SKOS resources out of an external Turtle file.
+
+        A SKOS preferred label wins over an RDFS label, with an alternate
+        label as a useful fallback.  One candidate per URI prevents a synonym
+        from creating duplicate review-queue entries.
+        """
         g = Graph()
         g.parse(str(external_ttl_path), format="turtle")
 
         candidates: list[LinkCandidate] = []
         seen_uris: set[str] = set()
-        for subject, _, label in g.triples((None, RDFS.label, None)):
+        subjects = set(g.subjects(SKOS.prefLabel, None))
+        subjects.update(g.subjects(RDFS.label, None))
+        subjects.update(g.subjects(SKOS.altLabel, None))
+        for subject in subjects:
             uri = str(subject)
             if uri in seen_uris:
                 continue
             seen_uris.add(uri)
+
+            label = next(g.objects(subject, SKOS.prefLabel), None)
+            if label is None:
+                label = next(g.objects(subject, RDFS.label), None)
+            if label is None:
+                label = next(g.objects(subject, SKOS.altLabel), None)
+            if label is None:
+                continue
 
             type_hint = "CONCEPT"
             types = [str(t) for t in g.objects(subject, RDF.type) if str(t) != str(OWL.NamedIndividual)]

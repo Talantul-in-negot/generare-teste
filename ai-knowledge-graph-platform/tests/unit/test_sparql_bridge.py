@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib import Graph, Literal, Namespace
 from rdflib.namespace import OWL, RDF, RDFS, XSD
 
 from graphrag.graph.sparql_bridge import SPARQLBridge
@@ -11,6 +11,7 @@ from graphrag.graph.sparql_bridge import SPARQLBridge
 BASE  = Namespace("https://graphrag.example.com/ontology#")
 INST  = Namespace("https://graphrag.example.com/entity/")
 ANNOT = Namespace("https://graphrag.example.com/annotation#")
+SKOS = Namespace("http://www.w3.org/2004/02/skos/core#")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -104,6 +105,13 @@ class TestSPARQLBridgeQuery:
         )
         # BASE.PERSON, BASE.EMPLOYEE are owl:Class
         assert len(rows) >= 2
+
+    def test_skos_prefix_is_available_without_manual_binding(self) -> None:
+        self.bridge._g.add((INST["default/PERSON/Alice"], SKOS.prefLabel, Literal("Alice")))
+
+        rows = self.bridge.query("SELECT ?label WHERE { ?entity skos:prefLabel ?label }")
+
+        assert rows == [{"label": "Alice"}]
 
     def test_result_keys_are_variable_names(self) -> None:
         rows = self.bridge.query("SELECT ?label WHERE { ?e rdfs:label ?label }")

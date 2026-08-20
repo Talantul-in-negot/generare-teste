@@ -72,6 +72,7 @@ def _reject_unsafe_sparql(sparql: str) -> None:
 BASE  = Namespace("https://graphrag.example.com/ontology#")
 INST  = Namespace("https://graphrag.example.com/entity/")
 ANNOT = Namespace("https://graphrag.example.com/annotation#")
+SKOS  = Namespace("http://www.w3.org/2004/02/skos/core#")
 
 
 class SPARQLBridge:
@@ -93,6 +94,7 @@ class SPARQLBridge:
         "owl":   str(OWL),
         "rdf":   str(RDF),
         "rdfs":  str(RDFS),
+        "skos":  str(SKOS),
         "xsd":   str(XSD),
     }
 
@@ -135,7 +137,7 @@ class SPARQLBridge:
             A complete SPARQL 1.1 SELECT statement.
         init_ns :
             Extra namespace prefix bindings, merged with the default set
-            (base, inst, annot, owl, rdf, rdfs, xsd).
+            (base, inst, annot, owl, rdf, rdfs, skos, xsd).
 
         Returns
         -------

@@ -146,25 +146,45 @@ def _normalize_ro(text: str) -> str:
 
 
 async def _get_redis():
-    """Return an async Redis client, or None if Redis is unavailable.
+    """Return an async Redis client, or None when the optional cache is off.
 
-    The failure is logged rather than swallowed: previously a Redis auth
-    failure, a DNS failure and "Redis is not configured here" were all
-    indistinguishable, so a misconfigured cache silently degraded every alias
-    lookup to the slower Neo4j path with no signal anywhere.
+    Alias resolution is correct without Redis: Neo4j remains the source of
+    truth and Redis only shares a warmed alias table between workers.  Do not
+    probe localhost merely because redis-py is installed; an explicit
+    ``REDIS_URL`` opts a deployment into this cache.  A configured-but-down
+    cache receives one short connection attempt, then safely falls back.
     """
+    redis_url = os.getenv("REDIS_URL", "").strip()
+    if not redis_url:
+        log.debug("alias_registry.redis_not_configured")
+        return None
+
     try:
         import redis.asyncio as aioredis
+        from redis.backoff import NoBackoff
+        from redis.retry import Retry
     except ImportError:
         log.debug("alias_registry.redis_not_installed")
         return None
 
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    client = None
     try:
-        client = aioredis.from_url(redis_url, decode_responses=True)
+        client = aioredis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=0.5,
+            socket_timeout=0.5,
+            retry=Retry(NoBackoff(), 0),
+            retry_on_timeout=False,
+        )
         await client.ping()
         return client
     except Exception as exc:  # noqa: BLE001 — redis-py raises a wide family here
+        if client is not None:
+            try:
+                await client.aclose()
+            except Exception:  # noqa: BLE001 — fallback must stay available
+                pass
         log.warning("alias_registry.redis_unavailable",
                     error=str(exc)[:160], hint="falling back to Neo4j alias lookups")
         return None

@@ -10,6 +10,7 @@ Mapping
 -------
   Entity nodes          → owl:NamedIndividual + rdf:type
   EntityType nodes      → owl:Class + rdfs:subClassOf hierarchy
+  Browseable concepts   → skos:Concept in a tenant ConceptScheme
   RELATES_TO edges      → owl:ObjectProperty assertions with reified confidence
   NEGATIVE_RELATES_TO   → annotated negative assertions
   SUBCLASS_OF edges     → rdfs:subClassOf
@@ -55,6 +56,7 @@ BASE  = Namespace("https://graphrag.example.com/ontology#")
 INST  = Namespace("https://graphrag.example.com/entity/")
 ANNOT = Namespace("https://graphrag.example.com/annotation#")
 PROV  = Namespace("http://www.w3.org/ns/prov#")
+SKOS  = Namespace("http://www.w3.org/2004/02/skos/core#")
 
 
 def _entity_uri(name: str, etype: str, tenant: str) -> URIRef:
@@ -67,6 +69,13 @@ def _entity_uri(name: str, etype: str, tenant: str) -> URIRef:
 
 def _type_uri(etype: str) -> URIRef:
     return BASE[etype.upper()]
+
+
+def _scheme_uri(tenant: str) -> URIRef:
+    """Stable SKOS concept scheme URI, isolated per exported tenant."""
+    import urllib.parse
+
+    return INST[f"scheme/{urllib.parse.quote(tenant, safe='')}"]
 
 
 def _rel_uri(relation: str) -> URIRef:
@@ -110,6 +119,7 @@ def _init_graph() -> Graph:
     g.bind("rdfs",  RDFS)
     g.bind("xsd",   XSD)
     g.bind("prov",  PROV)
+    g.bind("skos",  SKOS)
 
     # Ontology declaration
     ont = URIRef("https://graphrag.example.com/ontology")
@@ -137,6 +147,10 @@ async def export(tenant: str, output: Path, limit: int, infer: bool = False, val
 
     neo4j = get_neo4j()
     g = _init_graph()
+    scheme = _scheme_uri(tenant)
+    g.add((scheme, RDF.type, SKOS.ConceptScheme))
+    g.add((scheme, SKOS.prefLabel, Literal(f"Knowledge graph concepts ({tenant})")))
+    g.add((scheme, ANNOT.tenant, Literal(tenant)))
 
     g.add((URIRef("https://graphrag.example.com/ontology"),
            RDFS.comment,
@@ -154,8 +168,12 @@ async def export(tenant: str, output: Path, limit: int, infer: bool = False, val
                 t_uri = _type_uri(t)
                 g.add((t_uri, RDF.type, OWL.Class))
                 g.add((t_uri, RDFS.label, Literal(t)))
+                g.add((t_uri, RDF.type, SKOS.Concept))
+                g.add((t_uri, SKOS.prefLabel, Literal(t)))
+                g.add((t_uri, SKOS.inScheme, scheme))
                 declared_types.add(t)
         g.add((_type_uri(child), RDFS.subClassOf, _type_uri(parent)))
+        g.add((_type_uri(child), SKOS.broader, _type_uri(parent)))
 
     # ── Object properties ──────────────────────────────────────────────────────
     rel_rows = await neo4j.run(
@@ -192,10 +210,25 @@ async def export(tenant: str, output: Path, limit: int, infer: bool = False, val
         etype = row["type"] or "CONCEPT"
         t     = row["tenant"] or "default"
         uri   = _entity_uri(name, etype, t)
+        type_uri = _type_uri(etype)
+
+        # Types that have no explicit SUBCLASS_OF edge still need a SKOS
+        # concept so every exported entity has a navigable broader concept.
+        if etype not in declared_types:
+            g.add((type_uri, RDF.type, OWL.Class))
+            g.add((type_uri, RDFS.label, Literal(etype)))
+            g.add((type_uri, RDF.type, SKOS.Concept))
+            g.add((type_uri, SKOS.prefLabel, Literal(etype)))
+            g.add((type_uri, SKOS.inScheme, scheme))
+            declared_types.add(etype)
 
         g.add((uri, RDF.type, OWL.NamedIndividual))
-        g.add((uri, RDF.type, _type_uri(etype)))
+        g.add((uri, RDF.type, type_uri))
         g.add((uri, RDFS.label, Literal(name)))
+        g.add((uri, RDF.type, SKOS.Concept))
+        g.add((uri, SKOS.prefLabel, Literal(name)))
+        g.add((uri, SKOS.inScheme, scheme))
+        g.add((uri, SKOS.broader, type_uri))
         g.add((uri, ANNOT.tenant, Literal(t)))
         if row.get("desc"):
             g.add((uri, RDFS.comment, Literal(str(row["desc"])[:500])))

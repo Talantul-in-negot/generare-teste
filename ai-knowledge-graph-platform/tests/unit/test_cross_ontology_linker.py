@@ -12,6 +12,7 @@ from graphrag.graph.alias_registry import AmbiguousMatch
 from graphrag.graph.cross_ontology_linker import CrossOntologyLinker, _entity_uri
 
 EX = Namespace("https://customer.example.com/onto#")
+SKOS = Namespace("http://www.w3.org/2004/02/skos/core#")
 
 
 def _write_external_ttl(tmp_path, entries: list[tuple[str, str, str | None]]) -> str:
@@ -81,6 +82,21 @@ class TestExtractCandidates:
         linker = _make_linker(mock_registry)
         candidates = linker._extract_candidates(str(path))
         assert len(candidates) == 1
+
+    def test_prefers_skos_preferred_label_and_accepts_alt_label(self, tmp_path):
+        g = Graph()
+        preferred = EX["preferred"]
+        alternate = EX["alternate"]
+        g.add((preferred, RDFS.label, Literal("Legacy Router Name")))
+        g.add((preferred, SKOS.prefLabel, Literal("Canonical Router Name")))
+        g.add((alternate, SKOS.altLabel, Literal("Alias-only Circuit")))
+        path = tmp_path / "skos.ttl"
+        g.serialize(str(path), format="turtle")
+
+        linker = _make_linker(MagicMock())
+        candidates = {candidate.external_uri: candidate for candidate in linker._extract_candidates(path)}
+        assert candidates[str(preferred)].label == "Canonical Router Name"
+        assert candidates[str(alternate)].label == "Alias-only Circuit"
 
 
 # ── link() — exact/fuzzy path ────────────────────────────────────────────────

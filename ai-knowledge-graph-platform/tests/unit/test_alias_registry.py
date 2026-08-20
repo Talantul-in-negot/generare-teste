@@ -11,8 +11,18 @@ from graphrag.graph.alias_registry import (
     _normalize,
     _normalize_regulatory,
     _normalize_ro,
+    _get_redis,
     _stem_ro_token,
 )
+
+
+class TestRedisCacheConfiguration:
+    @pytest.mark.asyncio
+    async def test_redis_cache_is_disabled_without_an_explicit_url(self, monkeypatch):
+        """Unit/in-process runs must not spend retry time probing localhost."""
+        monkeypatch.delenv("REDIS_URL", raising=False)
+
+        assert await _get_redis() is None
 
 
 # ── _normalize ─────────────────────────────────────────────────────────────────

@@ -188,6 +188,12 @@ The export maps:
 - `NEGATIVE_RELATES_TO` edges → annotated with `owl:complementOf` semantics
 - `SUBCLASS_OF` edges → `rdfs:subClassOf`
 
+The same export also supplies a SKOS browsing projection: each tenant has a
+`skos:ConceptScheme`; entity types and entities are `skos:Concept`s with
+`skos:prefLabel`, and type/entity navigation is represented by
+`skos:broader`. This leaves the OWL/RDFS semantics intact while making exports
+directly usable by vocabulary browsers and SKOS-aware RDF tools.
+
 This allows the ontology to be consumed by Protégé, reasoners (HermiT, Pellet),
 and SPARQL endpoints without requiring a full migration to a triple store.
 

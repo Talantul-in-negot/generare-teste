@@ -9,13 +9,14 @@ from unittest.mock import AsyncMock, patch
 # Allow importing from scripts/
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-from rdflib import Graph, Namespace, OWL, RDF, RDFS
+from rdflib import Graph, Literal, Namespace, OWL, RDF, RDFS
 from rdflib.namespace import XSD
 
 BASE  = Namespace("https://graphrag.example.com/ontology#")
 INST  = Namespace("https://graphrag.example.com/entity/")
 ANNOT = Namespace("https://graphrag.example.com/annotation#")
 PROV = Namespace("http://www.w3.org/ns/prov#")
+SKOS = Namespace("http://www.w3.org/2004/02/skos/core#")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -236,6 +237,31 @@ def _make_neo4j(
 
 
 class TestExportProducesConformantGraph:
+    async def test_export_emits_tenant_scoped_skos_concepts(self, tmp_path: Path) -> None:
+        from export_rdf import _entity_uri, _scheme_uri, _type_uri, export
+
+        neo4j = _make_neo4j(
+            type_rows=[{"child": "AIRCRAFT_MODEL", "parent": "ASSET"}],
+            ent_rows=[
+                {"name": "Boeing 737 MAX", "type": "AIRCRAFT_MODEL", "desc": None,
+                 "vf": None, "vt": None, "tenant": "aerospace"},
+            ],
+        )
+        output = tmp_path / "skos.ttl"
+        with patch("graphrag.graph.neo4j_client.get_neo4j", return_value=neo4j):
+            await export(tenant="aerospace", output=output, limit=1000)
+
+        graph = Graph().parse(output, format="turtle")
+        scheme = _scheme_uri("aerospace")
+        entity = _entity_uri("Boeing 737 MAX", "AIRCRAFT_MODEL", "aerospace")
+        child = _type_uri("AIRCRAFT_MODEL")
+        parent = _type_uri("ASSET")
+        assert (scheme, RDF.type, SKOS.ConceptScheme) in graph
+        assert (entity, SKOS.prefLabel, Literal("Boeing 737 MAX")) in graph
+        assert (entity, SKOS.inScheme, scheme) in graph
+        assert (entity, SKOS.broader, child) in graph
+        assert (child, SKOS.broader, parent) in graph
+
     async def test_typical_entities_and_edges_conform(self, tmp_path: Path) -> None:
         """Representative export (2 entities, 1 relation, 1 type edge) must
         pass the platform's own SHACL shapes."""
