@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Quiz – Cartea lui Ioan</title>
+<meta name="theme-color" content="#160047">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cartea lui Ioan">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
   canvas.bg { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; }
@@ -1040,6 +1046,9 @@ document.getElementById('statsModal').addEventListener('click',e=>{if(e.target==
 updateAccount();
 Auth.init(async user=>{accountUser=user||'';updateAccount();if(accountUser){await Tracker.flush();await syncCloudStats();}}).catch(()=>updateAccount());
 showSelector();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(() => {}));
+}
 </script>
 </body>
 </html>
