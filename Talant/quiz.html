@@ -83,12 +83,22 @@
   .wrong-item .feedback-text { font-size:.9rem; color:#666; padding:10px; background:#fff; border-radius:8px; border-left:3px solid #666; }
   .review-btn { display:block; width:100%; margin-top:18px; padding:14px; background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; border:none; border-radius:14px; font-size:1rem; font-weight:700; cursor:pointer; letter-spacing:.5px; transition:opacity .2s; }
   .review-btn:hover { opacity:.88; }
+  #accountBar { position:fixed; top:14px; left:16px; z-index:30; display:flex; gap:8px; align-items:center; }
+  .account-btn { border:1px solid rgba(255,255,255,.45); background:rgba(0,0,0,.38); backdrop-filter:blur(8px); color:#fff; border-radius:20px; padding:7px 12px; cursor:pointer; font:600 .82rem 'Segoe UI',Arial,sans-serif; }
+  .account-btn:hover { background:rgba(0,0,0,.58); } #scoreChip { cursor:default; }
+  .modal-backdrop { position:fixed; inset:0; z-index:80; display:grid; place-items:center; padding:18px; background:rgba(0,0,0,.6); }.modal-backdrop[hidden] { display:none; }
+  .modal { width:min(100%,560px); max-height:min(86vh,720px); overflow:auto; background:#fff; color:#1a2a3a; border-radius:20px; padding:24px; box-shadow:0 20px 70px rgba(0,0,0,.45); }.modal h2 { color:#6d28d9; font-size:1.35rem; margin-bottom:14px; }
+  .modal input { width:100%; margin:6px 0; padding:11px 12px; border:1.5px solid #c4b5fd; border-radius:10px; font-size:.95rem; }.modal-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }.modal-actions button { flex:1; min-width:140px; border:0; border-radius:10px; padding:11px; color:#fff; font-weight:700; cursor:pointer; background:#7c3aed; }.modal-actions .secondary { background:#64748b; }
+  .modal-close { float:right; border:0; background:transparent; color:#64748b; font-size:1.4rem; cursor:pointer; }.auth-error { color:#b91c1c; min-height:1.25em; margin-top:8px; font-size:.88rem; }
+  .stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin:12px 0 18px; }.stat { background:#f3f0ff; border-radius:10px; padding:10px; text-align:center; }.stat b { display:block; color:#6d28d9; font-size:1.15rem; }.leaderboard-row,.attempt-row { display:grid; grid-template-columns:40px 1fr auto; gap:8px; align-items:center; padding:9px 0; border-bottom:1px solid #ede9fe; font-size:.9rem; }.leaderboard-row.me { background:#f3e8ff; margin:0 -8px; padding:9px 8px; border-radius:8px; }.attempt-row { grid-template-columns:1fr auto; }.attempt-row small { color:#64748b; }
+  @media(max-width:560px){ #accountBar { top:8px; left:8px; gap:4px; }.account-btn { padding:6px 8px; }#scene-label { top:54px; }.stats-grid { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
 <canvas class="bg" id="bgA"></canvas>
 <canvas class="bg" id="bgB"></canvas>
 <div id="scene-label"></div>
+<div id="accountBar"><button class="account-btn" id="userBtn" type="button">👤 <span id="userName">Conectează-te</span></button><span class="account-btn" id="scoreChip" title="Punctajul tău total">⭐ <span id="userPoints">0</span> pct</span><button class="account-btn" id="statsBtn" type="button">🏆 Clasament</button></div>
 <div id="selectorScreen">
   <div class="sel-header">
     <h1>✨ Cartea lui Ioan ✨</h1>
@@ -105,7 +115,13 @@
   </div>
   <div class="card" id="quizCard"></div>
 </div>
+<div class="modal-backdrop" id="authModal" hidden><section class="modal" aria-labelledby="authTitle"><button class="modal-close" id="authClose" type="button" aria-label="Închide">×</button><h2 id="authTitle">Contul meu</h2><p id="authIntro">Conectează-te ca să-ți păstrezi punctajul și istoricul încercărilor.</p><div id="authForm"><input id="authUsername" maxlength="30" autocomplete="username" placeholder="Nume utilizator"><input id="authPassword" type="password" maxlength="64" autocomplete="current-password" placeholder="Parolă"><p class="auth-error" id="authError" role="alert"></p><div class="modal-actions"><button id="loginBtn" type="button">Intră în cont</button><button id="registerBtn" class="secondary" type="button">Creează cont</button></div></div><div id="authLogged" hidden><p>Conectat ca <strong id="authLoggedName"></strong>.</p><div class="modal-actions"><button id="logoutBtn" class="secondary" type="button">Ieși din cont</button></div></div></section></div>
+<div class="modal-backdrop" id="statsModal" hidden><section class="modal" aria-labelledby="statsTitle"><button class="modal-close" id="statsClose" type="button" aria-label="Închide">×</button><h2 id="statsTitle">🏆 Clasament și activitate</h2><div id="statsContent">Se încarcă…</div></section></div>
 <script src="questions.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="tracker.js"></script>
 <script>
 // ════════════════════════════════════════════════════════════
 // UTILITIES
@@ -780,18 +796,19 @@ startA=performance.now();showLabel(SCENES[idxA].name);requestAnimationFrame(bgTi
 // ════════════════════════════════════════════════════════════
 const ROUNDS = (() => {
   const icons = ['📖','✨','🔥','🌟','💡','🎯','🏆','🌈','⭐','🎶','🕊️','🌿'];
+  const indexedQuestions = QUESTIONS.map((q, sourceIndex) => ({ ...q, sourceIndex }));
   // Detect all page numbers present in the data
-  const pages = [...new Set(QUESTIONS.map(q => { const m = q.card.match(/Card (\d+)\./); return m ? Number(m[1]) : null; }).filter(n => n !== null))].sort((a,b)=>a-b);
+  const pages = [...new Set(indexedQuestions.map(q => { const m = q.card.match(/Card (\d+)\./); return m ? Number(m[1]) : null; }).filter(n => n !== null))].sort((a,b)=>a-b);
   const rounds = [];
   const usedIdx = new Set();
   pages.forEach((p, i) => {
     const re = new RegExp('Card ' + p + '\\.');
-    const qs = QUESTIONS.filter((q, idx) => { if (re.test(q.card)) { usedIdx.add(idx); return true; } return false; });
+    const qs = indexedQuestions.filter((q, idx) => { if (re.test(q.card)) { usedIdx.add(idx); return true; } return false; });
     const isLast = i === pages.length - 1;
     rounds.push({ label: isLast ? 'Final' : 'Set ' + p, sub: qs.length + ' întrebări · ' + (qs.length/6|0) + ' cărți', icon: icons[i] ?? '📚', qs, special: isLast });
   });
   // Catch any questions with no page pattern
-  const extras = QUESTIONS.filter((_, i) => !usedIdx.has(i));
+  const extras = indexedQuestions.filter((_, i) => !usedIdx.has(i));
   if (extras.length) rounds.push({ label: 'Bonus', sub: extras.length + ' întrebări · ' + (extras.length/6|0) + ' cărți', icon: '🎁', qs: extras, special: true });
   return rounds;
 })();
@@ -804,10 +821,49 @@ let current=0, score=0, answered=false;
 let selectedIdx = new Set();
 let wrongAnswers = []; // Track incorrect questions for review
 let showingReview = false; // Track if we're on review screen
+let accountUser = '', cloudPoints = 0;
 
 function getLabels(n){ return n===2?['A','F']:n===3?['a','b','c']:['A','B','C','D']; }
 function gridClass(n){ return n===2?'n2':n===3?'n3':''; }
-function fmtQ(t){ return t.replace(/_{2,}/g,'<span class="blank">______</span>'); }
+function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function fmtQ(t){ return escapeHtml(t).replace(/_{2,}/g,'<span class="blank">______</span>'); }
+
+function updateAccount(){
+  document.getElementById('userName').textContent=accountUser||'Conectează-te';
+  document.getElementById('userPoints').textContent=cloudPoints;
+  document.getElementById('authForm').hidden=!!accountUser;
+  document.getElementById('authLogged').hidden=!accountUser;
+  document.getElementById('authLoggedName').textContent=accountUser;
+}
+async function syncCloudStats(){
+  try{const stats=await Tracker.ownStats();if(stats){cloudPoints=Number(stats.points)||0;updateAccount();}return stats;}catch{return null;}
+}
+async function recordQuizAttempt(q, selected, isCorrect){
+  if(!accountUser)return;
+  try{const stats=await Tracker.record({question_id:q.sourceIndex,round_key:ROUNDS[activeRoundIdx].label,quiz_version:'ioan-v1',selected_indices:selected,correct:isCorrect});if(stats){cloudPoints=Number(stats.points)||0;updateAccount();}}catch{ /* activitatea rămâne în coada locală și va fi retrimisă */ }
+}
+function openAuth(){document.getElementById('authModal').hidden=false;document.getElementById('authError').textContent='';updateAccount();}
+function closeAuth(){document.getElementById('authModal').hidden=true;}
+async function submitAuth(mode){
+  const error=document.getElementById('authError'), username=document.getElementById('authUsername').value, password=document.getElementById('authPassword').value;
+  error.textContent='';
+  try{accountUser=mode==='login'?await Auth.signIn(username,password):await Auth.signUp(username,password);updateAccount();await Tracker.flush();await syncCloudStats();closeAuth();}catch(e){error.textContent=e.message;}
+}
+function text(tag, value, className){const node=document.createElement(tag);if(className)node.className=className;node.textContent=value;return node;}
+async function openStats(){
+  const modal=document.getElementById('statsModal'), content=document.getElementById('statsContent');modal.hidden=false;content.replaceChildren(text('p','Se încarcă…'));
+  if(!accountUser){content.replaceChildren(text('p','Conectează-te pentru clasament, punctaj și istoricul verificabil al încercărilor.'));return;}
+  try{
+    const [stats,ranking,attempts]=await Promise.all([syncCloudStats(),Tracker.leaderboard(),Tracker.myAttempts()]);
+    content.replaceChildren();
+    const grid=document.createElement('div');grid.className='stats-grid';
+    [['Puncte',stats?.points||0],['Corecte',stats?.correct_answers||0],['Precizie',`${stats?.accuracy||0}%`]].forEach(([label,value])=>{const cell=text('div','', 'stat');cell.append(text('b',value));cell.append(text('span',label));grid.append(cell);});content.append(grid);
+    content.append(text('h3','Clasament'));
+    if(!ranking.length)content.append(text('p','Încă nu există punctaje în clasament.'));else ranking.forEach(entry=>{const row=document.createElement('div');row.className='leaderboard-row'+(entry.user_name===accountUser?' me':'');row.append(text('span',`#${entry.rank}`),text('span',entry.user_name),text('strong',`${entry.points} pct`));content.append(row);});
+    content.append(text('h3','Ultimele mele încercări'));
+    if(!attempts.length)content.append(text('p','Nu ai încă încercări înregistrate.'));else attempts.forEach(item=>{const row=document.createElement('div');row.className='attempt-row';const detail=document.createElement('div');detail.append(text('strong',`${item.round_key} · întrebarea ${item.question_id+1}`));detail.append(document.createElement('br'));detail.append(text('small',new Date(item.attempted_at).toLocaleString('ro-RO')));row.append(detail,text('strong',item.correct?'✓ Corect':'✗ Greșit'));content.append(row);});
+  }catch{content.replaceChildren(text('p','Statisticile au nevoie de internet. Încearcă din nou mai târziu.'));}
+}
 
 // ── Selector ──────────────────────────────────────────────
 function showSelector(){
@@ -827,7 +883,7 @@ function showSelector(){
 function startRound(idx){
   activeRoundIdx=idx;
   activeQs=ROUNDS[idx].qs;
-  current=0; score=0; answered=false; selectedIdx=new Set(); wrongAnswers=[];
+  current=0; score=0; answered=false; selectedIdx=new Set(); wrongAnswers=[]; showingReview=false;
   document.getElementById('selectorScreen').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('roundTitle').textContent=ROUNDS[idx].label + ' — ' + ROUNDS[idx].sub;
@@ -850,7 +906,7 @@ function render(){
   const labels=getLabels(q.answers.length), gc=gridClass(q.answers.length);
   const isMulti=q.answers.length===3;
   const confirmBtn=isMulti?`<button class="btn-confirm" id="btnConfirm" style="display:none" onclick="confirmAnswer()">✓ Confirmă răspunsul</button>`:'';
-  card.innerHTML=`<div class="card-label"><span class="dot"></span>${q.card}</div><div class="q-counter">Întrebarea ${current+1} din ${TOTAL}</div><div class="question-text">${fmtQ(q.question)}</div><div class="answers ${gc}">${q.answers.map((a,i)=>`<button class="answer-btn" onclick="choose(${i})" id="ans-${i}"><span class="letter">${labels[i]}</span>${a}</button>`).join('')}</div>${confirmBtn}<div class="feedback" id="feedback"></div><button class="btn-next" id="btnNext" style="display:none" onclick="nextQ()">${current+1<TOTAL?'Întrebarea următoare →':'Vezi rezultatul final →'}</button>`;
+  card.innerHTML=`<div class="card-label"><span class="dot"></span>${escapeHtml(q.card)}</div><div class="q-counter">Întrebarea ${current+1} din ${TOTAL}</div><div class="question-text">${fmtQ(q.question)}</div><div class="answers ${gc}">${q.answers.map((a,i)=>`<button class="answer-btn" onclick="choose(${i})" id="ans-${i}"><span class="letter">${labels[i]}</span>${escapeHtml(a)}</button>`).join('')}</div>${confirmBtn}<div class="feedback" id="feedback"></div><button class="btn-next" id="btnNext" style="display:none" onclick="nextQ()">${current+1<TOTAL?'Întrebarea următoare →':'Vezi rezultatul final →'}</button>`;
 }
 
 function choose(idx){
@@ -867,16 +923,17 @@ function choose(idx){
   if(answered)return; answered=true;
   document.querySelectorAll('.answer-btn').forEach(b=>b.disabled=true);
   const fb=document.getElementById('feedback');
-  if(idx===q.correct){score++;document.getElementById(`ans-${idx}`).classList.add('correct');fb.className='feedback correct-fb show';fb.innerHTML=`✅ <strong>Corect!</strong> ${q.feedback}`;}
+  if(idx===q.correct){score++;document.getElementById(`ans-${idx}`).classList.add('correct');fb.className='feedback correct-fb show';fb.innerHTML=`✅ <strong>Corect!</strong> ${escapeHtml(q.feedback)}`;}
   else{
     document.getElementById(`ans-${idx}`).classList.add('wrong');
     document.getElementById(`ans-${q.correct}`).classList.add('correct');
     fb.className='feedback wrong-fb show';
-    fb.innerHTML=`❌ <strong>Greșit.</strong> ${q.feedback}`;
+    fb.innerHTML=`❌ <strong>Greșit.</strong> ${escapeHtml(q.feedback)}`;
     wrongAnswers.push({q, selected: q.answers[idx], correct: q.answers[q.correct], feedback: q.feedback});
   }
   document.getElementById('scoreDisplay').textContent=`Puncte: ${score} / ${current+1}`;
   document.getElementById('btnNext').style.display='block';
+  recordQuizAttempt(q,[idx],idx===q.correct);
 }
 
 function confirmAnswer(){
@@ -893,18 +950,19 @@ function confirmAnswer(){
     score++;
     selected.forEach(i=>document.getElementById(`ans-${i}`).classList.add('correct'));
     fb.className='feedback correct-fb show';
-    fb.innerHTML=`✅ <strong>Corect!</strong> ${q.feedback}`;
+    fb.innerHTML=`✅ <strong>Corect!</strong> ${escapeHtml(q.feedback)}`;
   } else {
     selected.forEach(i=>document.getElementById(`ans-${i}`).classList.add('wrong'));
     correctArr.forEach(i=>document.getElementById(`ans-${i}`).classList.add('correct'));
     fb.className='feedback wrong-fb show';
-    fb.innerHTML=`❌ <strong>Greșit.</strong> ${q.feedback}`;
+    fb.innerHTML=`❌ <strong>Greșit.</strong> ${escapeHtml(q.feedback)}`;
     const selectedText=selected.map(i=>q.answers[i]).join(', ');
     const correctText=correctArr.map(i=>q.answers[i]).join(', ');
     wrongAnswers.push({q, selected: selectedText, correct: correctText, feedback: q.feedback});
   }
   document.getElementById('scoreDisplay').textContent=`Puncte: ${score} / ${current+1}`;
   document.getElementById('btnNext').style.display='block';
+  recordQuizAttempt(q,selected,isCorrect);
 }
 
 function nextQ(){current++;render();document.getElementById('quizCard').scrollIntoView({behavior:'smooth',block:'start'});}
@@ -922,19 +980,19 @@ function renderReview(card){
         ${wrongAnswers.map((w,i)=>`
           <div class="wrong-item">
             <div class="question-part">
-              <div class="q-text">${i+1}. ${w.q.question.replace(/_{2,}/g,'______')}</div>
+              <div class="q-text">${i+1}. ${escapeHtml(w.q.question).replace(/_{2,}/g,'______')}</div>
             </div>
             <div class="answer-row">
               <div>
                 <strong style="color:#7f1d1d;">Te-ai răspuns:</strong>
-                <div class="selected">${w.selected}</div>
+                <div class="selected">${escapeHtml(w.selected)}</div>
               </div>
               <div>
                 <strong style="color:#14532d;">Răspuns corect:</strong>
-                <div class="correct">${w.correct}</div>
+                <div class="correct">${escapeHtml(w.correct)}</div>
               </div>
             </div>
-            <div class="feedback-text">📖 ${w.feedback}</div>
+            <div class="feedback-text">📖 ${escapeHtml(w.feedback)}</div>
           </div>
         `).join('')}
       </div>
@@ -961,6 +1019,17 @@ function renderFinal(card){
 }
 
 function restart(){startRound(activeRoundIdx);}
+document.getElementById('userBtn').addEventListener('click',openAuth);
+document.getElementById('authClose').addEventListener('click',closeAuth);
+document.getElementById('statsBtn').addEventListener('click',openStats);
+document.getElementById('statsClose').addEventListener('click',()=>document.getElementById('statsModal').hidden=true);
+document.getElementById('loginBtn').addEventListener('click',()=>submitAuth('login'));
+document.getElementById('registerBtn').addEventListener('click',()=>submitAuth('register'));
+document.getElementById('logoutBtn').addEventListener('click',async()=>{await Auth.signOut();accountUser='';cloudPoints=0;updateAccount();});
+document.getElementById('authModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAuth();});
+document.getElementById('statsModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.hidden=true;});
+updateAccount();
+Auth.init(async user=>{accountUser=user||'';updateAccount();if(accountUser){await Tracker.flush();await syncCloudStats();}}).catch(()=>updateAccount());
 showSelector();
 </script>
 </body>

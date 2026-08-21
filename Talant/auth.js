@@ -1,0 +1,87 @@
+/* Autentificare cu nume de utilizator și parolă prin Supabase Auth. */
+const Auth = (() => {
+  const DOMAIN = '@talant.app';
+  let clientInstance = null;
+  let session = null;
+  let onChange = null;
+
+  function client() {
+    if (!clientInstance && typeof supabase !== 'undefined') {
+      clientInstance = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: true, storageKey: 'talant_auth' },
+      });
+    }
+    return clientInstance;
+  }
+
+  function normalizeUsername(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 30);
+  }
+
+  function toEmail(username) {
+    return normalizeUsername(username).toLocaleLowerCase('ro-RO').replace(/\s/g, '_') + DOMAIN;
+  }
+
+  function displayName(user) {
+    return normalizeUsername(user?.user_metadata?.username || (user?.email || '').replace(DOMAIN, '')) || null;
+  }
+
+  function userFriendlyError(message) {
+    if (message?.includes('Invalid login') || message?.includes('invalid_credentials')) return 'Nume sau parolă incorectă.';
+    if (message?.includes('already registered') || message?.includes('already been registered')) return 'Acest nume de utilizator este deja folosit.';
+    if (message?.includes('Password should')) return 'Parola trebuie să aibă cel puțin 6 caractere.';
+    if (message?.includes('rate limit')) return 'Prea multe încercări. Încearcă mai târziu.';
+    return message || 'Eroare necunoscută.';
+  }
+
+  async function init(callback) {
+    onChange = callback;
+    const c = client();
+    if (!c) return null;
+    const { data } = await c.auth.getSession();
+    session = data.session;
+    c.auth.onAuthStateChange((_, nextSession) => {
+      session = nextSession;
+      onChange?.(currentUser());
+    });
+    return currentUser();
+  }
+
+  async function signIn(username, password) {
+    const c = client();
+    if (!c) throw new Error('Serviciul de autentificare nu este disponibil.');
+    const { data, error } = await c.auth.signInWithPassword({ email: toEmail(username), password });
+    if (error) throw new Error(userFriendlyError(error.message));
+    session = data.session;
+    return currentUser();
+  }
+
+  async function signUp(username, password) {
+    const name = normalizeUsername(username);
+    if (name.length < 2) throw new Error('Numele trebuie să aibă cel puțin 2 caractere.');
+    if (password.length < 6) throw new Error('Parola trebuie să aibă cel puțin 6 caractere.');
+    const c = client();
+    if (!c) throw new Error('Serviciul de autentificare nu este disponibil.');
+    const { data, error } = await c.auth.signUp({
+      email: toEmail(name), password, options: { data: { username: name } },
+    });
+    if (error) throw new Error(userFriendlyError(error.message));
+    if (data.user && !data.session) throw new Error('Confirmarea prin email este activă în configurația Supabase.');
+    session = data.session;
+    return currentUser();
+  }
+
+  async function signOut() {
+    await client()?.auth.signOut();
+    session = null;
+  }
+
+  async function accessToken() {
+    const { data } = await client()?.auth.getSession() || {};
+    return data?.session?.access_token || null;
+  }
+
+  function currentUser() { return displayName(session?.user); }
+  function userId() { return session?.user?.id || null; }
+  return { init, signIn, signUp, signOut, accessToken, currentUser, userId };
+})();
