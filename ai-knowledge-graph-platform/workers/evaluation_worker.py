@@ -36,6 +36,11 @@ async def main():
     consumer = EvaluationConsumer()
     task = asyncio.create_task(consumer.start())
 
+    # The readiness endpoint must not remain at 503 after the consumer has
+    # been scheduled; Docker/Kubernetes otherwise marks a working evaluator
+    # unhealthy and can repeatedly restart it.
+    health.set_ready()
+
     if sys.platform != "win32":
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):

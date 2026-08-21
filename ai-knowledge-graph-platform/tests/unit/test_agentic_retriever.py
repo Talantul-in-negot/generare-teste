@@ -21,7 +21,10 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from graphrag.retrieval.agentic_retriever import AgenticRetriever
+from graphrag.retrieval.agentic_retriever import (
+    AgenticRetriever,
+    _answer_named_document_citations,
+)
 
 _NBH = chr(0x2011)  # NON-BREAKING HYPHEN — the confirmed culprit
 
@@ -73,3 +76,18 @@ class TestFinalSynthesisDashNormalization:
 
         assert result.answer == "AD-2024-01-02"
         assert _NBH not in result.answer
+
+
+class TestAnswerNamedDocumentCitations:
+    def test_explicit_document_and_southwest_alias_are_cited(self) -> None:
+        citations = _answer_named_document_citations(
+            "Southwest Airlines must comply with FAA AD 2024-01-02.",
+            ["FAA-AD-2022-03-07"],
+            ["FAA-AD-2024-01-02.txt", "SWA_fleet_registry_2024.txt"],
+        )
+
+        assert citations == [
+            "FAA-AD-2022-03-07",
+            "FAA-AD-2024-01-02",
+            "SWA_fleet_registry_2024",
+        ]

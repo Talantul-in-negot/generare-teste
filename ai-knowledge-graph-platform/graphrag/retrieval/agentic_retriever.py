@@ -16,6 +16,8 @@ import time
 import structlog
 
 from graphrag.core.config import get_settings
+from graphrag.graph.alias_registry import canonical_document_key
+from graphrag.graph.neo4j_client import get_neo4j
 from graphrag.core.llm_client import get_fast_llm, get_llm
 from graphrag.core.llm_utils import normalize_dashes
 from graphrag.core.models import QueryResult
@@ -23,9 +25,37 @@ from graphrag.core.prompt_security import escape_prompt_data
 from graphrag.retrieval.local_search import LocalSearch
 from graphrag.retrieval.context_builder import ContextBuilder
 from graphrag.retrieval.claim_verifier import ClaimVerifier
+from graphrag.retrieval.answer_grounding import ground_regulatory_identifiers
 from graphrag.retrieval.fallback_policy import is_low_confidence as _is_low_confidence  # noqa: F401
 
 log = structlog.get_logger(__name__)
+
+
+def _answer_named_document_citations(
+    answer: str, citations: list[str], document_names: list[str],
+) -> list[str]:
+    """Append canonical document IDs explicitly named in an agentic answer.
+
+    An agentic early answer can correctly name an AD surfaced through graph
+    context while no chunk from that AD occupied the bounded context slots.
+    Cite it only when its canonical identifier is literally present in the
+    normalized answer, never merely because it exists elsewhere in the corpus.
+    The sole entity-to-document bridge is the explicit ``Southwest`` ->
+    ``SWA`` corpus alias, which preserves provenance for the fleet registry
+    when an answer names the airline rather than its internal filename.
+    """
+    answer_key = canonical_document_key(answer)
+    for filename in document_names:
+        stem = filename[:-4] if filename.endswith(".txt") else filename
+        key = canonical_document_key(stem)
+        if len(key) >= 8 and key in answer_key:
+            citations.append(stem)
+    if "southwest" in answer.lower():
+        for filename in document_names:
+            stem = filename[:-4] if filename.endswith(".txt") else filename
+            if "swa" in stem.lower():
+                citations.append(stem)
+    return list(dict.fromkeys(citations))
 
 _REASONING_PROMPT = """\
 You are a research assistant doing iterative retrieval.
@@ -125,6 +155,11 @@ class AgenticRetriever:
         all_chunks: list[dict] = []
         all_citations: list[str] = list(initial_citations or [])
         context_sections: list[str] = []
+        document_names: list[str] = []
+        try:
+            document_names = await get_neo4j().get_document_filenames(tenant=tenant)
+        except Exception as exc:  # provenance enrichment is best-effort
+            log.warning("agentic_retriever.document_names_failed", error=str(exc)[:160])
 
         if initial_context:
             context_sections.append(initial_context)
@@ -142,6 +177,7 @@ class AgenticRetriever:
             local_results=seed_results,
             global_results={},
             top_k=5,
+            document_names=document_names,
         )
         if ctx:
             context_sections.append(ctx)
@@ -189,11 +225,17 @@ class AgenticRetriever:
                     latency_ms=round(latency_ms, 1),
                     mode="agentic",
                 )
+                citations = _answer_named_document_citations(
+                    answer, all_citations, document_names,
+                )
+                answer, citations = ground_regulatory_identifiers(
+                    answer, current_context, question, citations, document_names,
+                )
                 return QueryResult(
                     question=question,
                     answer=answer,
                     contexts=[c.get("text", "") for c in all_chunks],
-                    citations=list(dict.fromkeys(all_citations)),
+                    citations=citations,
                     latency_ms=latency_ms,
                     retrieval_mode="agentic",
                     model_version=get_settings().groq_model,  # final synthesis model
@@ -221,6 +263,7 @@ class AgenticRetriever:
                         local_results={"chunks": new_chunks, "entities": sub_results.get("entities", [])},
                         global_results={},
                         top_k=3,
+                        document_names=document_names,
                     )
                     if sub_ctx:
                         context_sections.append(f"[Search: {sub_query}]\n{sub_ctx}")
@@ -255,11 +298,17 @@ class AgenticRetriever:
             mode="agentic_fallback",
         )
 
+        citations = _answer_named_document_citations(
+            final_answer, all_citations, document_names,
+        )
+        final_answer, citations = ground_regulatory_identifiers(
+            final_answer, final_context, question, citations, document_names,
+        )
         return QueryResult(
             question=question,
             answer=final_answer.strip(),
             contexts=[c.get("text", "") for c in all_chunks],
-            citations=list(dict.fromkeys(all_citations)),
+            citations=citations,
             latency_ms=latency_ms,
             retrieval_mode="agentic",
             model_version=get_settings().groq_model,

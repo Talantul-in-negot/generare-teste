@@ -97,3 +97,6 @@ class TestNormalizeDashes:
         nbh = "‑"
         raw = f"AD 2022-03-07 supersedes AD{nbh}2020{nbh}05{nbh}11"
         assert normalize_dashes(raw) == "AD 2022-03-07 supersedes AD-2020-05-11"
+
+    def test_non_breaking_spaces_normalized(self):
+        assert normalize_dashes("FAA\u202fAD\u00a02024-01-02") == "FAA AD 2024-01-02"

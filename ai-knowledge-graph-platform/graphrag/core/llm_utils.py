@@ -79,11 +79,17 @@ _DASH_VARIANTS = str.maketrans({
     "−": "-",  # MINUS SIGN
 })
 
+_SPACE_VARIANTS = str.maketrans({
+    "\u00a0": " ",  # NO-BREAK SPACE
+    "\u202f": " ",  # NARROW NO-BREAK SPACE
+})
+
 
 def normalize_dashes(text: str) -> str:
-    """Replace Unicode dash/hyphen variants with ASCII '-'.
+    """Normalize typographic dashes and non-breaking spaces for stable output.
 
-    Apply to every LLM-synthesized answer before it's returned to the
-    caller or graded — see the module comment above `_DASH_VARIANTS` for why.
+    Groq also emits narrow non-breaking spaces around identifiers (for example
+    ``FAA\u202fAD\u202f2024-01-02``), which are visually harmless but break plain-text
+    citation and answer-term matching.
     """
-    return text.translate(_DASH_VARIANTS)
+    return text.translate(_DASH_VARIANTS).translate(_SPACE_VARIANTS)

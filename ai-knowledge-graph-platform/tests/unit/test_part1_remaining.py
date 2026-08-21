@@ -14,6 +14,20 @@ def test_query_planner_routes_classes_and_fallbacks():
     assert retrieval_plan("Compare the chain across steps")["fallback"] == "agentic"
 
 
+def test_query_planner_routes_regulatory_cross_document_shapes_to_multi_hop():
+    # RAGAS regressions A161: these questions need an operator/procedure or
+    # authority-chain hop, but none used the original generic "chain" trigger.
+    for question in (
+        "Which airlines are affected by MCAS software requirements?",
+        "What is the regulatory path from FAA to the maintenance crew for the CFM LEAP-1B engine?",
+        "What is the effective regulatory hierarchy for Boeing 737 MAX engine inspections?",
+    ):
+        plan = retrieval_plan(question)
+        assert plan["query_class"] == "multi_hop"
+        assert plan["top_k"] == 10
+        assert plan["fallback"] == "agentic"
+
+
 def test_query_planner_routes_existence_check_to_negative_class():
     # Added 2026-08-17 for NEG-03 — see query_planner.py's classify_query()
     # docstring comment for the full root-cause trace. "is there"/"any

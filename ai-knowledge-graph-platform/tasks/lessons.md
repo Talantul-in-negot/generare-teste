@@ -5876,3 +5876,123 @@ convenience endpoint's required statement reference. This is intentionally
 labelled as demo fidelity, not real provenance. A production-quality control
 must expose typed evidence references and their actual versions from the query
 result before recording a governed trace.
+
+## A161 - RAGAS multi-hop failures can originate in query classification, not graph traversal
+
+**Observed during the 2026-08-21 aerospace RAGAS faithfulness run.** The live
+run scored `MH-03` ("Which airlines are affected by MCAS software
+requirements?") at `0.000` and `MH-04` ("What is the regulatory path from FAA
+to the maintenance crew for the CFM LEAP-1B engine?") at `0.500`. `AUT-03`
+(the effective Boeing 737 MAX regulatory hierarchy) also scored low at
+`0.727`. These are all cross-document questions: they require an
+operator/software link, an authority-to-procedure link, or a directive chain.
+
+**Root cause confirmed from live retrieval logs and code.** All three were
+classified as `factoid` by `query_planner.classify_query`. The adaptive router
+then selected the factoid baseline and set `local_top_k=5` (logged as
+`query_plan ... top_k=5`), overwriting the aerospace tenant's wider retrieval
+budget before `LocalSearch.search` runs. The necessary graph-hop or document
+evidence is therefore truncated from the candidate pool before the context
+builder and answer model can use it. This is a classification/routing failure;
+it is not evidence that Neo4j traversal or the GAT scorer cannot reach the
+relevant nodes.
+
+**Why the classifier missed them.** Its multi-hop trigger only recognizes
+`across`, `multiple`, `compare`, `steps`, or `chain`; relational detection only
+recognizes `how does`, `connected`, `relationship`, or `between`. Natural
+multi-hop wording such as `affected by`, `regulatory path`, and `hierarchy`
+falls through to factoid. Do not judge routing quality by the expected question
+type in `golden_set.json`: the router sees only the raw question text.
+
+**Fix direction (not implemented in this entry).** Extend classification with
+precise, test-covered structural phrases for regulatory paths/hierarchies and
+affected-operator questions, then route them through the relational or
+multi-hop plans that retain 8–10 candidates and permit agentic fallback. Keep
+the trigger set narrow and validate the full golden set: a previous broad
+top-k increase caused regressions, so this must target the misclassified
+question shapes rather than globally widening every factoid query.
+
+**Evaluation environment finding.** The first live RAGAS pass hit a Windows
+`charmap` error when the agentic answer contained a non-breaking hyphen.
+Running with `PYTHONIOENCODING=utf-8` eliminated that environment-only error.
+DeepSeek judge calls can still time out at RAGAS's three-minute job limit;
+the runner records those as `UNSCORABLE`, not as zero-faithfulness answers.
+
+## A162 - Consolidated lessons from the recent implementation, audit, and evaluation sessions
+
+This entry consolidates operational lessons that recurred across the recent
+project sessions so they remain discoverable in one place rather than being
+scattered across chat history.
+
+**Repository and Git alignment.** Work in this project is nested inside the
+parent `Generative-AI` repository. Always inspect status from the parent root,
+use an explicit safe-directory setting when the Windows ownership differs from
+the sandbox identity, and stage only the requested project paths. Parent-level
+changes in sibling projects are unrelated and must remain untouched. Generated
+evaluation artifacts such as `evals/last_run.json` should not be committed when
+they are partial, unauthorized, or interrupted runs.
+
+**Evaluation authentication.** Golden evaluation requests are tenant-scoped by
+the JWT, not by the request body alone. A token minted for `default` can make a
+request that says `aerospace` appear to work while retrieving the wrong corpus.
+For local evaluation, mint a dev token with the target tenant explicitly and
+verify the worker logs show that same tenant before trusting any score.
+
+**Docker project identity and data safety.** Compose project names and manual
+containers can silently diverge. A healthy Neo4j container is not sufficient
+evidence that it is using the repository's declared image, mounts, volumes, and
+tenant data. Before rebuilding or switching Compose profiles, inspect container
+names, labels, image, mounts, and health. Prefer an explicit project name and
+`docker-compose.yml`; never recreate or remove a data service until its volume
+and corpus ownership are understood. Duplicate names can leave the rebuilt API
+and worker unable to start even when Neo4j itself is healthy.
+
+**Resource recovery.** Long-running graph extraction or HTML-generation jobs
+can starve Docker Desktop and make even basic diagnostics appear hung. Check
+process command lines and start times before stopping anything; terminate only
+clearly stale, unrelated jobs, and record what was stopped. After cleanup,
+validate Docker responsiveness with `docker version`, then validate each
+dependency in order: Neo4j, Redis, RabbitMQ, TimescaleDB, API, and query worker.
+
+**Container rebuild verification.** Restarting a container does not load source
+changes that were baked into an image. After production-code edits, rebuild the
+API/worker images, wait for the reranker warmup health signal, and inspect the
+worker log for `worker.health_ready ready=True` before running evaluation.
+When an existing named container conflicts with a new Compose project, start or
+recreate only the missing service against the already-verified data services;
+do not casually replace Neo4j.
+
+**RAGAS bootstrap and platform compatibility.** RAGAS 0.4.x can import the
+removed `langchain_community.chat_models.vertexai` module before the project's
+compatibility stub is installed. The faithfulness runner must not eagerly
+import RAGAS or LangChain Community during its dependency preflight; let
+`RagasEvaluator` install the optional VertexAI stub immediately before metrics
+are loaded. This keeps the intended DeepSeek → Groq → Gemini judge fallback
+available without pinning an obsolete LangChain package.
+
+**Windows evaluation output.** Answers can contain non-breaking hyphens and
+other Unicode characters. Set `PYTHONIOENCODING=utf-8` for local RAGAS runs so
+agentic answers do not become evaluation errors through the legacy Windows
+`charmap` stream. Keep the stored answer text Unicode-safe as well; do not
+silently convert an encoding failure into a retrieval failure.
+
+**RAGAS result interpretation.** Separate four states in reports: scored
+faithfulness, low-faithfulness scored answers, correct refusals, and
+`UNSCORABLE`/judge timeout records. A timeout from the external RAGAS judge is
+not a zero-faithfulness answer. Preserve the full results file only after the
+run completes; partial output is diagnostic evidence, not a release score.
+
+**Retrieval tuning discipline.** Query-class routing can override tenant
+retrieval settings. A tenant override such as `rerank_top_k: 8` is ineffective
+if the adaptive router first classifies the question as a factoid and forces a
+five-item plan. Trace the effective configuration in live logs, not only the
+YAML file. Classifier changes must be narrow and followed by the full golden
+regression suite because broad top-k increases have previously regressed
+document precision.
+
+**Documentation and cleanup.** Documentation consolidation is useful only when
+historical findings remain traceable. Move presentation-only material out of
+general project guidance, merge duplicates by subject, and retain one dated
+lesson entry per measured finding with the command, evidence, decision, and
+known limitations. Do not delete a lesson merely because the implementation
+later changed; mark it superseded and link the newer evidence.

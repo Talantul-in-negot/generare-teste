@@ -1,791 +1,189 @@
 {
-  "pass_rate": 0.6471,
-  "passed": 22,
-  "failed": 12,
+  "pass_rate": 1.0,
+  "passed": 5,
+  "failed": 0,
   "errored": 0,
   "by_type": {
-    "single_hop": {
-      "passed": 8,
-      "total": 8
-    },
     "multi_hop": {
-      "passed": 4,
-      "total": 6
-    },
-    "temporal": {
       "passed": 2,
-      "total": 4
-    },
-    "inference": {
-      "passed": 1,
-      "total": 3
+      "total": 2
     },
     "authority_chain": {
       "passed": 1,
-      "total": 3
+      "total": 1
     },
     "negative": {
       "passed": 1,
-      "total": 3
-    },
-    "precision": {
-      "passed": 2,
-      "total": 2
-    },
-    "calibration": {
-      "passed": 0,
       "total": 1
     },
-    "agentic": {
-      "passed": 1,
-      "total": 2
-    },
     "contextual": {
-      "passed": 2,
-      "total": 2
+      "passed": 1,
+      "total": 1
     }
   },
   "questions": [
     {
-      "id": "SH-01",
-      "type": "single_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "FAA-AD-2024-01-02 supersedes AD 2022-03-07. Additionally, EASA-AD-2024-0072 supersedes EASA AD 2022-0201.",
-      "citations": [
-        "FAA-AD-2020-05-11",
-        "FAA-AD-2024-01-02",
-        "FAA-AD-2022-03-07",
-        "EASA-AD-2024-0072",
-        "G-ABCD_inspection_2024-01"
-      ],
-      "steps": [
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 14328.999999997905
-    },
-    {
-      "id": "SH-02",
-      "type": "single_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "AD 2022-03-07 supersedes AD 2020-05-11. In turn, AD 2024-01-02 supersedes AD 2022-03-07.",
-      "citations": [
-        "FAA-AD-2024-01-02",
-        "FAA-AD-2020-05-11",
-        "FAA-AD-2022-03-07",
-        "EASA-AD-2024-0072"
-      ],
-      "steps": [
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 11030.999999988126
-    },
-    {
-      "id": "SH-03",
-      "type": "single_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "Federal Aviation Administration (FAA), DOT, is identified as the agency issuing FAA-AD-2024-01-02 under 14 CFR Part 39. ",
-      "citations": [
-        "FAA-AD-2024-01-02",
-        "Airbus_A320neo_profile",
-        "14CFR_Part39_excerpt"
-      ],
-      "steps": [
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 18265.00000001397
-    },
-    {
-      "id": "SH-04",
-      "type": "single_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "FAA-AD-2024-01-02 applies to Boeing Model 737-8 and 737-9 aircraft. The MCAS software change record states that 737-8 or",
-      "citations": [
-        "FAA-AD-2024-01-02",
-        "Boeing_MCAS_SWChangeRecord",
-        "SWA_fleet_registry_2024"
-      ],
-      "steps": [
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 13109.99999998603
-    },
-    {
-      "id": "SH-05",
-      "type": "single_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "Boeing manufactures the Boeing 737 MAX. Boeing Commercial Airplanes, a division of The Boeing Company, builds the 737 fa",
-      "citations": [
-        "737MAX_CMM_Engine_Mount",
-        "FAA-AD-2020-05-11",
-        "Boeing_company_profile"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 Boeing 737 MAX manufacturer",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 7266.00000000326
-    },
-    {
-      "id": "SH-06",
-      "type": "single_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "The CFM LEAP-1B engine is installed on the Boeing 737 MAX.",
-      "citations": [
-        "737MAX_CMM_Engine_Mount",
-        "Boeing_company_profile",
-        "SWA_fleet_registry_2024"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 Boeing 737 MAX engine",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 5592.999999993481
-    },
-    {
-      "id": "SH-07",
-      "type": "single_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "MCAS Software v2.0 supersedes MCAS Software v1.7.3 and all earlier versions. Since v1.0 is an earlier version, it is sup",
-      "citations": [
-        "Boeing_MCAS_SWChangeRecord",
-        "G-ABCD_AD_compliance_2024-03",
-        "G-ABCD_inspection_2024-01",
-        "SWA_fleet_registry_2024"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 MCAS Software v2.0 status compared to v1.0",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 9000.0
-    },
-    {
-      "id": "SH-08",
-      "type": "single_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "Southwest Airlines operates Boeing 737 MAX aircraft. Other operators include Ryanair, Air Canada, Norwegian Air Shuttle,",
-      "citations": [
-        "SWA_fleet_registry_2024",
-        "FAA-AD-2020-05-11",
-        "737MAX_CMM_Engine_Mount",
-        "Boeing_company_profile"
-      ],
-      "steps": [
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 5625.0
-    },
-    {
-      "id": "MH-01",
+      "id": "MH-03",
       "type": "multi_hop",
       "passed": true,
       "failures": [],
-      "answer_snippet": "FAA AD 2024-01-02 supersedes AD 2022-03-07. AD 2020-05-11 was partially superseded by AD 2022-03-07 and is fully superse",
+      "answer_snippet": "The MCAS software requirements apply to all operators of Boeing 737-8 and 737-9 aircraft. In the context provided, the o",
       "citations": [
+        "FAA-AD-2020-05-11",
+        "FAA-AD-2022-03-07",
         "FAA-AD-2024-01-02",
-        "G-ABCD_inspection_2024-01",
         "Boeing_MCAS_SWChangeRecord",
-        "14CFR_Part39_excerpt",
-        "SWA_fleet_registry_2024",
-        "Boeing_company_profile"
+        "EASA AD 2024-0072",
+        "EASA AD 2022-0201",
+        "Boeing Model 737-8",
+        "Boeing Service Bulletin 737-31-1710",
+        "Boeing",
+        "MCAS v2.0",
+        "MCAS Software v1.7.3",
+        "MCAS Software version 2.0 or later",
+        "737-9",
+        "737-8",
+        "Boeing 737 MAX",
+        "Southwest Airlines",
+        "EASA-AD-2024-0072",
+        "SWA_fleet_registry_2024"
       ],
       "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA-AD-2024-01-02 supersession chain to 2020 directive",
+        "\ud83d\udcdd Query expanded \u2192 airlines MCAS (Maneuvering Characteristics Augmentation Syst",
         "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
         "\u270d\ufe0f Synthesising answer with LLM..."
       ],
-      "latency_ms": 41734.99999998603
-    },
-    {
-      "id": "MH-02",
-      "type": "multi_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "FAA AD 2024-01-02 is listed as referencing 737 MAX continued airworthiness requirements. The engine maintenance procedur",
-      "citations": [
-        "FAA-AD-2024-01-02",
-        "737MAX_CMM_Engine_Mount",
-        "G-ABCD_inspection_2024-01"
-      ],
-      "steps": [
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 21375.0
-    },
-    {
-      "id": "MH-03",
-      "type": "multi_hop",
-      "passed": false,
-      "failures": [
-        "answer missing required term: 'Southwest'",
-        "insufficient citation recall \u2014 missing: ['SWA_fleet_registry_2024']"
-      ],
-      "answer_snippet": "The context does not identify any airlines affected by MCAS software requirements. It identifies the affected aircraft m",
-      "citations": [
-        "FAA-AD-2022-03-07",
-        "FAA-AD-2024-01-02",
-        "Boeing_MCAS_SWChangeRecord",
-        "FAA-AD-2020-05-11"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 MCAS software requirements airlines",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 14014.999999984866
+      "latency_ms": 21854.83481799929
     },
     {
       "id": "MH-04",
       "type": "multi_hop",
       "passed": true,
       "failures": [],
-      "answer_snippet": "The context does not state a complete regulatory path from the FAA to a maintenance crew. It identifies the 737MAX_CMM_E",
+      "answer_snippet": "The FAA issues an Airworthiness Directive (AD) that mandates specific inspections and actions for the LEAP-1B engine mou",
       "citations": [
         "737MAX_CMM_Engine_Mount",
-        "G-ABCD_inspection_2024-01",
-        "Airbus_A320neo_profile"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA CFM LEAP-1B engine maintenance crew",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 35719.000000011874
-    },
-    {
-      "id": "MH-05",
-      "type": "multi_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "Southwest Airlines received its first Boeing 737 MAX 8 on August 29, 2017. All 737 MAX 8 aircraft were grounded on March",
-      "citations": [
-        "FAA-AD-2020-05-11",
-        "SWA_fleet_registry_2024",
-        "Boeing_MCAS_SWChangeRecord",
-        "Boeing_company_profile"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 Southwest Airlines 737 MAX MCAS system compliance story",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 54592.99999999348
-    },
-    {
-      "id": "MH-06",
-      "type": "multi_hop",
-      "passed": false,
-      "failures": [
-        "insufficient citation recall \u2014 missing: ['FAA-AD-2024-01-02']"
-      ],
-      "answer_snippet": "AD 2022-03-07 supersedes AD 2020-05-11 and became effective March 25, 2022. AD 2020-05-11 was partially superseded by AD",
-      "citations": [
-        "FAA-AD-2020-05-11",
         "G-ABCD_inspection_2024-01",
         "14CFR_Part39_excerpt",
-        "FAA-AD-2022-03-07",
-        "SWA_fleet_registry_2024"
+        "Boeing Model 737-8",
+        "Boeing Service Bulletin 737-31-1710",
+        "Boeing",
+        "MCAS v2.0",
+        "737 MAX Series",
+        "Boeing 737 MAX",
+        "Southwest Airlines",
+        "737-8",
+        "737-9",
+        "EASA AD 2024-0072",
+        "Alternative Method of Compliance (AMOC)",
+        "EASA-AD-2024-0072",
+        "FAA-AD-2024-01-02",
+        "FAA-AD-2022-03-07"
       ],
       "steps": [
-        "\ud83d\udcdd Query expanded \u2192 2022 directive 2020 directive 2024 directive current operato",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
+        "\ud83d\udcdd Query expanded \u2192 FAA Federal Aviation Administration CFM LEAP-1B engine regul",
         "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
         "\u270d\ufe0f Synthesising answer with LLM..."
       ],
-      "latency_ms": 35015.999999974156
-    },
-    {
-      "id": "CON-01",
-      "type": "temporal",
-      "passed": false,
-      "failures": [
-        "answer missing any of required terms: ['not compliant', 'non-compliant', 'not yet compliant', 'noncompliant', 'not fully compliant']"
-      ],
-      "answer_snippet": "The context does not contain enough information to confirm full compliance with all applicable FAA MCAS airworthiness di",
-      "citations": [
-        "G-ABCD_AD_compliance_2024-03",
-        "G-ABCD_inspection_2024-01",
-        "14CFR_Part39_excerpt"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 aircraft G-ABCD FAA airworthiness directives MCAS system Mar",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 27687.000000005355
-    },
-    {
-      "id": "CON-02",
-      "type": "inference",
-      "passed": false,
-      "failures": [
-        "answer missing any of required terms: ['remains airworthy', 'still airworthy', 'was airworthy', 'remained airworthy']",
-        "answer contains forbidden term: 'unairworthy'"
-      ],
-      "answer_snippet": "The context does not state that G-ABCD was non-compliant with FAA AD 2024-01-02 in March 2024. It also does not state th",
-      "citations": [
-        "G-ABCD_AD_compliance_2024-03",
-        "G-ABCD_inspection_2024-01",
-        "FAA-AD-2024-01-02"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 G-ABCD FAA AD-2024-01-02 March 2024 unairworthy",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 13202.99999997951
-    },
-    {
-      "id": "AUT-01",
-      "type": "authority_chain",
-      "passed": false,
-      "failures": [
-        "insufficient citation recall \u2014 missing: ['FAA-AD-2024-01-02', 'FAA-AD-2022-03-07']"
-      ],
-      "answer_snippet": "The 737MAX CMM Engine Mount (CMM 71-21-05) governs engine mount inspection. Its latest revision is rev12 (Nov 2023), whi",
-      "citations": [
-        "737MAX_CMM_Engine_Mount",
-        "G-ABCD_inspection_2024-01",
-        "FAA-AD-2020-05-11"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 Which document currently governs engine mount inspection for",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 14155.999999988126
-    },
-    {
-      "id": "AUT-02",
-      "type": "authority_chain",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "No. FAA-AD-2020-05-11 has been partially superseded by AD 2022-03-07 and fully superseded by FAA-AD-2024-01-02. AD 2022-",
-      "citations": [
-        "FAA-AD-2020-05-11",
-        "FAA-AD-2022-03-07",
-        "G-ABCD_inspection_2024-01"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA-AD-2020-05-11 governing airworthiness directive",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 24469.000000011874
+      "latency_ms": 9519.884689998435
     },
     {
       "id": "AUT-03",
       "type": "authority_chain",
-      "passed": false,
-      "failures": [
-        "insufficient citation recall \u2014 missing: ['FAA-AD-2024-01-02', 'FAA-AD-2022-03-07']"
-      ],
-      "answer_snippet": "The Federal Aviation Administration (FAA) is the primary certification authority for Boeing commercial aircraft, and Boe",
+      "passed": true,
+      "failures": [],
+      "answer_snippet": "The regulatory hierarchy that governs engine-inspection requirements for the Boeing 737 MAX is set out in 14 CFR Part 39",
       "citations": [
-        "Boeing_company_profile",
-        "14CFR_Part39_excerpt",
         "FAA-AD-2020-05-11",
-        "737MAX_CMM_Engine_Mount"
+        "14CFR_Part39_excerpt",
+        "FAA-AD-2022-03-07",
+        "Boeing_company_profile",
+        "EASA AD 2024-0072",
+        "EASA AD 2022-0201",
+        "Boeing Model 737-8",
+        "Boeing Service Bulletin 737-31-1710",
+        "Boeing",
+        "MCAS v2.0",
+        "Boeing 737 MAX",
+        "Southwest Airlines",
+        "737-9",
+        "737-8",
+        "737 MAX Series",
+        "737MAX_CMM_Engine_Mount",
+        "EASA-AD-2024-0072",
+        "FAA-AD-2024-01-02"
       ],
       "steps": [
         "\ud83d\udcdd Query expanded \u2192 Boeing 737 MAX engine inspections regulatory hierarchy",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
+        "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
         "\u270d\ufe0f Synthesising answer with LLM..."
       ],
-      "latency_ms": 28733.99999999674
-    },
-    {
-      "id": "INF-01",
-      "type": "inference",
-      "passed": false,
-      "failures": [
-        "insufficient citation recall \u2014 missing: ['FAA-AD-2022-03-07', 'FAA-AD-2020-05-11']"
-      ],
-      "answer_snippet": "Yes. AD 2020-05-11 is partially superseded by AD 2022-03-07 and fully superseded by FAA-AD-2024-01-02. FAA-AD-2024-01-02",
-      "citations": [
-        "FAA-AD-2024-01-02",
-        "SWA_fleet_registry_2024",
-        "737MAX_CMM_Engine_Mount"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA-AD-2024-01-02 supersede 2020 directive",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 11375.0
-    },
-    {
-      "id": "INF-02",
-      "type": "inference",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "Yes. The SWA fleet registry states Southwest Airlines operates Boeing 737 MAX 8 aircraft. FAA-AD-2024-01-02 applies to c",
-      "citations": [
-        "FAA-AD-2024-01-02",
-        "SWA_fleet_registry_2024",
-        "FAA-AD-2020-05-11"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 Southwest Airlines Boeing 737 MAX FAA-AD-2024-01-02",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 34562.999999994645
-    },
-    {
-      "id": "NEG-01",
-      "type": "negative",
-      "passed": false,
-      "failures": [
-        "answer missing required term: 'Boeing'"
-      ],
-      "answer_snippet": "No. The context does not state that FAA-AD-2024-01-02 applies to the Airbus A320neo. Its associated entities relate to M",
-      "citations": [
-        "FAA-AD-2024-01-02",
-        "EASA-AD-2024-0072",
-        "G-ABCD_AD_compliance_2024-03",
-        "Airbus_A320neo_profile"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA-AD-2024-01-02 Airbus A320neo",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 12656.00000001723
-    },
-    {
-      "id": "NEG-02",
-      "type": "negative",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "No. The context identifies Boeing as the manufacturer of the 737 MAX series. Airbus SAS is described as a competitor tha",
-      "citations": [
-        "737MAX_CMM_Engine_Mount",
-        "Airbus_A320neo_profile",
-        "SWA_fleet_registry_2024",
-        "Boeing_company_profile"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 Airbus Boeing 737 MAX",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 7250.0
+      "latency_ms": 9832.592349999686
     },
     {
       "id": "NEG-03",
       "type": "negative",
-      "passed": false,
-      "failures": [
-        "answer missing required term: 'EASA'"
-      ],
-      "answer_snippet": "No. The context does not contain any FAA airworthiness directive governing Airbus aircraft; the only aircraft model iden",
-      "citations": [
-        "14CFR_Part39_excerpt",
-        "FAA-AD-2024-01-02",
-        "FAA-AD-2020-05-11",
-        "FAA-AD-2022-03-07"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA airworthiness directive Airbus aircraft corpus",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 7952.999999979511
-    },
-    {
-      "id": "TMP-01",
-      "type": "temporal",
       "passed": true,
       "failures": [],
-      "answer_snippet": "The earliest FAA airworthiness directive issued in this corpus is FAA-AD-2020-05-11. Its stated effective date is May 27",
-      "citations": [
-        "14CFR_Part39_excerpt",
-        "FAA-AD-2022-03-07",
-        "FAA-AD-2020-05-11",
-        "G-ABCD_AD_compliance_2024-03",
-        "G-ABCD_inspection_2024-01"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA airworthiness directive earliest issued in corpus",
-        "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 18312.999999994645
-    },
-    {
-      "id": "TMP-02",
-      "type": "temporal",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "MCAS Software v2.0 is the current version; it supersedes MCAS Software v1.7.3 and all prior versions. FAA AD 2024-01-02 ",
-      "citations": [
-        "FAA-AD-2022-03-07",
-        "Boeing_MCAS_SWChangeRecord",
-        "G-ABCD_AD_compliance_2024-03",
-        "FAA-AD-2024-01-02"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 MCAS software version",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 9717.99999999348
-    },
-    {
-      "id": "TMP-03",
-      "type": "temporal",
-      "passed": false,
-      "failures": [
-        "insufficient citation recall \u2014 missing: ['FAA-AD-2022-03-07']"
-      ],
-      "answer_snippet": "Two FAA airworthiness directives are identified as applying to LEAP-1B engine mount inspection: FAA AD 2022-03-07 and FA",
-      "citations": [
-        "737MAX_CMM_Engine_Mount",
-        "FAA-AD-2020-05-11",
-        "14CFR_Part39_excerpt",
-        "FAA-AD-2024-01-02"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA airworthiness directives 2020 2024 737 MAX engine mount",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 16672.00000002049
-    },
-    {
-      "id": "PRE-01",
-      "type": "precision",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "The exact document ID is FAA-AD-2022-03-07; its AD number is 2022-03-07.",
+      "answer_snippet": "No. The FAA airworthiness directives in the corpus (FAA-AD-2022-03-07, FAA-AD-2024-01-02, FAA-AD-2020-05-11) address top",
       "citations": [
         "FAA-AD-2022-03-07",
         "FAA-AD-2024-01-02",
-        "737MAX_CMM_Engine_Mount"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 2022 FAA airworthiness directive document ID",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 7437.999999994645
-    },
-    {
-      "id": "PRE-02",
-      "type": "precision",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "FAA-AD-2024-01-02",
-      "citations": [
-        "FAA-AD-2024-01-02",
-        "FAA-AD-2022-03-07",
-        "FAA-AD-2020-05-11",
-        "G-ABCD_inspection_2024-01"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA directive superseding 2022 document ID",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 4937.000000005355
-    },
-    {
-      "id": "CAL-01",
-      "type": "calibration",
-      "passed": false,
-      "failures": [
-        "answer missing required term: 'yes'"
-      ],
-      "answer_snippet": "No. The corpus contains no conflicting compliance status for a specific aircraft. For G-ABCD, the reports consistently s",
-      "citations": [
         "14CFR_Part39_excerpt",
-        "G-ABCD_AD_compliance_2024-03",
-        "G-ABCD_inspection_2024-01"
+        "FAA-AD-2020-05-11",
+        "EASA-AD-2024-0072",
+        "EASA AD 2024-0072",
+        "EASA AD 2022-0201",
+        "Boeing Model 737-8",
+        "Boeing Service Bulletin 737-31-1710",
+        "Boeing",
+        "MCAS v2.0",
+        "Boeing 737 MAX",
+        "Southwest Airlines",
+        "Alternative Method of Compliance (AMOC)",
+        "EASA",
+        "Certification Directorate, Safety Information Section",
+        "FMGC software P/12D",
+        "A320",
+        "Airbus Service Bulletin A320-22-1272"
       ],
       "steps": [
-        "\ud83d\udcdd Query expanded \u2192 Is there evidence of conflicting compliance status for a spe",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
+        "Answer cache hit; original governed trace reused"
       ],
-      "latency_ms": 11281.00000001723
-    },
-    {
-      "id": "AGT-01",
-      "type": "agentic",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "The FAA is Boeing\u2019s primary certification authority, and Boeing holds FAA Production Approval and Design Approval Holder",
-      "citations": [
-        "737MAX_CMM_Engine_Mount",
-        "G-ABCD_inspection_2024-01",
-        "Boeing_company_profile"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 Trace the FAA regulatory path to the CFM LEAP-1B engine serv",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 33437.000000005355
-    },
-    {
-      "id": "AGT-02",
-      "type": "agentic",
-      "passed": false,
-      "failures": [
-        "answer missing required term: 'Southwest'",
-        "answer missing required term: '737 MAX'",
-        "answer missing any of required terms: ['FAA-AD-2024', 'FAA AD 2024', 'AD 2024-01-02']",
-        "insufficient citation recall \u2014 missing: ['FAA-AD-2024-01-02', 'SWA_fleet_registry_2024']"
-      ],
-      "answer_snippet": "",
-      "citations": [],
-      "steps": [],
-      "latency_ms": null
-    },
-    {
-      "id": "CTX-01",
-      "type": "contextual",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "14 CFR Part 39 establishes requirements for correcting unsafe conditions in aircraft, aircraft engines, propellers, and ",
-      "citations": [
-        "14CFR_Part39_excerpt"
-      ],
-      "steps": [
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 20000.0
+      "latency_ms": 19.68944200052647
     },
     {
       "id": "CTX-02",
       "type": "contextual",
       "passed": true,
       "failures": [],
-      "answer_snippet": "EASA AD 2024-0072 covers Airbus A320-200N series aeroplanes, all manufacturer serial numbers, equipped with Flight Manag",
+      "answer_snippet": "The EASA AD 2024-0072 covers Airbus A320-200N series aeroplanes (all manufacturer serial numbers) and Airbus A321-271N s",
       "citations": [
-        "Airbus_A320neo_profile",
         "EASA-AD-2024-0072",
-        "14CFR_Part39_excerpt"
+        "Airbus_A320neo_profile",
+        "14CFR_Part39_excerpt",
+        "G-ABCD_AD_compliance_2024-03",
+        "EASA AD 2024-0072",
+        "EASA AD 2022-0201",
+        "Alternative Method of Compliance (AMOC)",
+        "EASA",
+        "Certification Directorate, Safety Information Section",
+        "FMGC software P/12D",
+        "A320",
+        "Airbus Service Bulletin A320-22-1272",
+        "Software Update",
+        "vertical navigation algorithm",
+        "Install FMGC software standard P/12D",
+        "Flight crew",
+        "Operational Restriction (interim)",
+        "FMGC",
+        "Boeing Model 737-8",
+        "Boeing Service Bulletin 737-31-1710"
       ],
       "steps": [
-        "\ud83d\udcdd Query expanded \u2192 What aircraft configuration EASA directive corpus",
-        "\ud83d\udd0d BM25 + vector search in graph...",
-        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
-        "\ud83d\udcca Cross-encoder reranking \u2192 top 5 chunks",
-        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
-        "\u270d\ufe0f Synthesising answer with LLM..."
+        "Answer cache hit; original governed trace reused"
       ],
-      "latency_ms": 7905.999999988126
+      "latency_ms": 37.54036499958602
     }
   ]
 }

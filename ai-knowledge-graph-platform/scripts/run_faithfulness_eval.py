@@ -18,14 +18,18 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 # Without this, retrieval works but every RAGAS judge call errors out and a
 # 15-minute run produces a results file full of errors instead of scores.
 try:
-    import ragas  # noqa: F401
-    import langchain_community  # noqa: F401
+    import datasets  # noqa: F401
 except ImportError as _exc:
     sys.exit(
         f"Missing eval dependency ({_exc.name}) — wrong Python interpreter?\n"
         f"  running : {sys.executable}\n"
         f"  expected: the project's Python 3.11 with requirements installed"
     )
+
+# Do not import ``ragas`` here.  ragas 0.4 imports the removed
+# ``langchain_community.chat_models.vertexai`` module at import time; the
+# compatibility stub for that optional integration is deliberately installed
+# by RagasEvaluator immediately before metrics are loaded.
 
 _REFUSAL = (
     "does not contain",

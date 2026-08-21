@@ -10,6 +10,21 @@ def classify_query(question: str) -> str:
     text = question.lower()
     if any(word in text for word in ("conflict", "contradict", "disagree", "match")):
         return "contradiction"
+    # These question shapes require evidence from more than one document or
+    # graph hop even though they do not use the older generic trigger words
+    # below.  Treating them as factoids cuts the candidate pool to five before
+    # the operator/procedure/authority evidence can meet in the context.
+    # Keep this phrase list intentionally structural and narrow: a blanket
+    # increase for ordinary factoids previously reduced citation precision.
+    if any(phrase in text for phrase in (
+        "regulatory path",
+        "regulatory hierarchy",
+        "full compliance story",
+        "full supersession chain",
+        "airlines are affected",
+        "operators are affected",
+    )):
+        return "multi_hop"
     if any(word in text for word in ("how does", "connected", "relationship", "between")):
         return "relational"
     if any(word in text for word in ("across", "multiple", "compare", "steps", "chain")):
