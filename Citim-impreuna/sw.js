@@ -1,4 +1,4 @@
-const CACHE = "citim-impreuna-v60";
+const CACHE = "citim-impreuna-v61";
 const ASSETS = [
   ".",
   "index.html",
@@ -45,5 +45,15 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() => caches.match(event.request))
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const existing = windows.find((client) => client.url.startsWith(self.location.origin));
+      return existing ? existing.focus() : clients.openWindow("./");
+    })
   );
 });

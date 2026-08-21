@@ -21,6 +21,7 @@
     <div class="header-sub">
       <button class="user-chip" id="user-chip" title="Contul tău">👤 <span id="user-name">…</span></button>
       <button class="icon-btn" id="logout-btn" title="Ieși din cont" hidden>↩</button>
+      <button class="icon-btn reminder-btn" id="reminder-btn" title="Setează un memento zilnic de citire">⏰ <span id="reminder-label">15:00</span></button>
       <button class="icon-btn" id="stats-btn" title="Statistici">📊 Statistici</button>
     </div>
   </header>
@@ -86,6 +87,26 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="reminder-modal" hidden>
+    <section class="modal reminder-modal" role="dialog" aria-modal="true" aria-labelledby="reminder-title">
+      <h2 id="reminder-title">⏰ Memento de citire</h2>
+      <p class="reminder-copy">Primește un îndemn zilnic să citești capitolul următor.</p>
+      <label class="reminder-toggle">
+        <input type="checkbox" id="reminder-enabled" />
+        <span>Activează mementoul zilnic</span>
+      </label>
+      <label class="reminder-time" for="reminder-time">
+        <span>Ora</span>
+        <input id="reminder-time" type="time" value="15:00" />
+      </label>
+      <p class="reminder-note" id="reminder-note"></p>
+      <div class="reminder-actions">
+        <button class="btn secondary" id="reminder-close-btn">Închide</button>
+        <button class="btn primary" id="reminder-save-btn">Salvează</button>
+      </div>
+    </section>
+  </div>
+
   <canvas id="confetti"></canvas>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -96,6 +117,6 @@
   <script src="js/verses-2samuel.js?v=44"></script>
   <script src="js/verses.js?v=44"></script>
   <script src="js/tracker.js?v=49"></script>
-  <script src="js/app.js?v=53"></script>
+  <script src="js/app.js?v=54"></script>
 </body>
 </html>

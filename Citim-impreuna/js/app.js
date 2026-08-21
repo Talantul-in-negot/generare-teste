@@ -9,6 +9,10 @@ const STORAGE_PROGRESS = "ci_progress";
 const STORAGE_USER = "ci_user";
 const STORAGE_CYCLE = "ci_cycle";
 const STORAGE_PAGE_MISTAKES = "ci_page_mistakes";
+const STORAGE_REMINDER_ENABLED = "ci_daily_reminder_enabled";
+const STORAGE_REMINDER_TIME = "ci_daily_reminder_time";
+const STORAGE_REMINDER_LAST_SENT = "ci_daily_reminder_last_sent";
+const DEFAULT_REMINDER_TIME = "15:00";
 
 // La fiecare prag de 1000 de puncte, un verset despre Cuvânt apare pe ecran.
 // Se arată în ordine (pragul N → versetul N), iar când lista se termină se
@@ -56,6 +60,8 @@ const el = {
   userName: document.getElementById("user-name"),
   logoutBtn: document.getElementById("logout-btn"),
   statsBtn: document.getElementById("stats-btn"),
+  reminderBtn: document.getElementById("reminder-btn"),
+  reminderLabel: document.getElementById("reminder-label"),
   bookTitle: document.getElementById("book-title"),
   // auth modal
   authModal: document.getElementById("auth-modal"),
@@ -66,6 +72,13 @@ const el = {
   loginError: document.getElementById("login-error"),
   loginBtn: document.getElementById("login-btn"),
   authLogoutBtn: document.getElementById("auth-logout-btn"),
+  // reminder modal
+  reminderModal: document.getElementById("reminder-modal"),
+  reminderEnabled: document.getElementById("reminder-enabled"),
+  reminderTime: document.getElementById("reminder-time"),
+  reminderNote: document.getElementById("reminder-note"),
+  reminderSaveBtn: document.getElementById("reminder-save-btn"),
+  reminderCloseBtn: document.getElementById("reminder-close-btn"),
 };
 
 let score = parseInt(localStorage.getItem(STORAGE_SCORE), 10) || 0;
@@ -76,6 +89,115 @@ let page = parseInt(localStorage.getItem(STORAGE_PROGRESS), 10) || 0;
 let cycle = parseInt(localStorage.getItem(STORAGE_CYCLE), 10) || 0;
 let userName = "";
 let hadMistake = false;
+let reminderTimer = null;
+let serviceWorkerRegistration = null;
+
+function reminderTime() {
+  return localStorage.getItem(STORAGE_REMINDER_TIME) || DEFAULT_REMINDER_TIME;
+}
+
+function reminderIsEnabled() {
+  return localStorage.getItem(STORAGE_REMINDER_ENABLED) === "true";
+}
+
+function dateKey(date = new Date()) {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 10);
+}
+
+function updateReminderButton() {
+  const enabled = reminderIsEnabled();
+  const time = reminderTime();
+  el.reminderLabel.textContent = enabled ? time : "Memento";
+  el.reminderBtn.classList.toggle("is-active", enabled);
+  el.reminderBtn.title = enabled
+    ? `Memento zilnic activ la ${time}`
+    : "Setează un memento zilnic de citire";
+}
+
+async function showReminderNotification() {
+  const title = "E timpul pentru citirea de azi 📖";
+  const options = {
+    body: "Deschide Citim împreună și citește următorul capitol.",
+    icon: "icons/icon.svg",
+    badge: "icons/icon.svg",
+    tag: "citim-impreuna-daily-reminder",
+    renotify: true,
+  };
+
+  try {
+    const registration = serviceWorkerRegistration || await navigator.serviceWorker?.ready;
+    if (registration) {
+      await registration.showNotification(title, options);
+      return;
+    }
+  } catch {
+    // Folosim API-ul clasic ca rezervă pentru browserele fără SW disponibil.
+  }
+  new Notification(title, options);
+}
+
+function scheduleDailyReminder() {
+  if (reminderTimer) {
+    clearTimeout(reminderTimer);
+    reminderTimer = null;
+  }
+  if (!reminderIsEnabled() || !("Notification" in window) || Notification.permission !== "granted") return;
+
+  const now = new Date();
+  const [hours, minutes] = reminderTime().split(":").map(Number);
+  const target = new Date(now);
+  target.setHours(hours, minutes, 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 1);
+  const delay = Math.max(0, target.getTime() - now.getTime());
+  reminderTimer = setTimeout(async () => {
+    const sentToday = localStorage.getItem(STORAGE_REMINDER_LAST_SENT) === dateKey();
+    if (reminderIsEnabled() && !sentToday && Notification.permission === "granted") {
+      await showReminderNotification();
+      localStorage.setItem(STORAGE_REMINDER_LAST_SENT, dateKey());
+    }
+    scheduleDailyReminder();
+  }, delay);
+}
+
+function openReminderModal() {
+  el.reminderEnabled.checked = reminderIsEnabled();
+  el.reminderTime.value = reminderTime();
+  const supported = "Notification" in window;
+  el.reminderNote.textContent = !supported
+    ? "Acest browser nu acceptă notificări."
+    : Notification.permission === "denied"
+      ? "Notificările sunt blocate în browser. Activează-le din setările site-ului pentru a folosi mementoul."
+      : "Vei acorda permisiunea de notificări când activezi mementoul.";
+  el.reminderModal.hidden = false;
+}
+
+function closeReminderModal() {
+  el.reminderModal.hidden = true;
+}
+
+async function saveReminder() {
+  const enabled = el.reminderEnabled.checked;
+  const time = /^\d{2}:\d{2}$/.test(el.reminderTime.value) ? el.reminderTime.value : DEFAULT_REMINDER_TIME;
+  if (enabled) {
+    if (!("Notification" in window)) {
+      el.reminderNote.textContent = "Acest browser nu acceptă notificări.";
+      return;
+    }
+    const permission = Notification.permission === "default"
+      ? await Notification.requestPermission()
+      : Notification.permission;
+    if (permission !== "granted") {
+      el.reminderNote.textContent = "Permisiunea pentru notificări nu a fost acordată.";
+      return;
+    }
+  }
+  localStorage.setItem(STORAGE_REMINDER_ENABLED, String(enabled));
+  localStorage.setItem(STORAGE_REMINDER_TIME, time);
+  updateReminderButton();
+  scheduleDailyReminder();
+  closeReminderModal();
+}
 
 function pageMistakeKey(cycleNumber = cycle, pageNumber = page) {
   return `${cycleNumber}:${pageNumber}`;
@@ -1123,6 +1245,10 @@ function launchCelebration(kind) {
 el.checkBtn.addEventListener("click", checkAnswers);
 el.nextBtn.addEventListener("click", nextPage);
 el.statsBtn.addEventListener("click", renderStats);
+el.reminderBtn.addEventListener("click", openReminderModal);
+el.reminderSaveBtn.addEventListener("click", saveReminder);
+el.reminderCloseBtn.addEventListener("click", closeReminderModal);
+el.reminderModal.addEventListener("click", (e) => { if (e.target === el.reminderModal) closeReminderModal(); });
 
 // auth modal events (optional chaining = rezistență la SW care servește HTML vechi)
 el.userChip.addEventListener("click", showAuthModal);
@@ -1133,6 +1259,8 @@ el.loginPassword?.addEventListener("keydown", (e) => { if (e.key === "Enter") ha
 el.authModal?.addEventListener("click", (e) => { if (e.target === el.authModal && Auth.isLoggedIn()) hideAuthModal(); });
 
 el.score.textContent = score;
+updateReminderButton();
+scheduleDailyReminder();
 if (page >= totalPages) page = 0;
 renderPage();
 Tracker.flush();
@@ -1177,6 +1305,7 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker
     .register("sw.js")
     .then((reg) => {
+      serviceWorkerRegistration = reg;
       reg.update();
       // verifică periodic dacă a apărut o versiune nouă (aplicația poate sta
       // deschisă zile întregi ca PWA instalat)
