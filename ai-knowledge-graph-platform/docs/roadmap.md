@@ -655,6 +655,23 @@ production value, not trend visibility.
 4. Broaden the parent monorepo CI lint command to `ruff check .`; the current
    project tree passes, but the workflow still scans only selected directories.
 
+## Recently completed
+
+- **Async rate limiting.** `api/limiter.py` was rebuilt on `limits.aio`;
+  slowapi is removed from the dependency set. Its Limiter is synchronous with
+  no async variant in 0.1.x, so every Redis-backed check blocked the event loop
+  — tolerable only while six low-rate endpoints were limited, and exactly wrong
+  at the load where limiting matters. Enforcement is now a FastAPI dependency
+  rather than a decorator, so endpoints no longer carry `request: Request`
+  purely for the limiter's benefit.
+- **Per-tenant quotas.** `graphrag/core/tenant_quota.py` adds a fixed-window
+  budget per tenant across two dimensions (requests, cost USD), gating
+  `/query` and `/ingest`. This closes a gap a rate limiter cannot: one tenant
+  running steadily just under the rate limit could consume an entire day of
+  shared LLM spend with every individual request looking well-behaved.
+  Ceilings default to unlimited, so the feature throttles nobody until a
+  deployment chooses numbers.
+
 ## Recommended
 
 1. **Decouple the answer prompt from the aerospace corpus.** `_ANSWER_PROMPT`

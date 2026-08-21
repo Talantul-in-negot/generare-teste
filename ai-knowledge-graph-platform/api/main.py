@@ -8,8 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth.dependencies import require_scope
 from api.auth.default_auth import RequireAuthMiddleware
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 
 from api.limiter import limiter
@@ -108,8 +106,11 @@ async def correlation_middleware(request, call_next):
     return response
 
 # ── Rate limiting ─────────────────────────────────────────────────────────────
+# The limiter is a FastAPI dependency (see api/limiter.py), so there is no
+# app-level exception handler to register: RateLimitExceeded is an HTTPException
+# subclass and FastAPI's own handler already renders it with its Retry-After and
+# X-RateLimit-Limit headers intact.
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ── Prometheus metrics ─────────────────────────────────────────────────────────
 # Exposes /metrics in Prometheus text format.  Requires:

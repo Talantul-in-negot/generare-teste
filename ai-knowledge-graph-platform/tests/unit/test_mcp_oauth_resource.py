@@ -193,7 +193,8 @@ class TestTokenEndpointResourceParameter:
         from api.routes import auth as auth_routes
 
         app = FastAPI()
-        app.state.limiter = auth_routes.limiter
+        # No app.state.limiter: the limiter is a FastAPI dependency now, not a
+        # slowapi extension needing app-level registration (see api/limiter.py).
         app.include_router(auth_routes.router, prefix="/auth")
         return TestClient(app)
 

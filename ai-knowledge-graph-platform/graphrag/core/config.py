@@ -292,6 +292,11 @@ class Settings(BaseSettings):
     def retrieval(self) -> dict:
         return self._yaml.get("retrieval", {})
 
+    @property
+    def quotas(self) -> dict:
+        """Per-tenant consumption ceilings; see graphrag/core/tenant_quota.py."""
+        return self._yaml.get("quotas", {})
+
     def retrieval_for(self, tenant: str = "default") -> dict:
         """Retrieval config with this tenant's overrides merged over the global
         defaults (see ``resolve_tenant_config``). Different corpora need

@@ -27,7 +27,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from api.auth.dependencies import get_current_user, get_tenant, require_scope
-from api.limiter import AUTH_LIMIT, limiter
+from api.limiter import AUTH_LIMIT, rate_limit
 from graphrag.core.config import get_settings, is_dev_env
 from graphrag.core.redis_support import (
     redis_error_types as _redis_error_types,
@@ -135,8 +135,8 @@ def _client_set(client_id: str, data: dict) -> None:
 # ── Dev login (no credentials — development only) ──────────────────────────────
 
 @router.get("/dev-login", summary="⚡ Dev login — issues cookie without Google (dev only)",
+            dependencies=[Depends(rate_limit(AUTH_LIMIT))],
             include_in_schema=True)
-@limiter.limit(AUTH_LIMIT)
 async def dev_login(request: Request, response: Response, next: str = "/docs"):
     if not is_dev_env(get_settings().env):
         raise HTTPException(status_code=403, detail="Only available in development")
@@ -171,9 +171,9 @@ async def dev_login(request: Request, response: Response, next: str = "/docs"):
 
 
 @router.post("/dev-token",
+             dependencies=[Depends(rate_limit(AUTH_LIMIT))],
              summary="⚡ Dev token — returns Bearer JWT as JSON (dev + CLI only)",
              include_in_schema=True)
-@limiter.limit(AUTH_LIMIT)
 async def dev_token(request: Request, tenant: str | None = None):
     """Returns a Bearer token as JSON for CLI / PowerShell use in development.
 
@@ -330,8 +330,8 @@ class M2MRegisterResponse(BaseModel):
     "/clients",
     response_model=M2MRegisterResponse,
     summary="Register an M2M client (requires an authenticated write-scoped session)",
+    dependencies=[Depends(rate_limit(AUTH_LIMIT))],
 )
-@limiter.limit(AUTH_LIMIT)
 async def register_client(
     request: Request,
     req: M2MRegisterRequest,
@@ -410,8 +410,8 @@ class TokenResponse(BaseModel):
     "/token",
     response_model=TokenResponse,
     summary="Issue Bearer JWT for M2M access (client_credentials)",
+    dependencies=[Depends(rate_limit(AUTH_LIMIT))],
 )
-@limiter.limit(AUTH_LIMIT)
 async def token(request: Request, req: TokenRequest):
     if req.grant_type != "client_credentials":
         raise HTTPException(
@@ -597,8 +597,8 @@ class TokenRevokeResponse(BaseModel):
     "/revoke",
     response_model=TokenRevokeResponse,
     summary="Revoke an access token or every token for a subject (admin only)",
+    dependencies=[Depends(rate_limit(AUTH_LIMIT))],
 )
-@limiter.limit(AUTH_LIMIT)
 async def revoke_token(
     request: Request,
     req: TokenRevokeRequest,

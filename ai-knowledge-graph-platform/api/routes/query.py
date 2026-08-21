@@ -13,7 +13,8 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from pydantic import BaseModel, Field
 
 from api.auth.dependencies import get_tenant, require_scope
-from api.limiter import QUERY_LIMIT, limiter
+from api.quota import enforce_tenant_quota
+from api.limiter import QUERY_LIMIT, rate_limit
 from graphrag.messaging.publishers import publish_query
 from graphrag.retrieval.result_store import ResultStoreUnavailable, get_result_store
 from graphrag.retrieval.session_store import SessionContextUnavailable, get_session_store
@@ -42,8 +43,19 @@ class QueryResponse(BaseModel):
     status: str = "queued"
 
 
-@router.post("", response_model=QueryResponse, dependencies=[Depends(require_scope("read"))])
-@limiter.limit(QUERY_LIMIT)
+@router.post(
+    "",
+    response_model=QueryResponse,
+    # Order matters: scope, then burst protection, then budget. The
+    # quota check is the most expensive of the three (it may hit
+    # Redis), so it runs only for requests already known to be
+    # authorized and within their rate.
+    dependencies=[
+        Depends(require_scope("read")),
+        Depends(rate_limit(QUERY_LIMIT)),
+        Depends(enforce_tenant_quota),
+    ],
+)
 async def submit_query(request: Request, body: QueryRequest, tenant: str = Depends(get_tenant)):
     """Submit a question to the async query pipeline.
 

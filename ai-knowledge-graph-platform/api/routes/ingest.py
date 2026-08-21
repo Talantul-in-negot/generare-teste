@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from api.auth.dependencies import get_tenant, require_scope
-from api.limiter import INGEST_LIMIT, limiter
+from api.quota import enforce_tenant_quota
+from api.limiter import INGEST_LIMIT, rate_limit
 from graphrag.core.models import Document
 from graphrag.messaging.publishers import publish_document
 
@@ -29,8 +30,19 @@ class IngestResponse(BaseModel):
     status: str = "queued"
 
 
-@router.post("", response_model=IngestResponse, dependencies=[Depends(require_scope("write"))])
-@limiter.limit(INGEST_LIMIT)
+@router.post(
+    "",
+    response_model=IngestResponse,
+    # Order matters: scope, then burst protection, then budget. The
+    # quota check is the most expensive of the three (it may hit
+    # Redis), so it runs only for requests already known to be
+    # authorized and within their rate.
+    dependencies=[
+        Depends(require_scope("write")),
+        Depends(rate_limit(INGEST_LIMIT)),
+        Depends(enforce_tenant_quota),
+    ],
+)
 async def ingest_document(request: Request, body: IngestRequest, tenant: str = Depends(get_tenant)):
     """Publish a document to the ingestion queue.
 

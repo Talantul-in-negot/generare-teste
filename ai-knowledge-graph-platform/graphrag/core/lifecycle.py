@@ -11,6 +11,7 @@ async def close_shared_resources() -> None:
     """Close initialized singletons and reset them for clean process reuse."""
     from graphrag.graph.neo4j_client import close_neo4j
     from graphrag.messaging.rabbitmq_client import close_rabbitmq
+    from graphrag.core.tenant_quota import close_quota_store
     from graphrag.core.token_revocation import close_revocation_store
     from graphrag.retrieval.query_cache import close_query_cache
     from graphrag.retrieval.result_store import close_result_store
@@ -27,6 +28,7 @@ async def close_shared_resources() -> None:
         # out.
         ("query_cache", close_query_cache),
         ("token_revocation", close_revocation_store),
+        ("tenant_quota", close_quota_store),
     )
     for component, closer in closers:
         try:

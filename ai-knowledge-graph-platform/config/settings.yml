@@ -285,3 +285,20 @@ business_matrix:
       contradiction_rate: 0.20   # 20 % — more permissive for experimental tenant
       orphan_rate: 0.40
       low_confidence_rate: 0.60
+
+# ── Per-tenant consumption quotas ─────────────────────────────────────────────
+# Distinct from rate limiting (api/limiter.py): a rate limit protects the system
+# from a burst and is per-caller over minutes; a quota protects the budget from
+# sustained use and is per-tenant over a day. Without quotas one tenant running
+# steadily just under the rate limit can consume an entire day of shared LLM
+# spend while every individual request looks well-behaved.
+#
+# 0 means unlimited on that dimension, so this block throttles nobody until real
+# ceilings are chosen. Set them per deployment against measured usage.
+quotas:
+  window_seconds: 86400          # fixed daily window; a budget is for a period
+  strict: false                  # true = deny when the quota store is unreachable
+  default:
+    max_requests: 0              # 0 = unlimited
+    max_cost_usd: 0              # 0 = unlimited
+  tenants: {}                    # e.g. aerospace: {max_requests: 50000, max_cost_usd: 25}
