@@ -33,7 +33,7 @@ def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
 
 def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
     selection = parse_selection(data["chapters"])
-    repo = BibleRepository("data/bible/bible.json")
+    repo = BibleRepository("data")
     base_seed = int(data["seed"]) if data.get("seed", "").strip() else secrets.randbelow(2**31)
     versions = max(1, min(10, int(data.get("versions", "1"))))
     contest = {"title": "TALANTUL ÎN NEGOȚ", "category": data.get("category", "6_7"), "edition": int(data.get("edition", "2026")), "stage": data.get("stage", "Faza pe biserică"), "date": data.get("date", "")}

@@ -48,7 +48,7 @@ def main() -> None:
     parser.add_argument("--chapters", required=True, help='Ex.: "1 Samuel 1,2"')
     parser.add_argument("--version", type=int, default=1)
     parser.add_argument("--config", default="config.yaml")
-    parser.add_argument("--corpus", default="data/bible/bible.json")
+    parser.add_argument("--corpus", default="data")
     parser.add_argument("--output", default="output")
     args = parser.parse_args()
     config = load_config(Path(args.config))
