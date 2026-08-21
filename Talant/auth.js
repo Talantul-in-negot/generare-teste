@@ -26,7 +26,10 @@ const Auth = (() => {
   }
 
   function displayName(user) {
-    return normalizeUsername(user?.user_metadata?.username || (user?.email || '').replace(DOMAIN, '')) || null;
+    const name = normalizeUsername(user?.user_metadata?.username || (user?.email || '').replace(DOMAIN, ''));
+    // Afișăm consecvent numele cu inițială mare, indiferent cum a fost creat
+    // contul în formular sau direct în Supabase.
+    return name ? name.slice(0, 1).toLocaleUpperCase('ro-RO') + name.slice(1) : null;
   }
 
   function userFriendlyError(message) {

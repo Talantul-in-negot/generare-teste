@@ -923,7 +923,7 @@ function choose(idx){
   if(answered)return; answered=true;
   document.querySelectorAll('.answer-btn').forEach(b=>b.disabled=true);
   const fb=document.getElementById('feedback');
-  if(idx===q.correct){score++;document.getElementById(`ans-${idx}`).classList.add('correct');fb.className='feedback correct-fb show';fb.innerHTML=`✅ <strong>Corect!</strong> ${escapeHtml(q.feedback)}`;}
+  if(idx===q.correct){score++;document.getElementById(`ans-${idx}`).classList.add('correct');fb.className='feedback correct-fb show';fb.innerHTML=`✅ <strong>Corect! +1 pct</strong> ${escapeHtml(q.feedback)}`;}
   else{
     document.getElementById(`ans-${idx}`).classList.add('wrong');
     document.getElementById(`ans-${q.correct}`).classList.add('correct');
@@ -950,7 +950,7 @@ function confirmAnswer(){
     score++;
     selected.forEach(i=>document.getElementById(`ans-${i}`).classList.add('correct'));
     fb.className='feedback correct-fb show';
-    fb.innerHTML=`✅ <strong>Corect!</strong> ${escapeHtml(q.feedback)}`;
+    fb.innerHTML=`✅ <strong>Corect! +1 pct</strong> ${escapeHtml(q.feedback)}`;
   } else {
     selected.forEach(i=>document.getElementById(`ans-${i}`).classList.add('wrong'));
     correctArr.forEach(i=>document.getElementById(`ans-${i}`).classList.add('correct'));
