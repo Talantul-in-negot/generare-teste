@@ -28,7 +28,7 @@ const Auth = (() => {
 
   function userFriendlyError(message) {
     if (message?.includes('Invalid login') || message?.includes('invalid_credentials')) return 'Nume sau parolă incorectă.';
-    if (message?.includes('already registered') || message?.includes('already been registered')) return 'Acest nume de utilizator este deja folosit.';
+    if (message?.includes('already registered') || message?.includes('already been registered') || message?.includes('duplicate key') || message?.includes('users_email_partial_key')) return 'Acest nume de utilizator este deja folosit. Încearcă să intri în cont sau alege alt nume.';
     if (message?.includes('Password should')) return 'Parola trebuie să aibă cel puțin 6 caractere.';
     if (message?.includes('rate limit')) return 'Prea multe încercări. Încearcă mai târziu.';
     return message || 'Eroare necunoscută.';
