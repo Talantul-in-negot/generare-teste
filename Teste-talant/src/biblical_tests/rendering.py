@@ -46,6 +46,7 @@ def _styles() -> dict[str, ParagraphStyle]:
         "section": ParagraphStyle("section", parent=base["Normal"], fontName=bold, fontSize=10.5, leading=13, spaceBefore=8, spaceAfter=3),
         "red": ParagraphStyle("red", parent=base["Normal"], fontName=italic, textColor=RED, fontSize=9.7, leading=12, alignment=TA_RIGHT),
         "correct": ParagraphStyle("correct", parent=base["Normal"], fontName=italic, textColor=RED, fontSize=10.5, leading=13),
+        "matching_text": ParagraphStyle("matching_text", parent=base["Normal"], fontName=regular, fontSize=10.5, leading=13, leftIndent=5.25*mm, firstLineIndent=-5.25*mm),
     }
 
 
@@ -55,6 +56,11 @@ def _p(text: str, style: ParagraphStyle) -> Paragraph:
 
 def _reference(evidence: Evidence, styles: dict) -> Paragraph:
     return _p(evidence.reference, styles["red"])
+
+
+def _matching_description(letter: str, text: str, styles: dict) -> Paragraph:
+    escaped = html.escape(text).replace("\n", "<br/>")
+    return Paragraph(f"{letter}.&nbsp;&nbsp;&nbsp;„{escaped}”", styles["matching_text"])
 
 
 def _header(test: TestDefinition, styles: dict) -> list:
@@ -105,7 +111,7 @@ def _matching(q, answer_key: bool, styles: dict):
         answer = q.answers[str(i)] if answer_key else ""
         answer_style = styles["correct"] if answer_key else styles["body"]
         letter = chr(64 + i)
-        rows.append([_p(f"{i}.", styles["body"]), _p(answer, answer_style), _p(left, styles["body"]), _p(f"{letter}.    {q.right[letter]}", styles["body"]), _p(q.evidence[i-1].reference, styles["red"])])
+        rows.append([_p(f"{i}.", styles["body"]), _p(answer, answer_style), _p(left, styles["body"]), _matching_description(letter, q.right[letter], styles), _p(q.evidence[i-1].reference, styles["red"])])
     # The left column is reserved for names, while the right column carries
     # the longer verse-based descriptions to be associated with those names.
     table = Table(rows, colWidths=[7*mm, 8*mm, 32*mm, 101*mm, 42*mm])
