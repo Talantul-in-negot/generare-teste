@@ -292,6 +292,14 @@ class EvalResult(BaseModel):
     answer_relevancy: float = 0.0
     context_precision: float = 0.0
     context_recall: float = 0.0
+    judge_decision: str = "retrieve"
+    judge_confidence: float = 0.0
+    judge_accept_threshold: float = 0.9
+    judge_retrieve_threshold: float = 0.55
+    judge_target_fdr: float = 0.05
+    retrieval_used: bool = True
+    abstention_reason: str = ""
+    evaluation_source: str = "ragas"
     scored_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -310,6 +318,15 @@ class KPIEvent(BaseModel):
     cost_usd: float = 0.0
     retrieval_mode: str = "hybrid"
     model_version: str = ""
+    judge_decision: str = "retrieve"
+    judge_confidence: float = 0.0
+    judge_accept_threshold: float = 0.9
+    judge_retrieve_threshold: float = 0.55
+    judge_target_fdr: float = 0.05
+    retrieval_used: bool = True
+    abstention_reason: str = ""
+    evaluation_source: str = "ragas"
+    retrieval_cost_usd: float = 0.0
 
 
 # ── Message queue payloads ─────────────────────────────────────────────────────

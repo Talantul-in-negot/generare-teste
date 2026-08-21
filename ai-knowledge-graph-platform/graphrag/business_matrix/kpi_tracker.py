@@ -70,6 +70,15 @@ class KPITracker:
                 cost_usd=kpi.cost_usd,
                 retrieval_mode=kpi.retrieval_mode,
                 model_version=kpi.model_version,
+                judge_decision=kpi.judge_decision,
+                judge_confidence=kpi.judge_confidence,
+                judge_accept_threshold=kpi.judge_accept_threshold,
+                judge_retrieve_threshold=kpi.judge_retrieve_threshold,
+                judge_target_fdr=kpi.judge_target_fdr,
+                retrieval_used=str(kpi.retrieval_used).lower(),
+                abstention_reason=kpi.abstention_reason,
+                evaluation_source=kpi.evaluation_source,
+                retrieval_cost_usd=kpi.retrieval_cost_usd,
             )
             session.add(row)
             await session.commit()

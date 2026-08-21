@@ -61,6 +61,15 @@ class TimescaleKPIStore:
                 context_precision=event.context_precision, context_recall=event.context_recall,
                 cost_usd=event.cost_usd, retrieval_mode=event.retrieval_mode,
                 model_version=event.model_version,
+                judge_decision=event.judge_decision,
+                judge_confidence=event.judge_confidence,
+                judge_accept_threshold=event.judge_accept_threshold,
+                judge_retrieve_threshold=event.judge_retrieve_threshold,
+                judge_target_fdr=event.judge_target_fdr,
+                retrieval_used=str(event.retrieval_used).lower(),
+                abstention_reason=event.abstention_reason,
+                evaluation_source=event.evaluation_source,
+                retrieval_cost_usd=event.retrieval_cost_usd,
             ))
             await session.commit()
 

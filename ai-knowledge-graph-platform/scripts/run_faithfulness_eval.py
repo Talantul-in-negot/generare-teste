@@ -87,6 +87,18 @@ def _contract_result(question: dict, answer: str, citations: list[str]) -> tuple
 async def main(question_ids: set[str] | None = None):
     from graphrag.retrieval.hybrid_retriever import HybridRetriever
     from graphrag.evaluation.ragas_evaluator import RagasEvaluator
+    from graphrag.evaluation.judge_retrieve_abstain import (
+        CalibrationThresholds,
+        JudgeDecision,
+        finalize_after_retrieval,
+        judge_without_retrieval,
+    )
+    from graphrag.core.config import get_settings
+    from graphrag.core.models import EvalResult
+    from graphrag.evidence.claim_graph import (
+        build_claim_evidence_graph,
+        persist_claim_evidence_graph,
+    )
     from graphrag.graph.confidence_calibration import CalibrationService
     from graphrag.graph.neo4j_client import get_neo4j
 
@@ -102,11 +114,29 @@ async def main(question_ids: set[str] | None = None):
     neo4j = get_neo4j()
     cal_svc = CalibrationService(neo4j)
     tenant = "aerospace"
+    judge_cfg = get_settings().evaluation.get("judge_retrieve_abstain", {})
+    judge_thresholds = CalibrationThresholds(
+        accept_threshold=float(judge_cfg.get("accept_threshold", 0.90)),
+        retrieve_threshold=float(judge_cfg.get("retrieve_threshold", 0.55)),
+        target_fdr=float(judge_cfg.get("target_fdr", 0.05)),
+    )
+    retrieval_accept_threshold = float(judge_cfg.get("retrieval_accept_threshold", 0.80))
 
     scores, correct_abstentions, refusal_failures, errors, unscorable = [], 0, 0, 0, 0
+    judge_accepts, judge_retrievals, judge_abstentions = 0, 0, 0
     contract_passes = 0
     results = []
     cal_samples = 0
+
+    async def persist_claim_graph(result, evaluation: EvalResult) -> None:
+        """Keep the standalone evaluator on the same provenance path as workers."""
+        try:
+            graph = build_claim_evidence_graph(result, evaluation, tenant=tenant)
+            await persist_claim_evidence_graph(neo4j, graph)
+        except Exception as exc:
+            # Provenance is best effort for a batch report; the score remains
+            # useful when Neo4j is temporarily unavailable.
+            print(f"  Warning: claim graph persistence failed: {str(exc)[:160]}")
 
     print(f"\n{'='*70}")
     print(f"  GraphRAG Faithfulness Eval — {len(questions)} questions")
@@ -119,6 +149,12 @@ async def main(question_ids: set[str] | None = None):
             res = await retriever.retrieve_and_answer(question=q["question"], tenant="aerospace")
             elapsed = time.monotonic() - t0
             contract_ok, contract_failures = _contract_result(q, res.answer, res.citations)
+            initial_policy = judge_without_retrieval(
+                answer=res.answer, reference=q.get("ground_truth", ""),
+                thresholds=judge_thresholds,
+            )
+            if initial_policy.decision == JudgeDecision.RETRIEVE:
+                judge_retrievals += 1
             if contract_ok:
                 contract_passes += 1
 
@@ -136,7 +172,23 @@ async def main(question_ids: set[str] | None = None):
                                  "answer": res.answer, "citations": res.citations,
                                  "golden_contract_pass": contract_ok,
                                  "golden_contract_failures": contract_failures,
+                                 "judge_decision": initial_policy.decision.value,
+                                 "judge_confidence": initial_policy.confidence,
+                                 "retrieval_used": False,
+                                 "abstention_reason": initial_policy.abstention_reason,
                                  "latency": round(elapsed, 1)})
+                await persist_claim_graph(res, EvalResult(
+                    job_id=q["id"], query_id=res.query_id,
+                    judge_decision=initial_policy.decision.value,
+                    judge_confidence=initial_policy.confidence,
+                    judge_accept_threshold=judge_thresholds.accept_threshold,
+                    judge_retrieve_threshold=judge_thresholds.retrieve_threshold,
+                    judge_target_fdr=judge_thresholds.target_fdr,
+                    retrieval_used=False,
+                    abstention_reason=initial_policy.abstention_reason,
+                    evaluation_source="judge",
+                ))
+                judge_abstentions += 1
                 continue
 
             er, attempts, judge_notes = await _evaluate_with_retries(
@@ -155,6 +207,10 @@ async def main(question_ids: set[str] | None = None):
             # below as an `actual_outcome`, corrupting the Brier-score dataset.
             if isinstance(f, float) and math.isnan(f):
                 unscorable += 1
+                final_policy = finalize_after_retrieval(
+                    initial_policy, None, accept_threshold=retrieval_accept_threshold,
+                )
+                judge_abstentions += 1
                 print(f"  [{q['id']:8s}] UNSCORABLE after {attempts} attempt(s) — "
                       f"RAGAS could not produce finite faithfulness  ({elapsed:.1f}s)  "
                       f"{res.answer[:60]!r}")
@@ -162,21 +218,65 @@ async def main(question_ids: set[str] | None = None):
                                  "answer": res.answer, "citations": res.citations,
                                  "golden_contract_pass": contract_ok,
                                  "golden_contract_failures": contract_failures,
+                                 "judge_decision": final_policy.decision.value,
+                                 "judge_confidence": final_policy.confidence,
+                                 "judge_accept_threshold": retrieval_accept_threshold,
+                                 "judge_retrieve_threshold": judge_thresholds.retrieve_threshold,
+                                 "judge_target_fdr": judge_thresholds.target_fdr,
+                                 "retrieval_used": True,
+                                 "abstention_reason": final_policy.abstention_reason,
                                  "evaluation_attempts": attempts,
                                  "judge_notes": judge_notes,
                                  "latency": round(elapsed, 1)})
+                await persist_claim_graph(res, (er or EvalResult(
+                    job_id=q["id"], query_id=res.query_id,
+                )).model_copy(update={
+                    "judge_decision": final_policy.decision.value,
+                    "judge_confidence": final_policy.confidence,
+                    "judge_accept_threshold": retrieval_accept_threshold,
+                    "judge_retrieve_threshold": judge_thresholds.retrieve_threshold,
+                    "judge_target_fdr": judge_thresholds.target_fdr,
+                    "retrieval_used": True,
+                    "abstention_reason": final_policy.abstention_reason,
+                    "evaluation_source": "ragas",
+                }))
                 continue
 
             scores.append(f)
+            final_policy = finalize_after_retrieval(
+                initial_policy, f, accept_threshold=retrieval_accept_threshold,
+            )
+            if final_policy.decision == JudgeDecision.ACCEPT:
+                judge_accepts += 1
+            elif final_policy.decision == JudgeDecision.ABSTAIN:
+                judge_abstentions += 1
+            evaluation_for_graph = er.model_copy(update={
+                "judge_decision": final_policy.decision.value,
+                "judge_confidence": final_policy.confidence,
+                "judge_accept_threshold": retrieval_accept_threshold,
+                "judge_retrieve_threshold": judge_thresholds.retrieve_threshold,
+                "judge_target_fdr": judge_thresholds.target_fdr,
+                "retrieval_used": True,
+                "abstention_reason": final_policy.abstention_reason,
+                "evaluation_source": "ragas",
+            })
             # Append result before print — print errors (e.g. Windows encoding) must not discard score
             results.append({"id": q["id"], "type": q["type"], "status": "scored",
                              "faithfulness": round(f, 4), "answer": res.answer,
                              "citations": res.citations,
                              "golden_contract_pass": contract_ok,
                              "golden_contract_failures": contract_failures,
+                             "judge_decision": final_policy.decision.value,
+                             "judge_confidence": final_policy.confidence,
+                             "judge_accept_threshold": retrieval_accept_threshold,
+                             "judge_retrieve_threshold": judge_thresholds.retrieve_threshold,
+                             "judge_target_fdr": judge_thresholds.target_fdr,
+                             "retrieval_used": True,
+                             "abstention_reason": final_policy.abstention_reason,
                              "evaluation_attempts": attempts,
                              "judge_notes": judge_notes,
                              "latency": round(elapsed, 1)})
+            await persist_claim_graph(res, evaluation_for_graph)
             flag = "  LOW" if (not isinstance(f, float) or f < 0.8) else ""
             print(f"  [{q['id']:8s}] faith={f:.3f}  ({elapsed:.1f}s)  {res.answer[:60]!r}{flag}")
 
@@ -219,6 +319,8 @@ async def main(question_ids: set[str] | None = None):
     print(f"  Golden contract pass rate: {contract_passes}/{len(questions)} "
           f"({contract_passes / len(questions):.1%})")
     print(f"  Correct abstentions: {correct_abstentions}/{len(questions)}")
+    print(f"  Judge decisions: accept={judge_accepts}, retrieve={judge_retrievals}, "
+          f"abstain={judge_abstentions}")
     if refusal_failures:
         print(f"  Retrieval refusal failures: {refusal_failures}/{len(questions)}")
     if unscorable:
@@ -255,6 +357,12 @@ async def main(question_ids: set[str] | None = None):
         "n_scored": len(scores),
         "n_correct_abstentions": correct_abstentions,
         "n_refusal_failures": refusal_failures,
+        "n_judge_accepts": judge_accepts,
+        "n_judge_retrievals": judge_retrievals,
+        "n_judge_abstentions": judge_abstentions,
+        "judge_target_fdr": judge_thresholds.target_fdr,
+        "judge_accept_threshold": retrieval_accept_threshold,
+        "judge_retrieve_threshold": judge_thresholds.retrieve_threshold,
         "n_unscorable": unscorable,
         "n_errors": errors,
         "n_total": len(questions),

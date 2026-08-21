@@ -32,6 +32,15 @@ class KPIEventRow(Base):
     cost_usd = Column(Float, default=0.0)
     retrieval_mode = Column(String, default="hybrid")
     model_version = Column(String, default="")
+    judge_decision = Column(String, default="retrieve")
+    judge_confidence = Column(Float, default=0.0)
+    judge_accept_threshold = Column(Float, default=0.9)
+    judge_retrieve_threshold = Column(Float, default=0.55)
+    judge_target_fdr = Column(Float, default=0.05)
+    retrieval_used = Column(String, default="true")
+    abstention_reason = Column(String, default="")
+    evaluation_source = Column(String, default="ragas")
+    retrieval_cost_usd = Column(Float, default=0.0)
 
 
 _engine: AsyncEngine | None = None
@@ -53,6 +62,25 @@ async def ensure_tenant_column(conn) -> None:
         text("CREATE INDEX IF NOT EXISTS ix_kpi_events_tenant_recorded_at "
              "ON kpi_events (tenant, recorded_at)")
     )
+    columns = {
+        "judge_decision": "VARCHAR NOT NULL DEFAULT 'retrieve'",
+        "judge_confidence": "FLOAT NOT NULL DEFAULT 0",
+        "judge_accept_threshold": "FLOAT NOT NULL DEFAULT 0.9",
+        "judge_retrieve_threshold": "FLOAT NOT NULL DEFAULT 0.55",
+        "judge_target_fdr": "FLOAT NOT NULL DEFAULT 0.05",
+        "retrieval_used": "VARCHAR NOT NULL DEFAULT 'true'",
+        "abstention_reason": "VARCHAR NOT NULL DEFAULT ''",
+        "evaluation_source": "VARCHAR NOT NULL DEFAULT 'ragas'",
+        "retrieval_cost_usd": "FLOAT NOT NULL DEFAULT 0",
+    }
+    existing = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("kpi_events")
+        }
+    )
+    for name, definition in columns.items():
+        if name not in existing:
+            await conn.execute(text(f"ALTER TABLE kpi_events ADD COLUMN {name} {definition}"))
 
 
 def _get_db_url() -> str:

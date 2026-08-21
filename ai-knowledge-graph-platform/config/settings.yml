@@ -235,6 +235,13 @@ evaluation:
     # - context_recall
   eval_sample_rate: 0.2
   min_ground_truth_queries: 50
+  judge_retrieve_abstain:
+    enabled: true
+    accept_threshold: 0.90
+    retrieve_threshold: 0.55
+    target_fdr: 0.05
+    retrieval_accept_threshold: 0.80
+    bigquery_metrics_table: ""
 
 context_graph:
   proactive:
