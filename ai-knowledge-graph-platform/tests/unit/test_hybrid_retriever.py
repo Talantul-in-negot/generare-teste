@@ -221,7 +221,20 @@ class TestPlannedAgenticFallback:
         assert result.retrieval_mode == "agentic"
 
     async def test_cold_start_route_honors_the_planned_agentic_fallback(self) -> None:
-        hr = _make_hybrid_retriever({"agentic_fallback": True})
+        """The ADAPTIVE ROUTER's cold-start route must still reach IRCoT.
+
+        Complement of the test above: that one disables the adaptive router to
+        exercise the keyword planner, this one leaves it enabled to exercise
+        the router. Both need `query_planner_enabled` — hybrid_retriever gates
+        the whole routing block on it, so without it the router is never
+        consulted and a test that stubs `_adaptive_router` is asserting
+        nothing about routing at all.
+        """
+        hr = _make_hybrid_retriever({
+            "query_planner_enabled": True,
+            "adaptive_router_enabled": True,
+            "agentic_fallback": True,
+        })
         hr._global.search = AsyncMock(return_value={})
         hr._agentic.retrieve_and_answer = AsyncMock(return_value=QueryResult(
             question="Explain the full compliance chain across steps.",
@@ -242,5 +255,11 @@ class TestPlannedAgenticFallback:
                 "Explain the full compliance chain across steps.", mode="hybrid",
             )
 
+        # Guard against this test silently going vacuous again: if the routing
+        # block stops running, `choose` is never awaited and the cold-start
+        # reason never reaches the result, even though the fallback assertion
+        # below would still pass for unrelated reasons.
+        hr._adaptive_router.choose.assert_awaited_once()
+        assert result.routing_reason == "planner_cold_start"
         hr._agentic.retrieve_and_answer.assert_awaited_once()
         assert result.retrieval_mode == "agentic"
