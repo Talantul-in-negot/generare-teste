@@ -736,13 +736,30 @@ class HybridRetriever:
         # Per-tenant: when true, a hedging answer triggers the agent even if it
         # carried citations (see _is_low_confidence). Off by default.
         hedge_only = cfg.get("agentic_hedge_only_fallback", False)
-        if agentic_enabled and _is_low_confidence(
-            answer, citations, require_no_citations=not hedge_only
-        ):
+        low_confidence = _is_low_confidence(
+            answer, citations, require_no_citations=not hedge_only,
+        )
+        # A planned multi-hop fallback must not be blocked merely because a
+        # global-only search returned an incidental citation.  In that mode
+        # `local_results` is intentionally empty, so the policy already says
+        # we have no chunk-level evidence for the synthesized answer.  The
+        # previous strict hedge-and-no-citation gate turned that explicit
+        # planner decision into a one-citation refusal (AGT-02).
+        planned_missing_evidence = (
+            routing_reason in {
+                "keyword_planner", "planner_fail_open", "planner_cold_start",
+            }
+            and plan["fallback"] == "agentic"
+            and policy_reason_code == "missing_evidence"
+        )
+        if agentic_enabled and (low_confidence or planned_missing_evidence):
             log.info(
                 "hybrid_retriever.low_confidence",
                 answer_preview=answer[:80],
-                triggering="agentic_fallback",
+                triggering=(
+                    "planned_missing_evidence" if planned_missing_evidence
+                    else "low_confidence"
+                ),
             )
             result = await self._agentic.retrieve_and_answer(
                 question=question,

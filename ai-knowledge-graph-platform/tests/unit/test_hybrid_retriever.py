@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from graphrag.retrieval.hybrid_retriever import HybridRetriever
+from graphrag.core.models import QueryResult
 
 
 def _make_hybrid_retriever(cfg_overrides: dict | None = None) -> HybridRetriever:
@@ -190,3 +191,56 @@ class TestNegativeClassTopKWiring:
         _, kwargs = hr._local.search.call_args
         assert "local_top_k" not in kwargs["config_overrides"]
         assert "rerank_top_k" not in kwargs["config_overrides"]
+
+
+class TestPlannedAgenticFallback:
+    async def test_multi_hop_plan_falls_back_when_global_has_no_chunk_evidence(self) -> None:
+        """An incidental global citation must not suppress the planned IRCoT path."""
+        hr = _make_hybrid_retriever({
+            "query_planner_enabled": True,
+            "adaptive_router_enabled": False,
+            "agentic_fallback": True,
+        })
+        hr._global.search = AsyncMock(return_value={})
+        hr._agentic.retrieve_and_answer = AsyncMock(return_value=QueryResult(
+            question="Explain the full compliance chain across steps.",
+            answer="The FAA directive applies to Southwest's 737 MAX fleet.",
+            citations=["FAA-AD-2024-01-02", "SWA_fleet_registry_2024"],
+            retrieval_mode="agentic",
+        ))
+        hr._record_context_trace = AsyncMock(return_value=None)
+
+        neo4j = MagicMock()
+        neo4j.get_document_filenames = AsyncMock(return_value=[])
+        with patch("graphrag.retrieval.hybrid_retriever.get_neo4j", return_value=neo4j):
+            result = await hr.retrieve_and_answer(
+                "Explain the full compliance chain across steps.", mode="hybrid",
+            )
+
+        hr._agentic.retrieve_and_answer.assert_awaited_once()
+        assert result.retrieval_mode == "agentic"
+
+    async def test_cold_start_route_honors_the_planned_agentic_fallback(self) -> None:
+        hr = _make_hybrid_retriever({"agentic_fallback": True})
+        hr._global.search = AsyncMock(return_value={})
+        hr._agentic.retrieve_and_answer = AsyncMock(return_value=QueryResult(
+            question="Explain the full compliance chain across steps.",
+            answer="The FAA directive applies to Southwest's 737 MAX fleet.",
+            citations=["FAA-AD-2024-01-02", "SWA_fleet_registry_2024"],
+            retrieval_mode="agentic",
+        ))
+        hr._record_context_trace = AsyncMock(return_value=None)
+        hr._adaptive_router = AsyncMock()
+        hr._adaptive_router.choose = AsyncMock(return_value=MagicMock(
+            mode="global", top_k=10, reason="planner_cold_start",
+        ))
+
+        neo4j = MagicMock()
+        neo4j.get_document_filenames = AsyncMock(return_value=[])
+        with patch("graphrag.retrieval.hybrid_retriever.get_neo4j", return_value=neo4j):
+            result = await hr.retrieve_and_answer(
+                "Explain the full compliance chain across steps.", mode="hybrid",
+            )
+
+        hr._agentic.retrieve_and_answer.assert_awaited_once()
+        assert result.retrieval_mode == "agentic"
