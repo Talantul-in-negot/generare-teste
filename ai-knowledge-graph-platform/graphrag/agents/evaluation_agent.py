@@ -31,7 +31,7 @@ from graphrag.evidence.claim_graph import (
     build_claim_evidence_graph,
     persist_claim_evidence_graph,
 )
-from graphrag.observability.agent_telemetry import record_evaluation_job
+from graphrag.observability.agent_telemetry import record_evaluation_job, record_evaluation_quality
 from graphrag.observability.correlation import correlation_context
 from graphrag.observability.tracing import trace_span
 
@@ -170,6 +170,10 @@ class EvaluationAgent(BaseGraphRAGAgent):
                     evaluation_source=eval_result.evaluation_source,
                 )
                 await self._tracker.record(kpi)
+                record_evaluation_quality(
+                    faithfulness=eval_result.faithfulness,
+                    source=eval_result.evaluation_source,
+                )
 
                 # Persist an auditable claim/artifact/action/check subgraph.
                 # Evaluation must remain available if Neo4j or an optional

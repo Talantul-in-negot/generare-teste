@@ -717,8 +717,10 @@ production value, not trend visibility.
    signals; `monitoring/prometheus/alerts.yml` consumes them. A test asserts
    every metric an alert references actually exists, because a rule pointing at
    a typo'd metric never fires and never-firing looks exactly like healthy.
-   *Remaining:* a Grafana dashboard JSON, and wiring these rules into the
-   deployment's Prometheus.
+   **Done** — `monitoring/prometheus/prometheus.yml` wires the rules into a
+   Prometheus scrape, and `monitoring/grafana/graphrag-overview.json` is
+   provisioned by the Docker Compose Grafana service. SLO targets remain
+   provisional until the load, soak, and restore exit criteria are met.
 4. ~~Track OpenTelemetry GenAI semantic conventions and adopt the stable fields
    that map cleanly to the platform's existing traces.~~
    **Done** — `graphrag/observability/genai_telemetry.py` emits

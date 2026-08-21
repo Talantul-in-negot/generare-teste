@@ -1,7 +1,8 @@
 # Service Level Objectives and Error Budgets
 
-Status: **provisional.** Every SLI below is computed from a metric that exists
-and is emitted today. The *targets* are a different matter — see
+Status: **implemented, with provisional targets.** Every SLI below is computed
+from a metric that exists and is emitted today. The *targets* are a different
+matter — see
 [Which targets are grounded](#which-targets-are-grounded) before quoting any
 number in a contract. This document is deliberately explicit about that
 distinction, because an SLO presented as measured when it was chosen by
@@ -34,15 +35,19 @@ what a dashboard shows, the dashboard is wrong.
 ### 1. Query availability
 
 ```promql
-sum(rate(http_requests_total{handler="/query", status!~"5.."}[30d]))
+sum(rate(http_requests_total{handler="/query", status!~"4..|5.."}[30d]))
 /
-sum(rate(http_requests_total{handler="/query"}[30d]))
+sum(rate(http_requests_total{handler="/query", status!~"4.."}[30d]))
 ```
 
 **Valid events** exclude 4xx. A 429 from a rate limit or quota is the system
 working correctly, and a 401 is a client credential problem; counting either as
 unavailability would mean a tenant hitting its own quota degrades the platform's
 published reliability.
+
+The numerator is the same valid-event denominator with 5xx responses excluded;
+the query above is abbreviated for readability. The dashboard and burn-rate
+rules use the explicit `status!~"4..|5.."` numerator.
 
 ### 2. Query latency
 
@@ -139,9 +144,25 @@ which is why it is the standard fast-burn multiplier:
 ) > (14.4 * 0.005)
 ```
 
-This rule is **not** in `monitoring/prometheus/alerts.yml` yet, deliberately.
-Adding a burn-rate alert against a provisional target would page someone against
-a number nobody has validated. It goes in with the measured targets.
+The fast and slow burn-rate rules are implemented in
+`monitoring/prometheus/alerts.yml`. They are labelled as SLO alerts and use the
+same target constants as this document. Because the targets remain provisional,
+the alerts are a ticket/page signal for review, not evidence that a production
+SLA has been achieved.
+
+## Operational wiring
+
+- Prometheus scrape and rule wiring: `monitoring/prometheus/prometheus.yml`.
+- Importable/provisioned dashboard: `monitoring/grafana/graphrag-overview.json`.
+- Grafana datasource and dashboard provisioning: `monitoring/grafana/provisioning/`.
+- Local Docker Compose endpoints: Prometheus at `http://localhost:9090` and
+  Grafana at `http://localhost:3000` after `docker compose up -d`.
+- Set `PROMETHEUS_METRICS_TOKEN` in `.env` before starting Compose. Prometheus
+  uses that token for the protected API `/metrics` endpoint; `/metrics` is not
+  made public for dashboard convenience.
+- Groundedness is exported as `graphrag_evaluation_faithfulness{source="ragas"}`
+  from the evaluation worker. Reference-only judge scores are not used for the
+  groundedness SLO.
 
 ## What is not an SLO here
 
@@ -173,6 +194,8 @@ machine — they need a deployment carrying real traffic.
 
 - `monitoring/prometheus/alerts.yml` — the alerts that fire before a budget is
   meaningfully spent
+- `monitoring/prometheus/prometheus.yml` — scrape and rule-file wiring
+- `monitoring/grafana/graphrag-overview.json` — SLO and error-budget dashboard
 - `graphrag/observability/operational_metrics.py` — SLI metric definitions
 - `docs/performance-metrics-inventory.md` — recorded latency measurements and
   their sample-size caveats

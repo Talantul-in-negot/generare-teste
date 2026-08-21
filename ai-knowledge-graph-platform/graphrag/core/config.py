@@ -166,6 +166,7 @@ class Settings(BaseSettings):
 
     # ── RabbitMQ ────────────────────────────────────────────────────────────────
     rabbitmq_url: str = "amqp://graphrag:graphrag_dev@localhost:5672/"
+    prometheus_metrics_token: str = ""
 
     # ── OAuth / JWT ──────────────────────────────────────────────────────────────
     jwt_secret_key: str = "change-me-in-production-at-least-32-bytes"

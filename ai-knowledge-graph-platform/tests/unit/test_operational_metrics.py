@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from graphrag.observability import genai_telemetry as gt
+from graphrag.observability import agent_telemetry as at
 from graphrag.observability import operational_metrics as om
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -175,6 +176,12 @@ class TestGenAiTelemetry:
         assert _sample(
             "graphrag_gen_ai_client_token_usage_total", system="deepseek", direction="input",
         ) == before
+
+    def test_evaluation_faithfulness_is_exported_and_bounded(self):
+        at.record_evaluation_quality(faithfulness=1.4, source="ragas")
+        assert _sample("graphrag_evaluation_faithfulness", source="ragas") == 1.0
+        at.record_evaluation_quality(faithfulness=-0.2, source="reference_judge")
+        assert _sample("graphrag_evaluation_faithfulness", source="reference_judge") == 0.0
 
     def test_prompt_content_is_never_an_attribute(self):
         # Prompts carry customer document text; a trace backend has none of the

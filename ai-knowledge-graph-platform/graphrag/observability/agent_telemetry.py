@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import math
 from contextlib import contextmanager
 from contextvars import ContextVar
 
@@ -11,9 +12,9 @@ import structlog
 from graphrag.observability.correlation import current_correlation_id
 
 try:
-    from prometheus_client import Counter, Histogram
+    from prometheus_client import Counter, Gauge, Histogram
 except ImportError:  # pragma: no cover - optional at local import time
-    Counter = Histogram = None
+    Counter = Gauge = Histogram = None
 
 
 _capability_calls = Counter(
@@ -41,6 +42,11 @@ _evaluation_duration = Histogram(
     "End-to-end evaluation job duration",
     ["outcome"],
 ) if Histogram else None
+_evaluation_faithfulness = Gauge(
+    "graphrag_evaluation_faithfulness",
+    "Most recently observed evaluation faithfulness by bounded evaluation source",
+    ["source"],
+) if Gauge else None
 _operational_write_receipts = Counter(
     "graphrag_operational_write_receipts_total",
     "Governed operational write receipts by capability and outcome",
@@ -120,6 +126,25 @@ def record_evaluation_job(*, outcome: str, tenant: str, job_id: str, started_at:
         duration_ms=round(elapsed * 1000, 2),
         correlation_id=current_correlation_id(),
     )
+
+
+def record_evaluation_quality(*, faithfulness: float, source: str = "ragas") -> None:
+    """Expose the latest finite groundedness score for SLO dashboards.
+
+    ``source`` is intentionally a closed, low-cardinality value (for example
+    ``ragas`` or ``reference_judge``); tenant and query IDs stay in logs/KPI
+    storage rather than becoming Prometheus labels.
+    """
+    if not _evaluation_faithfulness:
+        return
+    try:
+        score = float(faithfulness)
+        if not math.isfinite(score):
+            return
+        safe_source = source if source in {"ragas", "reference_judge", "judge"} else "other"
+        _evaluation_faithfulness.labels(source=safe_source).set(max(0.0, min(1.0, score)))
+    except Exception as exc:  # noqa: BLE001 - telemetry must never break evaluation
+        log.debug("observability.evaluation_quality_update_failed", error=str(exc))
 
 
 def record_operational_write_receipt(*, capability: str, outcome: str, tenant: str) -> None:

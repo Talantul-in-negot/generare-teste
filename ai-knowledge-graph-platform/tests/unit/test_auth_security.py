@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
-from api.auth.default_auth import RequireAuthMiddleware, _is_public
+from api.auth.default_auth import RequireAuthMiddleware, _has_metrics_token, _is_public
 from api.auth.dependencies import get_current_user, require_scope
 from api.auth.jwt import create_access_token
 from api.routes.auth import _safe_next
@@ -263,6 +265,23 @@ class TestRequireAuthMiddleware:
             headers={"Authorization": f"BEARER {token}"},
         )
         assert resp.status_code == 200
+
+    def test_metrics_accepts_only_the_dedicated_bearer_token(self):
+        def request(authorization: str) -> Request:
+            return Request({
+                "type": "http",
+                "method": "GET",
+                "path": "/metrics",
+                "headers": [(b"authorization", authorization.encode())],
+            })
+
+        with patch(
+            "api.auth.default_auth.get_settings",
+            return_value=SimpleNamespace(prometheus_metrics_token="metrics-secret"),
+        ):
+            assert _has_metrics_token(request("Bearer metrics-secret")) is True
+            assert _has_metrics_token(request("Bearer wrong")) is False
+            assert _has_metrics_token(request("Basic metrics-secret")) is False
 
     def test_browser_cookie_authenticates_protected_routes_and_dependencies(self):
         client = _middleware_client()

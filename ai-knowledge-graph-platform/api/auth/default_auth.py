@@ -26,6 +26,8 @@ access for every legitimate browser client, not just unauthenticated ones.
 """
 from __future__ import annotations
 
+import hmac
+
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -105,6 +107,16 @@ def _is_hidden(path: str, dev: bool) -> bool:
     return not dev and (path in _DEV_ONLY or path in _DOCS_PATHS)
 
 
+def _has_metrics_token(request: Request) -> bool:
+    """Allow Prometheus to scrape metrics without weakening normal auth."""
+    expected = get_settings().prometheus_metrics_token
+    if not expected:
+        return False
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    return scheme.casefold() == "bearer" and bool(token) and hmac.compare_digest(token, expected)
+
+
 class RequireAuthMiddleware(BaseHTTPMiddleware):
     """401s requests with no decodable Bearer token or browser session.
 
@@ -127,6 +139,9 @@ class RequireAuthMiddleware(BaseHTTPMiddleware):
             # Hide, don't just deny -- an outside caller shouldn't learn that a
             # dev-only route or the OpenAPI document exists here at all.
             return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+        if path == "/metrics" and _has_metrics_token(request):
+            return await call_next(request)
 
         token, cookie_authenticated = request_access_token(request)
         if not token:

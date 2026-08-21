@@ -93,6 +93,7 @@ services:
       KPI_DB_PATH: /data/kpis.db
       KPI_BACKEND: timescale
       TIMESCALE_DB_URL: postgresql+asyncpg://graphrag:graphrag_dev@timescaledb:5432/graphrag
+      PROMETHEUS_METRICS_TOKEN: ${PROMETHEUS_METRICS_TOKEN:?Set PROMETHEUS_METRICS_TOKEN in .env}
     depends_on:
       neo4j:
         condition: service_healthy
@@ -226,10 +227,55 @@ services:
       - .:/app
       - kpi_data:/data
 
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: graphrag_prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        printf '%s' "$$PROMETHEUS_METRICS_TOKEN" > /tmp/prometheus-metrics-token
+        exec /bin/prometheus "$${@}"
+      - --
+    environment:
+      PROMETHEUS_METRICS_TOKEN: ${PROMETHEUS_METRICS_TOKEN:?Set PROMETHEUS_METRICS_TOKEN in .env}
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/rules/graphrag-alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      api:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: graphrag_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/graphrag-overview.json:/var/lib/grafana/dashboards/graphrag-overview.json:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+
 volumes:
   neo4j_data:
   neo4j_logs:
   rabbitmq_data:
   kpi_data:
   timescale_data:
+  prometheus_data:
+  grafana_data:
   redis_data:
