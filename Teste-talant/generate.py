@@ -12,7 +12,7 @@ from src.biblical_tests.validation import coverage_report, validate_evidence, va
 
 
 DEFAULT_CONFIG = {
-    "contest": {"title": "TALANTUL ÎN NEGOȚ", "stage": "Faza pe biserică", "edition": 2026, "date": "28 martie 2026", "category": "6_7"},
+    "contest": {"title": "TALANTUL ÎN NEGOȚ", "stage": "Faza pe biserică", "edition": 2027, "date": "28 martie 2026", "category": "6_7"},
     "scoring": {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}, "seed": 12345,
 }
 
