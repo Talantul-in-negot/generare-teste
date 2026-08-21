@@ -117,15 +117,20 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
             break
     if len(match_facts) != 5:
         raise GenerationError("Nu sunt suficiente răspunsuri distincte pentru Secțiunea III.")
-    right_values = [fact.object for fact in match_facts]
-    rng.shuffle(right_values)
-    right = dict(zip("ABCDE", right_values))
-    answers = {str(i): next(letter for letter, value in right.items() if value == fact.object) for i, fact in enumerate(match_facts, 1)}
-    matching = MatchingQuestion("III-1", [_blanked_statement(fact, limit=80) for fact in match_facts], right, answers, [f.evidence for f in match_facts], [f.id for f in match_facts])
+    right_facts = list(match_facts)
+    rng.shuffle(right_facts)
+    right = {letter: _blanked_statement(fact) for letter, fact in zip("ABCDE", right_facts)}
+    answers = {str(i): next(letter for letter, fact_for_letter in zip("ABCDE", right_facts) if fact_for_letter.id == fact.id) for i, fact in enumerate(match_facts, 1)}
+    matching = MatchingQuestion("III-1", [fact.object for fact in match_facts], right, answers, [f.evidence for f in match_facts], [f.id for f in match_facts])
 
     multis: list[MultiChoiceQuestion] = []
+    multi_pool = [fact for fact in pool if fact.id not in used]
+    if len(multi_pool) < 3:
+        raise GenerationError("Nu sunt suficiente facts distincte pentru o întrebare din Secțiunea IV.")
     for index in range(1, 4):
-        group = take(3)
+        # The same evidence card may appear in a different IV item when the
+        # source selection is short, but never twice inside the same item.
+        group = rng.sample(multi_pool, 3)
         correct_positions = set(rng.sample(range(3), rng.randint(0, 3)))
         options: dict[str, str] = {}
         correct: list[str] = []

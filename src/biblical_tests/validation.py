@@ -44,8 +44,11 @@ def validate_test(test: TestDefinition) -> None:
         evidence = question.supporting_evidence or [question.evidence]
         if set(question.options) != {"A", "B", "C"} or not set(question.correct).issubset({"A", "B", "C"}) or len(set(question.options.values())) != 3 or not all(_in_scope(item, test.source) for item in evidence):
             errors.append(f"Item IV invalid: {question.id}")
-    ids = [q.fact_id for q in test.section_i + test.section_ii] + [fact_id for q in test.section_iv for fact_id in (q.fact_ids or [q.fact_id])]
-    if len(ids) != len(set(ids)):
+    core_ids = [q.fact_id for q in test.section_i + test.section_ii]
+    if test.section_iii:
+        core_ids.extend(test.section_iii.fact_ids)
+    iv_fact_sets = [set(question.fact_ids or [question.fact_id]) for question in test.section_iv]
+    if len(core_ids) != len(set(core_ids)) or any(len(question.fact_ids or [question.fact_id]) != 3 for question in test.section_iv) or any(set(core_ids) & fact_ids for fact_ids in iv_fact_sets):
         errors.append("Aceeași factă este reutilizată între întrebări.")
     if errors:
         raise ValidationError("\n".join(errors))
