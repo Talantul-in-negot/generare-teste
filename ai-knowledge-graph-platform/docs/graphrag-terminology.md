@@ -100,7 +100,7 @@ A dense cluster of entities in the graph — nodes that are more connected to ea
 ### Community summary
 An LLM-generated natural language summary of a community's entities and their relationships. Used as a high-level context source in global search.
 
-**In this project:** `graphrag/graph/community_summarizer.py` — generates summaries using `get_llm()` (Cerebras by default, free tier, falls back to DeepSeek then Groq; `LLM_INGEST_PROVIDER=deepseek`/`groq` opt-in overrides). Stored as `Community.summary` in Neo4j.
+**In this project:** `graphrag/graph/community_summarizer.py` — generates summaries using `get_llm()` (Groq by default, DeepSeek fallback; provider overrides are configuration-driven). Stored as `Community.summary` in Neo4j.
 
 ---
 
@@ -109,7 +109,7 @@ A float [0.0, 1.0] representing how certain the system is that a relation is cor
 
 **Example:** "FAA-AD-2024-01-02 supersedes FAA-AD-2022-03-07" — explicit statement → confidence 0.95. "The 2024 directive appears to update the 2022 guidance" — implication → confidence 0.75.
 
-**In this project:** Extracted by the primary LLM (Cerebras via `get_llm()`, free tier; falls back to DeepSeek then Groq) in the JSON output. Clamped to [0,1] in `graphrag/ingestion/extractor.py`. Merged with Bayesian accumulation in `merge_relation`. Decays per hop for inferred edges (default decay 0.95).
+**In this project:** Extracted by the primary LLM (Groq via `get_llm()`, DeepSeek fallback) in the JSON output. Clamped to [0,1] in `graphrag/ingestion/extractor.py`. Merged with Bayesian accumulation in `merge_relation`. Decays per hop for inferred edges (default decay 0.95).
 
 ---
 
@@ -605,7 +605,9 @@ The process of connecting extracted entities to their corresponding entries in W
 
 **Example:** Extracted entity "Boeing" (ORG) → Wikidata entity Q66 (The Boeing Company), enriched with headquarters location, founding date, industry classification.
 
-**In this project:** `graphrag/graph/entity_linker.py`. Runs ad-hoc (not yet wired into the production ingestion pipeline — see `docs/roadmap.md`).
+**In this project:** `graphrag/graph/entity_linker.py`. It is available through
+the KG linking routes and the optional ingestion-agent enrichment step; it is
+not required for every ingestion run.
 
 ---
 

@@ -16,7 +16,7 @@
 # Every constraint declares sh:severity explicitly rather than relying on
 # the pyshacl default (sh:Violation) — this is what lets the platform
 # distinguish a hard rejection from a data-quality warning at all. See
-# graphrag/graph/shacl_validator.py and docs/context_graph_gap_plan.md
+# graphrag/graph/shacl_validator.py and the platform roadmap.
 # (Priority 1 — SHACL validation, Step 2).
 
 # Every NamedIndividual (extracted entity) must carry a human-readable

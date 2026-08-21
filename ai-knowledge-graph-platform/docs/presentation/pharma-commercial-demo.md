@@ -65,7 +65,7 @@ python docs/presentation/render_pharma_commercial_movie.py
 ```
 
 The scene-by-scene production script is in
-[`presentation/pharma-commercial-video-script.md`](presentation/pharma-commercial-video-script.md).
+[`pharma-commercial-video-script.md`](pharma-commercial-video-script.md).
 The generated MP4 is deliberately not source-controlled.
 
 ## Verified Live Capture

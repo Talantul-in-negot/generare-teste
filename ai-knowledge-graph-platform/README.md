@@ -51,9 +51,9 @@ The graph is not a RAG index. It is a formally modeled knowledge base:
 - [`docs/adr/0009-agent-platform-trust-boundaries.md`](docs/adr/0009-agent-platform-trust-boundaries.md) — Agent identity, capability, write, and telemetry trust boundaries
 - [`docs/adr/ADR-Context-Graph-Decision-Trace.md`](docs/adr/ADR-Context-Graph-Decision-Trace.md) — Bounded Context Graph ownership, trace integrity, and privacy rules
 - [`docs/mcp-operations.md`](docs/mcp-operations.md) — authenticated Streamable HTTP MCP operations and deployment gate
-- [`docs/mcp-capability-contract.md`](docs/mcp-capability-contract.md) — reusable, compatibility-tested MCP contract boundary
-- [`docs/production-evidence-template.json`](docs/production-evidence-template.json) — source-of-truth fields for production scale and business-impact claims
-- [`docs/public-evaluation-report-template.md`](docs/public-evaluation-report-template.md) — reproducible public evaluation report template
+- [`docs/mcp-operations.md`](docs/mcp-operations.md) — authenticated MCP operations and the reusable, compatibility-tested capability contract
+- [`docs/templates/production-evidence-template.json`](docs/templates/production-evidence-template.json) — source-of-truth fields for production scale and business-impact claims
+- [`docs/templates/public-evaluation-report-template.md`](docs/templates/public-evaluation-report-template.md) — reproducible public evaluation report template
 - [`docs/public-local-evaluation-report.md`](docs/public-local-evaluation-report.md) — generated, bounded local MCP/retrieval/write evidence
 - [`docs/articles/governed-mcp-and-agent-writes.md`](docs/articles/governed-mcp-and-agent-writes.md) — governed MCP architecture walkthrough article draft
 - [`docs/articles/local-evidence-walkthrough.md`](docs/articles/local-evidence-walkthrough.md) — reproducible local evidence walkthrough

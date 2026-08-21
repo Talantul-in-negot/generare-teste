@@ -42,6 +42,33 @@ checkov -d infra/terraform --framework terraform
 without creating GCP resources. Checkov is a static security scan and does not
 need cloud credentials.
 
+## Local Kubernetes validation
+
+Validate the rendered objects locally with Docker Desktop Kubernetes, kind, or
+k3d before applying them to GKE. These commands verify deployability and
+intended controls; they do not establish production capacity or uptime.
+
+```powershell
+kubectl kustomize deploy/kubernetes > artifacts/kubernetes-rendered.yaml
+kubectl apply --dry-run=client -k deploy/kubernetes
+kubectl auth can-i --list --as=system:serviceaccount:graphrag:graphrag-workload -n graphrag
+```
+
+With a local cluster and locally tagged images, exercise rollout, readiness,
+restart, and rollback:
+
+```powershell
+kubectl apply -k deploy/kubernetes
+kubectl rollout status deployment/graphrag-api -n graphrag
+kubectl rollout status deployment/graphrag-mcp -n graphrag
+kubectl rollout restart deployment/graphrag-mcp -n graphrag
+kubectl rollout undo deployment/graphrag-mcp -n graphrag
+kubectl get networkpolicy,pdb,hpa -n graphrag
+```
+
+Record cluster version, node capacity, image digests, pod counts, rollout time,
+restart recovery, and probe failures in the evidence report.
+
 Build and push one image per runtime service. The Dockerfile already supports
 the service-specific dependency sets through `--build-arg SERVICE=...`.
 

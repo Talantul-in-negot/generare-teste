@@ -221,10 +221,10 @@ raw docs → chunker → LLM extractor → validation → entity resolution
 1. **Chunking** — `graphrag/ingestion/chunker.py`, heading-aware section
    splitting (512 tokens, 64 overlap), so table rows keep their section
    headings for embedding quality.
-2. **Extraction** — Cerebras by default (`get_llm()`, free tier; falls back
-   to DeepSeek then Groq; `LLM_INGEST_PROVIDER=deepseek`/`groq` opt in to
-   skip Cerebras, and Groq is always the fast-routing model for agentic
-   retrieval) produces entities + relations as JSON with per-relation
+2. **Extraction** — Groq by default (`get_llm()`, with DeepSeek fallback;
+   `LLM_INGEST_PROVIDER=deepseek` or `cerebras` selects an alternate primary,
+   and Groq remains the default fast-routing provider for agentic retrieval)
+   produces entities + relations as JSON with per-relation
    confidence; clamped and schema-validated in `extractor.py`.
 3. **Ontology validation** — domain/range check per triplet.
 4. **Entity resolution** — 4-stage alias pipeline: exact → normalized →
@@ -296,7 +296,7 @@ Six stages, each addressing a failure mode of the previous:
 | 3. RRF fusion + cross-encoder rerank | `ms-marco-MiniLM-L-6-v2` | precision on the fused pool |
 | 4. Multi-hop traversal | 2-hop entity walk with confidence decay | facts no single chunk contains |
 | 5. GNN re-scoring | GCN/GAT over the query subgraph | structural relevance |
-| 6. LLM synthesis | DeepSeek by default (Groq fallback), cited chunks + graph facts + open-conflict warnings | grounded, auditable answer |
+| 6. LLM synthesis | Groq by default (DeepSeek fallback), cited chunks + graph facts + open-conflict warnings | grounded, auditable answer |
 
 Fallbacks: **agentic retrieval** (IRCoT — retrieve→reason→retrieve, max 4
 steps) when confidence is low; **global search** (direct retrieval of bounded

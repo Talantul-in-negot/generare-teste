@@ -36,6 +36,26 @@ python -m pytest tests/unit/test_mcp_identity.py tests/unit/test_mcp_remote.py t
 For local stdio clients, launch `python mcp_server/server.py` with a scoped
 `GRAPHRAG_MCP_TOKEN`. Stdout is protocol-only; diagnostics go to stderr.
 
+## Capability contract
+
+The capability registry is the client integration boundary. Each tool has a
+stable dotted identifier, semantic version, argument keys, risk class,
+required scopes, dry-run support, approval requirement, and optional legacy
+aliases. The committed snapshot is compatibility-tested before release.
+
+Export the client-consumable contract with:
+
+```bash
+python scripts/export_mcp_contract.py --output artifacts/mcp-capabilities-v1.json
+```
+
+Consumers should bind to a fully qualified name such as
+`biz.workorder.compensate@1.0.0`. A bare capability ID resolves to the newest
+registered version only when a client intentionally accepts that upgrade
+policy. Legacy aliases remain recorded and compatibility-tested. The exported
+JSON can feed an SDK generator or separate contract package, but publishing one
+requires an explicit registry, licence, version, and support decision.
+
 ## Deployment
 
 `deploy/kubernetes/mcp.yaml` ships a non-root, read-only-root-filesystem MCP
@@ -80,7 +100,7 @@ kubectl kustomize deploy/kubernetes
 The gateway already emits protected Prometheus metrics for versioned MCP
 capability calls and governed-write receipt outcomes. To prepare a truthful
 portfolio or operational report, save an authenticated `/metrics` response,
-copy `docs/production-evidence-template.json`, fill only measured fields, and
+copy `docs/templates/production-evidence-template.json`, fill only measured fields, and
 generate a source-linked report:
 
 ```powershell

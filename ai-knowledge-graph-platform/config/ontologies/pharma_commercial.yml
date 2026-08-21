@@ -2,7 +2,7 @@
 #
 # This is deliberately not a clinical ontology and contains no patient data,
 # real products, real claims, or prescribing guidance. It models the
-# commercial-content governance question used by docs/pharma-commercial-demo.md.
+# commercial-content governance question used by docs/presentation/pharma-commercial-demo.md.
 
 ontology:
   id: synthetic-pharma-commercial

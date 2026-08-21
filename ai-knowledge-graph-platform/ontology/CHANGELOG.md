@@ -41,9 +41,8 @@ one grounded warning-tier constraint: an `owl:Axiom`'s confidence annotation
 may legitimately be absent (older data, or an extraction path that never set
 it), so its absence is now a warning rather than indistinguishable from a
 genuinely malformed confidence value. See
-`docs/context_graph_gap_plan.md` (Priority 1 — SHACL validation) for the full
-rationale and `graphrag/graph/shacl_validator.py`'s module docstring for the
-implementation detail.
+`graphrag/graph/shacl_validator.py`'s module docstring for the implementation
+detail.
 
 ## Template for future entries
 

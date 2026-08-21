@@ -108,15 +108,17 @@ accuracy claim.
 Use `data/evidence/investigation-tasks.json` and copy
 `data/evidence/investigation-study-template.csv`. Have the same operator
 solve matched, pre-defined investigation tasks manually and with the platform.
-Record elapsed seconds, evidence score (using a written rubric), and success.
-The full protocol and claim boundaries are in `manual-agent-study-protocol.md`.
+Randomise the condition order, do not reuse answers between conditions, and
+start timing when each prompt is revealed. Stop timing only when the written
+answer and cited evidence are complete. Record elapsed seconds, evidence score
+(using the task rubric), and success in the copied CSV.
 
 ```powershell
 python scripts/analyze_investigation_study.py data/evidence/investigation-study.csv --output artifacts/investigation-study.json
 ```
 
-Use the report’s stated sample and rubric. Do not generalize it to customer
-time savings.
+Use the report’s stated sample and rubric. The supplied local CSV is a format
+example, not a measured study; do not generalize it to customer time savings.
 
 ## 9. Workflow, cost, recovery, and security evidence
 
@@ -142,7 +144,7 @@ kubectl apply --dry-run=client -k deploy/kubernetes
 The failure matrix records the local controls for duplicate writes, stale
 versions, tenant boundaries, approval bypass, compensation replay, and backup
 integrity. The Kubernetes commands validate rendered manifests and admission
-shape. See `docs/local-kubernetes-validation.md` for rollout and rollback steps;
+shape. See `docs/gcp-production-deployment.md` for rollout and rollback steps;
 neither exercise is a production availability or incident-prevention claim.
 
 With Docker Compose running, exercise a real dependency restart and restore:
@@ -158,13 +160,13 @@ prevention.
 
 ## Public artifacts
 
-- `docs/public-evaluation-report-template.md`
+- `docs/templates/public-evaluation-report-template.md`
 - `docs/public-local-evaluation-report.md` — generated from the checked-in local run outputs
 - `docs/articles/governed-mcp-and-agent-writes.md`
 - `docs/articles/local-evidence-walkthrough.md`
 - `docs/presentation/governed-mcp-walkthrough-video-script.md`
 - `docs/presentation/local-evidence-walkthrough.mp4` — silent, locally rendered walkthrough
-- `docs/mcp-capability-contract.md`
+- the capability-contract section in `docs/mcp-operations.md`
 - `artifacts/mcp-capabilities-v1.json` — exported versioned capability contract
 - `artifacts/graphrag-ontologies-v1.zip` — ontology package with manifest and checksums
 

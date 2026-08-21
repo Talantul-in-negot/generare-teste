@@ -54,7 +54,7 @@ CREATE TABLE kpi_events (
 | `context_recall` | Float | 0.0–1.0 | RAGAS: did we retrieve all relevant context? Higher = better | 0.0 |
 | `cost_usd` | Float | 0.0–∞ | Total cost of the query (LLM + embedding API calls) | 0.0 |
 | `retrieval_mode` | Text | "hybrid", "local", "global", "agentic" | Which retrieval path was taken | "hybrid" |
-| `model_version` | Text | e.g., "deepseek-v4-pro" | Which synthesis-tier LLM generated the answer | "" |
+| `model_version` | Text | e.g., "groq:openai/gpt-oss-120b" | Which synthesis-tier LLM generated the answer | "" |
 
 ### Sampling strategy
 
@@ -114,7 +114,7 @@ Aggregate across 104 queries:
   Context Precision:   0.907
   Context Recall:      0.867
   Retrieval Mode:      hybrid (90%) / agentic (10%)
-  Generation model:    Cerebras llama-3.3-70b (get_llm() default, free tier) / DeepSeek, Groq (fallback chain / opt-in overrides)
+  Generation model:    Groq configured large model (get_llm() default) / DeepSeek fallback / Cerebras opt-in
   Embedding model:     text-embedding-3-large (OpenAI, 3072d)
 ```
 

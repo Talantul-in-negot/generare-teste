@@ -18,7 +18,7 @@ loaded back through `ContextGraphRepository` using the tenant-scoped API shape.
 - Cold query ID: `movie-live-wpp-20260801-v4`
 - Repeat query ID: `movie-live-wpp-20260801-v4-repeat`
 - Retrieval mode selected by the planner: `local`
-- Model returned by the live configuration: `llama-3.1-8b-instant`
+- Captured model version: this is a historical trace; regenerate the capture to show the current configured model route
 - Evidence: 14 chunks from 4 documents
 - Citations: Brand Guideline, Campaign Brief, Data Privacy Policy, and SOW
 - Result: the privacy policy does not address sports-betting placements; SOW and campaign adjacency rules conflict
@@ -72,7 +72,7 @@ loaded back through `ContextGraphRepository` using the tenant-scoped API shape.
 
 **Screen:** Show the exact returned answer, citations, model version, retrieval mode, and measured latency. Do not paraphrase the answer on screen.
 
-**Action:** Show the answer response first, then mark the conflicting SOW and Campaign Brief passages. Keep `llama-3.1-8b-instant`, `local`, and the cold latency visible as response metadata.
+**Action:** Show the answer response first, then mark the conflicting SOW and Campaign Brief passages. Keep the model version from the regenerated trace, `local`, and the cold latency visible as response metadata.
 
 **Voiceover:**
 

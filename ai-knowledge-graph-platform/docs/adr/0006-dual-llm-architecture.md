@@ -39,8 +39,8 @@ Split the agentic loop into two model tiers:
 
 | Step | Model | Rationale |
 |---|---|---|
-| Reasoning steps (SEARCH/ANSWER routing) | `llama-3.1-8b-instant` | Trivial structured output; speed dominates |
-| Final synthesis | DeepSeek `deepseek-v4-pro` via `get_llm()` | User-facing answer; quality dominates; Groq is fallback/override |
+| Reasoning steps (SEARCH/ANSWER routing) | Configured `groq_fast_model` | Trivial structured output; speed dominates |
+| Final synthesis | Configured Groq `groq_model` via `get_llm()` | User-facing answer; quality dominates; DeepSeek is the fallback |
 
 Implementation in `graphrag/retrieval/agentic_retriever.py`:
 
@@ -54,11 +54,13 @@ async def _synthesize(self, prompt: str) -> str:
     return await get_llm().generate(prompt)
 ```
 
-`get_fast_llm()` points at Groq `llama-3.1-8b-instant` (config:
-`groq_fast_model`) with DeepSeek fallback. `get_llm()` defaults to DeepSeek
-`deepseek-v4-pro`; Groq `groq_model` is the fallback and optional override.
+`get_fast_llm()` points at the configured Groq fast model (`groq_fast_model`)
+with DeepSeek fallback. `get_llm()` defaults to the configured Groq large model
+(`groq_model`) with DeepSeek fallback. `LLM_INGEST_PROVIDER=deepseek` selects
+DeepSeek as primary; `LLM_INGEST_PROVIDER=cerebras` enables the Cerebras chain.
 
-`max_steps` reduced from 4 to 2. Empirically, most hard queries resolve within 2 iterations; steps 3–4 rarely surface chunks not already in context.
+The direct `AgenticRetriever` default is two steps; the production retrieval
+configuration permits a bounded maximum of four sub-searches.
 
 ---
 
@@ -118,31 +120,9 @@ roadmap records later live measurements separately.
 
 ---
 
-## Update 2026-07-24 — synthesis model changed from Groq 70B to DeepSeek
+## Historical provider changes
 
-This ADR's split (fast 8B for routing, larger model for synthesis) is still the
-current architecture and remains correct. What changed is which provider backs
-the *synthesis* tier: `get_llm()` in `graphrag/core/llm_client.py` now defaults
-to a bare `DeepSeekLLM` (`deepseek-v4-pro`), not Groq's `llama-3.3-70b-versatile`
-as originally implemented and described above. Groq generation is now an
-opt-in override only, via `LLM_INGEST_PROVIDER=groq`.
-
-`get_fast_llm()` — the routing tier discussed throughout this ADR — is
-unaffected: it still defaults to Groq's `llama-3.1-8b-instant` (DeepSeek
-fallback), so the "8B routing / large-model synthesis" split and the latency
-analysis above remain accurate. Only the specific model name behind "final
-synthesis" in the table and code comments should now be read as DeepSeek,
-not `llama-3.3-70b-versatile`.
-
-## Update 2026-08-17 — synthesis primary changed from DeepSeek to Cerebras
-
-`get_llm()` now defaults to a 3-tier `FallbackLLM` chain: Cerebras
-(`llama-3.3-70b`, free tier) → DeepSeek (`deepseek-v4-pro`) → Groq, replacing
-the bare `DeepSeekLLM` default from the update above. DeepSeek was billing
-paid balance on every synthesis call even when a free provider would have
-sufficed. DeepSeek and Groq remain automatic fallbacks in the same order as
-before. `LLM_INGEST_PROVIDER=deepseek` skips Cerebras and restores the
-2026-07-24 default; `LLM_INGEST_PROVIDER=groq` is unchanged.
-
-`get_fast_llm()` is unaffected — still Groq `llama-3.1-8b-instant` primary,
-DeepSeek fallback.
+Earlier provider-specific amendments are intentionally summarized rather than
+kept as current configuration claims. The durable decision is the two-tier
+routing split; active provider names come from `settings.yml` and
+`graphrag/core/llm_client.py`.

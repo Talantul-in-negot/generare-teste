@@ -92,7 +92,7 @@ ontology (or its wiring into extraction/retrieval) is incomplete. These are
 drawn directly from the live golden-eval suites (`evals/golden_set.json`,
 `data/eval_golden/queries_*.json`), not invented for this document — they are
 run, not aspirational, and their current pass/fail status is tracked in
-`docs/audit-2026-08-13.md` and `evals/last_run.json`.
+`evals/last_run.json`.
 
 **Aerospace** (`aerospace_regulatory.yml`):
 - *Which directive supersedes AD-2022?* — exercises `SUPERSEDES` and the
@@ -156,6 +156,6 @@ rejected before any Neo4j write, not merely logged.
 coerces ontology violations (unknown type → `CONCEPT`, invalid relation →
 `RELATED_TO`) rather than rejecting or quarantining them. SHACL only gates
 the relational-import path today. Extending it to the LLM path is tracked
-separately (see `docs/context_graph_gap_plan.md`, finding F5) — it would be a
-new mutation gate on the main ingestion pipeline and needs its own
-live-verified iteration, not a documentation-only fix.
+separately in the platform roadmap — it would be a new mutation gate on the
+main ingestion pipeline and needs its own live-verified iteration, not a
+documentation-only fix.

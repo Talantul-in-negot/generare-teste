@@ -35,10 +35,10 @@ deployed workload and monitoring data behind the claim.
 
 | Capability | Notes |
 |---|---|
-| Graph ingestion (document → chunk → entity → relation) | Cerebras extraction by default (`get_llm()`, free tier); `LLM_INGEST_PROVIDER=deepseek`/`groq` opt-in overrides; OpenAI `text-embedding-3-large`, 3072 dimensions |
-| LLM provider circuit breaker | Fail-fast after 3 consecutive failures or an 80% error rate over the last 20 calls; `FallbackLLM` chain is Cerebras → DeepSeek → Groq; surfaced on `/health/ready` |
+| Graph ingestion (document → chunk → entity → relation) | Groq extraction by default (`get_llm()`), with DeepSeek fallback; `LLM_INGEST_PROVIDER=deepseek`/`cerebras` opt-in overrides; OpenAI `text-embedding-3-large`, 3072 dimensions |
+| LLM provider circuit breaker | Fail-fast after 3 consecutive failures or an 80% error rate over the last 20 calls; the default `FallbackLLM` chain is Groq → DeepSeek; surfaced on `/health/ready` |
 | Six-stage hybrid retrieval | Vector + BM25 + reranker + GNN + multi-hop + LLM synthesis; high-level community summaries are retrieved directly into final synthesis (legacy map-reduce remains an ablation fallback) |
-| Agentic IRCoT fallback | Two-step maximum; Groq 8B routing + Cerebras large-model synthesis (DeepSeek → Groq fallback) |
+| Agentic IRCoT fallback | Bounded four-step maximum from configuration; Groq fast-model routing + Groq large-model synthesis (DeepSeek fallback) |
 | Forward-chaining inference | Transitivity, symmetry, inverse, and composition to fixpoint after ingestion |
 | OWL-RL reasoning | `owlrl` + `rdflib` over RDF export |
 | SPARQL bridge | In-process SPARQL 1.1 SELECT over Turtle export |
@@ -59,13 +59,31 @@ deployed workload and monitoring data behind the claim.
 
 ### Known scale limits
 
+### Technology evaluation boundaries
+
+Neo4j remains the production system of record. The platform's graph
+interoperability and second-backend work is deliberately evaluation-led:
+
+| Area | Current decision | Promotion condition |
+|---|---|---|
+| Graph analytics | Neo4j GDS PageRank is implemented | Evaluate additional read-only GDS workloads before adoption. |
+| RDF / SKOS | RDF export and SKOS vocabularies are implemented | Review external-source mappings before creating auditable equivalence links. |
+| GQL | Not a production runtime dependency | Keep the bounded read-query contract for conformance tests. |
+| Ultipa / other graph backends | Not integrated | Consider only a same-dataset, read-only benchmark. |
+
+Second-backend results must use the same dataset fingerprint, scenario, and
+query count as Neo4j. They require at least 99.9% result equivalence, tenant
+isolation, 20% lower p95 latency, 25% higher throughput, and no more than 20%
+higher cost before a limited read-only pilot is considered. This is a design
+review gate, not production approval.
+
 | Limit | Current | Expected pressure point |
 |---|---|---|
 | Ingestion throughput | Sequential per document | Approximately 20 documents/minute on one worker |
 | Alias resolution | In-memory dictionary per process | Approximately 500,000 entities before memory pressure |
 | Community rebuild | Full graph per tenant | Slow beyond approximately 100,000 entities; incremental builder exists |
 | Result-store TTL | One hour | Appropriate for interactive queries; insufficient for some batch pipelines |
-| Groq free tier | 1,500 RPD / 6,000 RPM | Gates fast routing and the optional Groq ingestion path, not default DeepSeek synthesis |
+| Groq free tier | 1,500 RPD / 6,000 RPM | Gates fast routing and default Groq synthesis; DeepSeek is the fallback |
 | Vector index | 3072d cosine; Neo4j 5.20 over-fetch fallback and validated Neo4j 2026.06 in-index tenant filtering | Recall/load testing is still required before claiming a 10M-chunk operating point |
 
 ### Current performance baseline
@@ -204,8 +222,6 @@ described as:
 > A production-oriented Enterprise Knowledge Graph and GraphRAG platform with
 > ontology management, temporal reasoning, provenance, hybrid retrieval,
 > evidence-based generation, and policy-controlled access.
-
-It should not yet be called a complete Context Graph for AI.
 
 ## Part I status
 

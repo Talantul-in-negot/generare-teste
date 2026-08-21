@@ -1,6 +1,6 @@
 # ADR-0004 — LLM provider routing and OpenAI embeddings
 
-**Status:** Accepted and amended (current routing updated 2026-07-24)
+**Status:** Accepted and amended (current routing: Groq → DeepSeek; Cerebras opt-in)
 **Date:** 2026-05-30  
 **Author:** Sergiu Nicoara
 
@@ -24,12 +24,13 @@ Initially both were served by Google Gemini (`gemini-2.0-flash` for generation, 
 The current provider split is:
 
 - **Embeddings:** OpenAI `text-embedding-3-large` (3072d).
-- **Large text generation:** DeepSeek `deepseek-v4-pro` primary through
-  `get_llm()`, with Groq fallback.
-- **Fast routing:** Groq `llama-3.1-8b-instant` primary through
-  `get_fast_llm()`, with DeepSeek fallback.
-- **Optional override:** `LLM_INGEST_PROVIDER=groq` makes Groq primary for
-  low-volume development runs, with DeepSeek fallback.
+- **Large text generation:** Groq `groq_model` primary through `get_llm()`,
+  with DeepSeek `deepseek-v4-flash` fallback.
+- **Fast routing:** Groq `groq_fast_model` primary through `get_fast_llm()`,
+  with DeepSeek fallback.
+- **Provider overrides:** `LLM_INGEST_PROVIDER=deepseek` selects DeepSeek
+  primary with Groq fallback; `LLM_INGEST_PROVIDER=cerebras` opts into the
+  Cerebras → DeepSeek → Groq chain.
 
 Rationale for each choice:
 
@@ -60,8 +61,8 @@ The agentic IRCoT path uses two provider tiers:
 
 | Call site | Model | Rationale |
 |---|---|---|
-| Routing steps (SEARCH/ANSWER) | `llama-3.1-8b-instant` | ~15 output tokens; speed matters, quality doesn't |
-| Final synthesis | `deepseek-v4-pro` via `get_llm()` | Quality matters; Groq is the fallback and optional override |
+| Routing steps (SEARCH/ANSWER) | Configured `groq_fast_model` | ~15 output tokens; speed matters, quality doesn't |
+| Final synthesis | Configured Groq `groq_model` via `get_llm()` | Quality matters; DeepSeek is the automatic fallback |
 
 Configured via `groq_model` and `groq_fast_model` in `settings.yml`.
 
@@ -113,37 +114,8 @@ No behavioral change to the retrieval pipeline. Vector dimensions unchanged. The
 
 ---
 
-## Update 2026-07-24 — DeepSeek became the default primary generation engine
+## Historical amendments
 
-The decision above (Groq for synthesis, `llama-3.1-8b-instant` for routing) described
-the architecture as of 2026-05-30/2026-06-03. Since then, `get_llm()` in
-`graphrag/core/llm_client.py` was changed to default to a bare `DeepSeekLLM`
-(`deepseek-v4-pro`) rather than Groq: one provider's extraction/synthesis voice
-for the whole corpus, with no Groq round-trip. Groq is now an **opt-in override
-only**, selected via `LLM_INGEST_PROVIDER=groq`, intended for quick, low-volume
-dev runs.
-
-`get_fast_llm()` — the separate, smaller model used only for the agentic
-retriever's intermediate SEARCH/ANSWER routing decisions — is unaffected by this
-change and still defaults to Groq's `llama-3.1-8b-instant` (with DeepSeek
-fallback), consistent with the "Two-model design" section above.
-
-The original reasoning in this ADR (why Groq was chosen over Gemini at the time,
-the quota/speed tradeoffs) remains an accurate record of that decision and is
-left unchanged. This update only corrects which provider is primary for
-generation as of 2026-07-24.
-
-## Update 2026-08-17 — Cerebras became the default primary generation engine
-
-`get_llm()` in `graphrag/core/llm_client.py` now defaults to a 3-tier
-`FallbackLLM` chain: Cerebras (free tier, 1M tokens/day, no card required) →
-DeepSeek → Groq, replacing the bare `DeepSeekLLM` default from the update
-above. Motivation: DeepSeek billed against paid balance on every call, even
-when a free provider would have sufficed. DeepSeek and Groq remain automatic
-fallbacks — no change to the ordering between them, and Groq's opt-in
-override (`LLM_INGEST_PROVIDER=groq`) is unchanged. A new
-`LLM_INGEST_PROVIDER=deepseek` override skips Cerebras and restores the
-2026-07-24 default (DeepSeek primary, Groq fallback) without a code change.
-
-`get_fast_llm()` is unaffected and still defaults to Groq's
-`llama-3.1-8b-instant` (DeepSeek fallback).
+The 2026-06-03 embedding migration and later provider changes are retained as
+decision history only. They do not override the current route above; consult
+`graphrag/core/llm_client.py` and the configuration for the active model names.
