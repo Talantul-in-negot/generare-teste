@@ -140,7 +140,19 @@ class ContextBuilder:
         entity_edges = local_results.get("entity_edges", [])
         if entity_edges:
             edge_lines = []
-            for e in entity_edges[:10]:  # generous vs. the 5-cap above — chain
+            # Supersession edges are the backbone of regulatory answers. Sort
+            # them first so a broad subgraph cannot crowd the governing chain
+            # out of the bounded prompt section.
+            ordered_edges = sorted(
+                entity_edges,
+                key=lambda e: (
+                    0 if str(e.get("relation", "")).upper() in {
+                        "SUPERSEDES", "SUPERSEDES_TRANSITIVE"
+                    } else 1,
+                    0 if e.get("source_type") == "inferred" else 1,
+                ),
+            )
+            for e in ordered_edges[:10]:  # preserve the bounded prompt budget
                                           # questions (e.g. MH-01) legitimately
                                           # need several hops to answer
                 relation = e.get("relation")
