@@ -115,7 +115,7 @@
   </div>
   <div class="card" id="quizCard"></div>
 </div>
-<div class="modal-backdrop" id="authModal" hidden><section class="modal" aria-labelledby="authTitle"><button class="modal-close" id="authClose" type="button" aria-label="Închide">×</button><h2 id="authTitle">Contul meu</h2><p id="authIntro">Conectează-te ca să-ți păstrezi punctajul și istoricul încercărilor.</p><div id="authForm"><input id="authUsername" maxlength="30" autocomplete="username" placeholder="Nume utilizator"><input id="authPassword" type="password" maxlength="64" autocomplete="current-password" placeholder="Parolă"><p class="auth-error" id="authError" role="alert"></p><div class="modal-actions"><button id="loginBtn" type="button">Intră în cont</button><button id="registerBtn" class="secondary" type="button">Creează cont</button></div></div><div id="authLogged" hidden><p>Conectat ca <strong id="authLoggedName"></strong>.</p><div class="modal-actions"><button id="logoutBtn" class="secondary" type="button">Ieși din cont</button></div></div></section></div>
+<div class="modal-backdrop" id="authModal" hidden><section class="modal" aria-labelledby="authTitle"><button class="modal-close" id="authClose" type="button" aria-label="Închide">×</button><h2 id="authTitle">Contul meu</h2><p id="authIntro">Conectează-te ca să-ți păstrezi punctajul și istoricul încercărilor. Conturile noi sunt create de administrator.</p><div id="authForm"><input id="authUsername" maxlength="30" autocomplete="username" placeholder="Nume utilizator"><input id="authPassword" type="password" maxlength="64" autocomplete="current-password" placeholder="Parolă"><p class="auth-error" id="authError" role="alert"></p><div class="modal-actions"><button id="loginBtn" type="button">Intră în cont</button></div></div><div id="authLogged" hidden><p>Conectat ca <strong id="authLoggedName"></strong>.</p><div class="modal-actions"><button id="logoutBtn" class="secondary" type="button">Ieși din cont</button></div></div></section></div>
 <div class="modal-backdrop" id="statsModal" hidden><section class="modal" aria-labelledby="statsTitle"><button class="modal-close" id="statsClose" type="button" aria-label="Închide">×</button><h2 id="statsTitle">🏆 Clasament și activitate</h2><div id="statsContent">Se încarcă…</div></section></div>
 <script src="questions.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -1034,7 +1034,6 @@ document.getElementById('authClose').addEventListener('click',closeAuth);
 document.getElementById('statsBtn').addEventListener('click',openStats);
 document.getElementById('statsClose').addEventListener('click',()=>document.getElementById('statsModal').hidden=true);
 document.getElementById('loginBtn').addEventListener('click',()=>submitAuth('login'));
-document.getElementById('registerBtn').addEventListener('click',()=>submitAuth('register'));
 document.getElementById('logoutBtn').addEventListener('click',async()=>{await Auth.signOut();accountUser='';cloudPoints=0;updateAccount();});
 document.getElementById('authModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAuth();});
 document.getElementById('statsModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.hidden=true;});
