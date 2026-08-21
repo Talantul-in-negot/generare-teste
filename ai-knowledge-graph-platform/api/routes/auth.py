@@ -589,3 +589,111 @@ async def revoke_user(
         raise HTTPException(status_code=404, detail="No provisioned user with that email in this tenant")
     delete_user_record(email)
     return {"status": "revoked", "email": normalize_email(email)}
+
+
+# ── Token revocation ─────────────────────────────────────────────────────────
+#
+# A JWT is valid until it expires and nothing else, so without this the only
+# answer to "that token leaked" was rotating the signing key and logging every
+# other caller out too. See graphrag/core/token_revocation.py.
+
+
+class TokenRevokeRequest(BaseModel):
+    # RFC 7009 names this field `token`; we accept the decoded id directly as
+    # well so an operator holding only a log line (which records `jti`, never
+    # the token itself) can act without needing the credential back.
+    token: str | None = None
+    jti: str | None = None
+    # Revoke every token issued to a subject before now. This is the usual
+    # incident-response shape: you have the client id, not the tokens.
+    subject: str | None = None
+    reason: str = ""
+
+
+class TokenRevokeResponse(BaseModel):
+    revoked_tokens: int
+    revoked_subjects: int
+    durable: bool
+
+
+@router.post(
+    "/revoke",
+    response_model=TokenRevokeResponse,
+    summary="Revoke an access token or every token for a subject (admin only)",
+)
+@limiter.limit(AUTH_LIMIT)
+async def revoke_token(
+    request: Request,
+    req: TokenRevokeRequest,
+    user: dict = Depends(require_scope("admin")),
+    tenant: str = Depends(get_tenant),
+):
+    """Deny a leaked credential without rotating the signing key.
+
+    Admin-scoped: revocation is a denial-of-service primitive as much as a
+    security one, so the ability to invalidate another caller's session is
+    gated at the same level as user provisioning.
+    """
+    from api.auth.jwt import decode_access_token
+    from graphrag.core.token_revocation import get_revocation_store
+
+    store = await get_revocation_store()
+    revoked_tokens = 0
+    revoked_subjects = 0
+    durable = True
+
+    target_jti = (req.jti or "").strip()
+    target_subject = (req.subject or "").strip()
+
+    if req.token:
+        # Decode without an audience: a token being revoked may well have been
+        # minted for the MCP resource, and refusing to revoke it here because
+        # it is not an API token would be exactly backwards.
+        try:
+            claims = decode_access_token(req.token)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token could not be verified, so its identifier cannot be trusted",
+            ) from exc
+        # Tenant-scope the action: an admin of one tenant must not be able to
+        # revoke another tenant's credentials.
+        if claims.get("tenant") != tenant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Token belongs to a different tenant",
+            )
+        target_jti = target_jti or str(claims.get("jti") or "")
+        if not target_jti:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token predates revocation support and carries no jti; revoke the subject instead",
+            )
+
+    if target_jti:
+        durable = await store.revoke_token(
+            target_jti, subject=target_subject, reason=req.reason,
+        ) and durable
+        revoked_tokens = 1
+
+    if target_subject:
+        durable = await store.revoke_subject(target_subject, reason=req.reason) and durable
+        revoked_subjects = 1
+
+    if not revoked_tokens and not revoked_subjects:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide one of: token, jti, or subject",
+        )
+
+    log.info(
+        "auth.revocation_requested",
+        actor=user.get("sub"), tenant=tenant,
+        jti=target_jti[:12] if target_jti else "",
+        subject=target_subject, durable=durable,
+    )
+    return TokenRevokeResponse(
+        revoked_tokens=revoked_tokens,
+        revoked_subjects=revoked_subjects,
+        durable=durable,
+    )

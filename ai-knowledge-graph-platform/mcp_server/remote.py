@@ -142,7 +142,7 @@ class RemoteMCPAuthMiddleware:
         # minted for the REST API must not buy access to the governed MCP
         # tool surface, and a token with no audience at all is not evidence
         # that any authorization server intended it for this resource.
-        identity = CallerIdentity.from_token(
+        identity = await CallerIdentity.from_token_checked(
             authorization[7:].strip(),
             audience=self.resource,
             strict_audience=True,

@@ -49,4 +49,9 @@ docs/presentation/*_build/
 .DS_Store
 Thumbs.db
 
+# Generated code knowledge graph — rebuilt with `graphify update .` (pure AST,
+# no API key), so committing 11 MB of derived nodes/edges/cache would bloat
+# every clone to store something reproducible from the source beside it.
+graphify-out/
+
 # Dependency lock is committed — regenerate with: make lock

@@ -541,6 +541,7 @@ customer-scale validation without deployment evidence.
 | Capability-gated Neo4j 2026 vector search | `docs/adr/0007-capability-gated-neo4j-vector-search.md`; implemented and live-validated on a separate modern volume |
 | Measured adaptive retrieval routing | `docs/adr/0008-adaptive-retrieval-routing.md`; implemented and unit-tested, with production gains still unclaimed |
 | Audience-bound access tokens for API and MCP | `docs/adr/0010-audience-bound-access-tokens.md`; implemented and unit-tested. Breaking for existing remote MCP clients |
+| JWT key rotation, algorithm confinement, and token revocation | `docs/adr/0011-jwt-key-rotation-and-revocation.md`; implemented and unit-tested. RS256/JWKS is opt-in — `jwt_algorithm` still defaults to HS256 |
 
 ## Context Graph ADRs
 
@@ -630,14 +631,18 @@ production value, not trend visibility.
 
 ## Production-critical
 
-1. **Federate an external identity provider.** Token audience binding and RFC
-   9728 protected-resource metadata are now implemented (ADR 0010); what
-   remains is multi-issuer validation, JWKS rotation, and asymmetric signing,
-   which are only needed once tokens come from somewhere other than this
-   codebase.
-   *Prerequisite:* choose and configure the production IdP.
-   *Benefit:* remote MCP can be exposed to federated or untrusted clients.
-   *Complexity:* medium — issuer allowlist, JWKS cache, key-rollover handling.
+1. **Turn on RS256 in production, then federate an external IdP.** Asymmetric
+   signing, `kid`, JWKS publication, rotation overlap, and token revocation are
+   implemented (ADR 0011) but `jwt_algorithm` defaults to HS256 — the
+   capability is inert until a deployment sets it and provides key material.
+   Do that first; it is configuration plus a rotation drill. What genuinely
+   remains after it is multi-issuer validation, remote JWKS fetching, and `iss`
+   allow-listing.
+   *Prerequisite:* key material in the deployment's secret store; then choose
+   the production IdP.
+   *Benefit:* a gateway or auditor can verify without being able to mint;
+   remote MCP can be exposed to federated clients.
+   *Complexity:* low for RS256, medium for federation.
 2. Run representative 10x load and recovery tests. Check in queue-age,
    throughput, p95/p99, error-rate, provider-cost, RTO, and RPO evidence.
    *Complexity:* medium; the blocker is environment, not code.

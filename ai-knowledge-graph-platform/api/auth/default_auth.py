@@ -32,7 +32,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from api.auth.dependencies import request_access_token, validate_cookie_csrf
-from api.auth.jwt import decode_access_token
+from api.auth.jwt import assert_not_revoked, decode_access_token
 from graphrag.core.config import get_settings, is_dev_env
 from graphrag.core.resource_identifiers import api_resource
 
@@ -46,6 +46,20 @@ _ALWAYS_PUBLIC = frozenset({
     "/auth/token",
     "/auth/login",
     "/auth/callback",
+    # OAuth discovery. These MUST be reachable without a credential: they are
+    # what a caller with no usable token reads in order to obtain one, and what
+    # a peer reads to verify a token without holding minting material. Neither
+    # contains a secret -- the JWKS publishes public halves only.
+    "/.well-known/jwks.json",
+    "/.well-known/oauth-authorization-server",
+})
+
+# Interactive API documentation. Public in development, hidden elsewhere: the
+# OpenAPI document is a complete map of every route, parameter, and model on
+# the deployment, which is free reconnaissance for an unauthenticated caller.
+# Hidden (404) rather than denied (401) outside DEV_ENVS so its absence does
+# not itself confirm the framework in use.
+_DOCS_PATHS = frozenset({
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -81,9 +95,14 @@ def _is_public(path: str, dev: bool) -> bool:
         return True
     if path == _ADMIN_PREFIX or path.startswith(_ADMIN_PREFIX + "/"):
         return True
-    if dev and path in _DEV_ONLY:
+    if dev and (path in _DEV_ONLY or path in _DOCS_PATHS):
         return True
     return False
+
+
+def _is_hidden(path: str, dev: bool) -> bool:
+    """Paths that must 404 rather than 401 outside development."""
+    return not dev and (path in _DEV_ONLY or path in _DOCS_PATHS)
 
 
 class RequireAuthMiddleware(BaseHTTPMiddleware):
@@ -104,11 +123,9 @@ class RequireAuthMiddleware(BaseHTTPMiddleware):
         if _is_public(path, dev):
             return await call_next(request)
 
-        if dev and path in _DEV_ONLY:
-            return await call_next(request)
-        if not dev and path in _DEV_ONLY:
-            # Hide, don't just deny -- an outside caller shouldn't learn
-            # that a dev-only route exists on this deployment at all.
+        if _is_hidden(path, dev):
+            # Hide, don't just deny -- an outside caller shouldn't learn that a
+            # dev-only route or the OpenAPI document exists here at all.
             return JSONResponse({"detail": "Not Found"}, status_code=404)
 
         token, cookie_authenticated = request_access_token(request)
@@ -124,6 +141,7 @@ class RequireAuthMiddleware(BaseHTTPMiddleware):
             # See api/auth/dependencies.py: the API is a resource server too,
             # so it rejects tokens minted for the MCP resource.
             claims = decode_access_token(token, audience=api_resource())
+            await assert_not_revoked(claims)
         except ValueError as exc:
             log.info("auth.middleware_denied", path=path, reason="invalid_token", error=str(exc))
             return JSONResponse(

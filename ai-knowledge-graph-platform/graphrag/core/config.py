@@ -169,6 +169,21 @@ class Settings(BaseSettings):
 
     # ── OAuth / JWT ──────────────────────────────────────────────────────────────
     jwt_secret_key: str = "change-me-in-production-at-least-32-bytes"
+    # Algorithm NEW tokens are signed with. HS256 keeps the historical
+    # single-secret behaviour; RS256 enables key rotation without invalidating
+    # outstanding tokens, and lets a second service verify without being able
+    # to mint. See graphrag/core/signing_keys.py and ADR 0011.
+    jwt_algorithm: str = "HS256"
+    # Algorithms a presented token may have been signed with. Empty means
+    # "only jwt_algorithm". Set to both values ONLY while migrating between
+    # them, and narrow it again once every outstanding token has expired.
+    # This is read from config and never from the token header — that is the
+    # defence against `alg` confusion, so it must stay an allow-list.
+    jwt_accepted_algorithms: str = ""
+    # Bound on how long a revoked token's deny-list entry is retained. It only
+    # has to outlive the token itself; anything longer is storage spent on
+    # credentials that already expired.
+    jwt_revocation_ttl_seconds: int = 3900
     # Separate secret for SessionMiddleware cookie signing.
     # When empty, main.py derives one from jwt_secret_key + ":session".
     # Set explicitly in production to allow independent rotation.

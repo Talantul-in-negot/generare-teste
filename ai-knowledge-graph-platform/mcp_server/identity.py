@@ -110,6 +110,39 @@ class CallerIdentity:
         )
 
     @classmethod
+    async def from_token_checked(
+        cls,
+        token: str | None,
+        *,
+        audience: str | None = None,
+        strict_audience: bool = False,
+    ) -> "CallerIdentity":
+        """`from_token`, plus the revocation deny-list.
+
+        Revocation needs I/O, so it cannot live in the sync `from_token` that
+        stdio and the capability tests use. The remote HTTP transport is
+        already async and is the surface a leaked token would be replayed
+        against, so it calls this instead.
+        """
+        identity = cls.from_token(
+            token, audience=audience, strict_audience=strict_audience,
+        )
+        if not identity.authenticated:
+            return identity
+        from graphrag.core.token_revocation import get_revocation_store
+
+        try:
+            claims = decode_access_token(
+                token or "", audience=audience, strict=strict_audience,
+            )
+            store = await get_revocation_store()
+            if await store.is_revoked(claims):
+                return cls.anonymous()
+        except ValueError:
+            return cls.anonymous()
+        return identity
+
+    @classmethod
     def resolve(cls) -> "CallerIdentity":
         """Resolve the process-wide caller identity from `GRAPHRAG_MCP_TOKEN`."""
         return cls.from_token(os.environ.get(TOKEN_ENV_VAR))

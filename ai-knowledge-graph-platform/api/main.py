@@ -14,7 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from api.limiter import limiter
 from api.request_limits import RequestBodyLimitMiddleware
-from api.routes import agent, auth, ingest, query, evaluation, kpis, corrections, kg_features, demo, context_graph, business, skills
+from api.routes import agent, auth, ingest, query, evaluation, kpis, corrections, kg_features, demo, context_graph, business, skills, wellknown
 from graphrag.core.config import get_settings, is_dev_env
 
 log = structlog.get_logger(__name__)
@@ -167,6 +167,7 @@ app.add_middleware(
 )
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+app.include_router(wellknown.router,  tags=["Auth"])   # unauthenticated OAuth discovery
 app.include_router(auth.router,       prefix="/auth",       tags=["Auth"])
 app.include_router(ingest.router,     prefix="/ingest",     tags=["Ingestion"])
 app.include_router(query.router,      prefix="/query",      tags=["Query"])

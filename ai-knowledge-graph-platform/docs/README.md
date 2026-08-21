@@ -21,7 +21,8 @@ The specification-to-implementation runner is documented in
 - `performance-metrics-inventory.md` — metric definitions and verification queries
 - `adr/` — architecture decisions, including the Context Graph decision trace,
   capability-gated Neo4j vector search, adaptive retrieval routing, agent
-  platform trust boundaries, and audience-bound access tokens
+  platform trust boundaries, audience-bound access tokens, and JWT key
+  rotation/revocation
 
 Interview, outreach, and role-specific material is deliberately **not** kept in
 this repository — it was removed on 2026-08-13 (it had been committed under
