@@ -73,6 +73,30 @@ def _parse_retry_after(message: str) -> float:
     return max(_MIN_RETRY_WAIT, min(_MAX_RETRY_WAIT, minutes * 60 + seconds))
 
 
+def _report_openai_compatible_usage(response: Any) -> None:
+    """Forward a chat-completion response's usage/model to GenAI telemetry.
+
+    Groq, DeepSeek, Cerebras, and OpenRouter are all OpenAI-compatible and
+    share this exact response shape, so one helper covers all four instead of
+    repeating the extraction in each `generate()`.
+
+    Deliberately tolerant: `response.usage` is `None` on some providers/some
+    responses (notably a request that only asked for the first partial chunk,
+    or an OpenRouter model that doesn't report usage), and reporting a
+    fabricated 0 in that case would be worse than reporting nothing — see
+    `record_llm_usage`'s and `record_token_usage`'s docstrings on why `None`
+    is treated differently from `0` throughout this telemetry path.
+    """
+    from graphrag.observability.genai_telemetry import record_llm_usage
+
+    usage = getattr(response, "usage", None)
+    record_llm_usage(
+        response_model=getattr(response, "model", None),
+        input_tokens=getattr(usage, "prompt_tokens", None) if usage else None,
+        output_tokens=getattr(usage, "completion_tokens", None) if usage else None,
+    )
+
+
 # ── Shared interface ─────────────────────────────────────────────────────────
 
 class BaseLLM:
@@ -152,6 +176,7 @@ class GroqLLM(BaseLLM):
                     lambda: self._client.chat.completions.create(**kwargs),
                 )
                 record_result(self._PROVIDER_NAME, True)
+                _report_openai_compatible_usage(response)
                 return response.choices[0].message.content or ""
 
             except RateLimitError as exc:
@@ -350,6 +375,7 @@ class DeepSeekLLM(BaseLLM):
                     lambda: self._client.chat.completions.create(**kwargs),
                 )
                 record_result(self._PROVIDER_NAME, True)
+                _report_openai_compatible_usage(response)
                 return response.choices[0].message.content or ""
 
             except (RateLimitError, APIStatusError, APITimeoutError, APIConnectionError) as exc:
@@ -433,6 +459,7 @@ class CerebrasLLM(BaseLLM):
                     lambda: self._client.chat.completions.create(**kwargs),
                 )
                 record_result(self._PROVIDER_NAME, True)
+                _report_openai_compatible_usage(response)
                 return response.choices[0].message.content or ""
 
             except (RateLimitError, APIStatusError, APITimeoutError, APIConnectionError) as exc:
@@ -539,6 +566,7 @@ class OpenRouterLLM(BaseLLM):
                     lambda: self._client.chat.completions.create(**kwargs),
                 )
                 record_result(self._PROVIDER_NAME, True)
+                _report_openai_compatible_usage(response)
                 return response.choices[0].message.content or ""
 
             except (RateLimitError, APIStatusError, APITimeoutError, APIConnectionError) as exc:

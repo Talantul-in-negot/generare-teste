@@ -39,10 +39,17 @@ from __future__ import annotations
 
 import time
 from contextlib import contextmanager
+from contextvars import ContextVar
 
 import structlog
 
 log = structlog.get_logger(__name__)
+
+# Set to the active span's response dict for the duration of `llm_call_span`,
+# None otherwise. Lets a provider client report usage without importing
+# tracing machinery or being handed the span object — see `record_llm_usage`.
+# Same pattern as `graphrag/observability/correlation.py`'s `_correlation_id`.
+_active_response: ContextVar[dict | None] = ContextVar("genai_active_response", default=None)
 
 try:
     from prometheus_client import Counter, Histogram
@@ -98,6 +105,43 @@ def system_for(provider: str) -> str:
     return _SYSTEM_BY_PROVIDER.get((provider or "").lower(), provider or "unknown")
 
 
+def record_llm_usage(
+    *,
+    response_model: str | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+) -> None:
+    """Report what a provider client learned from its own raw API response.
+
+    Call this from inside a provider's ``generate()``, immediately after
+    receiving the response and before extracting the text to return -- that
+    is the only place the raw `usage`/`model` fields are still in scope,
+    since ``BaseLLM.generate()`` returns a bare ``str`` everywhere else in
+    this codebase and changing that contract would ripple through every call
+    site.
+
+    A no-op outside an active `llm_call_span` (e.g. a provider constructed
+    and called directly in a test, or a future call site that bypasses
+    `FallbackLLM`), so providers may call this unconditionally without
+    checking whether they are inside one.
+
+    Previously this was never called, despite `llm_call_span` being designed
+    to accept exactly this: `FallbackLLM.generate()` opened the span but
+    never populated its yielded `response` dict, so
+    `gen_ai.usage.input_tokens`/`output_tokens` were defined in the semantic
+    convention mapping but never emitted from the real call path.
+    """
+    target = _active_response.get()
+    if target is None:
+        return
+    if response_model is not None:
+        target["response_model"] = response_model
+    if input_tokens is not None:
+        target["input_tokens"] = input_tokens
+    if output_tokens is not None:
+        target["output_tokens"] = output_tokens
+
+
 def record_token_usage(provider: str, input_tokens: int | None, output_tokens: int | None) -> None:
     """Record provider-reported token counts.
 
@@ -147,6 +191,14 @@ def llm_call_span(
     started = time.perf_counter()
     outcome = "success"
 
+    # Published for the duration of this span so a provider client several
+    # calls deeper (past `await loop.run_in_executor(...)`, still inside the
+    # same coroutine and therefore the same context) can reach `response`
+    # via `record_llm_usage()` without this function handing it anything
+    # explicitly. Reset in `finally` so a nested fallback span (primary then
+    # secondary, see `FallbackLLM.generate`) cannot leak into the wrong one.
+    token = _active_response.set(response)
+
     # Imported lazily and tolerantly: tracing is optional everywhere else in
     # this package, and a model call must not depend on it.
     try:
@@ -161,6 +213,7 @@ def llm_call_span(
             outcome = type(exc).__name__
             raise
         finally:
+            _active_response.reset(token)
             _finish(system, operation, outcome, time.perf_counter() - started, provider, response)
         return
 
@@ -178,6 +231,7 @@ def llm_call_span(
                     pass
             raise
         finally:
+            _active_response.reset(token)
             if span is not None:
                 _apply_response_attributes(span, response)
             _finish(system, operation, outcome, time.perf_counter() - started, provider, response)
