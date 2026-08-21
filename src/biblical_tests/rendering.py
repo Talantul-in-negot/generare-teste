@@ -61,8 +61,8 @@ def _header(test: TestDefinition, styles: dict) -> list:
     c = test.contest
     category = str(c.get("category", ""))
     header = Table([
-        [_p(f"{c.get('title', '')}\n{'Ediția ' + str(c.get('edition', ''))}", styles["header"]),
-         _p(f"Categoria {category}\n\n{c.get('stage', '')}\n{c.get('date', '')}", ParagraphStyle("center", parent=styles["header"], alignment=TA_CENTER)),
+        [_p(f"Categoria {category}", styles["header"]),
+         _p(f"{c.get('title', '')}\n{'Ediția ' + str(c.get('edition', ''))}\n\n{c.get('stage', '')}\n{c.get('date', '')}", ParagraphStyle("center", parent=styles["header"], alignment=TA_CENTER)),
          _p(f"Versiune Test:     {test.version}", ParagraphStyle("right", parent=styles["header"], alignment=TA_RIGHT))]
     ], colWidths=[62*mm, 66*mm, 62*mm])
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -104,8 +104,10 @@ def _matching(q, answer_key: bool, styles: dict):
         answer_style = styles["correct"] if answer_key else styles["body"]
         letter = chr(64 + i)
         rows.append([_p(f"{i}.", styles["body"]), _p(answer, answer_style), _p(left, styles["body"]), _p(f"{letter}.    {q.right[letter]}", styles["body"]), _p(q.evidence[i-1].reference, styles["red"])])
-    table = Table(rows, colWidths=[7*mm, 8*mm, 59*mm, 74*mm, 42*mm])
-    table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("BOX", (1, 0), (1, -1), 0.8, colors.black), ("ALIGN", (0, 0), (1, -1), "CENTER"), ("LEFTPADDING", (0, 0), (-1, -1), 1), ("RIGHTPADDING", (0, 0), (-1, -1), 1), ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
+    # Keep the answer boxes as individual cells and move the A-E column
+    # farther right, matching the reference form's wider central text area.
+    table = Table(rows, colWidths=[7*mm, 8*mm, 70*mm, 63*mm, 42*mm])
+    table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("GRID", (1, 0), (1, -1), 0.8, colors.black), ("ALIGN", (0, 0), (1, -1), "CENTER"), ("LEFTPADDING", (0, 0), (-1, -1), 1), ("RIGHTPADDING", (0, 0), (-1, -1), 1), ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
     return table
 
 

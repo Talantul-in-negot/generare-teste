@@ -1,7 +1,7 @@
 contest:
   title: "TALANTUL ÎN NEGOȚ"
   stage: "Faza pe biserică"
-  edition: 2026
+  edition: 2027
   date: "28 martie 2026"
   category: "6_7"
 scoring:
@@ -12,4 +12,3 @@ scoring:
 difficulty: mixed
 seed: 12345
 number_of_versions: 1
-
