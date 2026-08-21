@@ -140,7 +140,7 @@
     {
       "id": "SH-07",
       "type": "single_hop",
-      "question": "What is the status of MCAS Software v2.0 relative to v1.0?",
+      "question": "What is the status of MCAS Software v2.0 relative to the prior deployed version v1.7.3?",
       "expected_citations": [
         "Boeing_MCAS_SWChangeRecord"
       ],

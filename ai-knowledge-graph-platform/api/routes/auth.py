@@ -29,6 +29,11 @@ from pydantic import BaseModel
 from api.auth.dependencies import get_current_user, get_tenant, require_scope
 from api.limiter import AUTH_LIMIT, limiter
 from graphrag.core.config import get_settings, is_dev_env
+from graphrag.core.resource_identifiers import (
+    InvalidResourceIdentifier,
+    known_resources,
+    resolve_requested_resource,
+)
 from graphrag.core.scopes import FIXED_SCOPES, tenant_scope, validate_scopes
 from api.auth.google import build_authorization_url, exchange_code_for_userinfo  # pop_state removed (was dead code)
 from api.auth.jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
@@ -109,17 +114,33 @@ def _redis_error_types() -> tuple[type[BaseException], ...]:
         return (OSError, ConnectionError, ValueError)
 
 
+def _log_client_registry_fallback(operation: str, exc: BaseException) -> None:
+    """Record that the M2M client registry just diverged from shared storage.
+
+    A client written to process memory during a Redis outage authenticates on
+    exactly one replica; every other replica answers 401 for the same valid
+    credential. That is indistinguishable from a bad secret at the caller, so
+    it needs to be visible from this side.
+    """
+    log.warning(
+        "auth.client_registry_redis_unavailable",
+        operation=operation,
+        exception_type=type(exc).__name__,
+        impact="falling back to per-process storage; clients will not be shared across replicas",
+    )
+
+
 def _client_get(client_id: str) -> dict | None:
     r = _get_redis_sync()
     if r is not None:
         try:
             raw = r.hget(_CLIENTS_KEY, client_id)
             return json.loads(raw) if raw else None
-        except _redis_error_types():
+        except _redis_error_types() as exc:
             # The actual TCP connect happens lazily on this first command,
             # not at from_url() inside _get_redis_sync -- a Redis outage
             # surfaces here, not there.
-            pass
+            _log_client_registry_fallback("client_get", exc)
     return _m2m_clients_mem.get(client_id)
 
 
@@ -129,8 +150,8 @@ def _client_set(client_id: str, data: dict) -> None:
         try:
             r.hset(_CLIENTS_KEY, client_id, json.dumps(data))
             return
-        except _redis_error_types():
-            pass
+        except _redis_error_types() as exc:
+            _log_client_registry_fallback("client_set", exc)
     _m2m_clients_mem[client_id] = data
 
 
@@ -389,6 +410,12 @@ class TokenRequest(BaseModel):
     client_id: str
     client_secret: str
     scope: str = "read write"
+    # RFC 8707 Resource Indicators. The MCP authorization specification makes
+    # this mandatory for MCP clients and makes audience validation a MUST for
+    # the MCP server, so a caller that wants to reach the MCP transport asks
+    # for a token bound to it. Omitted means "the REST API", which keeps every
+    # existing client_credentials caller working unchanged.
+    resource: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -396,6 +423,10 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int = ACCESS_TOKEN_EXPIRE_MINUTES * 60
     scope: str
+    # Echoing the bound audience lets a client verify it received a token for
+    # the resource it asked for, rather than discovering the mismatch later as
+    # an opaque 401 from the resource server.
+    resource: str
 
 
 @router.post(
@@ -410,6 +441,21 @@ async def token(request: Request, req: TokenRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported grant_type: {req.grant_type}",
         )
+
+    try:
+        resource = resolve_requested_resource(req.resource)
+    except InvalidResourceIdentifier as exc:
+        # RFC 8707 Section 2 -- an unrecognised resource is invalid_target.
+        # Resolved before the credential check so a bad request never depends
+        # on whether the client_id happened to exist.
+        log.info("auth.invalid_target", requested=req.resource, error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "invalid_target: resource must be one of "
+                f"{', '.join(known_resources())}"
+            ),
+        ) from exc
 
     client = _client_get(req.client_id)
     if not client:
@@ -445,10 +491,11 @@ async def token(request: Request, req: TokenRequest):
         # tenant; fall back to the deployment default rather than issuing a
         # tenantless token that get_tenant would reject with a 403.
         "tenant":      client_tenant,
-    })
+    }, audience=resource)
     return TokenResponse(
         access_token=access_token,
         scope=" ".join(sorted(granted)),
+        resource=resource,
     )
 
 

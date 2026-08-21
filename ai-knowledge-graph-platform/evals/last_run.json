@@ -1,38 +1,31 @@
 {
-  "pass_rate": 1.0,
-  "passed": 5,
-  "failed": 0,
+  "pass_rate": 0.5,
+  "passed": 1,
+  "failed": 1,
   "errored": 0,
   "by_type": {
-    "multi_hop": {
-      "passed": 2,
-      "total": 2
-    },
-    "authority_chain": {
+    "single_hop": {
       "passed": 1,
       "total": 1
     },
-    "negative": {
-      "passed": 1,
-      "total": 1
-    },
-    "contextual": {
-      "passed": 1,
+    "agentic": {
+      "passed": 0,
       "total": 1
     }
   },
   "questions": [
     {
-      "id": "MH-03",
-      "type": "multi_hop",
+      "id": "SH-07",
+      "type": "single_hop",
       "passed": true,
       "failures": [],
-      "answer_snippet": "The MCAS software requirements apply to all operators of Boeing 737-8 and 737-9 aircraft. In the context provided, the o",
+      "answer_snippet": "MCAS Software v2.0 supersedes MCAS Software v1.7.3 and all earlier versions. It is the required version for compliance w",
       "citations": [
-        "FAA-AD-2020-05-11",
-        "FAA-AD-2022-03-07",
-        "FAA-AD-2024-01-02",
+        "G-ABCD_AD_compliance_2024-03",
         "Boeing_MCAS_SWChangeRecord",
+        "G-ABCD_inspection_2024-01",
+        "SWA_fleet_registry_2024",
+        "FAA-AD-2022-03-07",
         "EASA AD 2024-0072",
         "EASA AD 2022-0201",
         "Boeing Model 737-8",
@@ -43,147 +36,40 @@
         "MCAS Software version 2.0 or later",
         "737-9",
         "737-8",
-        "Boeing 737 MAX",
-        "Southwest Airlines",
-        "EASA-AD-2024-0072",
+        "Electric stabilizer trim",
+        "Pilot override capability",
+        "Fixed 15\u00b0 AOA threshold",
+        "v1.7.x",
+        "EASA-AD-2024-0072"
+      ],
+      "steps": [
+        "\ud83d\udcdd Query expanded \u2192 MCAS Software v2.0 v1.7.3 status",
+        "\ud83d\udd0d BM25 + vector search in graph...",
+        "\ud83d\udd78\ufe0f GNN scoring \u2014 2-hop traversal...",
+        "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
+        "\ud83d\udcca Cross-encoder reranking \u2192 top 8 chunks",
+        "\u26a0\ufe0f 1 unresolved conflict(s) flagged",
+        "\u270d\ufe0f Synthesising answer with LLM..."
+      ],
+      "latency_ms": 39196.564514000784
+    },
+    {
+      "id": "AGT-02",
+      "type": "agentic",
+      "passed": false,
+      "failures": [
+        "insufficient citation recall \u2014 missing: ['FAA-AD-2024-01-02']"
+      ],
+      "answer_snippet": "The provided context does not contain any information about FAA-AD-2024, its requirements, or how Southwest Airlines\u2019 73",
+      "citations": [
         "SWA_fleet_registry_2024"
       ],
       "steps": [
-        "\ud83d\udcdd Query expanded \u2192 airlines MCAS (Maneuvering Characteristics Augmentation Syst",
+        "\ud83d\udcdd Query expanded \u2192 FAA-AD-2024 Southwest Airlines 737 MAX compliance chain",
         "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
         "\u270d\ufe0f Synthesising answer with LLM..."
       ],
-      "latency_ms": 21854.83481799929
-    },
-    {
-      "id": "MH-04",
-      "type": "multi_hop",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "The FAA issues an Airworthiness Directive (AD) that mandates specific inspections and actions for the LEAP-1B engine mou",
-      "citations": [
-        "737MAX_CMM_Engine_Mount",
-        "G-ABCD_inspection_2024-01",
-        "14CFR_Part39_excerpt",
-        "Boeing Model 737-8",
-        "Boeing Service Bulletin 737-31-1710",
-        "Boeing",
-        "MCAS v2.0",
-        "737 MAX Series",
-        "Boeing 737 MAX",
-        "Southwest Airlines",
-        "737-8",
-        "737-9",
-        "EASA AD 2024-0072",
-        "Alternative Method of Compliance (AMOC)",
-        "EASA-AD-2024-0072",
-        "FAA-AD-2024-01-02",
-        "FAA-AD-2022-03-07"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 FAA Federal Aviation Administration CFM LEAP-1B engine regul",
-        "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 9519.884689998435
-    },
-    {
-      "id": "AUT-03",
-      "type": "authority_chain",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "The regulatory hierarchy that governs engine-inspection requirements for the Boeing 737 MAX is set out in 14 CFR Part 39",
-      "citations": [
-        "FAA-AD-2020-05-11",
-        "14CFR_Part39_excerpt",
-        "FAA-AD-2022-03-07",
-        "Boeing_company_profile",
-        "EASA AD 2024-0072",
-        "EASA AD 2022-0201",
-        "Boeing Model 737-8",
-        "Boeing Service Bulletin 737-31-1710",
-        "Boeing",
-        "MCAS v2.0",
-        "Boeing 737 MAX",
-        "Southwest Airlines",
-        "737-9",
-        "737-8",
-        "737 MAX Series",
-        "737MAX_CMM_Engine_Mount",
-        "EASA-AD-2024-0072",
-        "FAA-AD-2024-01-02"
-      ],
-      "steps": [
-        "\ud83d\udcdd Query expanded \u2192 Boeing 737 MAX engine inspections regulatory hierarchy",
-        "\ud83d\udd78\ufe0f Graph expansion (Leiden communities)...",
-        "\u270d\ufe0f Synthesising answer with LLM..."
-      ],
-      "latency_ms": 9832.592349999686
-    },
-    {
-      "id": "NEG-03",
-      "type": "negative",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "No. The FAA airworthiness directives in the corpus (FAA-AD-2022-03-07, FAA-AD-2024-01-02, FAA-AD-2020-05-11) address top",
-      "citations": [
-        "FAA-AD-2022-03-07",
-        "FAA-AD-2024-01-02",
-        "14CFR_Part39_excerpt",
-        "FAA-AD-2020-05-11",
-        "EASA-AD-2024-0072",
-        "EASA AD 2024-0072",
-        "EASA AD 2022-0201",
-        "Boeing Model 737-8",
-        "Boeing Service Bulletin 737-31-1710",
-        "Boeing",
-        "MCAS v2.0",
-        "Boeing 737 MAX",
-        "Southwest Airlines",
-        "Alternative Method of Compliance (AMOC)",
-        "EASA",
-        "Certification Directorate, Safety Information Section",
-        "FMGC software P/12D",
-        "A320",
-        "Airbus Service Bulletin A320-22-1272"
-      ],
-      "steps": [
-        "Answer cache hit; original governed trace reused"
-      ],
-      "latency_ms": 19.68944200052647
-    },
-    {
-      "id": "CTX-02",
-      "type": "contextual",
-      "passed": true,
-      "failures": [],
-      "answer_snippet": "The EASA AD 2024-0072 covers Airbus A320-200N series aeroplanes (all manufacturer serial numbers) and Airbus A321-271N s",
-      "citations": [
-        "EASA-AD-2024-0072",
-        "Airbus_A320neo_profile",
-        "14CFR_Part39_excerpt",
-        "G-ABCD_AD_compliance_2024-03",
-        "EASA AD 2024-0072",
-        "EASA AD 2022-0201",
-        "Alternative Method of Compliance (AMOC)",
-        "EASA",
-        "Certification Directorate, Safety Information Section",
-        "FMGC software P/12D",
-        "A320",
-        "Airbus Service Bulletin A320-22-1272",
-        "Software Update",
-        "vertical navigation algorithm",
-        "Install FMGC software standard P/12D",
-        "Flight crew",
-        "Operational Restriction (interim)",
-        "FMGC",
-        "Boeing Model 737-8",
-        "Boeing Service Bulletin 737-31-1710"
-      ],
-      "steps": [
-        "Answer cache hit; original governed trace reused"
-      ],
-      "latency_ms": 37.54036499958602
+      "latency_ms": 1749.2680480027047
     }
   ]
 }

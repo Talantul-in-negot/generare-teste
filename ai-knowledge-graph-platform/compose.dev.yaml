@@ -26,6 +26,12 @@ x-worker-env: &worker-env      # shared env for all Python services
   KPI_BACKEND:              timescale
   TIMESCALE_DB_URL:         postgresql+asyncpg://graphrag:graphrag_dev@timescaledb:5432/graphrag
   QUERY_RESULT_TTL_SECONDS: "3600"   # override at deploy time; no redeploy needed
+  # OAuth resource identifiers (ADR 0010). Tokens are bound to one of these in
+  # their `aud` claim, and each resource server rejects tokens minted for the
+  # other. Shared by every service so the API mints what the MCP gateway
+  # validates -- a disagreement here 401s every MCP call.
+  GRAPHRAG_API_RESOURCE:    http://localhost:8000
+  GRAPHRAG_MCP_RESOURCE:    http://localhost:8002/mcp
   # The Dockerfile's non-root "app" user has no real home directory
   # (HOME=/nonexistent), so huggingface_hub's default ~/.cache/huggingface
   # cache-dir resolution fails with PermissionError on query_worker's first

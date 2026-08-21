@@ -44,10 +44,13 @@ def main() -> None:
     args = parser.parse_args()
     if args.dev_token:
         from api.auth.jwt import create_access_token
+        from graphrag.core.resource_identifiers import mcp_resource
+        # The remote MCP transport validates the token audience (RFC 8707), so
+        # a dev token must name the MCP resource, not the REST API default.
         args.token = create_access_token({
             "sub": "local-load-agent", "tenant": args.tenant,
             "scope": f"read tenant:{args.tenant}", "type": "m2m",
-        })
+        }, audience=mcp_resource())
     if not args.token:
         raise SystemExit("GRAPHRAG_MCP_TOKEN or --token is required")
     question = "What are relations for Boeing 737 MAX?"

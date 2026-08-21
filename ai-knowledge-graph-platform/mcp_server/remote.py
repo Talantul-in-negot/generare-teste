@@ -24,9 +24,16 @@ from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from graphrag.core.resource_identifiers import mcp_resource
 from graphrag.observability.correlation import correlation_context
 from graphrag.observability.agent_telemetry import transport_context
 from mcp_server.identity import CallerIdentity
+from mcp_server.oauth_metadata import (
+    SCOPES_SUPPORTED,
+    challenge_header,
+    metadata_path,
+    protected_resource_metadata,
+)
 from mcp_server.server import mcp
 
 DEFAULT_MAX_REQUEST_BYTES = 1_048_576
@@ -89,12 +96,20 @@ class RemoteMCPAuthMiddleware:
                 _allowed_origins() if allowed_origins is None else allowed_origins
             )
         )
+        # Resolved once so a mid-flight environment change cannot make the
+        # audience this server enforces disagree with the one it advertises.
+        self.resource = mcp_resource()
+        self.metadata_path = metadata_path(self.resource)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        if scope["path"] == "/health":
+        # /health and the RFC 9728 metadata document are the two unauthenticated
+        # surfaces. The metadata document MUST be reachable without a token --
+        # it is what a client with no usable token reads to find out where to
+        # get one.
+        if scope["path"] in ("/health", self.metadata_path):
             await self.app(scope, receive, send)
             return
 
@@ -118,11 +133,32 @@ class RemoteMCPAuthMiddleware:
 
         authorization = _header(scope, b"authorization")
         if not authorization.lower().startswith("bearer "):
-            await self._reject(send, 401, "Bearer authentication is required")
+            await self._reject(
+                send, 401, "Bearer authentication is required",
+                challenge=challenge_header(scope=" ".join(SCOPES_SUPPORTED)),
+            )
             return
-        identity = CallerIdentity.from_token(authorization[7:].strip())
+        # Audience validation is a MUST for an MCP resource server: a token
+        # minted for the REST API must not buy access to the governed MCP
+        # tool surface, and a token with no audience at all is not evidence
+        # that any authorization server intended it for this resource.
+        identity = CallerIdentity.from_token(
+            authorization[7:].strip(),
+            audience=self.resource,
+            strict_audience=True,
+        )
         if not identity.authenticated:
-            await self._reject(send, 401, "invalid or incomplete bearer token")
+            await self._reject(
+                send, 401, "invalid or incomplete bearer token",
+                challenge=challenge_header(
+                    error="invalid_token",
+                    error_description=(
+                        "token must be valid, unexpired, tenant-scoped, and issued "
+                        f"for resource {self.resource}"
+                    ),
+                    scope=" ".join(SCOPES_SUPPORTED),
+                ),
+            )
             return
 
         identity_token = CallerIdentity.bind_request(identity)
@@ -189,18 +225,47 @@ class RemoteMCPAuthMiddleware:
         return _send
 
     @staticmethod
-    async def _reject(send: Send, status: int, detail: str) -> None:
-        await JSONResponse({"detail": detail}, status_code=status)(
-            {"type": "http"}, lambda: None, send,
-        )
+    async def _reject(
+        send: Send, status: int, detail: str, *, challenge: str | None = None,
+    ) -> None:
+        headers = {"WWW-Authenticate": challenge} if challenge else None
+        await JSONResponse(
+            {"detail": detail}, status_code=status, headers=headers,
+        )({"type": "http"}, _no_receive, send)
+
+
+async def _no_receive() -> Message:
+    """Stand-in receive for a response rendered outside the ASGI request cycle.
+
+    Starlette's Response never reads from `receive`, but the ASGI contract says
+    it is awaitable, and a plain `lambda: None` would raise if that ever
+    changed. Disconnect is the only honest answer here: the body has already
+    been consumed or rejected.
+    """
+    return {"type": "http.disconnect"}
 
 
 async def _health(_request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok", "transport": "streamable-http"})
 
 
+async def _protected_resource_metadata(_request: Request) -> JSONResponse:
+    """Serve the RFC 9728 document that points clients at the auth server."""
+    return JSONResponse(
+        protected_resource_metadata(),
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 def create_remote_app() -> ASGIApp:
-    routes = [Route("/health", _health, methods=["GET"])]
+    routes = [
+        Route("/health", _health, methods=["GET"]),
+        Route(
+            metadata_path(),
+            _protected_resource_metadata,
+            methods=["GET"],
+        ),
+    ]
     try:
         # Metrics include capability/router/evaluation counters registered in
         # this process. The outer auth middleware intentionally protects this

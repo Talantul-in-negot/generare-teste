@@ -6,7 +6,10 @@ The specification-to-implementation runner is documented in
 ## Canonical technical docs
 
 - `roadmap.md` — implementation status and remaining work
-- `audit-2026-08-21.md` — current architecture, security, dependency, and production-readiness audit
+- `audit-2026-08-21.md` — architecture, security, dependency, and production-readiness audit
+- `audit-2026-08-21-second-pass.md` — follow-up audit: OAuth resource-server
+  conformance, cache and rate-limit resource safety, and what was checked and
+  found clean
 - `knowledge-graph-architecture.md` — system architecture and data flow
 - `graphrag-terminology.md` — shared vocabulary and algorithms
 - `graphrag-tutorial.md` — setup and end-to-end usage
@@ -17,8 +20,8 @@ The specification-to-implementation runner is documented in
 - `entity-resolution.md`, `ontology-model.md`, `cypher-patterns.md` — focused KG references
 - `performance-metrics-inventory.md` — metric definitions and verification queries
 - `adr/` — architecture decisions, including the Context Graph decision trace,
-  capability-gated Neo4j vector search, adaptive retrieval routing, and agent
-  platform trust boundaries
+  capability-gated Neo4j vector search, adaptive retrieval routing, agent
+  platform trust boundaries, and audience-bound access tokens
 
 Interview, outreach, and role-specific material is deliberately **not** kept in
 this repository — it was removed on 2026-08-13 (it had been committed under

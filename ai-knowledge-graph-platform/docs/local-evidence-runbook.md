@@ -6,6 +6,12 @@ business impact without a separately documented deployment study.
 
 ## 1. Authenticated remote MCP
 
+> **Token audience.** Since [ADR 0010](adr/0010-audience-bound-access-tokens.md)
+> the gateway accepts only tokens whose `aud` is `GRAPHRAG_MCP_RESOURCE`.
+> Request one with `resource=<GRAPHRAG_MCP_RESOURCE>` on `POST /auth/token`,
+> or pass `--dev-token` to the evidence scripts below, which mint an
+> MCP-audience token for you. A REST API token will 401.
+
 Start the Docker MCP gateway:
 
 ```powershell

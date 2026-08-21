@@ -43,6 +43,14 @@ spec:
               value: "0.0.0.0"
             - name: GRAPHRAG_MCP_MAX_REQUEST_BYTES
               value: "1048576"
+            # ADR 0010: this gateway only accepts tokens whose `aud` is this
+            # exact URI. It must match GRAPHRAG_MCP_RESOURCE in the API
+            # deployment (graphrag-config) and the `resource` parameter every
+            # client sends to /auth/token. Set it to the ingress URL clients
+            # actually reach, not the in-cluster Service name.
+            - name: GRAPHRAG_MCP_RESOURCE
+              valueFrom:
+                configMapKeyRef: {name: graphrag-config, key: GRAPHRAG_MCP_RESOURCE}
             - name: TMPDIR
               value: /tmp
           readinessProbe:

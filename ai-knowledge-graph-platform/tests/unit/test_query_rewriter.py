@@ -35,6 +35,14 @@ class TestQueryRewriterPassthrough:
         )
         assert result == "rewritten query"
 
+    @pytest.mark.asyncio
+    async def test_preserves_named_document_code_dropped_by_rewriter(self):
+        result = await _rewrite_with_mocked_llm(
+            "Explain FAA-AD-2024 compliance for Southwest Airlines.",
+            "Southwest Airlines compliance chain",
+        )
+        assert result == "Southwest Airlines compliance chain FAA-AD-2024"
+
 
 class TestQueryRewriterEmptyOrEchoGuard:
     @pytest.mark.asyncio

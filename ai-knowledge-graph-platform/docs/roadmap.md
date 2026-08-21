@@ -540,6 +540,7 @@ customer-scale validation without deployment evidence.
 | Tenant-scoping enforcement on the agent-tool surface | Implemented and live-verified — `tasks/lessons.md` A147/A149 |
 | Capability-gated Neo4j 2026 vector search | `docs/adr/0007-capability-gated-neo4j-vector-search.md`; implemented and live-validated on a separate modern volume |
 | Measured adaptive retrieval routing | `docs/adr/0008-adaptive-retrieval-routing.md`; implemented and unit-tested, with production gains still unclaimed |
+| Audience-bound access tokens for API and MCP | `docs/adr/0010-audience-bound-access-tokens.md`; implemented and unit-tested. Breaking for existing remote MCP clients |
 
 ## Context Graph ADRs
 
@@ -623,28 +624,68 @@ is about MMR *stacked on top of* that mechanism, not MMR in isolation.
 
 # 2026-08-21 Audit Follow-ons
 
-The implementation and evidence are recorded in `docs/audit-2026-08-21.md`.
-Remaining work is ordered by production value, not trend visibility.
+The implementation and evidence are recorded in `docs/audit-2026-08-21.md`
+and `docs/audit-2026-08-21-second-pass.md`. Remaining work is ordered by
+production value, not trend visibility.
 
 ## Production-critical
 
-1. Add OAuth 2.1 protected-resource metadata, issuer discovery, and strict
-   token audience/resource validation before exposing remote MCP to federated
-   or untrusted clients. Prerequisite: choose and configure the production IdP.
+1. **Federate an external identity provider.** Token audience binding and RFC
+   9728 protected-resource metadata are now implemented (ADR 0010); what
+   remains is multi-issuer validation, JWKS rotation, and asymmetric signing,
+   which are only needed once tokens come from somewhere other than this
+   codebase.
+   *Prerequisite:* choose and configure the production IdP.
+   *Benefit:* remote MCP can be exposed to federated or untrusted clients.
+   *Complexity:* medium — issuer allowlist, JWKS cache, key-rollover handling.
 2. Run representative 10x load and recovery tests. Check in queue-age,
    throughput, p95/p99, error-rate, provider-cost, RTO, and RPO evidence.
-3. Broaden the parent monorepo CI lint command to `ruff check .`; the current
+   *Complexity:* medium; the blocker is environment, not code.
+3. **Turn on `semantic_answer_cache_strict` for any multi-replica deployment,
+   and prove it.** The flag exists and defaults off. Until a deployment sets
+   it, a Redis outage still silently forks the answer cache per replica and a
+   correction cannot evict a sibling's copy.
+   *Prerequisite:* a Redis instance whose availability is actually monitored.
+   *Complexity:* low — configuration plus a failure drill.
+4. Broaden the parent monorepo CI lint command to `ruff check .`; the current
    project tree passes, but the workflow still scans only selected directories.
 
 ## Recommended
 
-1. Add a GraphRAG-Benchmark-compatible adapter and compare the existing
-   local/global/hybrid/agentic routes on the same datasets and cost envelope.
-2. Add dashboards and alerts for oldest RabbitMQ message age, DLQ growth,
+1. **Decouple the answer prompt from the aerospace corpus.** `_ANSWER_PROMPT`
+   in `graphrag/retrieval/hybrid_retriever.py` hardcodes corpus-specific rules
+   — revision-number formatting (`rev.2` -> `rev2`), `doc_id` metadata
+   conventions, specific airworthiness phrasing. They exist because they moved
+   the golden-set pass rate, and they are the single largest obstacle to the
+   platform being domain-general: onboarding a second corpus today means
+   editing a shared prompt that another corpus depends on.
+   *Rationale:* a per-ontology prompt fragment, versioned alongside the
+   ontology and composed into the base prompt, keeps the measured behaviour
+   while making it additive rather than shared.
+   *Prerequisite:* a runnable golden eval — this must not be changed on
+   inspection alone, since the current rules are the only evidence anyone has
+   about what the corpus needs.
+   *Benefit:* second-corpus onboarding stops being a merge conflict.
+   *Complexity:* medium; the risk is entirely in the eval, not the code.
+2. Add a GraphRAG-Benchmark-compatible adapter (ICLR 2026) and compare the
+   existing local/global/hybrid/agentic routes on the same datasets and cost
+   envelope. The benchmark's own finding — that graph structure helps on
+   multi-hop, global, and sensemaking questions and not on single-fact lookup
+   — is the hypothesis to test against this corpus, not to assume.
+   *Complexity:* medium. *Benefit:* replaces anecdotal route comparison with
+   a quality/latency/cost triple.
+3. Add dashboards and alerts for oldest RabbitMQ message age, DLQ growth,
    publish failures, Neo4j pool saturation, and per-tenant model spend.
-3. Track OpenTelemetry GenAI semantic conventions and adopt the stable fields
+4. Track OpenTelemetry GenAI semantic conventions and adopt the stable fields
    that map cleanly to the platform's existing traces.
-4. Replace RAGAS if upstream does not fix its multi-modal SSRF and DiskCache
+5. **Adopt the MCP 2026-07-28 transport changes.** This pass implemented the
+   specification's authorization requirements only. Its stateless protocol
+   core, multi-round-trip requests, header-based routing, and cacheable list
+   results remain unadopted.
+   *Prerequisite:* an SDK upgrade (`mcp` is currently constrained to 1.x) and
+   a client-compatibility review.
+   *Complexity:* medium-high; not worth taking piecemeal.
+6. Replace RAGAS if upstream does not fix its multi-modal SSRF and DiskCache
    dependency; until then keep it isolated to offline evaluation workers.
 
 ## Experimental — benchmark before implementation

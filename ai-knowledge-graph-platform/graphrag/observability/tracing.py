@@ -45,8 +45,24 @@ def shutdown_tracing() -> None:
 
 @contextmanager
 def trace_span(name: str, **attributes):
+    """Start a span, recording *any* exception that escapes the body.
+
+    The OpenTelemetry SDK's own ``use_span`` already records and marks
+    ``Exception``. It catches nothing broader, so a span interrupted by
+    ``asyncio.CancelledError`` -- which is a ``BaseException`` since Python
+    3.8 -- was exported with the default UNSET status and no exception event,
+    indistinguishable in a trace backend from one that completed successfully.
+    That matters here specifically: request timeouts, budget aborts, and
+    worker shutdown all unwind through cancellation, so the spans an operator
+    most wants to find during an incident were the ones recorded as healthy.
+
+    Only the cases the SDK does not already cover are annotated here, so its
+    richer ``"Type: message"`` status description is left intact for ordinary
+    errors. Everything is re-raised unchanged.
+    """
     try:
         from opentelemetry import trace
+        from opentelemetry.trace import Status, StatusCode
         span = trace.get_tracer("graphrag").start_as_current_span(name)
     except ImportError:
         span = None
@@ -57,4 +73,11 @@ def trace_span(name: str, **attributes):
         for key, value in attributes.items():
             if value is not None:
                 current.set_attribute(key, value)
-        yield current
+        try:
+            yield current
+        except Exception:
+            raise  # already recorded and marked ERROR by the SDK's use_span
+        except BaseException as exc:
+            current.record_exception(exc)
+            current.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+            raise

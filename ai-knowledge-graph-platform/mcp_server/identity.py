@@ -52,19 +52,37 @@ class CallerIdentity:
         return cls()
 
     @classmethod
-    def from_token(cls, token: str | None) -> "CallerIdentity":
+    def from_token(
+        cls,
+        token: str | None,
+        *,
+        audience: str | None = None,
+        strict_audience: bool = False,
+    ) -> "CallerIdentity":
         """Decode `token` into an identity, or return anonymous on any failure.
 
         Every failure mode -- blank token, malformed/expired JWT, a token
-        with no `sub` claim, a token with no `tenant` claim -- collapses to
-        the same anonymous identity. This is deliberate: a caller with a
-        *partially* usable token is exactly as untrusted as one with none,
-        so there is no partial-trust state to reason about downstream.
+        with no `sub` claim, a token with no `tenant` claim, a token minted
+        for a different resource server -- collapses to the same anonymous
+        identity. This is deliberate: a caller with a *partially* usable
+        token is exactly as untrusted as one with none, so there is no
+        partial-trust state to reason about downstream.
+
+        `audience` is the canonical resource identifier of the MCP server
+        doing the verifying. The remote HTTP transport always supplies it,
+        because the MCP authorization specification makes audience validation
+        a MUST for a resource server. The stdio transport does not: that
+        specification explicitly directs stdio servers to take credentials
+        from the environment instead of following the OAuth flow, and a stdio
+        process is bound to one launcher rather than reachable by a network
+        caller holding some other resource's token.
         """
         if not token or not token.strip():
             return cls.anonymous()
         try:
-            claims = decode_access_token(token)
+            claims = decode_access_token(
+                token, audience=audience, strict=strict_audience,
+            )
         except ValueError:
             return cls.anonymous()
         return cls.from_claims(claims)

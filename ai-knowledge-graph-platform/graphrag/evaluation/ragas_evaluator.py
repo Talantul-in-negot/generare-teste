@@ -30,6 +30,9 @@ class RagasEvaluator:
             "ragas_metrics",
             ["faithfulness", "answer_relevancy", "context_precision", "context_recall"],
         )
+        self._judge_timeout_s = max(
+            1, int(cfg.evaluation.get("ragas_judge_timeout_seconds", 60))
+        )
         self._llm = self._build_llm()
 
     def _build_llm(self):
@@ -202,16 +205,23 @@ class RagasEvaluator:
                 except Exception:
                     _eval_embeddings = None
 
-            scores = await loop.run_in_executor(
-                None,
-                lambda: evaluate(
-                    dataset,
-                    metrics=metrics,
-                    llm=self._llm,
-                    embeddings=_eval_embeddings,
+            scores = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: evaluate(
+                        dataset,
+                        metrics=metrics,
+                        llm=self._llm,
+                        embeddings=_eval_embeddings,
+                    ),
                 ),
+                timeout=self._judge_timeout_s,
             )
             result_dict = scores.to_pandas().iloc[0].to_dict()
+        except asyncio.TimeoutError as exc:
+            message = f"RAGAS judge timed out after {self._judge_timeout_s}s"
+            log.warning("ragas_evaluator.timeout", query_id=query_id, timeout_s=self._judge_timeout_s)
+            raise EvaluationError(message) from exc
         except Exception as exc:
             log.error("ragas_evaluator.error", error=str(exc), query_id=query_id)
             raise EvaluationError(str(exc)) from exc

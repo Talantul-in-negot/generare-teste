@@ -123,11 +123,25 @@ class TestProductionSettings:
             ({"session_secret_key": "j" * 64}, "must differ"),
             ({"rabbitmq_url": "amqp://graphrag:graphrag_dev@localhost:5672/"}, "rabbitmq_url"),
             ({"cors_origins": ["http://localhost:8000"]}, "cors_origins"),
+            # RFC 7518 Section 3.2 -- an HMAC-SHA256 key shorter than the hash
+            # output weakens every token signed with it. The literal-default
+            # check does not catch this: a short but non-default secret used to
+            # pass validation with only a PyJWT runtime warning.
+            ({"jwt_secret_key": "short-but-not-the-default"}, "jwt_secret_key must be at least 32 bytes"),
+            ({"session_secret_key": "also-too-short"}, "session_secret_key must be at least 32 bytes"),
         ],
     )
     def test_rejects_insecure_production_settings(self, override, message):
         with pytest.raises(ValidationError, match=message):
             self._production(**override)
+
+    def test_exactly_the_minimum_secret_length_is_accepted(self):
+        assert self._production(jwt_secret_key="j" * 32).env == "production"
+
+    def test_short_secrets_are_still_allowed_in_development(self):
+        # Development keeps its convenience defaults; the gate is deliberately
+        # non-dev only, like every other check in this validator.
+        assert Settings(_env_file=None, env="development", jwt_secret_key="short").env == "development"
 
 
 class TestEnvFailClosedOnUnset:

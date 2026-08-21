@@ -124,6 +124,14 @@ retrieval:
   query_result_ttl_seconds: 3600   # how long to keep query results in Redis (1 hour)
   semantic_answer_cache_enabled: true  # governed exact-input cache for completed API/worker queries
   semantic_answer_cache_ttl_seconds: 3600  # corpus revision is the hard staleness guard; TTL bounds storage
+  # true = refuse to start when Redis is unreachable. The in-process fallback
+  # is per-replica, so entity invalidation cannot reach a sibling worker: that
+  # worker keeps serving a superseded answer for a full TTL. Turn this on in
+  # any multi-replica deployment; leave it off for single-process local work.
+  semantic_answer_cache_strict: false
+  # Hard bound on the in-process fallback so a Redis outage cannot turn a
+  # stream of distinct queries into unbounded process memory.
+  semantic_answer_cache_max_memory_entries: 2048
   # ── GNN scoring (after multi-hop traversal) ───────────────────────────────
   gnn_enabled: true        # GCN/GAT graph-propagated re-scoring
   gnn_type: gat            # "gcn" (Kipf & Welling 2017) | "gat" (Veličković 2018)
@@ -211,6 +219,9 @@ retrieval:
   # first checking what specifically pulled AUT-02/NEG-02 off track.
 
 evaluation:
+  # Bound each external RAGAS judge call so one provider timeout cannot stall
+  # a full evaluation run. The runner records and retries a timed-out record.
+  ragas_judge_timeout_seconds: 60
   ragas_metrics:
     - faithfulness
     # - answer_relevancy    # requires OpenAI embeddings + extra LLM tokens

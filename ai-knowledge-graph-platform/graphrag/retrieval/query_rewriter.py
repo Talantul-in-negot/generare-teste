@@ -17,6 +17,8 @@ question unchanged. The rewriter is a recall booster, never a gate.
 
 from __future__ import annotations
 
+import re
+
 import structlog
 
 from graphrag.core.config import get_settings
@@ -64,6 +66,7 @@ _MAX_EXPANSION_RATIO = 6
 # rewrite containing these actively hurts retrieval rather than helping it —
 # reject and fall back to the original question.
 _MALFORMED_MARKERS = (" AND ", " OR ", "XXXX", "document id:", "```")
+_DOCUMENT_CODE_RE = re.compile(r"\b[A-Z]{2,}(?:-[A-Z0-9]+){1,4}\b")
 
 
 class QueryRewriter:
@@ -96,6 +99,17 @@ class QueryRewriter:
         if any(marker.upper() in rewritten_upper for marker in _MALFORMED_MARKERS):
             log.warning("query_rewriter.malformed_output", rewritten=rewritten[:120])
             return question
+
+        # A rewritten query is useful only if it preserves every explicit
+        # document reference. These identifiers drive LocalSearch's named-
+        # document boost; dropping a partial reference such as ``FAA-AD-2024``
+        # turns a resolvable authority-chain query into a false refusal.
+        missing_codes = [
+            code for code in _DOCUMENT_CODE_RE.findall(question)
+            if code.lower() not in rewritten.lower()
+        ]
+        if missing_codes:
+            rewritten = f"{rewritten} {' '.join(missing_codes)}"
 
         log.info("query_rewriter.rewritten", original=question[:80], rewritten=rewritten[:80])
         return rewritten

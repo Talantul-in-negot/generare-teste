@@ -28,6 +28,14 @@ async def lifespan(app: FastAPI):
     from graphrag.observability.tracing import configure_tracing
     configure_tracing("graphrag-api")
     # ── Startup ───────────────────────────────────────────────────────────────
+    # Resolve the OAuth resource identifiers once, here, so a malformed
+    # GRAPHRAG_API_RESOURCE / GRAPHRAG_MCP_RESOURCE aborts startup instead of
+    # turning every authenticated request into a 500 (they are read on the
+    # token-mint and token-verify paths -- see ADR 0010). Same fail-closed
+    # posture as Settings' production secret validation.
+    from graphrag.core.resource_identifiers import known_resources
+
+    log.info("startup.oauth_resources", resources=list(known_resources()))
     # Verify Redis session store connectivity.
     # When session_store_strict=true this raises immediately on failure so
     # the process exits with a visible error instead of silently falling back

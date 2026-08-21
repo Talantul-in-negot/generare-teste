@@ -29,6 +29,10 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+import structlog
+
+log = structlog.get_logger(__name__)
+
 _USERS_KEY = "graphrag:user_tenant_map"
 _IDENTITIES_KEY = "graphrag:user_identity_map"
 _users_mem: dict[str, dict] = {}   # fallback for non-Redis environments
@@ -61,6 +65,22 @@ def _redis_error_types() -> tuple[type[BaseException], ...]:
         return (OSError, ConnectionError, ValueError)
 
 
+def _log_redis_fallback(operation: str, exc: BaseException) -> None:
+    """Record that the provisioning table just diverged from shared storage.
+
+    The in-memory fallback below is intentional, but silent divergence is not:
+    without this, a Redis outage splits the identity->tenant map per replica
+    and the only symptom an operator sees is a login that works on one pod and
+    is rejected on the next.
+    """
+    log.warning(
+        "user_provisioning.redis_unavailable",
+        operation=operation,
+        exception_type=type(exc).__name__,
+        impact="falling back to per-process storage; records will not be shared across replicas",
+    )
+
+
 def normalize_email(email: str) -> str:
     """The provisioning key. Google emails are case-insensitive; storing and
     looking up with mixed case would make provisioning silently miss a match."""
@@ -82,8 +102,8 @@ def get_user_record(email: str) -> dict | None:
         try:
             raw = r.hget(_USERS_KEY, key)
             return json.loads(raw) if raw else None
-        except _redis_error_types():
-            pass
+        except _redis_error_types() as exc:
+            _log_redis_fallback("get_user_record", exc)
     return _users_mem.get(key)
 
 
@@ -95,8 +115,8 @@ def get_user_record_by_identity(issuer: str, subject: str) -> dict | None:
         try:
             email_key = r.hget(_IDENTITIES_KEY, identity)
             return get_user_record(email_key) if email_key else None
-        except _redis_error_types():
-            pass
+        except _redis_error_types() as exc:
+            _log_redis_fallback("get_user_record_by_identity", exc)
     email_key = _identities_mem.get(identity)
     return _users_mem.get(email_key) if email_key else None
 
@@ -131,8 +151,8 @@ def set_user_record(
         try:
             r.hset(_USERS_KEY, key, payload)
             return record
-        except _redis_error_types():
-            pass
+        except _redis_error_types() as exc:
+            _log_redis_fallback("set_user_record", exc)
     _users_mem[key] = record
     return record
 
@@ -176,8 +196,8 @@ def bind_user_identity(email: str, *, issuer: str, subject: str) -> dict:
             return bound
         except UserIdentityConflict:
             raise
-        except _redis_error_types():
-            pass
+        except _redis_error_types() as exc:
+            _log_redis_fallback("bind_user_identity", exc)
 
     mapped_email = _identities_mem.get(identity)
     if mapped_email and mapped_email != key:
@@ -210,8 +230,8 @@ def delete_user_record(email: str) -> bool:
             result = pipe.execute()
             removed = result[0]
             return bool(removed)
-        except _redis_error_types():
-            pass
+        except _redis_error_types() as exc:
+            _log_redis_fallback("delete_user_record", exc)
     removed = _users_mem.pop(key, None)
     if identity:
         _identities_mem.pop(identity, None)
@@ -234,6 +254,6 @@ def list_user_records(*, tenant: str) -> list[dict]:
             raw_map = r.hgetall(_USERS_KEY)
             records = [json.loads(v) for v in raw_map.values()]
             return [rec for rec in records if rec.get("tenant") == tenant]
-        except _redis_error_types():
-            pass
+        except _redis_error_types() as exc:
+            _log_redis_fallback("list_user_records", exc)
     return [rec for rec in _users_mem.values() if rec.get("tenant") == tenant]

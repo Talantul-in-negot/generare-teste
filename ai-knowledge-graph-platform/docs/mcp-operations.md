@@ -1,7 +1,51 @@
 # MCP Operations Runbook
 
 This runbook covers the authenticated MCP gateway. Its security contract is
-defined in [ADR 0009](adr/0009-agent-platform-trust-boundaries.md).
+defined in [ADR 0009](adr/0009-agent-platform-trust-boundaries.md) and
+[ADR 0010](adr/0010-audience-bound-access-tokens.md).
+
+## Token audience (read this before issuing an MCP token)
+
+The gateway accepts **only** tokens minted for its own resource identifier.
+A REST API token is rejected with 401, by design — see ADR 0010. Two variables
+decide this and must agree between the API process, the gateway process, and
+the client:
+
+| Variable | Meaning | Local default |
+|---|---|---|
+| `GRAPHRAG_API_RESOURCE` | Canonical URI of the REST API resource server | `http://localhost:8000` |
+| `GRAPHRAG_MCP_RESOURCE` | Canonical URI of this gateway | `http://localhost:8002/mcp` |
+
+Canonical means absolute URI, no query, no fragment, no trailing slash. A
+non-canonical value is rejected at startup rather than producing tokens that
+silently never match.
+
+Obtain an MCP token by naming the resource in the token request (RFC 8707):
+
+```powershell
+$body = @{
+  grant_type    = "client_credentials"
+  client_id     = $env:GRAPHRAG_CLIENT_ID
+  client_secret = $env:GRAPHRAG_CLIENT_SECRET
+  scope         = "read"
+  resource      = $env:GRAPHRAG_MCP_RESOURCE
+} | ConvertTo-Json
+$token = (Invoke-RestMethod http://localhost:8000/auth/token -Method Post -Body $body -ContentType "application/json").access_token
+```
+
+The response echoes the bound `resource`; verify it matches before wiring the
+token into a client. A client that does not know where to ask can read the
+gateway's unauthenticated discovery document, which every 401 also points at
+in its `WWW-Authenticate` header:
+
+```powershell
+Invoke-RestMethod http://localhost:8002/.well-known/oauth-protected-resource/mcp
+```
+
+Local stdio clients are deliberately exempt from audience validation: the MCP
+specification directs stdio servers to take credentials from their launcher's
+environment, so `GRAPHRAG_MCP_TOKEN` for `python mcp_server/server.py` does not
+need an MCP audience.
 
 ## Local verification
 
@@ -88,7 +132,8 @@ kubectl kustomize deploy/kubernetes
 
 | Symptom | Check | Response |
 |---|---|---|
-| 401 from `/mcp` | JWT issuer, expiry, subject, tenant claim | Reissue a scoped token; do not relax the gateway |
+| 401 from `/mcp` | JWT expiry, subject, tenant claim, **and `aud` vs `GRAPHRAG_MCP_RESOURCE`** | Reissue a token with `resource=<GRAPHRAG_MCP_RESOURCE>`; do not relax the gateway. The `WWW-Authenticate` header on the 401 names the metadata document and required scope |
+| Every client 401s after a deploy | `GRAPHRAG_MCP_RESOURCE` changed, or differs between the API and gateway processes | Restore agreement between the two processes and the client's `resource` parameter; audience is an exact string comparison |
 | 413 from `/mcp` | `GRAPHRAG_MCP_MAX_REQUEST_BYTES`, client payload | Reduce/chunk the client request; increase only after a capacity review |
 | 403 `Origin is not allowed` | Browser origin absent from `GRAPHRAG_MCP_ALLOWED_ORIGINS` | Add the exact trusted HTTPS origin; never use a wildcard |
 | Structured `tenant_mismatch` denial | Client-provided tenant vs signed claim | Correct the client configuration; never override the claim |

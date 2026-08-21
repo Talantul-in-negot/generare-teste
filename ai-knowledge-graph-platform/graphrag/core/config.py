@@ -19,6 +19,10 @@ ROOT = Path(__file__).resolve().parents[2]  # repo root
 # in plaintext in this file and would let anyone forge a valid token.
 DEV_ENVS = ("development", "dev", "test", "testing", "local")
 
+# Minimum length for an HMAC-SHA256 signing key, per RFC 7518 Section 3.2:
+# "A key of the same size as the hash output ... or larger MUST be used".
+MIN_SECRET_BYTES = 32
+
 
 def is_dev_env(env: str) -> bool:
     """True if `env` (case/whitespace-normalized) is in the dev allow-list.
@@ -217,6 +221,22 @@ class Settings(BaseSettings):
                     "jwt_secret_key must be set to a strong random secret in production. "
                     "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
                 )
+            # RFC 7518 Section 3.2: an HMAC-SHA256 key must be at least as long
+            # as the hash output. A shorter key silently weakens every token
+            # this deployment signs; PyJWT warns about it at runtime, but a
+            # warning in a log nobody greps is not a gate. The literal-default
+            # check above passes for any *other* short secret, which is how a
+            # 23-byte key reached this repository's own .env unnoticed.
+            for field, value in (
+                ("jwt_secret_key", self.jwt_secret_key),
+                ("session_secret_key", self.session_secret_key),
+            ):
+                if value and len(value.encode("utf-8")) < MIN_SECRET_BYTES:
+                    raise ValueError(
+                        f"{field} must be at least {MIN_SECRET_BYTES} bytes "
+                        f"(RFC 7518 Section 3.2 for HMAC-SHA256); got "
+                        f"{len(value.encode('utf-8'))}."
+                    )
             if self.neo4j_password == "graphrag_dev":
                 raise ValueError(
                     "neo4j_password must be changed from the default 'graphrag_dev' in production."

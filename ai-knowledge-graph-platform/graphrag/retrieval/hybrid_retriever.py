@@ -45,7 +45,10 @@ from graphrag.retrieval.query_cache import (
 
 log = structlog.get_logger(__name__)
 
-_PROMPT_VERSION = "hybrid-answer-v1"
+# Bump whenever retrieval/prompt behavior changes: semantic answer-cache keys
+# include this version, so answers generated before a named-document or
+# grounding fix cannot mask the corrected retrieval path.
+_PROMPT_VERSION = "hybrid-answer-v2"
 
 
 _ONTOLOGY_VERSION = "platform/v1"

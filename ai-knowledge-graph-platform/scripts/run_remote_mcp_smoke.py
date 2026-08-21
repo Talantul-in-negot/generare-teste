@@ -34,8 +34,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://localhost:8002/mcp")
     parser.add_argument("--token", default=os.environ.get("GRAPHRAG_MCP_TOKEN", ""))
+    parser.add_argument("--dev-token", action="store_true",
+                        help="Mint a short-lived local development token for the MCP resource")
+    parser.add_argument("--tenant", default="local-evidence")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    if args.dev_token:
+        from api.auth.jwt import create_access_token
+        from graphrag.core.resource_identifiers import mcp_resource
+        # The gateway validates the token audience (RFC 8707), so a dev token
+        # must name the MCP resource, not the REST API default.
+        args.token = create_access_token({
+            "sub": "local-smoke-agent", "tenant": args.tenant,
+            "scope": f"read tenant:{args.tenant}", "type": "m2m",
+        }, audience=mcp_resource())
     if not args.token:
         raise SystemExit("GRAPHRAG_MCP_TOKEN or --token is required")
     status, headers, _body = _post(args.url, {

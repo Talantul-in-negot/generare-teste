@@ -12,3 +12,14 @@ data:
   QUERY_RESULT_TTL_SECONDS: "3600"
   GRAPHRAG_RATE_LIMIT_INGEST: 20/minute
   GRAPHRAG_RATE_LIMIT_QUERY: 60/minute
+  # Rate-limit counters are shared across replicas through REDIS_URL (set in
+  # graphrag-secrets). Without it each replica counts independently and the
+  # effective limit is silently multiplied by the replica count.
+  #
+  # OAuth resource identifiers (ADR 0010). REPLACE_ME with the public URLs
+  # clients actually reach — these are compared as exact strings against the
+  # `aud` claim, so an in-cluster Service name here will 401 every external
+  # client. Canonical form: absolute https URI, no query, no fragment, no
+  # trailing slash.
+  GRAPHRAG_API_RESOURCE: REPLACE_ME_https://api.example.com
+  GRAPHRAG_MCP_RESOURCE: REPLACE_ME_https://mcp.example.com/mcp

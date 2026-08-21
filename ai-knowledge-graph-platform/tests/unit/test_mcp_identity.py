@@ -60,7 +60,13 @@ class TestResolve:
             "sub": "s", "tenant": "aerospace", "scope": "read",
         }) as mock_decode:
             identity = CallerIdentity.resolve()
-        mock_decode.assert_called_once_with("token-value")
+        # stdio takes its credential from the launcher's environment, so it
+        # deliberately does NOT demand a resource audience -- see
+        # CallerIdentity.from_token and the MCP authorization specification's
+        # carve-out for the stdio transport.
+        mock_decode.assert_called_once_with(
+            "token-value", audience=None, strict=False,
+        )
         assert identity.authenticated is True
 
     def test_resolve_anonymous_when_env_var_absent(self, monkeypatch):

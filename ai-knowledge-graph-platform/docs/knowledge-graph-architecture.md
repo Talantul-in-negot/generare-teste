@@ -537,10 +537,15 @@ FastAPI/RabbitMQ stack:
 **Transport is deliberate:** local stdio is bound to the scoped
 `GRAPHRAG_MCP_TOKEN` supplied by the launcher. `mcp_server.remote` exposes
 the same FastMCP server over authenticated Streamable HTTP at `/mcp`; each
-Bearer token is verified and bound to that request only. The signed tenant is
-the authority; client-supplied tenant values are assertions that must match.
-Remote `/metrics` is also authenticated and `/health` is the sole public
-probe. See `docs/adr/0009-agent-platform-trust-boundaries.md` and
+Bearer token is verified and bound to that request only, and must carry an
+`aud` claim naming this MCP resource — a token minted for the REST API is
+rejected (RFC 8707; see `docs/adr/0010-audience-bound-access-tokens.md`). The
+signed tenant is the authority; client-supplied tenant values are assertions
+that must match. Remote `/metrics` is also authenticated; `/health` and the
+RFC 9728 document at `/.well-known/oauth-protected-resource/<path>` are the
+public surfaces, the latter because a client with no usable token has to be
+able to discover where to get one. See
+`docs/adr/0009-agent-platform-trust-boundaries.md` and
 `docs/mcp-operations.md` for the deployment contract.
 
 **A design constraint worth naming explicitly**: stdout is the stdio MCP

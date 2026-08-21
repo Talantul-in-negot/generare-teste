@@ -5,8 +5,10 @@ Run this after Groq daily quota resets (midnight UTC).
 Results written to evals/faithfulness_eval_results.json.
 """
 import asyncio
+import argparse
 import json
 import math
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -41,9 +43,48 @@ _REFUSAL = (
     "not available",
     "no details",
 )
+_RAGAS_ATTEMPTS = max(1, int(os.getenv("RAGAS_EVAL_ATTEMPTS", "3")))
 
 
-async def main():
+def _is_refusal(answer: str, contexts: list[str]) -> bool:
+    """Return whether retrieval intentionally abstained from answering."""
+    return not contexts or any(marker in answer.lower() for marker in _REFUSAL)
+
+
+async def _evaluate_with_retries(
+    evaluator, query_id: str, question: str, answer: str, contexts: list[str],
+) -> tuple[object | None, int, list[str]]:
+    """Retry transient/non-finite RAGAS results without hiding their cause."""
+    notes: list[str] = []
+    last_result = None
+    for attempt in range(1, _RAGAS_ATTEMPTS + 1):
+        try:
+            result = await evaluator.evaluate_single(
+                query_id, question, answer, contexts, ""
+            )
+            last_result = result
+            faithfulness = result.faithfulness
+            if isinstance(faithfulness, (int, float)) and math.isfinite(faithfulness):
+                return result, attempt, notes
+            notes.append(f"attempt {attempt}: non-finite faithfulness")
+        except Exception as exc:
+            notes.append(f"attempt {attempt}: {type(exc).__name__}: {str(exc)[:160]}")
+
+        # RAGAS itself performs prompt retries. This small delay is only for
+        # the outer retry, allowing a saturated judge provider to recover.
+        if attempt < _RAGAS_ATTEMPTS:
+            await asyncio.sleep(attempt)
+    return last_result, _RAGAS_ATTEMPTS, notes
+
+
+def _contract_result(question: dict, answer: str, citations: list[str]) -> tuple[bool, list[str]]:
+    """Use the deterministic golden contract for every evaluated response."""
+    from scripts.run_golden_eval import _check
+
+    return _check(question, {"answer": answer, "citations": citations})
+
+
+async def main(question_ids: set[str] | None = None):
     from graphrag.retrieval.hybrid_retriever import HybridRetriever
     from graphrag.evaluation.ragas_evaluator import RagasEvaluator
     from graphrag.graph.confidence_calibration import CalibrationService
@@ -51,6 +92,10 @@ async def main():
 
     golden = json.loads((Path(__file__).parents[1] / "evals" / "golden_set.json").read_text())
     questions = golden["questions"]
+    if question_ids is not None:
+        questions = [q for q in questions if q["id"] in question_ids]
+        if not questions:
+            raise ValueError("No golden questions matched --ids")
 
     retriever = HybridRetriever()
     evaluator = RagasEvaluator()
@@ -58,7 +103,8 @@ async def main():
     cal_svc = CalibrationService(neo4j)
     tenant = "aerospace"
 
-    scores, refusals, errors, unscorable = [], 0, 0, 0
+    scores, correct_abstentions, refusal_failures, errors, unscorable = [], 0, 0, 0, 0
+    contract_passes = 0
     results = []
     cal_samples = 0
 
@@ -72,19 +118,31 @@ async def main():
         try:
             res = await retriever.retrieve_and_answer(question=q["question"], tenant="aerospace")
             elapsed = time.monotonic() - t0
-            ans = res.answer.lower()
+            contract_ok, contract_failures = _contract_result(q, res.answer, res.citations)
+            if contract_ok:
+                contract_passes += 1
 
-            if not res.contexts or any(s in ans for s in _REFUSAL):
-                refusals += 1
-                print(f"  [{q['id']:8s}] REFUSAL  ({elapsed:.1f}s)  {res.answer[:60]!r}")
-                results.append({"id": q["id"], "type": q["type"], "status": "refusal",
-                                 "answer": res.answer, "latency": round(elapsed, 1)})
+            if _is_refusal(res.answer, res.contexts):
+                if contract_ok:
+                    correct_abstentions += 1
+                    status = "correct_abstention"
+                    label = "CORRECT ABSTENTION"
+                else:
+                    refusal_failures += 1
+                    status = "refusal_failure"
+                    label = "REFUSAL FAILURE"
+                print(f"  [{q['id']:8s}] {label}  ({elapsed:.1f}s)  {res.answer[:60]!r}")
+                results.append({"id": q["id"], "type": q["type"], "status": status,
+                                 "answer": res.answer, "citations": res.citations,
+                                 "golden_contract_pass": contract_ok,
+                                 "golden_contract_failures": contract_failures,
+                                 "latency": round(elapsed, 1)})
                 continue
 
-            er = await evaluator.evaluate_single(
-                q["id"], q["question"], res.answer, res.contexts, ""
+            er, attempts, judge_notes = await _evaluate_with_retries(
+                evaluator, q["id"], q["question"], res.answer, res.contexts,
             )
-            f = er.faithfulness
+            f = er.faithfulness if er is not None else float("nan")
 
             # RAGAS returns NaN (not an exception) when its claim-decomposition
             # step can't extract any verifiable statements from the answer —
@@ -97,16 +155,27 @@ async def main():
             # below as an `actual_outcome`, corrupting the Brier-score dataset.
             if isinstance(f, float) and math.isnan(f):
                 unscorable += 1
-                print(f"  [{q['id']:8s}] UNSCORABLE — RAGAS could not extract "
-                      f"claims to verify  ({elapsed:.1f}s)  {res.answer[:60]!r}")
+                print(f"  [{q['id']:8s}] UNSCORABLE after {attempts} attempt(s) — "
+                      f"RAGAS could not produce finite faithfulness  ({elapsed:.1f}s)  "
+                      f"{res.answer[:60]!r}")
                 results.append({"id": q["id"], "type": q["type"], "status": "unscorable",
-                                 "answer": res.answer, "latency": round(elapsed, 1)})
+                                 "answer": res.answer, "citations": res.citations,
+                                 "golden_contract_pass": contract_ok,
+                                 "golden_contract_failures": contract_failures,
+                                 "evaluation_attempts": attempts,
+                                 "judge_notes": judge_notes,
+                                 "latency": round(elapsed, 1)})
                 continue
 
             scores.append(f)
             # Append result before print — print errors (e.g. Windows encoding) must not discard score
             results.append({"id": q["id"], "type": q["type"], "status": "scored",
                              "faithfulness": round(f, 4), "answer": res.answer,
+                             "citations": res.citations,
+                             "golden_contract_pass": contract_ok,
+                             "golden_contract_failures": contract_failures,
+                             "evaluation_attempts": attempts,
+                             "judge_notes": judge_notes,
                              "latency": round(elapsed, 1)})
             flag = "  LOW" if (not isinstance(f, float) or f < 0.8) else ""
             print(f"  [{q['id']:8s}] faith={f:.3f}  ({elapsed:.1f}s)  {res.answer[:60]!r}{flag}")
@@ -141,9 +210,17 @@ async def main():
         by_type.setdefault(r["type"], []).append(r)
 
     print(f"\n{'='*70}")
-    print(f"  Faithfulness ({len(scores)} answerable): {avg:.3f}")
+    coverage = len(scores) / len(questions) if questions else 0.0
+    lower_bound = sum(scores) / len(questions) if questions else 0.0
+    print(f"  Faithfulness (RAGAS-scored {len(scores)}/{len(questions)}): {avg:.3f}")
     print(f"  Baseline: 0.840   Delta: {avg - 0.840:+.3f}")
-    print(f"  Refusals (correct, excluded): {refusals}/{len(questions)}")
+    print(f"  RAGAS coverage: {coverage:.1%}")
+    print(f"  Faithfulness lower bound (unscored = 0): {lower_bound:.3f}")
+    print(f"  Golden contract pass rate: {contract_passes}/{len(questions)} "
+          f"({contract_passes / len(questions):.1%})")
+    print(f"  Correct abstentions: {correct_abstentions}/{len(questions)}")
+    if refusal_failures:
+        print(f"  Retrieval refusal failures: {refusal_failures}/{len(questions)}")
     if unscorable:
         print(f"  Unscorable (RAGAS NaN, excluded): {unscorable}/{len(questions)}")
     if errors:
@@ -158,14 +235,26 @@ async def main():
     print(f"{'='*70}\n")
 
     # Write results
-    out = Path(__file__).parents[1] / "evals" / "faithfulness_eval_results.json"
+    output_name = (
+        "faithfulness_eval_targeted_results.json"
+        if question_ids is not None
+        else "faithfulness_eval_results.json"
+    )
+    out = Path(__file__).parents[1] / "evals" / output_name
     out.write_text(json.dumps({
         "run_at": datetime.now(timezone.utc).isoformat(),
+        "scope": "targeted" if question_ids is not None else "full",
+        "question_ids": [q["id"] for q in questions],
         "faithfulness_answerable": round(avg, 4),
+        "ragas_coverage": round(coverage, 4),
+        "faithfulness_lower_bound": round(lower_bound, 4),
+        "golden_contract_pass_rate": round(contract_passes / len(questions), 4),
+        "n_golden_contract_passed": contract_passes,
         "baseline": 0.840,
         "delta": round(avg - 0.840, 4),
         "n_scored": len(scores),
-        "n_refusals": refusals,
+        "n_correct_abstentions": correct_abstentions,
+        "n_refusal_failures": refusal_failures,
         "n_unscorable": unscorable,
         "n_errors": errors,
         "n_total": len(questions),
@@ -176,7 +265,11 @@ async def main():
                     max(1, sum(1 for r in rows if r.get("status") == "scored")), 4
                 ),
                 "scored": sum(1 for r in rows if r.get("status") == "scored"),
-                "refusals": sum(1 for r in rows if r.get("status") == "refusal"),
+                "refusals": sum(
+                    1
+                    for r in rows
+                    if r.get("status") in {"correct_abstention", "refusal_failure"}
+                ),
             }
             for qtype, rows in by_type.items()
         },
@@ -198,4 +291,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Run GraphRAG RAGAS faithfulness evaluation")
+    parser.add_argument("--ids", nargs="+", help="Run only specified golden-question IDs")
+    args = parser.parse_args()
+    asyncio.run(main(set(args.ids) if args.ids else None))

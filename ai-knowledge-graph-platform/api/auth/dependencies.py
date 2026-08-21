@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from api.auth.jwt import decode_access_token
+from graphrag.core.resource_identifiers import api_resource
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -67,7 +68,11 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     try:
-        claims = decode_access_token(token)
+        # Audience is checked in both directions: an MCP-bound token must not
+        # reach REST endpoints any more than an API token may reach the MCP
+        # tool surface. Non-strict, so a token minted before audience binding
+        # existed still works for its remaining lifetime -- see ADR 0010.
+        claims = decode_access_token(token, audience=api_resource())
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
