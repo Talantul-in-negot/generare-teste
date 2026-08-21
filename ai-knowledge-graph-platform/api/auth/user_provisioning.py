@@ -31,6 +31,11 @@ from datetime import datetime, timezone
 
 import structlog
 
+from graphrag.core.redis_support import (
+    redis_error_types as _redis_error_types,
+    sync_redis_client as _get_redis_sync,
+)
+
 log = structlog.get_logger(__name__)
 
 _USERS_KEY = "graphrag:user_tenant_map"
@@ -43,26 +48,6 @@ class UserIdentityConflict(ValueError):
     """Raised when an email or provider subject is already bound elsewhere."""
 
 
-def _get_redis_sync():
-    """Return a sync Redis client for the provisioning table, or None."""
-    try:
-        import redis as redis_lib
-        from graphrag.core.config import get_settings
-        redis_url = get_settings().retrieval.get("redis_url", "")
-        if not redis_url:
-            return None
-        return redis_lib.from_url(redis_url, socket_connect_timeout=1,
-                                  socket_timeout=1, decode_responses=True)
-    except (ImportError, OSError, ConnectionError, ValueError):
-        return None
-
-
-def _redis_error_types() -> tuple[type[BaseException], ...]:
-    try:
-        import redis as redis_lib
-        return (redis_lib.exceptions.RedisError, OSError, ConnectionError, ValueError)
-    except ImportError:
-        return (OSError, ConnectionError, ValueError)
 
 
 def _log_redis_fallback(operation: str, exc: BaseException) -> None:

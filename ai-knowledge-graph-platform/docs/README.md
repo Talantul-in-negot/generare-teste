@@ -19,6 +19,8 @@ The specification-to-implementation runner is documented in
 - `public-local-evaluation-report.md` — bounded results from the checked-in synthetic local run
 - `entity-resolution.md`, `ontology-model.md`, `cypher-patterns.md` — focused KG references
 - `performance-metrics-inventory.md` — metric definitions and verification queries
+- `../monitoring/prometheus/alerts.yml` — alerting rules, with the action an
+  operator should take in each rule's annotations
 - `adr/` — architecture decisions, including the Context Graph decision trace,
   capability-gated Neo4j vector search, adaptive retrieval routing, agent
   platform trust boundaries, audience-bound access tokens, and JWT key

@@ -592,11 +592,29 @@ class FallbackLLM(BaseLLM):
         temperature: float = 0.0,
         max_tokens: int | None = None,
     ) -> str:
+        """Try the primary, fall back on the configured exception set.
+
+        This is the single choke point every production model call goes
+        through (`get_llm()`/`get_fast_llm()` both return a FallbackLLM), which
+        is why GenAI telemetry is attached here rather than in each of the
+        provider clients. A fallback emits a *second* span for the secondary
+        provider rather than relabelling the first: the primary call really did
+        happen and really did fail, and hiding that would make the fallback
+        rate — the number that predicts a provider outage — unmeasurable.
+        """
+        from graphrag.observability.genai_telemetry import llm_call_span
+
         try:
-            return await self._primary.generate(
-                prompt, model=model, json_mode=json_mode, temperature=temperature,
+            with llm_call_span(
+                provider=self._primary_name,
+                model=model or getattr(self._primary, "_default_model", "") or "",
+                temperature=temperature,
                 max_tokens=max_tokens,
-            )
+            ):
+                return await self._primary.generate(
+                    prompt, model=model, json_mode=json_mode, temperature=temperature,
+                    max_tokens=max_tokens,
+                )
         except self._fallback_exceptions as exc:
             log.warning(
                 "llm_client.fallback",
@@ -606,10 +624,16 @@ class FallbackLLM(BaseLLM):
             # model is deliberately NOT forwarded here — the primary's model
             # name isn't valid on a different provider. max_tokens is
             # provider-agnostic, so unlike model it belongs on both paths.
-            return await self._secondary.generate(
-                prompt, json_mode=json_mode, temperature=temperature,
+            with llm_call_span(
+                provider=getattr(self._secondary, "_PROVIDER_NAME", "unknown"),
+                model=getattr(self._secondary, "_default_model", "") or "",
+                temperature=temperature,
                 max_tokens=max_tokens,
-            )
+            ):
+                return await self._secondary.generate(
+                    prompt, json_mode=json_mode, temperature=temperature,
+                    max_tokens=max_tokens,
+                )
 
     @classmethod
     def groq_primary(cls, cfg, model: str | None = None) -> "FallbackLLM":

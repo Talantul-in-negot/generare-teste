@@ -20,6 +20,8 @@ from typing import Any
 
 import structlog
 
+from graphrag.observability.operational_metrics import set_store_degraded
+
 log = structlog.get_logger(__name__)
 
 _DEFAULT_TTL = 3600
@@ -128,6 +130,7 @@ class QueryCache:
                     "semantic_answer_cache_strict is set but no redis_url is configured"
                 )
             log.warning("query_cache.no_redis", fallback="in-memory")
+            set_store_degraded("query_cache", True)
             return
         try:
             import redis.asyncio as aioredis
@@ -135,6 +138,7 @@ class QueryCache:
             self._redis = aioredis.from_url(self._redis_url, decode_responses=True)
             await self._redis.ping()
             log.info("query_cache.redis_connected")
+            set_store_degraded("query_cache", False)
         except Exception as exc:  # Redis errors differ between redis-py versions.
             self._redis = None
             if self._strict:
@@ -142,6 +146,9 @@ class QueryCache:
                     f"answer cache requires Redis but it is unreachable: {exc}"
                 ) from exc
             log.warning("query_cache.redis_unavailable", error=str(exc), fallback="in-memory")
+            # Invalidation cannot reach sibling replicas in this state, so a
+            # corrected answer keeps being served elsewhere for a full TTL.
+            set_store_degraded("query_cache", True)
 
     async def get(
         self,

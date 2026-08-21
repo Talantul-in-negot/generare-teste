@@ -43,6 +43,8 @@ from datetime import datetime, timezone
 
 import structlog
 
+from graphrag.core.redis_support import sync_redis_client
+
 log = structlog.get_logger(__name__)
 
 ALERT_HISTORY  = 100   # how many recent alerts to keep
@@ -67,21 +69,15 @@ _recent_alerts: deque[dict] = deque(maxlen=ALERT_HISTORY)
 # ── Redis-backed alert storage ─────────────────────────────────────────────────
 
 def _redis_client():
-    """Return a sync Redis client if redis-py is installed and REDIS_URL is set.
+    """Return a sync Redis client, or None when Redis is unavailable.
 
-    This module is imported before the event loop starts, so we use the
-    sync redis client (not aioredis) for the fire() call-path.
-
-    Returns None if Redis is unavailable — the in-process deque is the fallback.
+    Previously this read only the ``REDIS_URL`` environment variable while the
+    auth and provisioning tables read only ``retrieval.redis_url`` from
+    settings.yml — so on a deployment that set one but not the other, alert
+    history and authentication state disagreed about whether Redis existed,
+    silently. The shared resolver checks both.
     """
-    if not _REDIS_URL:
-        return None
-    try:
-        import redis as redis_lib   # sync redis-py
-        return redis_lib.from_url(_REDIS_URL, socket_connect_timeout=1,
-                                  socket_timeout=1, decode_responses=True)
-    except (ImportError, OSError, ConnectionError, ValueError):
-        return None
+    return sync_redis_client(_REDIS_URL or None)
 
 
 def _push_to_redis(alert: dict) -> bool:

@@ -9,6 +9,10 @@ from pathlib import Path
 
 import structlog
 from neo4j import AsyncGraphDatabase, AsyncDriver
+
+from graphrag.observability.operational_metrics import (
+    record_graph_query, set_graph_pool,
+)
 from neo4j.exceptions import ServiceUnavailable, TransientError
 
 from graphrag.core.config import get_settings
@@ -21,16 +25,27 @@ log = structlog.get_logger(__name__)
 class Neo4jClient:
     """Thin wrapper around the Neo4j async driver with retry logic."""
 
+    # Every query holds one pooled connection for its duration, so this is
+    # also the hard ceiling on graph concurrency for the process. Published as
+    # a gauge alongside in-flight count so saturation is visible as a ratio
+    # before it shows up as latency.
+    MAX_CONNECTION_POOL_SIZE = 50
+
     def __init__(self):
         cfg = get_settings()
         self._driver: AsyncDriver = AsyncGraphDatabase.driver(
             cfg.neo4j_uri,
             auth=(cfg.neo4j_user, cfg.neo4j_password),
-            max_connection_pool_size=50,
+            max_connection_pool_size=self.MAX_CONNECTION_POOL_SIZE,
             notifications_min_severity="OFF",
         )
         self._filtered_vector_search = False
         self._filtered_vector_indexes: set[str] = set()
+        # In-flight query count. The driver does not expose pool occupancy, so
+        # this is counted here: it is the same number for our purposes, since
+        # a session is held for exactly the span of a query.
+        self._in_flight = 0
+        set_graph_pool(0, self.MAX_CONNECTION_POOL_SIZE)
 
     async def detect_capabilities(self) -> dict:
         """Detect Neo4j 2026 tenant-filtered vector indexes explicitly."""
@@ -70,9 +85,16 @@ class Neo4jClient:
 
     @with_retry(exceptions=(TransientError, ServiceUnavailable), max_attempts=3)
     async def run(self, cypher: str, **params) -> list[dict]:
-        async with self._driver.session() as session:
-            result = await session.run(cypher, parameters=params)
-            return [record.data() async for record in result]
+        self._in_flight += 1
+        set_graph_pool(self._in_flight, self.MAX_CONNECTION_POOL_SIZE)
+        try:
+            with record_graph_query():
+                async with self._driver.session() as session:
+                    result = await session.run(cypher, parameters=params)
+                    return [record.data() async for record in result]
+        finally:
+            self._in_flight -= 1
+            set_graph_pool(self._in_flight, self.MAX_CONNECTION_POOL_SIZE)
 
     # ── Schema initialization ────────────────────────────────────────────────────
 

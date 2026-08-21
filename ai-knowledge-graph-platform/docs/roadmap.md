@@ -679,10 +679,24 @@ production value, not trend visibility.
    — is the hypothesis to test against this corpus, not to assume.
    *Complexity:* medium. *Benefit:* replaces anecdotal route comparison with
    a quality/latency/cost triple.
-3. Add dashboards and alerts for oldest RabbitMQ message age, DLQ growth,
-   publish failures, Neo4j pool saturation, and per-tenant model spend.
-4. Track OpenTelemetry GenAI semantic conventions and adopt the stable fields
-   that map cleanly to the platform's existing traces.
+3. ~~Add dashboards and alerts for oldest RabbitMQ message age, DLQ growth,
+   publish failures, Neo4j pool saturation, and per-tenant model spend.~~
+   **Done** — `graphrag/observability/operational_metrics.py` emits queue age,
+   DLQ, publish outcome, retry, graph pool occupancy, and store-degradation
+   signals; `monitoring/prometheus/alerts.yml` consumes them. A test asserts
+   every metric an alert references actually exists, because a rule pointing at
+   a typo'd metric never fires and never-firing looks exactly like healthy.
+   *Remaining:* a Grafana dashboard JSON, and wiring these rules into the
+   deployment's Prometheus.
+4. ~~Track OpenTelemetry GenAI semantic conventions and adopt the stable fields
+   that map cleanly to the platform's existing traces.~~
+   **Done** — `graphrag/observability/genai_telemetry.py` emits
+   `gen_ai.operation.name`, `gen_ai.system`, request/response model, and
+   provider-reported token usage, attached at `FallbackLLM.generate` (the
+   single choke point every production model call passes through). Prompt and
+   completion content are deliberately never attached: they carry customer
+   document text, and a trace backend has none of the retention, tenancy, or
+   erasure guarantees `graphrag/graph/gdpr.py` exists to provide.
 5. **Adopt the MCP 2026-07-28 transport changes.** This pass implemented the
    specification's authorization requirements only. Its stateless protocol
    core, multi-round-trip requests, header-based routing, and cacheable list

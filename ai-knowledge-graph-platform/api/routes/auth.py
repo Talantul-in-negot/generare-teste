@@ -29,6 +29,10 @@ from pydantic import BaseModel
 from api.auth.dependencies import get_current_user, get_tenant, require_scope
 from api.limiter import AUTH_LIMIT, limiter
 from graphrag.core.config import get_settings, is_dev_env
+from graphrag.core.redis_support import (
+    redis_error_types as _redis_error_types,
+    sync_redis_client as _get_redis_sync,
+)
 from graphrag.core.resource_identifiers import (
     InvalidResourceIdentifier,
     known_resources,
@@ -85,33 +89,6 @@ def _safe_next(url: str | None, default: str = "/docs") -> str:
 
 _CLIENTS_KEY    = "graphrag:m2m_clients"
 _m2m_clients_mem: dict[str, dict] = {}   # fallback for non-Redis environments
-
-
-def _get_redis_sync():
-    """Return a sync Redis client for the M2M registry, or None."""
-    try:
-        import redis as redis_lib
-        from graphrag.core.config import get_settings
-        redis_url = get_settings().retrieval.get("redis_url", "")
-        if not redis_url:
-            return None
-        return redis_lib.from_url(redis_url, socket_connect_timeout=1,
-                                  socket_timeout=1, decode_responses=True)
-    except (ImportError, OSError, ConnectionError, ValueError):
-        return None
-
-
-def _redis_error_types() -> tuple[type[BaseException], ...]:
-    """redis.exceptions.RedisError covers TimeoutError/ConnectionError/etc.
-    Lazily imported to match _get_redis_sync's existing convention (no hard
-    top-level dependency on the redis package). Falls back to just the
-    stdlib types if redis truly isn't installed -- _get_redis_sync would
-    already have returned None in that case, so this branch is defensive."""
-    try:
-        import redis as redis_lib
-        return (redis_lib.exceptions.RedisError, OSError, ConnectionError, ValueError)
-    except ImportError:
-        return (OSError, ConnectionError, ValueError)
 
 
 def _log_client_registry_fallback(operation: str, exc: BaseException) -> None:

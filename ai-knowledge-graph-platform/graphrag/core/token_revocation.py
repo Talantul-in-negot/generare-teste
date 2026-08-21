@@ -40,6 +40,8 @@ from typing import Any
 
 import structlog
 
+from graphrag.observability.operational_metrics import set_store_degraded
+
 log = structlog.get_logger(__name__)
 
 _JTI_PREFIX = "graphrag:revoked-jti:v1:"
@@ -79,6 +81,7 @@ class TokenRevocationStore:
                 "token_revocation.no_redis",
                 impact="revocations apply to this process only, not other replicas",
             )
+            set_store_degraded("token_revocation", True)
             return
         try:
             import redis.asyncio as aioredis
@@ -86,6 +89,7 @@ class TokenRevocationStore:
             self._redis = aioredis.from_url(self._redis_url, decode_responses=True)
             await self._redis.ping()
             log.info("token_revocation.redis_connected")
+            set_store_degraded("token_revocation", False)
         except Exception as exc:  # Redis error types vary across redis-py versions.
             self._redis = None
             if self._strict:
@@ -93,6 +97,8 @@ class TokenRevocationStore:
                     f"revocation store requires Redis but it is unreachable: {exc}"
                 ) from exc
             log.warning("token_revocation.redis_unavailable", error=str(exc))
+            # A revocation issued on another replica will not be seen here.
+            set_store_degraded("token_revocation", True)
 
     # ── Writes ───────────────────────────────────────────────────────────────
 
@@ -109,8 +115,13 @@ class TokenRevocationStore:
                 log.warning("token_revocation.write_error", error=str(exc))
                 if self._strict:
                     raise RevocationBackendUnavailable(str(exc)) from exc
+        # Reached only when there is no Redis at all, or the durable write
+        # above failed. Either way this revocation exists in one process only.
+        # Returning `self._redis is not None` here reported success whenever a
+        # client object existed, so a failed write told the operator the
+        # credential was dead fleet-wide when it was dead on one replica.
         self._memory_jti[jti] = time.time() + self._ttl
-        return self._redis is not None
+        return False
 
     async def revoke_subject(self, subject: str, *, reason: str = "") -> bool:
         """Deny every token issued to `subject` before now.
@@ -132,8 +143,9 @@ class TokenRevocationStore:
                 log.warning("token_revocation.write_error", error=str(exc))
                 if self._strict:
                     raise RevocationBackendUnavailable(str(exc)) from exc
+        # Same durability contract as revoke_token above.
         self._memory_subject[subject] = cutoff
-        return self._redis is not None
+        return False
 
     # ── Reads ────────────────────────────────────────────────────────────────
 

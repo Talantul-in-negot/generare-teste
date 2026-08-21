@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import Callable, Awaitable
 
 import aio_pika
@@ -14,6 +15,9 @@ from aio_pika.pool import Pool
 from graphrag.core.config import get_settings
 from graphrag.core.exceptions import MessagingError
 from graphrag.observability.correlation import current_correlation_id
+from graphrag.observability.operational_metrics import (
+    record_consumed, record_dlq, record_message_age, record_publish, record_retry,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -128,6 +132,11 @@ class RabbitMQClient:
                 inject(headers)
             except ImportError:
                 pass
+            # Stamp enqueue time so a consumer can measure how long the
+            # message actually waited. Queue *depth* cannot distinguish a deep
+            # queue that is draining from a shallow one that is stalled; age
+            # can, which is why it is the autoscaling signal.
+            headers["x-enqueued-at"] = repr(time.time())
             message = Message(
                 body,
                 delivery_mode=DeliveryMode.PERSISTENT,
@@ -135,7 +144,8 @@ class RabbitMQClient:
                 correlation_id=correlation_id or None,
                 headers=headers or None,
             )
-            await exchange.publish(message, routing_key=routing_key)
+            with record_publish(exchange_name):
+                await exchange.publish(message, routing_key=routing_key)
             log.info(
                 "rabbitmq.published",
                 exchange=exchange_name,
@@ -187,6 +197,14 @@ class RabbitMQClient:
                         message.headers.get("x-retry-count", 0)
                         if message.headers else 0
                     )
+                    _enqueued_at = None
+                    if message.headers:
+                        try:
+                            _enqueued_at = float(message.headers.get("x-enqueued-at") or 0) or None
+                        except (TypeError, ValueError):
+                            _enqueued_at = None
+                    record_message_age(queue_name, _enqueued_at)
+                    _handler_started = time.perf_counter()
                     try:
                         payload = json.loads(message.body)
                         if message.correlation_id and not payload.get("correlation_id"):
@@ -204,9 +222,15 @@ class RabbitMQClient:
                             if otel_token is not None:
                                 otel_context.detach(otel_token)
                         await message.ack()
+                        record_consumed(
+                            queue_name, "success", time.perf_counter() - _handler_started,
+                        )
                     except Exception as exc:  # broad: handler may raise anything; must not kill consumer loop
                         exc_type  = type(exc).__name__
                         exc_msg   = str(exc)[:300]
+                        record_consumed(
+                            queue_name, "failure", time.perf_counter() - _handler_started,
+                        )
                         # Summarise original payload for DLQ — truncate large fields
                         try:
                             raw_payload = json.loads(message.body)
@@ -228,6 +252,7 @@ class RabbitMQClient:
                         )
 
                         if retries < MAX_RETRIES:
+                            record_retry(queue_name, exc_type)
                             backoff_s = min(2 ** retries, 30)  # 1s, 2s, 4s… cap 30s
                             log.info(
                                 "rabbitmq.retry_backoff",
@@ -264,6 +289,9 @@ class RabbitMQClient:
                                 "payload_summary":  payload_summary,
                             }
                             log.error("rabbitmq.dlq_sent", dlq=dlq_name, **dlq_envelope)
+                            # Work being discarded permanently. A log line is
+                            # not alertable at the rate an operator needs.
+                            record_dlq(queue_name, exc_type)
                             dlq_msg = Message(
                                 json.dumps(dlq_envelope).encode(),
                                 delivery_mode=DeliveryMode.PERSISTENT,

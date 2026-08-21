@@ -6,7 +6,14 @@ from graphrag.business_matrix.timescale_kpi_store import TimescaleKPIStore
 from graphrag.graph.multimodal import MediaTransformation, MultiModalEntityService
 
 
-def test_timescale_backend_requires_explicit_url():
+def test_timescale_backend_requires_explicit_url(monkeypatch):
+    # The store falls back to the environment when given an empty URL, so this
+    # test has to establish "no URL anywhere" rather than assume it. It did
+    # assume it, which made it order-dependent: graphrag/dashboard/utils.py
+    # calls load_dotenv() at import time, so any test that transitively imports
+    # the Dash app (api.main mounts it) injects .env into os.environ
+    # process-wide and this assertion stops holding.
+    monkeypatch.delenv("TIMESCALE_DB_URL", raising=False)
     with pytest.raises(ValueError, match="TIMESCALE_DB_URL"):
         TimescaleKPIStore("")
 
