@@ -98,7 +98,7 @@
 <canvas class="bg" id="bgA"></canvas>
 <canvas class="bg" id="bgB"></canvas>
 <div id="scene-label"></div>
-<div id="accountBar"><button class="account-btn" id="userBtn" type="button">👤 <span id="userName">Conectează-te</span></button><span class="account-btn" id="scoreChip" title="Punctajul tău total">⭐ <span id="userPoints">0</span> pct</span><button class="account-btn" id="statsBtn" type="button">🏆 Clasament</button></div>
+<div id="accountBar"><button class="account-btn" id="userBtn" type="button">👤 <span id="userName">Conectează-te</span></button><span class="account-btn" id="scoreChip" title="Punctajul tău total">⭐ <span id="userPoints">0</span> pct</span><button class="account-btn" id="statsBtn" type="button">🏆 Clasament</button></div><p id="syncNotice" role="status" aria-live="polite"></p>
 <div id="selectorScreen">
   <div class="sel-header">
     <h1>✨ Cartea lui Ioan ✨</h1>
@@ -835,12 +835,22 @@ function updateAccount(){
   document.getElementById('authLogged').hidden=!accountUser;
   document.getElementById('authLoggedName').textContent=accountUser;
 }
+function setSyncNotice(message, isError=false){
+  const notice=document.getElementById('syncNotice');
+  notice.textContent=message||'';
+  notice.style.color=isError?'#fecaca':'#d8b4fe';
+}
 async function syncCloudStats(){
   try{const stats=await Tracker.ownStats();if(stats){cloudPoints=Number(stats.points)||0;updateAccount();}return stats;}catch{return null;}
 }
 async function recordQuizAttempt(q, selected, isCorrect){
-  if(!accountUser)return;
-  try{const stats=await Tracker.record({question_id:q.sourceIndex,round_key:ROUNDS[activeRoundIdx].label,quiz_version:'ioan-v1',selected_indices:selected,correct:isCorrect});if(stats){cloudPoints=Number(stats.points)||0;updateAccount();}}catch{ /* activitatea rămâne în coada locală și va fi retrimisă */ }
+  if(!accountUser){setSyncNotice('Conectează-te înainte de răspuns ca punctele să intre în clasament.',true);return;}
+  setSyncNotice('Se salvează răspunsul…');
+  try{
+    const stats=await Tracker.record({question_id:q.sourceIndex,round_key:ROUNDS[activeRoundIdx].label,quiz_version:'ioan-v1',selected_indices:selected,correct:isCorrect});
+    if(stats){cloudPoints=Number(stats.points)||0;updateAccount();setSyncNotice(`Salvat în clasament: ${cloudPoints} pct.`);}
+    else setSyncNotice('Răspunsul a fost pus în coada de sincronizare.');
+  }catch(error){setSyncNotice(`Nu s-a salvat: ${error.message||'eroare de conexiune'}`,true);}
 }
 function openAuth(){document.getElementById('authModal').hidden=false;document.getElementById('authError').textContent='';updateAccount();}
 function closeAuth(){document.getElementById('authModal').hidden=true;}

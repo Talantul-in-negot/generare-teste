@@ -4,6 +4,7 @@ const Tracker = (() => {
   const QUEUE_KEY = 'talant_pending_attempts';
   const enabled = typeof SUPABASE_URL === 'string' && SUPABASE_URL.startsWith('https://') && !!SUPABASE_ANON_KEY;
   let flushing = null;
+  let lastError = null;
 
   function readQueue() {
     try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; } catch { return []; }
@@ -24,7 +25,12 @@ const Tracker = (() => {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
       method: 'POST', headers: await headers({ 'Content-Type': 'application/json' }), body: JSON.stringify(body || {}),
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      const bodyText = await response.text();
+      let message = `HTTP ${response.status}`;
+      try { message = JSON.parse(bodyText).message || JSON.parse(bodyText).hint || message; } catch { message = bodyText || message; }
+      throw new Error(message);
+    }
     if (response.status === 204) return null;
     const text = await response.text();
     return text ? JSON.parse(text) : null;
@@ -43,11 +49,11 @@ const Tracker = (() => {
     flushing = (async () => {
       while (true) {
         const queue = readQueue();
-        if (!queue.length) return true;
+        if (!queue.length) { lastError = null; return true; }
         try {
           await rpc('talant_record_attempt', queue[0]);
           writeQueue(queue.slice(1));
-        } catch { return false; }
+        } catch (error) { lastError = error; return false; }
       }
     })().finally(() => { flushing = null; });
     return flushing;
@@ -55,7 +61,8 @@ const Tracker = (() => {
 
   async function record(attempt) {
     log(attempt);
-    await flush();
+    const saved = await flush();
+    if (!saved) throw lastError || new Error('Răspunsul nu a putut fi salvat.');
     return ownStats();
   }
   async function ownStats() {
