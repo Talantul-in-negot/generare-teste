@@ -34,7 +34,7 @@ Pentru corectitudinea baremului, fiecare `fact` conține textul exact al dovezii
 python generate.py --chapters "1 Samuel 1,2" --version 1
 ```
 
-Rezultatele sunt `output/V1/Test-Concurenti-V1.pdf`, `output/V1/Barem-Corectori-V1.pdf` și `output/V1/test.json`.
+Pentru selecția `1 Samuel 1,2`, rezultatele sunt `output/V1/1 Samuel 1-2.pdf`, `output/V1/1 Samuel 1-2 barem.pdf` și `output/V1/test.json`.
 
 ## Interfață web locală
 

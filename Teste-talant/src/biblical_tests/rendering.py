@@ -121,15 +121,28 @@ def render_pdf(test: TestDefinition, path: str | Path, answer_key: bool = False)
     story += [_p(f"II  Marcați litera corespunzătoare răspunsului corect pe foaia cu răspunsuri: (câte {s['section_2']} puncte fiecare)\n(doar un răspuns corect)", styles["section"]), _line()]
     story += [_choice_item(i, q, answer_key, styles) for i, q in enumerate(test.section_ii, 1)]
     story += [_p(f"III  Faceți asocierea și marcați litera corespunzătoare pe foaia cu răspunsuri: (câte {s['section_3']} puncte fiecare)", styles["section"]), _line(), _matching(test.section_iii, answer_key, styles)]
-    story += [_p(f"IV  Marcați litera corespunzătoare răspunsului corect pe foaia cu răspunsuri: (câte {s['section_4']} puncte fiecare)\n(poate fi unul, două, trei sau nici un răspuns corect)", styles["section"]), _line()]
-    story += [_choice_item(i, q, answer_key, styles) for i, q in enumerate(test.section_iv, 1)]
+    iv_items = [_choice_item(i, q, answer_key, styles) for i, q in enumerate(test.section_iv, 1)]
+    story += [KeepTogether([_p(f"IV  Marcați litera corespunzătoare răspunsului corect pe foaia cu răspunsuri: (câte {s['section_4']} puncte fiecare)\n(poate fi unul, două, trei sau nici un răspuns corect)", styles["section"]), _line(), iv_items[0]])]
+    story += iv_items[1:]
     doc.build(story)
     return path
 
 
 def render_pair(test: TestDefinition, directory: str | Path) -> tuple[Path, Path]:
     folder = Path(directory)
-    suffix = f"V{test.version}.pdf"
-    competitor = render_pdf(test, folder / f"Test-Concurenti-{suffix}")
-    key = render_pdf(test, folder / f"Barem-Corectori-{suffix}", answer_key=True)
+    labels = []
+    for book, chapters in test.source.items():
+        ranges = []
+        start = previous = chapters[0]
+        for chapter in chapters[1:]:
+            if chapter == previous + 1:
+                previous = chapter
+                continue
+            ranges.append(str(start) if start == previous else f"{start}-{previous}")
+            start = previous = chapter
+        ranges.append(str(start) if start == previous else f"{start}-{previous}")
+        labels.append(f"{book} {','.join(ranges)}")
+    label = "; ".join(labels)
+    competitor = render_pdf(test, folder / f"{label}.pdf")
+    key = render_pdf(test, folder / f"{label} barem.pdf", answer_key=True)
     return competitor, key

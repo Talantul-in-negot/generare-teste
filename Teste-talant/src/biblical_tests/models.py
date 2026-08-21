@@ -30,6 +30,8 @@ class Fact:
     predicate: str
     object: str
     evidence: Evidence
+    options: tuple[str, ...] = ()
+    quality: bool = True
 
 
 @dataclass(frozen=True)

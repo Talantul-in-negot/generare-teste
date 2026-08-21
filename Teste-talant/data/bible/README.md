@@ -1,6 +1,6 @@
 # Corpus biblic local
 
-Aplicația nu descarcă și nu include implicit nicio traducere. Puneți un fișier licențiat și verificabil la `data/bible/bible.json`.
+Aplicația nu descarcă nicio traducere. Corpusurile Markdown locale `data/1samuel-reference-text.md` și `data/2samuel-reference-text.md` sunt încărcate direct și păstrează proveniența declarată în fișiere. Sunt acceptate și JSON la `data/bible/bible.json`.
 
 Formatul de bază este:
 
