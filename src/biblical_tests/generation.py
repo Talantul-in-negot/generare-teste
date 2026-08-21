@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import re
 from collections import defaultdict
 
 from .models import Fact, MatchingQuestion, MultiChoiceQuestion, SingleChoiceQuestion, TestDefinition, TrueFalseQuestion
@@ -59,8 +60,13 @@ def _blanked_statement(fact: Fact, limit: int | None = None) -> str:
     return result
 
 
-def _claim(fact: Fact, object_value: str | None = None) -> str:
-    return f"{fact.evidence.reference}: {object_value or fact.object}"
+def _named_terms(facts: list[Fact]) -> list[str]:
+    divine_forms = {"Domnul", "Domnului", "Dumnezeu", "Dumnezeul"}
+    return sorted({fact.object for fact in facts if fact.object[:1].isupper() and fact.object not in divine_forms})
+
+
+def _mentions(text: str, value: str) -> bool:
+    return bool(re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text))
 
 
 def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, scoring: dict[str, int], seed: int, version: int) -> TestDefinition:
@@ -127,23 +133,41 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     multi_pool = [fact for fact in pool if fact.id not in used]
     if len(multi_pool) < 3:
         raise GenerationError("Nu sunt suficiente facts distincte pentru o întrebare din Secțiunea IV.")
+    names = _named_terms(facts)
     for index in range(1, 4):
-        # The same evidence card may appear in a different IV item when the
-        # source selection is short, but never twice inside the same item.
-        group = rng.sample(multi_pool, 3)
-        correct_positions = set(rng.sample(range(3), rng.randint(0, 3)))
-        options: dict[str, str] = {}
-        correct: list[str] = []
-        for position, fact in enumerate(group):
-            letter = "ABC"[position]
-            if position in correct_positions:
-                options[letter] = _claim(fact)
-                correct.append(letter)
-            else:
-                options[letter] = _claim(fact, _wrong_object(fact, facts))
+        count = rng.randint(0, 3)
+        eligible = []
+        for fact in multi_pool:
+            present = [name for name in names if _mentions(fact.statement, name)]
+            absent = [name for name in names if name not in present]
+            if len(present) >= count and len(absent) >= 3 - count:
+                eligible.append((fact, present, absent))
+        if eligible:
+            fact, present, absent = rng.choice(eligible)
+            values = rng.sample(present, count) + rng.sample(absent, 3 - count)
+            rng.shuffle(values)
+            options = dict(zip("ABC", values))
+            correct = [letter for letter, value in options.items() if value in present]
+            evidence = [fact.evidence]
+            fact_ids = [fact.id]
+            question = "Care dintre următoarele persoane sau locuri sunt menționate în pasaj?"
+        else:
+            # Fallback for a corpus without enough named entities in one verse.
+            group = rng.sample(multi_pool, 3)
+            correct_positions = set(rng.sample(range(3), count))
+            options = {}
+            correct = []
+            for position, fact in enumerate(group):
+                letter = "ABC"[position]
+                if position in correct_positions:
+                    options[letter] = fact.statement
+                    correct.append(letter)
+                else:
+                    options[letter] = fact.statement.replace(fact.object, _wrong_object(fact, facts), 1)
+            evidence = [fact.evidence for fact in group]
+            fact_ids = [fact.id for fact in group]
+            question = "Care dintre următoarele afirmații sunt adevărate?"
         multis.append(MultiChoiceQuestion(
-            f"IV-{index}", "Care dintre următoarele afirmații sunt susținute de pasajele selectate? (pot fi 0–3 răspunsuri)",
-            options, correct, group[0].evidence, group[0].id,
-            [fact.evidence for fact in group], [fact.id for fact in group],
+            f"IV-{index}", question, options, correct, evidence[0], fact_ids[0], evidence, fact_ids,
         ))
     return TestDefinition(source, seed, version, contest, scoring, section_i=tf, section_ii=singles, section_iii=matching, section_iv=multis)

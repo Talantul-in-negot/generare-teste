@@ -48,7 +48,7 @@ def validate_test(test: TestDefinition) -> None:
     if test.section_iii:
         core_ids.extend(test.section_iii.fact_ids)
     iv_fact_sets = [set(question.fact_ids or [question.fact_id]) for question in test.section_iv]
-    if len(core_ids) != len(set(core_ids)) or any(len(question.fact_ids or [question.fact_id]) != 3 for question in test.section_iv) or any(set(core_ids) & fact_ids for fact_ids in iv_fact_sets):
+    if len(core_ids) != len(set(core_ids)) or any(not 1 <= len(question.fact_ids or [question.fact_id]) <= 3 for question in test.section_iv) or any(set(core_ids) & fact_ids for fact_ids in iv_fact_sets):
         errors.append("Aceeași factă este reutilizată între întrebări.")
     if errors:
         raise ValidationError("\n".join(errors))
