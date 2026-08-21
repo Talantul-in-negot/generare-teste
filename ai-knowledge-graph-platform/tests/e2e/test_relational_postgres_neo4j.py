@@ -36,23 +36,34 @@ def _asyncpg_url(url: str) -> str:
     )
 
 
+RELATIONAL_NEO4J_PASSWORD = "relational-e2e-password"
+
+
+@pytest.fixture(scope="module")
+def postgres_container():
+    from testcontainers.community.postgres import PostgresContainer
+
+    with PostgresContainer("postgres:16-alpine") as container:
+        yield container
+
+
+@pytest.fixture(scope="module")
+def neo4j_container():
+    from testcontainers.community.neo4j import Neo4jContainer
+    from testcontainers.core.config import testcontainers_config
+
+    previous_max_tries = testcontainers_config.max_tries
+    testcontainers_config.max_tries = max(previous_max_tries, 300)
+    try:
+        with Neo4jContainer(
+            "neo4j:5.20-community", password=RELATIONAL_NEO4J_PASSWORD
+        ) as container:
+            yield container
+    finally:
+        testcontainers_config.max_tries = previous_max_tries
+
+
 class TestRelationalPostgresToNeo4j:
-    NEO4J_PASSWORD = "relational-e2e-password"
-
-    @pytest.fixture(scope="class")
-    def postgres_container(self):
-        from testcontainers.community.postgres import PostgresContainer
-
-        with PostgresContainer("postgres:16-alpine") as container:
-            yield container
-
-    @pytest.fixture(scope="class")
-    def neo4j_container(self):
-        from testcontainers.community.neo4j import Neo4jContainer
-
-        with Neo4jContainer("neo4j:5", password=self.NEO4J_PASSWORD) as container:
-            yield container
-
     async def test_postgres_import_persists_tenant_scoped_graph_and_provenance(
         self, postgres_container, neo4j_container,
     ) -> None:
@@ -102,7 +113,7 @@ class TestRelationalPostgresToNeo4j:
             await connection.execute(text("INSERT INTO has_evidence VALUES ('e1', 'v1', 0.99)"))
 
         driver = AsyncGraphDatabase.driver(
-            neo4j_container.get_connection_url(), auth=("neo4j", self.NEO4J_PASSWORD),
+            neo4j_container.get_connection_url(), auth=("neo4j", RELATIONAL_NEO4J_PASSWORD),
         )
         client = Neo4jClient.__new__(Neo4jClient)
         client._driver = driver

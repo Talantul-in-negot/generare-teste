@@ -28,10 +28,10 @@ from __future__ import annotations
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from graphrag.core.models import Chunk, Entity, Relation, SourceType
+from graphrag.core.models import Chunk, Entity, Relation
 from graphrag.graph.alias_registry import AliasRegistry
 from graphrag.graph.contradiction_detector import ContradictionDetector
-from graphrag.graph.ontology_registry import OntologyRegistry, _RELATION_RULES
+from graphrag.graph.ontology_registry import OntologyRegistry
 from graphrag.graph.quarantine import QuarantineService
 
 
@@ -71,7 +71,6 @@ class TestTenantIsolation:
             {"canonical_name": "NASA", "canonical_type": "ORG", "aliases": ["National Aeronautics"]}
         ])
         registry_a = AliasRegistry(neo4j_mock, tenant="tenant_a")
-        registry_b = AliasRegistry(neo4j_mock, tenant="tenant_b")
 
         await registry_a.load()
 

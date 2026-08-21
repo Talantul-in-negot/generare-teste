@@ -8,9 +8,8 @@ PageRank coverage across tenants with no automatic refresh mechanism.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-import pytest
 
 from graphrag.graph.pagerank import PageRankComputer
 

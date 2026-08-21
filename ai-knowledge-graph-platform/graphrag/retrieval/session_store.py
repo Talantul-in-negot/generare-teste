@@ -294,6 +294,12 @@ class SessionStore:
         except Exception:
             return False
 
+    async def close(self) -> None:
+        """Close the optional Redis client."""
+        if self._redis is not None:
+            await self._redis.aclose()
+            self._redis = None
+
     # ── Internal helpers ───────────────────────────────────────────────────────
 
     def _log_op_failure(self, op: str, exc: Exception) -> None:
@@ -347,3 +353,11 @@ def get_session_store() -> SessionStore:
             strict=strict,
         )
     return _store
+
+
+async def close_session_store() -> None:
+    """Close and reset the process singleton when it was initialized."""
+    global _store
+    store, _store = _store, None
+    if store is not None:
+        await store.close()

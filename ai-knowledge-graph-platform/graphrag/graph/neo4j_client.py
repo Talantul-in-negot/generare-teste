@@ -1760,3 +1760,11 @@ def get_neo4j() -> Neo4jClient:
     if _client is None:
         _client = Neo4jClient()
     return _client
+
+
+async def close_neo4j() -> None:
+    """Close and reset the process singleton when it was initialized."""
+    global _client
+    client, _client = _client, None
+    if client is not None:
+        await client.close()

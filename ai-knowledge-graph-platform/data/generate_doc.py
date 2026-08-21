@@ -302,7 +302,8 @@ def call_once(provider, model, messages):
             from groq import Groq
         except ImportError:
             print("Instaleaza: pip install groq")
-            import sys; sys.exit(1)
+            import sys
+            sys.exit(1)
         client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
         r = client.chat.completions.create(
             model=model, max_tokens=8192, messages=messages
@@ -445,10 +446,10 @@ def main():
     wc = len(text.split())
     out_path = save_document(text, args.industry, args.doctype, name, args.lang, args.contradictions)
 
-    print(f"\nGata!")
+    print("\nGata!")
     print(f"Cuvinte:  {wc} (target: {dm['len']})")
     print(f"Salvat:   {out_path}")
-    print(f"\nVerifica cu:")
+    print("\nVerifica cu:")
     print(f"  python manage_corpus.py list --industry {args.industry}")
 
     if wc < dm["min_words"] // 2:

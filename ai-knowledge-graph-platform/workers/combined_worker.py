@@ -80,6 +80,9 @@ async def main():
         await asyncio.gather(ingest_task, query_task)
     except asyncio.CancelledError:
         log.info("combined_worker.shutdown_graceful")
+    finally:
+        from graphrag.core.lifecycle import close_shared_resources
+        await close_shared_resources()
 
 
 if __name__ == "__main__":

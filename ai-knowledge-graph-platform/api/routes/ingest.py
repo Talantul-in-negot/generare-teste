@@ -1,7 +1,10 @@
 """POST /ingest — publish document to the ingestion queue."""
 
+from typing import Any, Literal
+
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.auth.dependencies import get_tenant, require_scope
 from api.limiter import INGEST_LIMIT, limiter
@@ -9,14 +12,15 @@ from graphrag.core.models import Document
 from graphrag.messaging.publishers import publish_document
 
 router = APIRouter()
+log = structlog.get_logger(__name__)
 
 
 class IngestRequest(BaseModel):
-    filename: str
-    text: str
-    priority: str = "normal"
-    metadata: dict = {}
-    source_id: str | None = None
+    filename: str = Field(min_length=1, max_length=255)
+    text: str = Field(min_length=1, max_length=8_000_000)
+    priority: Literal["normal", "high"] = "normal"
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=100)
+    source_id: str | None = Field(default=None, max_length=256)
 
 
 class IngestResponse(BaseModel):
@@ -44,6 +48,13 @@ async def ingest_document(request: Request, body: IngestRequest, tenant: str = D
     try:
         job_id = await publish_document(doc, priority=body.priority)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Queue unavailable: {exc}")
+        log.error(
+            "ingest.queue_unavailable",
+            doc_id=doc.id,
+            tenant=tenant,
+            correlation_id=getattr(request.state, "correlation_id", ""),
+            exception_type=type(exc).__name__,
+        )
+        raise HTTPException(status_code=503, detail="Queue unavailable") from exc
 
     return IngestResponse(job_id=job_id, doc_id=doc.id)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -317,16 +317,16 @@ class KPIEvent(BaseModel):
 class IngestMessage(BaseModel):
     job_id: str = Field(default_factory=lambda: str(uuid4()))
     document: Document
-    priority: str = "normal"
+    priority: Literal["normal", "high"] = "normal"
 
 
 class QueryMessage(BaseModel):
     query_id: str = Field(default_factory=lambda: str(uuid4()))
-    question: str
-    mode: str = "hybrid"
-    ground_truth: str = ""
-    tenant: str = "default"
-    session_id: str = ""   # for multi-turn conversational context
-    valid_at: str | None = None
-    transaction_at: str | None = None
-    correlation_id: str = ""
+    question: str = Field(min_length=1, max_length=8_000)
+    mode: Literal["local", "global", "hybrid"] = "hybrid"
+    ground_truth: str = Field(default="", max_length=16_000)
+    tenant: str = Field(default="default", min_length=1, max_length=256)
+    session_id: str = Field(default="", max_length=256)  # multi-turn context
+    valid_at: str | None = Field(default=None, max_length=64)
+    transaction_at: str | None = Field(default=None, max_length=64)
+    correlation_id: str = Field(default="", max_length=128)

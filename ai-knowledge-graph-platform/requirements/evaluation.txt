@@ -2,11 +2,11 @@
 
 # ── Worker health server (graphrag/workers/health_server.py) ───────────────────
 # Direct dependency — see requirements/query.txt for why this was missing.
-aiohttp>=3.9.0
+aiohttp>=3.14.3
 
 # ── Evaluation ─────────────────────────────────────────────────────────────────
 ragas>=0.2.0
-datasets>=2.20.0
+datasets>=5.0.1
 
 # ── Google AI (RAGAS uses Gemini as judge) ─────────────────────────────────────
 google-generativeai>=0.8.0

@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 
 from graphrag.core.config import get_settings
 
@@ -27,5 +28,5 @@ def decode_access_token(token: str) -> dict:
     settings = get_settings()
     try:
         return jwt.decode(token, settings.jwt_secret_key, algorithms=[ALGORITHM])
-    except JWTError as exc:
-        raise ValueError(f"Invalid token: {exc}") from exc
+    except InvalidTokenError as exc:
+        raise ValueError("Invalid token") from exc

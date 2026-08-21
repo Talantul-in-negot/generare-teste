@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib import Graph, Literal, Namespace
 from rdflib.namespace import OWL, RDF, RDFS, XSD
 
 from graphrag.graph.shacl_validator import SHACLValidator

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections import deque
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

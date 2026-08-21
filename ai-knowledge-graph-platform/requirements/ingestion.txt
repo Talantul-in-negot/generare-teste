@@ -2,14 +2,14 @@
 
 # ── Worker health server (graphrag/workers/health_server.py) ───────────────────
 # Direct dependency — see requirements/query.txt for why this was missing.
-aiohttp>=3.9.0
+aiohttp>=3.14.3
 
 # ── Graph processing ───────────────────────────────────────────────────────────
 graspologic>=3.3.0
 networkx>=3.3
 
 # ── Document ingestion ─────────────────────────────────────────────────────────
-pypdf>=4.0.0
+pypdf>=6.15.0
 python-docx>=1.1.0
 langchain-text-splitters>=0.2.0
 

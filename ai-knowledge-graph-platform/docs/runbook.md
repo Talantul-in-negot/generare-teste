@@ -490,7 +490,29 @@ User reports: "I submitted a query and it never completed"
 
 ---
 
-## 10. Key File Locations
+## 10. Resource and Shutdown Safety
+
+- `API_MAX_REQUEST_BYTES` defaults to 10 MiB. Oversized requests receive 413;
+  malformed or prematurely terminated bodies receive 400. Keep the reverse
+  proxy limit at or below this value so rejected bodies are not buffered twice.
+- Query modes are `local`, `global`, or `hybrid`; ingestion priorities are
+  `normal` or `high`. A 422 for another value is an intentional routing guard.
+- The first RabbitMQ connection declares all durable exchanges, work queues,
+  DLQs, TTLs, and bindings. API startup therefore makes publishing safe even
+  when workers are not running yet. Alert on publish failures and DLQ growth.
+- A failed query publish removes its Redis `queued` marker. A 503 from submit
+  means the client may retry with its own idempotency policy.
+- Graceful API/worker shutdown closes RabbitMQ, Neo4j, Redis stores, health
+  servers, and the tracing provider. Give containers enough termination grace
+  for in-flight handlers and telemetry flush; force-kill only after that window.
+- Remote MCP rejects any supplied `Origin` not listed exactly in
+  `GRAPHRAG_MCP_ALLOWED_ORIGINS`. Local execution binds to `127.0.0.1` by
+  default; containers must explicitly bind `0.0.0.0` behind their network and
+  ingress controls.
+
+---
+
+## 11. Key File Locations
 
 | What | Where |
 |---|---|

@@ -73,6 +73,52 @@ _SKIP = not (_docker_available() and _testcontainers_available())
 _SKIP_REASON = "Docker or testcontainers-python not available"
 
 
+NEO4J_TEST_PASSWORD = "e2e-test-password"
+
+
+@pytest.fixture(scope="module")
+def neo4j_container():
+    from testcontainers.community.neo4j import Neo4jContainer
+    from testcontainers.core.config import testcontainers_config
+
+    previous_max_tries = testcontainers_config.max_tries
+    # A cold Neo4j start on Docker Desktop can legitimately exceed the
+    # library's 120-second default. Keep a bounded five-minute readiness gate.
+    testcontainers_config.max_tries = max(previous_max_tries, 300)
+    try:
+        with Neo4jContainer(
+            "neo4j:5.20-community", password=NEO4J_TEST_PASSWORD
+        ) as container:
+            yield container
+    finally:
+        testcontainers_config.max_tries = previous_max_tries
+
+
+@pytest.fixture(scope="module")
+def neo4j_url(neo4j_container):
+    return neo4j_container.get_connection_url()
+
+
+@pytest.fixture(scope="module")
+def neo4j_auth():
+    return ("neo4j", NEO4J_TEST_PASSWORD)
+
+
+@pytest.fixture(scope="module")
+def redis_container():
+    from testcontainers.community.redis import RedisContainer
+
+    with RedisContainer("redis:7-alpine") as container:
+        yield container
+
+
+@pytest.fixture(scope="module")
+def redis_url(redis_container):
+    host = redis_container.get_container_host_ip()
+    port = redis_container.get_exposed_port(6379)
+    return f"redis://{host}:{port}"
+
+
 # ── Neo4j e2e tests ────────────────────────────────────────────────────────────
 
 @pytest.mark.skipif(_SKIP, reason=_SKIP_REASON)
@@ -84,22 +130,6 @@ class TestNeo4jClientE2E:
     # who has sourced the project .env (NEO4J_PASSWORD=graphrag_dev) got a
     # container on one password while these tests connected with another —
     # an auth ERROR rather than a clean skip.
-    NEO4J_TEST_PASSWORD = "e2e-test-password"
-
-    @pytest.fixture(scope="class")
-    def neo4j_container(self):
-        from testcontainers.community.neo4j import Neo4jContainer
-        with Neo4jContainer("neo4j:5", password=self.NEO4J_TEST_PASSWORD) as c:
-            yield c
-
-    @pytest.fixture(scope="class")
-    def neo4j_url(self, neo4j_container):
-        return neo4j_container.get_connection_url()
-
-    @pytest.fixture(scope="class")
-    def neo4j_auth(self):
-        return ("neo4j", self.NEO4J_TEST_PASSWORD)
-
     async def test_run_simple_query(self, neo4j_url, neo4j_auth):
         """Basic round-trip: RETURN 1 AS n == 1."""
         from neo4j import AsyncGraphDatabase
@@ -134,18 +164,6 @@ class TestNeo4jClientE2E:
 @pytest.mark.skipif(_SKIP, reason=_SKIP_REASON)
 class TestSessionStoreE2E:
     """Live Redis container — SessionStore round-trip under real persistence."""
-
-    @pytest.fixture(scope="class")
-    def redis_container(self):
-        from testcontainers.community.redis import RedisContainer
-        with RedisContainer("redis:7-alpine") as c:
-            yield c
-
-    @pytest.fixture(scope="class")
-    def redis_url(self, redis_container):
-        host = redis_container.get_container_host_ip()
-        port = redis_container.get_exposed_port(6379)
-        return f"redis://{host}:{port}"
 
     async def test_save_and_load_turns(self, redis_url):
         """Turns written to Redis are readable back with correct content."""

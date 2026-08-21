@@ -6,7 +6,7 @@ import copy
 import inspect
 
 import pytest
-from rdflib import Graph, Namespace, URIRef
+from rdflib import Graph, Namespace
 from rdflib.namespace import OWL, RDF, RDFS
 
 from graphrag.graph.owl_reasoner import OWLRLReasoner

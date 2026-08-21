@@ -5,7 +5,7 @@
 # present in requirements.lock via some other package's own dependency chain),
 # which left every worker image silently broken until first actually run
 # against a correctly-built image.
-aiohttp>=3.9.0
+aiohttp>=3.14.3
 
 # ── Reranking + GNN ────────────────────────────────────────────────────────────
 sentence-transformers>=3.0.0

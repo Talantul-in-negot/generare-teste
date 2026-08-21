@@ -6,8 +6,11 @@ which run as separate containers — share the same result space.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from typing import Literal
+
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from pydantic import BaseModel, Field
 
 from api.auth.dependencies import get_tenant, require_scope
 from api.limiter import QUERY_LIMIT, limiter
@@ -16,15 +19,16 @@ from graphrag.retrieval.result_store import ResultStoreUnavailable, get_result_s
 from graphrag.retrieval.session_store import SessionContextUnavailable, get_session_store
 
 router = APIRouter()
+log = structlog.get_logger(__name__)
 
 
 class QueryRequest(BaseModel):
-    question: str
-    mode: str = "hybrid"       # local | global | hybrid
-    ground_truth: str = ""
-    session_id: str = ""
-    valid_at: str | None = None
-    transaction_at: str | None = None
+    question: str = Field(min_length=1, max_length=8_000)
+    mode: Literal["local", "global", "hybrid"] = "hybrid"
+    ground_truth: str = Field(default="", max_length=16_000)
+    session_id: str = Field(default="", max_length=256)
+    valid_at: str | None = Field(default=None, max_length=64)
+    transaction_at: str | None = Field(default=None, max_length=64)
     # Set by the UI from the second message of a conversation onward — never
     # inferred from session_id server-side, since a first message can carry
     # a freshly-generated session_id too. When true, a follow-up that can't
@@ -60,8 +64,12 @@ async def submit_query(request: Request, body: QueryRequest, tenant: str = Depen
                 body.session_id, tenant=tenant, required=True,
             )
         except SessionContextUnavailable as exc:
-            raise HTTPException(status_code=503,
-                detail=f"Session context unavailable: {exc}")
+            log.error(
+                "query.session_context_unavailable",
+                correlation_id=request.state.correlation_id,
+                exception_type=type(exc).__name__,
+            )
+            raise HTTPException(status_code=503, detail="Session context unavailable") from exc
 
     from uuid import uuid4
     query_id = str(uuid4())
@@ -70,10 +78,17 @@ async def submit_query(request: Request, body: QueryRequest, tenant: str = Depen
     # If this can't be persisted, don't publish at all: without it, the worker
     # would do a full (expensive, real LLM cost) retrieval and its result would
     # have nowhere durable to land — the client would poll forever for nothing.
+    result_store = get_result_store()
     try:
-        await get_result_store().set_status(query_id, "queued", tenant)
+        await result_store.set_status(query_id, "queued", tenant)
     except ResultStoreUnavailable as exc:
-        raise HTTPException(status_code=503, detail=f"Result store unavailable: {exc}")
+        log.error(
+            "query.result_store_unavailable",
+            operation="enqueue",
+            correlation_id=request.state.correlation_id,
+            exception_type=type(exc).__name__,
+        )
+        raise HTTPException(status_code=503, detail="Result store unavailable") from exc
     try:
         await publish_query(
             question=body.question,
@@ -87,19 +102,47 @@ async def submit_query(request: Request, body: QueryRequest, tenant: str = Depen
             correlation_id=request.state.correlation_id,
         )
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Queue unavailable: {exc}")
+        # The caller never receives query_id on a failed POST, so leaving its
+        # queued marker behind creates an unobservable orphan until TTL expiry.
+        try:
+            await result_store.delete(query_id)
+        except Exception as cleanup_exc:
+            log.warning(
+                "query.queue_failure_cleanup_failed",
+                query_id=query_id,
+                correlation_id=request.state.correlation_id,
+                exception_type=type(cleanup_exc).__name__,
+            )
+        log.error(
+            "query.queue_unavailable",
+            query_id=query_id,
+            correlation_id=request.state.correlation_id,
+            exception_type=type(exc).__name__,
+        )
+        raise HTTPException(status_code=503, detail="Queue unavailable") from exc
 
     return QueryResponse(query_id=query_id)
 
 
 @router.get("/{query_id}", dependencies=[Depends(require_scope("read"))])
-async def get_query_result(query_id: str, tenant: str = Depends(get_tenant)):
+async def get_query_result(
+    request: Request,
+    query_id: str = Path(min_length=1, max_length=128),
+    tenant: str = Depends(get_tenant),
+):
     try:
         result = await get_result_store().get(query_id)
     except ResultStoreUnavailable as exc:
         # Distinguish "storage is down" from "no such query" — a 404 here
         # would be a lie: we don't actually know whether the query exists.
-        raise HTTPException(status_code=503, detail=f"Result store unavailable: {exc}")
+        log.error(
+            "query.result_store_unavailable",
+            operation="poll",
+            query_id=query_id,
+            correlation_id=getattr(request.state, "correlation_id", ""),
+            exception_type=type(exc).__name__,
+        )
+        raise HTTPException(status_code=503, detail="Result store unavailable") from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Query not found")
     # Ownership check. The result-store key is the query_id alone, so without

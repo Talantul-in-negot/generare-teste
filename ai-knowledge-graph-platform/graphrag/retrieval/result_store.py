@@ -196,6 +196,12 @@ class ResultStore:
     def is_redis_backed(self) -> bool:
         return self._redis is not None
 
+    async def close(self) -> None:
+        """Close the optional Redis client."""
+        if self._redis is not None:
+            await self._redis.aclose()
+            self._redis = None
+
 
 @lru_cache(maxsize=1)
 def get_result_store() -> ResultStore:
@@ -210,3 +216,11 @@ def get_result_store() -> ResultStore:
         redis_url = ""
         ttl       = _RESULT_TTL
     return ResultStore(redis_url=redis_url or None, ttl=ttl)
+
+
+async def close_result_store() -> None:
+    """Close and clear the cached process singleton when initialized."""
+    if get_result_store.cache_info().currsize:
+        store = get_result_store()
+        get_result_store.cache_clear()
+        await store.close()

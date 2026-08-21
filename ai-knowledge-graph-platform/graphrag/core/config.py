@@ -164,7 +164,7 @@ class Settings(BaseSettings):
     rabbitmq_url: str = "amqp://graphrag:graphrag_dev@localhost:5672/"
 
     # ── OAuth / JWT ──────────────────────────────────────────────────────────────
-    jwt_secret_key: str = "change-me-in-production"
+    jwt_secret_key: str = "change-me-in-production-at-least-32-bytes"
     # Separate secret for SessionMiddleware cookie signing.
     # When empty, main.py derives one from jwt_secret_key + ":session".
     # Set explicitly in production to allow independent rotation.
@@ -178,6 +178,10 @@ class Settings(BaseSettings):
     # the request body — so this is the only place a browser session's tenant
     # is decided. M2M clients pick their tenant at registration time.
     default_tenant: str = "default"
+
+    # Reject oversized request bodies before Starlette/FastAPI buffers and
+    # parses them. Endpoint models apply tighter semantic limits where useful.
+    api_max_request_bytes: int = 10_485_760  # 10 MiB
 
     # ── App ─────────────────────────────────────────────────────────────────────
     log_level: str = "INFO"
@@ -198,6 +202,8 @@ class Settings(BaseSettings):
     def _validate_production_secrets(self) -> "Settings":
         """Fail fast if a non-development environment has insecure defaults."""
         env = self.env.strip().lower()
+        if self.api_max_request_bytes <= 0:
+            raise ValueError("api_max_request_bytes must be positive")
         if env not in DEV_ENVS:
             if env == "":
                 raise ValueError(
@@ -206,7 +212,7 @@ class Settings(BaseSettings):
                     "Refusing to start with development defaults in an unnamed "
                     "environment."
                 )
-            if self.jwt_secret_key == "change-me-in-production":
+            if self.jwt_secret_key == "change-me-in-production-at-least-32-bytes":
                 raise ValueError(
                     "jwt_secret_key must be set to a strong random secret in production. "
                     "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""

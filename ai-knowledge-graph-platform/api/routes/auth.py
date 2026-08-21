@@ -21,6 +21,7 @@ import json
 import secrets
 from urllib.parse import urlparse
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -43,6 +44,7 @@ from api.auth.user_provisioning import (
 )
 
 router = APIRouter()
+log = structlog.get_logger(__name__)
 _GOOGLE_ISSUER = "https://accounts.google.com"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -220,7 +222,12 @@ async def callback(request: Request, code: str, state: str):
     try:
         userinfo = await exchange_code_for_userinfo(code, redirect_uri)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Google token exchange failed: {exc}")
+        log.warning(
+            "auth.google_token_exchange_failed",
+            correlation_id=getattr(request.state, "correlation_id", ""),
+            exception_type=type(exc).__name__,
+        )
+        raise HTTPException(status_code=400, detail="Google token exchange failed") from exc
 
     # Previously this accepted ANY Google account and unconditionally issued
     # a token for settings.default_tenant — there was no persistent mapping

@@ -23,8 +23,10 @@ import os
 # real ENV in the environment (e.g. a developer testing prod-like config
 # locally) is never silently overridden.
 os.environ.setdefault("ENV", "test")
+# Do not let a developer's local .env signing key leak into the test process.
+# The value is deliberately test-only and long enough for HS256/PyJWT.
+os.environ["JWT_SECRET_KEY"] = "test-only-jwt-secret-key-with-at-least-32-bytes"
 
-from collections import deque
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

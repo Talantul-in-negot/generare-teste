@@ -44,6 +44,15 @@ def _max_request_bytes() -> int:
     return value
 
 
+def _allowed_origins() -> frozenset[str]:
+    """Exact browser origins allowed to reach the remote MCP transport."""
+    raw = os.environ.get("GRAPHRAG_MCP_ALLOWED_ORIGINS", "")
+    origins = frozenset(item.strip().rstrip("/") for item in raw.split(",") if item.strip())
+    if "*" in origins:
+        raise RuntimeError("GRAPHRAG_MCP_ALLOWED_ORIGINS must not contain '*'")
+    return origins
+
+
 def _header(scope: Scope, name: bytes) -> str:
     for key, value in scope.get("headers", []):
         if key.lower() == name:
@@ -66,9 +75,20 @@ class RemoteMCPAuthMiddleware:
     must reset even if the client disconnects or a tool raises.
     """
 
-    def __init__(self, app: ASGIApp, *, max_request_bytes: int | None = None) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_request_bytes: int | None = None,
+        allowed_origins: frozenset[str] | set[str] | None = None,
+    ) -> None:
         self.app = app
         self.max_request_bytes = max_request_bytes or _max_request_bytes()
+        self.allowed_origins = frozenset(
+            origin.rstrip("/") for origin in (
+                _allowed_origins() if allowed_origins is None else allowed_origins
+            )
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -76,6 +96,14 @@ class RemoteMCPAuthMiddleware:
             return
         if scope["path"] == "/health":
             await self.app(scope, receive, send)
+            return
+
+        # MCP Streamable HTTP requires Origin validation to prevent a browser
+        # from using DNS rebinding to reach a local or internal gateway. CLI
+        # clients usually omit Origin and continue to work unchanged.
+        origin = _header(scope, b"origin").rstrip("/")
+        if origin and origin not in self.allowed_origins:
+            await self._reject(send, 403, "Origin is not allowed")
             return
 
         raw_length = _header(scope, b"content-length")
@@ -201,7 +229,9 @@ app = create_remote_app()
 def main() -> None:
     uvicorn.run(
         "mcp_server.remote:app",
-        host=os.environ.get("GRAPHRAG_MCP_HOST", "0.0.0.0"),
+        # Local runs bind to loopback. Container deployments explicitly set
+        # 0.0.0.0 after applying their network boundary and authentication.
+        host=os.environ.get("GRAPHRAG_MCP_HOST", "127.0.0.1"),
         port=int(os.environ.get("GRAPHRAG_MCP_PORT", "8002")),
         proxy_headers=False,
     )

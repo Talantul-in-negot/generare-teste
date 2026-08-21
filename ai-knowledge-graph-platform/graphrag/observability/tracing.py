@@ -28,6 +28,21 @@ def configure_tracing(service_name: str) -> None:
         return
 
 
+def shutdown_tracing() -> None:
+    """Flush queued spans before a worker or API process exits."""
+    if not _configured:
+        return
+    try:
+        from opentelemetry import trace
+
+        provider = trace.get_tracer_provider()
+        shutdown = getattr(provider, "shutdown", None)
+        if shutdown:
+            shutdown()
+    except ImportError:
+        return
+
+
 @contextmanager
 def trace_span(name: str, **attributes):
     try:

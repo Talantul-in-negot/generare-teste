@@ -86,6 +86,8 @@ async def main():
         log.info("ingestion_worker.shutdown_graceful")
     finally:
         await health.stop()
+        from graphrag.core.lifecycle import close_shared_resources
+        await close_shared_resources()
 
 
 if __name__ == "__main__":

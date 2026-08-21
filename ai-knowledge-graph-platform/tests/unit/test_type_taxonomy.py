@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-import pytest
 
 from graphrag.graph.type_taxonomy import DEFAULT_HIERARCHY, TypeTaxonomy
 

@@ -10,7 +10,6 @@ import pytest
 from graphrag.monitoring.alerts import (
     AlertService,
     _DEFAULT_THRESHOLDS,
-    _recent_alerts,
     get_recent_alerts,
 )
 

@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 
 from api.limiter import limiter
+from api.request_limits import RequestBodyLimitMiddleware
 from api.routes import agent, auth, ingest, query, evaluation, kpis, corrections, kg_features, demo, context_graph, business, skills
 from graphrag.core.config import get_settings, is_dev_env
 
@@ -58,9 +59,14 @@ async def lifespan(app: FastAPI):
         )
 
     log.info("startup.complete")
-    yield
-    # ── Shutdown ──────────────────────────────────────────────────────────────
-    log.info("shutdown.complete")
+    try:
+        yield
+    finally:
+        # ── Shutdown ──────────────────────────────────────────────────────────
+        from graphrag.core.lifecycle import close_shared_resources
+
+        await close_shared_resources()
+        log.info("shutdown.complete")
 
 
 app = FastAPI(  # noqa: E302 — rate limiter attached below
@@ -134,6 +140,14 @@ app.add_middleware(
 )
 
 app.add_middleware(RequireAuthMiddleware)
+
+# This middleware buffers at most the configured bound and therefore must run
+# outside application parsing. It applies to both fixed-length and chunked
+# requests; endpoint models enforce smaller domain-specific limits.
+app.add_middleware(
+    RequestBodyLimitMiddleware,
+    max_request_bytes=settings.api_max_request_bytes,
+)
 
 app.add_middleware(
     CORSMiddleware,

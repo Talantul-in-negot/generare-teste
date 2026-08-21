@@ -71,9 +71,9 @@ async def get_current_user(
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
+            detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
     if cookie_authenticated:
         # Cookies are only for the browser OAuth flow.  M2M tokens must remain

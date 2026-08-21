@@ -26,7 +26,6 @@ Utilizare:
   python manage_corpus.py golden --add
 """
 
-import os
 import re
 import json
 import argparse

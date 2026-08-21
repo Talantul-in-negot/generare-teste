@@ -26,10 +26,13 @@ async def _body_reading_echo(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
-def _protected_app(*, max_request_bytes: int = 1024) -> RemoteMCPAuthMiddleware:
+def _protected_app(
+    *, max_request_bytes: int = 1024, allowed_origins: set[str] | None = None,
+) -> RemoteMCPAuthMiddleware:
     return RemoteMCPAuthMiddleware(
         Starlette(routes=[Route("/mcp", _identity_echo, methods=["POST"])]),
         max_request_bytes=max_request_bytes,
+        allowed_origins=allowed_origins,
     )
 
 
@@ -88,3 +91,22 @@ class TestRemoteMCPAuth:
                     "/mcp", content=chunks(), headers={"Authorization": "Bearer valid"},
                 )
         assert response.status_code == 413
+
+    def test_browser_origin_must_be_explicitly_allowed(self):
+        client = TestClient(_protected_app(allowed_origins={"https://agent.example"}))
+        with patch("mcp_server.identity.decode_access_token", return_value={
+            "sub": "agent-1", "tenant": "aerospace", "scope": "read",
+        }):
+            denied = client.post(
+                "/mcp",
+                content=b"{}",
+                headers={"Authorization": "Bearer valid", "Origin": "https://evil.example"},
+            )
+            allowed = client.post(
+                "/mcp",
+                content=b"{}",
+                headers={"Authorization": "Bearer valid", "Origin": "https://agent.example"},
+            )
+
+        assert denied.status_code == 403
+        assert allowed.status_code == 200

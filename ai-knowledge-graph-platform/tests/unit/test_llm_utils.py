@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
 
 from graphrag.core.llm_utils import normalize_dashes, safe_response_text
 

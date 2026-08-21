@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
-from graphrag.graph.pii_guard import PIIGuard, PIIFinding
+from graphrag.graph.pii_guard import PIIGuard
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────

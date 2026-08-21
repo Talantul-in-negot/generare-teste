@@ -8,7 +8,7 @@ graspologic>=3.3.0
 networkx>=3.3
 
 # ── Document ingestion ─────────────────────────────────────────────────────────
-pypdf>=4.0.0
+pypdf>=6.15.0
 python-docx>=1.1.0
 langchain-text-splitters>=0.2.0
 
@@ -22,17 +22,17 @@ pika>=1.3.2
 # every worker image silently broken until first actually run against a
 # correctly-built Docker image (see requirements/README.md and the per-service
 # subset files for the split this feeds into).
-aiohttp>=3.9.0
+aiohttp>=3.14.3
 
 # ── Evaluation ─────────────────────────────────────────────────────────────────
 ragas>=0.2.0
-datasets>=2.20.0
+datasets>=5.0.1
 
 # ── API & Dashboard ────────────────────────────────────────────────────────────
-fastapi>=0.111.0
+fastapi>=0.141.1
 uvicorn[standard]>=0.30.0
-python-jose[cryptography]>=3.3.0
-python-multipart>=0.0.9
+PyJWT[crypto]>=2.10.1
+python-multipart>=0.0.31
 dash>=2.17.0
 plotly>=5.22.0
 httpx>=0.27.0
@@ -45,7 +45,7 @@ redis[asyncio]>=5.0.0
 
 # ── Config & validation ────────────────────────────────────────────────────────
 pydantic>=2.7.0
-pydantic-settings>=2.3.0
+pydantic-settings>=2.14.2
 pyyaml>=6.0.1
 python-dotenv>=1.0.0
 
@@ -75,7 +75,7 @@ owlrl>=6.0.0
 pyshacl>=0.29.0
 
 # ── MCP server (exposes hybrid retrieval + entity lookup to MCP clients) ───────
-mcp>=1.2.0
+mcp>=1.8.0,<2.0
 
 # ── Live E2E tests (Docker-backed Neo4j and Redis) ────────────────────────────
 testcontainers>=4.15.0
@@ -90,3 +90,15 @@ rapidfuzz>=3.9.0
 # ── Backup targets ────────────────────────────────────────────────────────────
 # scripts/kg_backup.py uses boto3 for `--output s3://...`.
 boto3>=1.34.0
+
+# ── Security floors for transitive runtime dependencies ──────────────────────
+# Keep these explicit so a fresh lock cannot resolve to versions with known
+# fixed vulnerabilities through RAGAS, LangChain, FastAPI, or transformers.
+cryptography>=50.0.0
+langchain>=1.3.9
+langchain-openai>=1.1.14
+langsmith>=0.8.18
+pillow>=12.3.0
+pyasn1>=0.6.4
+starlette>=1.3.1
+torch>=2.13.0

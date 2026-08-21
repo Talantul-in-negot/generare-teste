@@ -18,6 +18,12 @@ probe. `/mcp` and `/metrics` require `Authorization: Bearer <scoped JWT>`.
 Use a real MCP Streamable HTTP client for protocol calls; do not hand-craft a
 write JSON-RPC request as an operational test.
 
+The standalone command binds to `127.0.0.1` by default. Container definitions
+set `GRAPHRAG_MCP_HOST=0.0.0.0` because their Service/network policy is the
+network boundary. If a browser-based client sends an `Origin` header, list its
+exact origin in `GRAPHRAG_MCP_ALLOWED_ORIGINS`; an unlisted origin is rejected
+with 403. Non-browser clients normally omit `Origin` and are unaffected.
+
 ```powershell
 # A protected observability smoke test; never print the token in a ticket.
 Invoke-WebRequest http://localhost:8002/metrics -Headers @{ Authorization = "Bearer $env:GRAPHRAG_MCP_TOKEN" }
@@ -64,6 +70,7 @@ kubectl kustomize deploy/kubernetes
 |---|---|---|
 | 401 from `/mcp` | JWT issuer, expiry, subject, tenant claim | Reissue a scoped token; do not relax the gateway |
 | 413 from `/mcp` | `GRAPHRAG_MCP_MAX_REQUEST_BYTES`, client payload | Reduce/chunk the client request; increase only after a capacity review |
+| 403 `Origin is not allowed` | Browser origin absent from `GRAPHRAG_MCP_ALLOWED_ORIGINS` | Add the exact trusted HTTPS origin; never use a wildcard |
 | Structured `tenant_mismatch` denial | Client-provided tenant vs signed claim | Correct the client configuration; never override the claim |
 | Missing write capability in discovery | `biz:write` entitlement | Grant through the identity provider approval process, not application config |
 | Long-lived session disconnects after scale | Service affinity / rollout events | Drain client sessions; do not remove affinity without shared-session validation |

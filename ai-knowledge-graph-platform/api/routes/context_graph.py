@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from api.auth.dependencies import assert_request_tenant, get_tenant, require_scope
@@ -67,24 +67,28 @@ async def load_context_trace(decision_id: str, tenant: str = Depends(get_tenant)
 
 
 @router.get("/sessions/{session_id}/episodes", dependencies=[Depends(require_scope("read"))])
-async def load_session_episodes(session_id: str, tenant: str = Depends(get_tenant), limit: int = 10):
+async def load_session_episodes(
+    session_id: str,
+    tenant: str = Depends(get_tenant),
+    limit: int = Query(default=10, ge=1, le=100),
+):
     return await ContextGraphRepository(get_neo4j()).load_session_episodes(
         session_id, tenant, limit,
     )
 
 
 class WPPTraceRequest(BaseModel):
-    placement_id: str = Field(min_length=1)
-    question: str = Field(min_length=1)
-    statement_ids: list[str] = Field(min_length=1)
-    statement_versions: list[str] = Field(min_length=1)
-    chunk_ids: list[str] = Field(default_factory=list)
-    chunk_versions: list[str] = Field(default_factory=list)
-    document_ids: list[str] = Field(default_factory=list)
-    document_versions: list[str] = Field(default_factory=list)
-    selected: str = "escalate"
-    policy_id: str = "data-privacy-policy"
-    policy_version: str = "2024.1"
+    placement_id: str = Field(min_length=1, max_length=256)
+    question: str = Field(min_length=1, max_length=8_000)
+    statement_ids: list[str] = Field(min_length=1, max_length=500)
+    statement_versions: list[str] = Field(min_length=1, max_length=500)
+    chunk_ids: list[str] = Field(default_factory=list, max_length=500)
+    chunk_versions: list[str] = Field(default_factory=list, max_length=500)
+    document_ids: list[str] = Field(default_factory=list, max_length=500)
+    document_versions: list[str] = Field(default_factory=list, max_length=500)
+    selected: str = Field(default="escalate", max_length=128)
+    policy_id: str = Field(default="data-privacy-policy", max_length=256)
+    policy_version: str = Field(default="2024.1", max_length=128)
 
 
 @router.post("/wpp/campaign-placement", dependencies=[Depends(require_scope("write"))])
@@ -167,10 +171,17 @@ async def apply_context_retention(request: RetentionRequest, tenant: str = Depen
 
 
 @router.get("/precedents", dependencies=[Depends(require_scope("read"))])
-async def find_context_precedents(policy_version_id: str, tenant: str = Depends(get_tenant), limit: int = 10):
+async def find_context_precedents(
+    policy_version_id: str,
+    tenant: str = Depends(get_tenant),
+    limit: int = Query(default=10, ge=1, le=100),
+):
     return await ContextGraphRepository(get_neo4j()).find_precedents(tenant, policy_version_id, limit)
 
 
 @router.get("/proactive/expiring-policies", dependencies=[Depends(require_scope("read"))])
-async def expiring_context_policies(tenant: str = Depends(get_tenant), within_days: int | None = None):
+async def expiring_context_policies(
+    tenant: str = Depends(get_tenant),
+    within_days: int | None = Query(default=None, ge=1, le=3_650),
+):
     return [item.model_dump(mode="json") for item in await _proactive_service().expiring_policies(tenant, within_days)]

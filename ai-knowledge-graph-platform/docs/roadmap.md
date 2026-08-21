@@ -602,3 +602,45 @@ the two mechanisms optimize different notions of "redundant" and can work
 against each other rather than stacking. Revisit only if the existing
 lexical-diversity step is removed or substantially changed — this verdict
 is about MMR *stacked on top of* that mechanism, not MMR in isolation.
+
+---
+
+# 2026-08-21 Audit Follow-ons
+
+The implementation and evidence are recorded in `docs/audit-2026-08-21.md`.
+Remaining work is ordered by production value, not trend visibility.
+
+## Production-critical
+
+1. Add OAuth 2.1 protected-resource metadata, issuer discovery, and strict
+   token audience/resource validation before exposing remote MCP to federated
+   or untrusted clients. Prerequisite: choose and configure the production IdP.
+2. Run representative 10x load and recovery tests. Check in queue-age,
+   throughput, p95/p99, error-rate, provider-cost, RTO, and RPO evidence.
+3. Broaden the parent monorepo CI lint command to `ruff check .`; the current
+   project tree passes, but the workflow still scans only selected directories.
+
+## Recommended
+
+1. Add a GraphRAG-Benchmark-compatible adapter and compare the existing
+   local/global/hybrid/agentic routes on the same datasets and cost envelope.
+2. Add dashboards and alerts for oldest RabbitMQ message age, DLQ growth,
+   publish failures, Neo4j pool saturation, and per-tenant model spend.
+3. Track OpenTelemetry GenAI semantic conventions and adopt the stable fields
+   that map cleanly to the platform's existing traces.
+4. Replace RAGAS if upstream does not fix its multi-modal SSRF and DiskCache
+   dependency; until then keep it isolated to offline evaluation workers.
+
+## Experimental — benchmark before implementation
+
+1. DRIFT-style search versus the current bounded agentic fallback.
+2. Query-personalized PageRank versus existing graph expansion/PageRank.
+3. FastGraphRAG/LightRAG-style extraction versus current ontology-governed
+   extraction, measuring indexing cost and domain-relation recall together.
+
+## Explicitly deferred
+
+- A second graph database (including Ultipa) without a measured Neo4j blocker.
+- Always-on agentic loops.
+- A LightRAG migration that would remove temporal, provenance, ontology, or
+  Context Graph governance semantics.

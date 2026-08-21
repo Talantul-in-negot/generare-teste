@@ -23,8 +23,8 @@ router = APIRouter()
 
 
 class ToolCallRequest(BaseModel):
-    tool: str = Field(min_length=1)
-    args: dict = {}
+    tool: str = Field(min_length=1, max_length=128)
+    args: dict = Field(default_factory=dict, max_length=100)
     dry_run: bool = False
 
 

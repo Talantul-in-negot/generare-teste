@@ -703,7 +703,6 @@ class TestContextGraphBodyTenantMismatch:
         """record_wpp_campaign_placement defaults tenant="marketing" in its
         own signature; the route must override that with the real caller
         tenant, not silently let every trace land under "marketing"."""
-        from unittest.mock import AsyncMock as _AsyncMock
 
         client = self._client()
         captured = {}

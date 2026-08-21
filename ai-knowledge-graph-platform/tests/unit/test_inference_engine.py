@@ -113,7 +113,7 @@ class TestRunFixpoint:
             [],   # MERGE write
             [],   # second iteration → 0 rows → fixpoint
         ])
-        report = await engine.run(tenant="acme", max_iterations=10)
+        await engine.run(tenant="acme", max_iterations=10)
         # Should have stopped at iteration 2, not run all 10
         assert neo4j_mock.run.call_count < 10
 
@@ -208,6 +208,6 @@ class TestRunForDocument:
             [{"name": "SpaceX", "type": "ORG"}],  # doc entities
             [],   # symmetry query → fixpoint immediately
         ])
-        report = await engine.run_for_document(doc_id="doc_abc", tenant="acme")
+        await engine.run_for_document(doc_id="doc_abc", tenant="acme")
         # run_for_document should have called run() which made at least 1 more query
         assert neo4j_mock.run.call_count >= 2

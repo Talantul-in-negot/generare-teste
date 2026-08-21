@@ -70,6 +70,63 @@ class TestSubmitQueryResultStoreDown:
         assert resp.status_code == 200
         mock_publish.assert_awaited_once()
 
+    def test_publish_failure_removes_orphan_and_hides_backend_detail(self):
+        client = _make_client()
+        mock_store = AsyncMock()
+        mock_store.set_status = AsyncMock(return_value=None)
+        mock_store.delete = AsyncMock(return_value=None)
+
+        with (
+            patch("api.routes.query.get_result_store", return_value=mock_store),
+            patch(
+                "api.routes.query.publish_query",
+                new=AsyncMock(side_effect=RuntimeError("amqp://user:secret@internal")),
+            ),
+        ):
+            resp = client.post("/query", json={"question": "hello"})
+
+        assert resp.status_code == 503
+        assert resp.json() == {"detail": "Queue unavailable"}
+        assert "secret" not in resp.text
+        mock_store.delete.assert_awaited_once()
+
+    def test_cleanup_failure_does_not_mask_publish_failure(self):
+        client = _make_client()
+        mock_store = AsyncMock()
+        mock_store.set_status = AsyncMock(return_value=None)
+        mock_store.delete = AsyncMock(side_effect=ResultStoreUnavailable("Redis down"))
+
+        with (
+            patch("api.routes.query.get_result_store", return_value=mock_store),
+            patch(
+                "api.routes.query.publish_query",
+                new=AsyncMock(side_effect=RuntimeError("broker down")),
+            ),
+        ):
+            resp = client.post("/query", json={"question": "hello"})
+
+        assert resp.status_code == 503
+        assert resp.json() == {"detail": "Queue unavailable"}
+
+
+class TestQueryInputLimits:
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"question": ""},
+            {"question": "hello", "mode": "unknown"},
+            {"question": "x" * 8_001},
+            {"question": "hello", "session_id": "s" * 257},
+        ],
+    )
+    def test_invalid_or_resource_unbounded_requests_are_rejected(self, payload):
+        client = _make_client()
+        with patch("api.routes.query.publish_query", new_callable=AsyncMock) as publish:
+            response = client.post("/query", json=payload)
+
+        assert response.status_code == 422
+        publish.assert_not_awaited()
+
 
 class TestRequiresSessionContext:
     """A156: a follow-up marked requires_session_context must be refused

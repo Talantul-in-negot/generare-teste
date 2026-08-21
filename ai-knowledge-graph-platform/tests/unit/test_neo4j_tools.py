@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
 from graphrag.agents.tools.neo4j_tools import get_community, get_neighbors, search_graph
 

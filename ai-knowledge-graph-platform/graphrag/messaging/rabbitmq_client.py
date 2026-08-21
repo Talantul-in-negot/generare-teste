@@ -45,6 +45,14 @@ class RabbitMQClient:
         self._channel_pool = Pool(
             lambda: _make_channel(self._connection_pool), max_size=20
         )
+        # Durable exchanges do not retain messages when no queue is bound.
+        # Provision every queue before the API can publish so worker startup
+        # order or a temporary worker outage cannot silently drop accepted work.
+        try:
+            await self.ensure_topology()
+        except Exception:
+            await self.close()
+            raise
         log.info("rabbitmq.connected")
 
     async def close(self):
@@ -52,7 +60,49 @@ class RabbitMQClient:
             await self._channel_pool.close()
         if self._connection_pool:
             await self._connection_pool.close()
+        self._channel_pool = None
+        self._connection_pool = None
         log.info("rabbitmq.closed")
+
+    async def ensure_topology(self) -> None:
+        """Declare all durable exchanges, work queues, bindings, and DLQs."""
+        if not self._channel_pool:
+            raise MessagingError("RabbitMQ not connected — call connect() first")
+        from graphrag.messaging.exchanges import (
+            EVAL_EXCHANGE,
+            EVAL_QUEUE,
+            EVAL_ROUTING_KEY,
+            INGEST_EXCHANGE,
+            INGEST_QUEUE,
+            INGEST_ROUTING_KEY,
+            QUERY_EXCHANGE,
+            QUERY_QUEUE,
+            QUERY_ROUTING_KEY,
+        )
+
+        topology = (
+            (INGEST_EXCHANGE, INGEST_QUEUE, INGEST_ROUTING_KEY),
+            (QUERY_EXCHANGE, QUERY_QUEUE, QUERY_ROUTING_KEY),
+            (EVAL_EXCHANGE, EVAL_QUEUE, EVAL_ROUTING_KEY),
+        )
+        async with self._channel_pool.acquire() as channel:
+            for exchange_name, queue_name, routing_key in topology:
+                exchange = await channel.declare_exchange(
+                    exchange_name, ExchangeType.TOPIC, durable=True
+                )
+                dlq_name = f"{queue_name}.dlq"
+                await channel.declare_queue(dlq_name, durable=True)
+                queue = await channel.declare_queue(
+                    queue_name,
+                    durable=True,
+                    arguments={
+                        "x-dead-letter-exchange": "",
+                        "x-dead-letter-routing-key": dlq_name,
+                        "x-message-ttl": 86_400_000,
+                    },
+                )
+                await queue.bind(exchange, routing_key=routing_key)
+        log.info("rabbitmq.topology_ready", queues=len(topology))
 
     async def publish(
         self,
@@ -248,6 +298,16 @@ async def get_rabbitmq() -> RabbitMQClient:
         _client_lock = asyncio.Lock()
     async with _client_lock:
         if _client is None:
-            _client = RabbitMQClient()
-            await _client.connect()
+            candidate = RabbitMQClient()
+            await candidate.connect()
+            _client = candidate
     return _client
+
+
+async def close_rabbitmq() -> None:
+    """Close and reset the process singleton when it was initialized."""
+    global _client, _client_lock
+    client, _client = _client, None
+    if client is not None:
+        await client.close()
+    _client_lock = None

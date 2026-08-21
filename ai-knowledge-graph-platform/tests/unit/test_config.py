@@ -155,15 +155,17 @@ class TestEnvFailClosedOnUnset:
 
     @pytest.mark.parametrize("env_value", list(DEV_ENVS))
     def test_every_dev_allowlist_value_permits_insecure_defaults(self, env_value):
-        s = Settings(_env_file=None, env=env_value)
-        assert s.jwt_secret_key == "change-me-in-production"  # unchanged default, no raise
+        default_secret = Settings.model_fields["jwt_secret_key"].default
+        s = Settings(_env_file=None, env=env_value, jwt_secret_key=default_secret)
+        assert s.jwt_secret_key == "change-me-in-production-at-least-32-bytes"  # unchanged default, no raise
 
     def test_unnamed_non_dev_env_still_rejects_default_secret(self):
         """A typo'd env ("prod" vs "production") must fail exactly like the
         real thing -- this pins the existing allow-list check, not the new
         empty-string case above."""
+        default_secret = Settings.model_fields["jwt_secret_key"].default
         with pytest.raises(ValidationError, match="jwt_secret_key must be set"):
-            Settings(_env_file=None, env="prod")
+            Settings(_env_file=None, env="prod", jwt_secret_key=default_secret)
 
 
 class TestIsDevEnv:
