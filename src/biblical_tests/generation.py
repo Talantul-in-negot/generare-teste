@@ -59,6 +59,10 @@ def _blanked_statement(fact: Fact, limit: int | None = None) -> str:
     return result
 
 
+def _claim(fact: Fact, object_value: str | None = None) -> str:
+    return f"{fact.evidence.reference}: {object_value or fact.object}"
+
+
 def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, scoring: dict[str, int], seed: int, version: int) -> TestDefinition:
     facts = [fact for fact in facts if fact.quality]
     if len(facts) < 20:
@@ -119,24 +123,22 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     answers = {str(i): next(letter for letter, value in right.items() if value == fact.object) for i, fact in enumerate(match_facts, 1)}
     matching = MatchingQuestion("III-1", [_blanked_statement(fact, limit=80) for fact in match_facts], right, answers, [f.evidence for f in match_facts], [f.id for f in match_facts])
 
-    multi_facts = take(3)
     multis: list[MultiChoiceQuestion] = []
-    # The builder supports any 0..3-correct configuration; the default mix uses
-    # one answer so a corpus containing independent evidence cards is sufficient.
-    patterns = [["A"], ["B"], ["C"]]
-    for index, (fact, correct) in enumerate(zip(multi_facts, patterns), 1):
-        candidates = [value for value in [*fact.options, *(f.object for f in facts)] if value != fact.object]
-        wrong_values = []
-        for value in candidates:
-            if value not in wrong_values:
-                wrong_values.append(value)
-            if len(wrong_values) == 2:
-                break
-        if len(wrong_values) < 2:
-            raise GenerationError("Nu există distractori distincți pentru Secțiunea IV.")
-        options = {"A": wrong_values[0], "B": wrong_values[1], "C": _wrong_object(fact, list(reversed(facts)))}
-        if len(set(options.values())) != 3:
-            options["C"] = next(f.object for f in facts if f.object not in set(options.values()) and f.object != fact.object)
-        options[correct[0]] = fact.object
-        multis.append(MultiChoiceQuestion(f"IV-{index}", f"Care dintre următoarele variante este susținută de text? ({fact.subject} {fact.predicate})", options, correct, fact.evidence, fact.id))
+    for index in range(1, 4):
+        group = take(3)
+        correct_positions = set(rng.sample(range(3), rng.randint(0, 3)))
+        options: dict[str, str] = {}
+        correct: list[str] = []
+        for position, fact in enumerate(group):
+            letter = "ABC"[position]
+            if position in correct_positions:
+                options[letter] = _claim(fact)
+                correct.append(letter)
+            else:
+                options[letter] = _claim(fact, _wrong_object(fact, facts))
+        multis.append(MultiChoiceQuestion(
+            f"IV-{index}", "Care dintre următoarele afirmații sunt susținute de pasajele selectate? (pot fi 0–3 răspunsuri)",
+            options, correct, group[0].evidence, group[0].id,
+            [fact.evidence for fact in group], [fact.id for fact in group],
+        ))
     return TestDefinition(source, seed, version, contest, scoring, section_i=tf, section_ii=singles, section_iii=matching, section_iv=multis)
