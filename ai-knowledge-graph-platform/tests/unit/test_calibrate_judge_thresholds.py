@@ -1,6 +1,6 @@
 import json
 
-from scripts.calibrate_judge_thresholds import load_records, main
+from scripts.calibrate_judge_thresholds import load_records
 
 
 def test_load_records_accepts_faithfulness_runner_shape(tmp_path):
