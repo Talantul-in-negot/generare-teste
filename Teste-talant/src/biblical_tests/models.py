@@ -71,6 +71,8 @@ class MultiChoiceQuestion:
     correct: list[Answer]
     evidence: Evidence
     fact_id: str
+    supporting_evidence: list[Evidence] = field(default_factory=list)
+    fact_ids: list[str] = field(default_factory=list)
 
 
 @dataclass

@@ -86,7 +86,9 @@ def _tf_item(index: int, q, answer_key: bool, styles: dict):
 
 
 def _choice_item(index: int, q, answer_key: bool, styles: dict):
-    rows = [[_p(f"{index}.", styles["body"]), _p(q.question, styles["body"]), _reference(q.evidence, styles)]]
+    evidence = getattr(q, "supporting_evidence", None) or [q.evidence]
+    reference = "; ".join(item.reference for item in evidence)
+    rows = [[_p(f"{index}.", styles["body"]), _p(q.question, styles["body"]), _p(reference, styles["red"])]]
     for letter in "ABC":
         style = styles["correct"] if answer_key and letter in q.correct else styles["body"]
         content = f"{letter}    {q.options[letter]}"

@@ -41,9 +41,10 @@ def validate_test(test: TestDefinition) -> None:
         if not all(_in_scope(item, test.source) for item in match.evidence):
             errors.append("O referință din III nu este în selecție.")
     for question in test.section_iv:
-        if set(question.options) != {"A", "B", "C"} or not set(question.correct).issubset({"A", "B", "C"}) or len(set(question.options.values())) != 3 or not _in_scope(question.evidence, test.source):
+        evidence = question.supporting_evidence or [question.evidence]
+        if set(question.options) != {"A", "B", "C"} or not set(question.correct).issubset({"A", "B", "C"}) or len(set(question.options.values())) != 3 or not all(_in_scope(item, test.source) for item in evidence):
             errors.append(f"Item IV invalid: {question.id}")
-    ids = [q.fact_id for q in test.section_i + test.section_ii + test.section_iv]
+    ids = [q.fact_id for q in test.section_i + test.section_ii] + [fact_id for q in test.section_iv for fact_id in (q.fact_ids or [q.fact_id])]
     if len(ids) != len(set(ids)):
         errors.append("Aceeași factă este reutilizată între întrebări.")
     if errors:
@@ -51,7 +52,8 @@ def validate_test(test: TestDefinition) -> None:
 
 
 def coverage_report(test: TestDefinition) -> dict[str, int]:
-    refs = [q.evidence for q in test.section_i + test.section_ii + test.section_iv]
+    refs = [q.evidence for q in test.section_i + test.section_ii]
+    refs.extend(ref for q in test.section_iv for ref in (q.supporting_evidence or [q.evidence]))
     if test.section_iii:
         refs.extend(test.section_iii.evidence)
     return dict(Counter(f"{ref.book} {ref.chapter}" for ref in refs))
@@ -59,7 +61,8 @@ def coverage_report(test: TestDefinition) -> dict[str, int]:
 
 def validate_evidence(test: TestDefinition, repository: BibleRepository) -> None:
     """Confirms every stored evidence excerpt is exactly the local corpus text."""
-    evidence = [q.evidence for q in test.section_i + test.section_ii + test.section_iv]
+    evidence = [q.evidence for q in test.section_i + test.section_ii]
+    evidence.extend(ref for q in test.section_iv for ref in (q.supporting_evidence or [q.evidence]))
     if test.section_iii:
         evidence.extend(test.section_iii.evidence)
     for item in evidence:
