@@ -657,6 +657,20 @@ production value, not trend visibility.
 
 ## Recently completed
 
+- **Property-based and concurrency testing.** `hypothesis` is now a dev
+  dependency. `tests/unit/test_property_invariants.py` pins invariants across
+  generated inputs — answer-cache tenant isolation above all, since a key
+  collision there serves one tenant another's answer with nothing erroring, and
+  no finite set of examples can establish its absence.
+  `tests/unit/test_write_path_concurrency.py` covers the optimistic-concurrency
+  guard, quota counters, and revocation under real `asyncio.gather` contention,
+  using a state-holding fake rather than an `AsyncMock` (a canned mock answers
+  identically regardless of arrival order, so it cannot demonstrate a
+  concurrency property at all). Those assertions were mutation-verified.
+  *Still open:* a **live** concurrency drill against real Neo4j. The fake
+  models the guard; only the database can demonstrate the atomicity the guard
+  relies on.
+
 - **Async rate limiting.** `api/limiter.py` was rebuilt on `limits.aio`;
   slowapi is removed from the dependency set. Its Limiter is synchronous with
   no async variant in 0.1.x, so every Redis-backed check blocked the event loop
