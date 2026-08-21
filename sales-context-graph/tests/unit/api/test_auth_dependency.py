@@ -12,7 +12,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from api.dependencies import _claim_values, verify_api_key
+from api.dependencies import _claim_values, get_access_context_or_panel_token, verify_api_key
 from src.core.config import get_settings
 
 pytestmark = pytest.mark.asyncio
@@ -102,6 +102,34 @@ async def test_sso_enabled_switches_the_shared_route_dependency(monkeypatch):
     monkeypatch.setattr("src.auth.sso.verify_sso_token", verified_sso)
 
     assert await verify_api_key(authorization="Bearer signed-token") == "ws-from-jwt"
+
+
+async def test_panel_compatible_api_key_path_uses_verified_sso_claims(monkeypatch):
+    """A caller cannot elevate a normal API-key/JWT request with X-User-*."""
+    monkeypatch.setenv("SSO_ENABLED", "true")
+    monkeypatch.setenv("AUTHZ_ENFORCEMENT_ENABLED", "true")
+    get_settings.cache_clear()
+    request = Request({"type": "http", "method": "POST", "path": "/api/v1/qa/account-objections", "headers": []})
+    request.state.sso_claims = {
+        "sub": "seller-from-jwt",
+        "roles": ["seller"],
+        "opportunity_ids": ["opp-allowed"],
+    }
+
+    access = await get_access_context_or_panel_token(
+        request=request,
+        workspace_id="ws-a",
+        x_panel_token=None,
+        x_user_id="attacker",
+        x_actor_id=None,
+        x_user_roles="admin",
+        x_division_ids=None,
+        x_opportunity_ids="opp-other",
+    )
+
+    assert access.subject_id == "seller-from-jwt"
+    assert access.roles == {"seller"}
+    assert access.opportunity_ids == {"opp-allowed"}
 
 
 async def test_verified_claim_values_accept_idp_list_or_csv_shapes():

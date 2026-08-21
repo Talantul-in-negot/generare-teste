@@ -119,14 +119,21 @@ async def buying_committee(
     access: AccessContext = Depends(get_access_context_or_panel_token),
 ) -> dict:
     # verify_api_key_or_panel_token, not verify_api_key -- this is one of
-    # the 3 endpoints /viz/panel's own JS calls (api/routes/viz.py). See
+    # the 2 endpoints /viz/panel's own JS calls (api/routes/viz.py). See
     # that dependency's docstring for what a panel token does and doesn't
     # scope.
-    if get_settings().authz_enforcement_enabled:
+    # A signed panel token is always opportunity-scoped, even in local mode
+    # where general user authorization is intentionally disabled.
+    if get_settings().authz_enforcement_enabled or access.has_role("panel"):
         try:
             require_opportunity(access, opportunity_id)
         except AccessDenied as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if access.has_role("panel") and classify_roles:
+        # Panel tokens are long-lived iframe credentials.  Keep their surface
+        # read-only and deterministic rather than letting a leaked embed token
+        # trigger optional LLM work (and its cost) repeatedly.
+        raise HTTPException(status_code=403, detail="panel tokens cannot request role classification")
     executor = GraphExecutor()
     chat_fn = None
     if classify_roles:

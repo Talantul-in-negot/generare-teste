@@ -18,7 +18,7 @@ layered on top of existing GET/POST endpoints. Four tabs on `/viz`:
 - "Alerts": GET /api/v1/digest, the proactive signals from Increment 17.
 
 Separately, `GET /viz/panel` (Increment 20) is a compact, single-opportunity,
-iframe-embeddable view (alerts + open objections + buying committee) meant for
+iframe-embeddable view (open objections + buying committee) meant for
 embedding in Salesforce/Showpad — an embeddable panel, not a packaged
 Salesforce/Showpad app (no OAuth, no AppExchange packaging; see README.md).
 """
@@ -32,7 +32,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from api.dependencies import verify_api_key, verify_panel_token
+from api.dependencies import get_access_context, verify_api_key, verify_panel_token
+from src.auth.policy import AccessContext, AccessDenied, require_opportunity
 from src.core.config import get_settings
 from src.viz.panel_tokens import PanelTokenClaims, PanelTokenError, mint_panel_token
 
@@ -54,7 +55,11 @@ class PanelTokenRequest(BaseModel):
 
 
 @router.post("/viz/panel-token")
-async def create_panel_token(body: PanelTokenRequest, workspace_id: str = Depends(verify_api_key)) -> dict:
+async def create_panel_token(
+    body: PanelTokenRequest,
+    workspace_id: str = Depends(verify_api_key),
+    access: AccessContext = Depends(get_access_context),
+) -> dict:
     """Mints the token GET /viz/panel now requires, replacing the raw
     X-Api-Key that used to sit directly in the panel's URL (docs/
     evaluation.md's Showpad-compatibility analysis, item 3). Requires the
@@ -63,6 +68,11 @@ async def create_panel_token(body: PanelTokenRequest, workspace_id: str = Depend
     iframe src; the real key never reaches the browser. See
     src/viz/panel_tokens.py for the token's shape, expiry, and revocation.
     """
+    if get_settings().authz_enforcement_enabled:
+        try:
+            require_opportunity(access, body.opportunity_id)
+        except AccessDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     try:
         token = await mint_panel_token(workspace_id, body.opportunity_id)
     except PanelTokenError as exc:
@@ -177,7 +187,7 @@ async def opportunity_panel(response: Response, token: str, claims: PanelTokenCl
     # re-parsed from client-supplied query params -- a caller can no longer
     # claim a different opportunity_id than the one their token was minted
     # for. `token` itself is re-embedded verbatim so the page's own JS can
-    # present it as X-Panel-Token on its 3 downstream fetches below.
+    # present it as X-Panel-Token on its two downstream fetches below.
     page = _PANEL_PAGE
     page = page.replace("__PANEL_TOKEN_JSON__", json.dumps(token))
     page = page.replace("__WORKSPACE_ID_JSON__", json.dumps(claims.workspace_id))
@@ -1604,7 +1614,7 @@ const contentEl = document.getElementById("content");
 async function loadPanel() {
   // Only the scoped panel token -- the real workspace API key never
   // reaches this page. api/dependencies.py::verify_api_key_or_panel_token
-  // accepts this header on the 3 endpoints below as an alternative to a
+  // accepts this header on the two opportunity-scoped endpoints below as an alternative to a
   // real API key.
   const headers = { "X-Panel-Token": panelToken };
 
@@ -1622,11 +1632,6 @@ async function loadPanel() {
     return r.json();
   });
 
-  await section("Alerts for this deal", async () => {
-    const r = await fetch("/api/v1/digest", { headers });
-    const data = await r.json();
-    return data.signals.filter(s => s.opportunity_id === opportunityId);
-  });
 }
 
 async function section(title, fetchFn) {

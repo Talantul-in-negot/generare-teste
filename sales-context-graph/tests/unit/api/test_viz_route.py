@@ -152,6 +152,28 @@ async def test_panel_route_serves_html_with_a_valid_token(panel_token) -> None:
     # the real API key never appears on this page -- only the panel token.
     assert "X-Api-Key" not in resp.text
     assert "X-Panel-Token" in resp.text
+    # The token is opportunity-scoped: the panel must not fetch a workspace
+    # digest and filter it in the browser, which would disclose other deals.
+    assert 'fetch("/api/v1/digest", { headers })' not in resp.text
+
+
+async def test_panel_token_cannot_cross_opportunity_scope(panel_token) -> None:
+    headers = {"X-Panel-Token": panel_token}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        objections = await client.post(
+            "/api/v1/qa/account-objections",
+            headers=headers,
+            json={"opportunity_id": "opp-other"},
+        )
+        committee = await client.get(
+            "/api/v1/opportunities/opp-other/buying-committee",
+            headers=headers,
+        )
+        digest = await client.get("/api/v1/digest", headers=headers)
+
+    assert objections.status_code == 403
+    assert committee.status_code == 403
+    assert digest.status_code == 401
 
 
 async def test_panel_route_denies_embedding_by_default(monkeypatch, panel_token) -> None:

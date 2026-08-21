@@ -226,19 +226,16 @@ async def verify_api_key_or_panel_token(
     x_panel_token: str | None = Header(None, alias="X-Panel-Token"),
 ) -> str:
     """Additive alternative to verify_api_key, used only on the handful of
-    routes /viz/panel's own JS calls (buying-committee, account-objections,
-    digest) -- see api/routes/viz.py's _PANEL_PAGE. A valid X-Panel-Token is
+    routes /viz/panel's own JS calls (buying-committee and account-objections)
+    -- see api/routes/viz.py's _PANEL_PAGE. A valid X-Panel-Token is
     self-contained proof of workspace scope (the token itself carries
     workspace_id, HMAC-signed), so it's checked first and doesn't need
     X-Workspace-Id at all; every other caller keeps using the real
     X-Api-Key exactly as before. This intentionally does not narrow access
-    to the token's own opportunity_id -- the 3 panel endpoints don't share
-    a uniform opportunity-scoping shape (path param, body field, or none at
-    all for a workspace-wide digest) -- so a panel token authorizes
-    workspace-level access, same ceiling verify_api_key already grants, not
-    a stricter per-opportunity one. That's a real, documented limitation on
-    top of "no raw API key in the URL anymore" — not a claim of full
-    per-opportunity isolation.
+    to the token's own opportunity_id. Both callers enforce that scope in
+    their route handler, so a token is deliberately less powerful than a
+    workspace API key. Workspace-wide endpoints (including the digest) must
+    use a regular API key and cannot accept a panel token.
     """
     if x_panel_token:
         try:
@@ -270,7 +267,6 @@ async def get_access_context_or_panel_token(
     stay active for the embedded Showpad panel without treating a panel token
     as a general user identity.
     """
-    settings = get_settings()
     if x_panel_token:
         claims = getattr(request.state, "panel_claims", None)
         if claims is None:
@@ -285,20 +281,16 @@ async def get_access_context_or_panel_token(
             opportunity_ids=frozenset({claims.opportunity_id}),
         )
 
-    if settings.authz_enforcement_enabled and not (
-        settings.sso_enabled or settings.authz_trusted_gateway_enabled
-    ):
-        raise HTTPException(
-            status_code=503,
-            detail="authorization enforcement requires SSO or a trusted claims gateway",
-        )
-    subject_id = x_user_id or x_actor_id
-    if settings.authz_enforcement_enabled and not subject_id:
-        raise HTTPException(status_code=401, detail="authenticated user identity is required")
-    return AccessContext(
+    # Keep the API-key/JWT path on exactly the same claim construction as the
+    # normal API dependency.  In particular, SSO callers must use the verified
+    # claims set by verify_sso_token, never X-User-* headers supplied by the
+    # client.
+    return await get_access_context(
+        request=request,
         workspace_id=workspace_id,
-        subject_id=subject_id or "api-key-service",
-        roles=frozenset(item.strip().lower() for item in (x_user_roles or "").split(",") if item.strip()),
-        division_ids=frozenset(item.strip() for item in (x_division_ids or "").split(",") if item.strip()),
-        opportunity_ids=frozenset(item.strip() for item in (x_opportunity_ids or "").split(",") if item.strip()),
+        x_user_id=x_user_id,
+        x_actor_id=x_actor_id,
+        x_user_roles=x_user_roles,
+        x_division_ids=x_division_ids,
+        x_opportunity_ids=x_opportunity_ids,
     )

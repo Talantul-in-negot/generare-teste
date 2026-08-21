@@ -36,6 +36,22 @@ configure_logging()
 log = structlog.get_logger(__name__)
 
 _OPPORTUNITY_PATH = re.compile(r"^/api/v1/opportunities/([^/]+)(?:/|$)")
+_PANEL_BUYING_COMMITTEE_PATH = re.compile(r"^/api/v1/opportunities/[^/]+/buying-committee$")
+
+
+def _is_panel_token_route(request: Request) -> bool:
+    """Return whether this is one of the two routes a panel token can call.
+
+    Middleware runs before dependency authentication, so the presence of an
+    ``X-Panel-Token`` header alone is never evidence that a request is a panel
+    request.  Keeping this allow-list adjacent to the middleware prevents an
+    arbitrary header from bypassing its actor and path-scope checks; the route
+    dependency still verifies the token signature before the handler runs.
+    """
+    return (
+        (request.method == "POST" and request.url.path == "/api/v1/qa/account-objections")
+        or (request.method == "GET" and bool(_PANEL_BUYING_COMMITTEE_PATH.fullmatch(request.url.path)))
+    )
 
 
 def _csv_header(value: str | None) -> frozenset[str]:
@@ -50,7 +66,7 @@ def _path_scope_denied(request: Request) -> bool:
     dependency, so they intentionally bypass this header-based check.
     """
     settings = get_settings()
-    if not settings.authz_enforcement_enabled or request.headers.get("x-panel-token"):
+    if not settings.authz_enforcement_enabled or _is_panel_token_route(request):
         return False
     match = _OPPORTUNITY_PATH.match(request.url.path)
     if not match:
@@ -120,7 +136,7 @@ async def rate_limit_security_and_audit(request: Request, call_next):
     # workspace API-key authentication remains the authoritative boundary.
     actor_id = request.headers.get("x-user-id") or request.headers.get("x-actor-id")
     actor_roles = request.headers.get("x-user-roles")
-    panel_request = bool(request.headers.get("x-panel-token"))
+    panel_request = _is_panel_token_route(request)
     if (
         settings.authz_enforcement_enabled
         and request.url.path.startswith("/api/")

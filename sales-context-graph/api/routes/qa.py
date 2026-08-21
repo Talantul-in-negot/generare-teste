@@ -119,7 +119,9 @@ async def account_objections(
     # verify_api_key_or_panel_token, not verify_api_key -- /viz/panel's own
     # JS calls this endpoint (api/routes/viz.py). See that dependency's
     # docstring for what a panel token does and doesn't scope.
-    if get_settings().authz_enforcement_enabled:
+    # A signed panel token is always opportunity-scoped, even in local mode
+    # where general user authorization is intentionally disabled.
+    if get_settings().authz_enforcement_enabled or access.has_role("panel"):
         try:
             require_opportunity(access, body.opportunity_id)
         except AccessDenied as exc:

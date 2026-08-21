@@ -91,7 +91,12 @@ enforcement is active.
 
 The embedded panel is handled separately but consistently: a signed,
 revocable panel token becomes a synthetic access context containing only its
-workspace and opportunity. It cannot be used as a general user identity.
+workspace and opportunity. It cannot be used as a general user identity or a
+workspace-wide credential: it is accepted only by the panel's two
+opportunity-scoped reads (buying committee and objections), and both apply
+`require_opportunity()` even when general authorization enforcement is off.
+The workspace-wide digest requires a regular API key/JWT, so filtering a broad
+response in browser JavaScript cannot leak other deals through a panel embed.
 Audit events include optional actor id and roles, while workspace API keys
 remain the authentication boundary until SSO is connected.
 
@@ -117,7 +122,9 @@ remain the authentication boundary until SSO is connected.
   embedding and, when Qdrant is configured, the tenant-scoped Qdrant point
   before the event is marked complete. Retention/legal-hold policy and
   third-party/object-store propagation remain deployment-level work.
-- No legal-hold state is modeled.
+- Buyer-space retention honours persisted legal holds before deleting upload
+  bytes; the release and sweep APIs require an authorized manager when
+  fine-grained authorization is enabled.
 
 ## PII handling — raw at rest, redacted at egress (added Phase 6, 2026-08-07)
 
@@ -166,3 +173,27 @@ reasoning; this is a documented deferral, not a silent gap.
    real JWT/session-claim IdP plus SCIM before onboarding beyond a controlled
    pilot. Keep `AUTHZ_ENFORCEMENT_ENABLED` fail-closed while that contract is
    being deployed.
+
+## Panel-token scope repair — 2026-08-21
+
+An authorization review found that the earlier panel design could retrieve a
+workspace-wide digest and filter it in browser JavaScript, even though its
+token was minted for one opportunity. Its two intended opportunity reads also
+checked scope only when the general authorization feature flag was enabled.
+Those are BOLA risks: a client-controlled identifier or an over-broad response
+can disclose another deal in the same workspace.
+
+The panel token capability is now allow-listed to buying-committee and
+account-objections only. Both routes enforce `require_opportunity()` for the
+synthetic panel principal regardless of global authorization mode; the digest
+requires an API key/JWT and the panel no longer fetches it. Middleware also
+recognizes a panel path, not an arbitrary `X-Panel-Token` header, so a fake
+header cannot bypass actor checks. Panel-token minting also enforces the
+caller's opportunity scope. Finally, API-key/JWT traffic through these
+token-compatible routes uses the standard access-context builder, preserving
+verified SSO claim precedence over caller-provided headers.
+
+This follows [OWASP API1:2023 Broken Object Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)
+and [OWASP API5:2023 Broken Function Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/).
+Regression coverage is in `tests/unit/api/test_authz_middleware.py`,
+`tests/unit/api/test_viz_route.py`, and `tests/unit/api/test_auth_dependency.py`.

@@ -11,7 +11,7 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.dependencies import verify_api_key, verify_api_key_or_panel_token
+from api.dependencies import verify_api_key
 from src.core.config import get_settings
 from src.delivery.slack import build_slack_blocks, post_digest
 from src.graph.execution import GraphExecutor
@@ -37,10 +37,9 @@ def _build_usecase(executor: GraphExecutor) -> DigestUseCase:
 
 
 @router.get("/digest")
-async def digest(seller_id: str | None = None, workspace_id: str = Depends(verify_api_key_or_panel_token)) -> dict:
-    # verify_api_key_or_panel_token, not verify_api_key -- /viz/panel's own
-    # JS calls this endpoint (api/routes/viz.py). /digest/deliver below
-    # stays on verify_api_key only -- the panel never posts to Slack.
+async def digest(seller_id: str | None = None, workspace_id: str = Depends(verify_api_key)) -> dict:
+    # A digest is workspace-wide and can disclose other opportunities.  It is
+    # intentionally unavailable to an opportunity-scoped panel token.
     executor = GraphExecutor()
     usecase = _build_usecase(executor)
     result = await usecase.build(workspace_id, seller_id=seller_id)
