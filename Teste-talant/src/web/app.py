@@ -16,6 +16,7 @@ from src.biblical_tests.validation import coverage_report, validate_evidence, va
 
 
 OUTPUT = Path("output").resolve()
+REPOSITORY = BibleRepository("data")
 
 
 def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
@@ -33,7 +34,7 @@ def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
 
 def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
     selection = parse_selection(data["chapters"])
-    repo = BibleRepository("data")
+    repo = REPOSITORY
     base_seed = int(data["seed"]) if data.get("seed", "").strip() else secrets.randbelow(2**31)
     versions = max(1, min(10, int(data.get("versions", "").strip() or "1")))
     contest = {"title": "TALANTUL ÎN NEGOȚ", "category": data.get("category", "6_7"), "edition": int(data.get("edition", "2027")), "stage": data.get("stage", "Faza pe biserică"), "date": data.get("date", "")}

@@ -3,3 +3,4 @@ __pycache__/
 output/
 tmp/
 data/bible/bible.json
+config.yaml
