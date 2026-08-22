@@ -10,6 +10,7 @@ class SelectionError(ValueError):
 
 BOOK_ALIASES = {
     "1 samuel": "1 Samuel", "1samuel": "1 Samuel", "1 sam": "1 Samuel", "1sam": "1 Samuel",
+    "2 samuel": "2 Samuel", "2samuel": "2 Samuel", "2 sam": "2 Samuel", "2sam": "2 Samuel",
     "rut": "Rut", "ioan": "Ioan",
 }
 
