@@ -33,6 +33,23 @@ def _sentences(text: str) -> list[str]:
     return [part.strip() for part in _SENTENCES.split(text) if part.strip()]
 
 
+def _dedup(values) -> list[str]:
+    """First-seen values, case-insensitively deduped — a small corpus repeats
+    the same few names/deity terms across many verses, so building a
+    distractor list straight from `facts` without this can hand back the
+    same term twice (`add()`'s own dedup check then rejects every candidate,
+    which reads as "not enough distractors" when there actually were plenty,
+    just not distinct ones)."""
+    seen: set[str] = set()
+    result = []
+    for value in values:
+        key = value.lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(value)
+    return result
+
+
 def _mentions(text: str, value: str) -> bool:
     return bool(re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text))
 
@@ -376,7 +393,7 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
         if fact.id in used or not (built := _completion_stem(fact) or _wh_question(fact)):
             continue
         stem, segment = built
-        distractors = [f.object for f in facts if f.object != fact.object and not _mentions(segment, f.object) and not _inflection(f.object, [fact.object])]
+        distractors = _dedup(f.object for f in facts if f.object != fact.object and not _mentions(segment, f.object) and not _inflection(f.object, [fact.object]))
         if len(distractors) < 2:
             continue
         add(fact, stem, [fact.object, *distractors[:2]], [fact.object])
