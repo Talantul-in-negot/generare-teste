@@ -82,3 +82,21 @@ It's faster than another guess-and-check round trip.
 ad hoc into the environment for this debugging session — no `pdftoppm`/poppler was available.
 Reach for it early: `fitz.open(path)[page_idx].get_pixmap(dpi=..., clip=fitz.Rect(...))` for
 zoomed visual crops, `.get_drawings()` for exact vector line/rect coordinates.
+
+## L05 — Subject-swap false statements need their adjective/verb agreement fixed too, not just the noun (2026-08-22)
+
+A generated true/false item swapped the subject of 1 Samuel 2:22 from "Eli" to "Ana" to make the
+statement false (`"Ana era foarte bătrân..."`), but left the predicate adjective in the masculine
+form ("bătrân") instead of agreeing with the new feminine subject ("bătrână"). The statement was
+factually false as intended, but ungrammatical — a corrector/student could flag it as an error in
+the test itself rather than recognizing it as the intended false claim.
+
+**Rule:** Whenever a name/subject is substituted into a verse to manufacture a false statement
+(gender, number, or person changes), re-check every agreeing word downstream (adjectives, past
+participles, pronouns) — not just that the sentence still parses. This applies to both
+LLM-generated swaps and any hand-authored ones.
+
+**How to apply:** No swap-generation code currently exists in `generation.py` to patch directly —
+this was a content-level fix in the generated JSON output (`output/V1/test.json`, gitignored).
+If/when an automated subject-swap generator is added, this check needs to be part of its
+validation step in `validation.py`.
