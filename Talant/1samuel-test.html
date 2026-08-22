@@ -98,6 +98,17 @@
   .test-pill { background:rgba(255,255,255,.14); color:#fff; border:1.5px solid rgba(255,255,255,.35); padding:7px 16px; border-radius:20px; font-size:.85rem; font-weight:700; cursor:pointer; text-decoration:none; transition:.15s; }
   .test-pill:hover { background:rgba(255,255,255,.24); }
   .test-pill.active { background:#fff; color:#6d28d9; border-color:#fff; }
+
+  #selectorScreen { max-width:520px; margin:60px auto 0; text-align:center; color:#fff; }
+  #selectorScreen h1 { font-size:1.6rem; font-weight:800; margin-bottom:6px; }
+  #selectorScreen p.lead { opacity:.85; margin-bottom:26px; }
+  .test-card-grid { display:grid; gap:14px; }
+  .test-card { background:rgba(255,255,255,.96); border-radius:16px; padding:20px 22px; text-align:left; cursor:pointer; border:0; box-shadow:0 8px 30px rgba(0,0,0,.3); transition:.15s; }
+  .test-card:hover { transform:translateY(-2px); box-shadow:0 12px 36px rgba(0,0,0,.4); }
+  .test-card h3 { color:#1a2a3a; font-size:1.1rem; margin-bottom:4px; }
+  .test-card span { color:#7c3aed; font-size:.85rem; font-weight:700; }
+  .back-link { display:inline-block; margin-bottom:14px; color:#fff; opacity:.8; font-size:.85rem; cursor:pointer; text-decoration:underline; background:none; border:0; }
+  .back-link:hover { opacity:1; }
 </style>
 </head>
 <body>
@@ -106,7 +117,13 @@
   <button class="account-btn" id="statsBtn" type="button">🏆 Clasament</button>
 </div>
 <p id="syncNotice" role="status" aria-live="polite"></p>
-<div id="app">
+<div id="selectorScreen">
+  <h1>Talantul în negoț</h1>
+  <p class="lead">Alege testul pe care vrei să-l dai</p>
+  <div class="test-card-grid" id="testCardGrid"></div>
+</div>
+<div id="app" style="display:none">
+  <button class="back-link" id="backToSelector" type="button">← Alege alt test</button>
   <div class="header">
     <h1 id="testTitle"></h1>
     <div class="subtitle" id="testSubtitle"></div>
@@ -157,48 +174,73 @@ const TESTS = {
   'samuel1-2': { quizVersion: 'samuel1-2-v1', label: '1 Samuel 1-2', data: () => TEST_1SAMUEL },
   'samuel3-4': { quizVersion: 'samuel3-4-v1', label: '1 Samuel 3-4', data: () => TEST_1SAMUEL_3_4 },
 };
-const params = new URLSearchParams(location.search);
-const activeTestId = TESTS[params.get('test')] ? params.get('test') : 'samuel1-2';
-const activeTest = TESTS[activeTestId];
-const QUIZ_VERSION = activeTest.quizVersion;
-const DATA = activeTest.data();
-const state = { af: {}, single: {}, match: {}, multi: {} };
+let activeTestId = null, activeTest = null, QUIZ_VERSION = null, DATA = null;
+let state = { af: {}, single: {}, match: {}, multi: {} };
 let activeMatchRow = null;
-
-document.getElementById('pageTitle').textContent = `Talantul în negoț – ${DATA.subtitle}`;
-document.getElementById('testTitle').textContent = DATA.title;
-document.getElementById('testSubtitle').textContent = DATA.subtitle;
-document.getElementById('statsTitle').textContent = `🏆 Clasament — ${DATA.subtitle}`;
-document.getElementById('testSwitcher').innerHTML = Object.entries(TESTS).map(([id, t]) =>
-  `<a class="test-pill${id === activeTestId ? ' active' : ''}" href="?test=${id}">${t.label}</a>`
-).join('');
 
 const sectionsEl = document.getElementById('sections');
 
 function romanBadge(id) { return id; }
 
-DATA.sections.forEach(sec => {
-  const block = document.createElement('section');
-  block.className = 'block';
+function showSelector(pushUrl) {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('selectorScreen').style.display = 'block';
+  if (pushUrl) history.pushState(null, '', location.pathname);
+}
 
-  const title = document.createElement('div');
-  title.className = 'sec-title';
-  title.innerHTML = `<div class="roman">${romanBadge(sec.id)}</div><h2></h2><div class="sec-points">${sec.points} p / întrebare</div>`;
-  title.querySelector('h2').textContent = sectionHeading(sec);
-  block.appendChild(title);
+function startTest(id, pushUrl) {
+  if (!TESTS[id]) id = 'samuel1-2';
+  activeTestId = id;
+  activeTest = TESTS[id];
+  QUIZ_VERSION = activeTest.quizVersion;
+  DATA = activeTest.data();
+  state = { af: {}, single: {}, match: {}, multi: {} };
 
-  const instr = document.createElement('div');
-  instr.className = 'sec-instructions';
-  instr.textContent = sec.instructions;
-  block.appendChild(instr);
+  document.getElementById('selectorScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  if (pushUrl) history.pushState(null, '', `?test=${id}`);
 
-  if (sec.type === 'af') renderAF(sec, block);
-  else if (sec.type === 'single') renderSingle(sec, block);
-  else if (sec.type === 'match') renderMatch(sec, block);
-  else if (sec.type === 'multi') renderMulti(sec, block);
+  document.getElementById('pageTitle').textContent = `Talantul în negoț – ${DATA.subtitle}`;
+  document.getElementById('testTitle').textContent = DATA.title;
+  document.getElementById('testSubtitle').textContent = DATA.subtitle;
+  document.getElementById('statsTitle').textContent = `🏆 Clasament — ${DATA.subtitle}`;
+  document.getElementById('testSwitcher').innerHTML = Object.entries(TESTS).map(([tid, t]) =>
+    `<a class="test-pill${tid === activeTestId ? ' active' : ''}" href="?test=${tid}">${t.label}</a>`
+  ).join('');
+  document.getElementById('testSwitcher').querySelectorAll('.test-pill').forEach(pill => {
+    pill.addEventListener('click', e => {
+      e.preventDefault();
+      const tid = new URL(pill.href).searchParams.get('test');
+      startTest(tid, true);
+    });
+  });
 
-  sectionsEl.appendChild(block);
-});
+  document.getElementById('resultBox').innerHTML = '';
+  sectionsEl.innerHTML = '';
+  DATA.sections.forEach(sec => {
+    const block = document.createElement('section');
+    block.className = 'block';
+
+    const title = document.createElement('div');
+    title.className = 'sec-title';
+    title.innerHTML = `<div class="roman">${romanBadge(sec.id)}</div><h2></h2><div class="sec-points">${sec.points} p / întrebare</div>`;
+    title.querySelector('h2').textContent = sectionHeading(sec);
+    block.appendChild(title);
+
+    const instr = document.createElement('div');
+    instr.className = 'sec-instructions';
+    instr.textContent = sec.instructions;
+    block.appendChild(instr);
+
+    if (sec.type === 'af') renderAF(sec, block);
+    else if (sec.type === 'single') renderSingle(sec, block);
+    else if (sec.type === 'match') renderMatch(sec, block);
+    else if (sec.type === 'multi') renderMulti(sec, block);
+
+    sectionsEl.appendChild(block);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 function sectionHeading(sec) {
   if (sec.type === 'af') return 'Adevărat / Fals';
@@ -414,6 +456,11 @@ function text(tag, value, className) { const node = document.createElement(tag);
 async function openStats() {
   const modal = document.getElementById('statsModal'), content = document.getElementById('statsContent');
   modal.hidden = false;
+  if (!activeTestId) {
+    document.getElementById('statsTitle').textContent = '🏆 Clasament';
+    content.replaceChildren(text('p', 'Alege mai întâi un test ca să vezi clasamentul lui.'));
+    return;
+  }
   content.replaceChildren(text('p', 'Se încarcă…'));
   try {
     const [stats, ranking] = await Promise.all([
@@ -450,8 +497,24 @@ document.getElementById('loginBtn').addEventListener('click', () => submitAuth('
 document.getElementById('logoutBtn').addEventListener('click', async () => { await Auth.signOut(); accountUser = ''; updateAccount(); });
 document.getElementById('authModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeAuth(); });
 document.getElementById('statsModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.hidden = true; });
+document.getElementById('backToSelector').addEventListener('click', () => showSelector(true));
+window.addEventListener('popstate', () => {
+  const id = new URLSearchParams(location.search).get('test');
+  if (id && TESTS[id]) startTest(id, false); else showSelector(false);
+});
 updateAccount();
 Auth.init(async user => { accountUser = user || ''; updateAccount(); if (accountUser) await TestTracker.flush(); }).catch(() => updateAccount());
+
+// ── Landing: un singur link — testul se alege în pagină, nu prin URL diferit.
+// Un ?test= direct în URL (link vechi/marcat) sare peste selector. ──
+document.getElementById('testCardGrid').innerHTML = Object.entries(TESTS).map(([id, t]) =>
+  `<button class="test-card" data-id="${id}"><h3>${t.label}</h3><span>Talantul în negoț · Ediția 2027</span></button>`
+).join('');
+document.querySelectorAll('.test-card').forEach(card => {
+  card.addEventListener('click', () => startTest(card.dataset.id, true));
+});
+const initialTestId = new URLSearchParams(location.search).get('test');
+if (initialTestId && TESTS[initialTestId]) startTest(initialTestId, false); else showSelector(false);
 </script>
 </body>
 </html>
