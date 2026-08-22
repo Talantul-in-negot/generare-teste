@@ -367,10 +367,13 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
             if add(fact, stem, [*correct_values, *picks], correct_values):
                 break
     # A verse that merely names a person still makes a sound single-answer item.
+    # Same fallback order as Section II: the colon-completion shape needs the
+    # answer to close its own clause, so a „Cine ...?" question covers most of
+    # what it can't.
     for fact in pool:
         if len(multis) == 3:
             break
-        if fact.id in used or not (built := _completion_stem(fact)):
+        if fact.id in used or not (built := _completion_stem(fact) or _wh_question(fact)):
             continue
         stem, segment = built
         distractors = [f.object for f in facts if f.object != fact.object and not _mentions(segment, f.object) and not _inflection(f.object, [fact.object])]
