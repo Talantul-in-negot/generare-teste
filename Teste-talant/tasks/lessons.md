@@ -82,3 +82,176 @@ It's faster than another guess-and-check round trip.
 ad hoc into the environment for this debugging session — no `pdftoppm`/poppler was available.
 Reach for it early: `fitz.open(path)[page_idx].get_pixmap(dpi=..., clip=fitz.Rect(...))` for
 zoomed visual crops, `.get_drawings()` for exact vector line/rect coordinates.
+
+## L05 — Subject-swap false statements need their adjective/verb agreement fixed too, not just the noun (2026-08-22)
+
+A generated true/false item swapped the subject of 1 Samuel 2:22 from "Eli" to "Ana" to make the
+statement false (`"Ana era foarte bătrân..."`), but left the predicate adjective in the masculine
+form ("bătrân") instead of agreeing with the new feminine subject ("bătrână"). The statement was
+factually false as intended, but ungrammatical — a corrector/student could flag it as an error in
+the test itself rather than recognizing it as the intended false claim.
+
+**Rule:** Whenever a name/subject is substituted into a verse to manufacture a false statement
+(gender, number, or person changes), re-check every agreeing word downstream (adjectives, past
+participles, pronouns) — not just that the sentence still parses. This applies to both
+LLM-generated swaps and any hand-authored ones.
+
+**How to apply:** No swap-generation code currently exists in `generation.py` to patch directly —
+this was a content-level fix in the generated JSON output (`output/V1/test.json`, gitignored).
+If/when an automated subject-swap generator is added, this check needs to be part of its
+validation step in `validation.py`.
+
+## L06 — `_completion_stem` cut the stem at the *last* occurrence of the answer word, not at the end of its clause (2026-08-22)
+
+Two Section II questions read as nonsense once truncated: "...pentru că:" (verse continues
+"Domnul o făcuse stearpă" — dropped) and "...în timp ce:" (verse continues "Israel va fi copleșit
+de bunătăți de Domnul; ..." — dropped). `_completion_stem` in `generation.py` found the object's
+last regex match, sliced everything before it into the stem, and silently discarded everything
+after it (`rest`) except for using it as a distractor-safety check — it never verified the object
+was actually the *last* meaningful word of its clause. Whenever the object sat mid-clause (a
+subject right after a conjunction like "în timp ce", or right before a verb like "pentru că
+Domnul o făcuse"), the stem lost the predicate and the fill-in-the-blank stopped making sense
+even though every length/format check still passed.
+
+**Rule:** A completion/cloze stem is only valid if the word being blanked is immediately followed
+by clause-ending punctuation (comma, semicolon, colon, sentence end) — not just "within
+`_STEM_MIN_CHARS`/`_STEM_MAX_CHARS`". If real words remain before the next punctuation mark,
+either try an earlier occurrence of the same object in the statement or reject the fact — never
+render a stem that silently amputates a clause.
+
+**How to apply:** Fixed in `_completion_stem` (`generation.py`) — it now iterates occurrences from
+last to first, skipping any whose trailing clause (`rest` up to the next `[,;:.!?]`) has non-trim
+characters left in it. The synthetic fixture in `tests/test_generator.py::_corpus` had baked in
+the same anti-pattern (object always followed by more words) and only "passed" because the old
+code accepted broken stems — it now alternates a clause-ending shape (for Section II/IV) with a
+trailing-predicate shape (for Section III's `_name_predicate`), so the test suite actually
+exercises the real constraint instead of masking it. Regenerate (`python generate.py --chapters
+"1 Samuel 1,2" --version 1`) and spot-check every Section II/IV `question` string reads as a
+complete sentence with the answer dropped in, not just that it satisfies length bounds.
+
+## L07 — `_name_predicate` (Section III) and `_enumeration` (Section IV) assumed the extracted
+object was always the sentence's subject and always at a guessable word-count boundary (2026-08-22)
+
+Two more misattributions surfaced right after L06's fix: Section III paired "Eli" with "erau
+niște oameni răi" (evidence: "**Fiii lui** Eli erau niște oameni răi" — the verse is about Eli's
+*sons*, not Eli) and "Israel" with "care veneau la Silo" (evidence: "...acelora **din** Israel
+care veneau la Silo" — describes "those people", not Israel). Both times `_name_predicate` found
+*a* occurrence of `fact.object` in the sentence and took everything after it as "what the verse
+says about it", without checking the name was actually functioning as the subject there rather
+than as a genitive possessor ("lui Eli") or a prepositional complement ("din Israel").
+
+Separately, `_enumeration` (Section IV's coordinated-list items, e.g. "a luat trei tauri, o efă de
+făină și un burduf cu vin") assumed every list member has the same word count as the *last* one —
+true for `mid`/`tail` (no punctuation between them to measure by), but the optional third/earliest
+member is separated from the verb that introduces the list by nothing at all ("...și **a luat**
+trei tauri, o efă de făină..."), so guessing its length off `tail`'s length can walk backward
+straight into the verb: "a luat trei tauri" got offered as one option next to bare noun phrases
+"o efă de făină" / "un burduf cu vin" — inconsistent register, and grammatically the verb doesn't
+belong to the option.
+
+**Rule:** Extracting "object → what's said about it" or "list item" from free text is not safe
+just because a regex match succeeded and a length bound was satisfied — check the *role* the
+matched span is actually playing (subject vs. possessor/oblique object; list member vs. verb that
+introduces the list) before treating it as reusable copy. When a word-count-based guess can't be
+independently verified (no punctuation boundary to confirm it), prefer under-including — leave the
+ambiguous words in the stem — over risking a wrong pairing reaching students.
+
+**How to apply:** `_name_predicate` now rejects a match whose preceding word is a
+preposition/genitive marker (`_OBLIQUE_MARKERS` in `generation.py`: lui, pe, cu, din, la, în, de,
+pentru, …), excludes the literal genitive/dative form "Domnului" outright (it's never a subject),
+truncates the predicate at the first clause boundary instead of requiring the whole sentence
+remainder to be clean, and rejects a predicate whose own first word is itself one of those
+markers (catches verb-subject inversion, e.g. "se suia Ana la Casa Domnului" — the phrase after
+"Ana" belongs to "suia", not to Ana). `_enumeration`'s triple-member branch now refuses a guessed
+first-member candidate that opens with a common verb/auxiliary token (`_VERB_OPENERS`: a, au, s-a,
+l-a, …) and falls back to leaving those words in the stem, producing a valid two-option item
+instead of a mis-parsed three-option one — this is a deliberate reduction in how often a 3-correct
+Section IV item appears (see `tests/test_generator.py::RealCorpusSectionIVTests`, relaxed from
+requiring an exact `[1, 2, 3]` spread), not a bug. Regenerate and read Section III/IV aloud with
+each option substituted in, not just check they satisfy the length/punctuation rules.
+
+## L08 — Section header's own LINEBELOW doubled up with item 1's LINEABOVE (2026-08-22)
+
+L03 gave every list item both `LINEABOVE` and `LINEBELOW` so a page break landing right before an
+item never leaves it without a top border. That's correct for item 2 onward, but item 1 never has
+a page break above it — it's preceded by the section header, which *already* draws its own
+`LINEBELOW` right there (`_section_header`, `rendering.py`). The two lines sit at (nearly) the same
+y-coordinate, rendering as a visibly doubled rule above item 1 in Sections I, II and IV. Section
+III didn't show it because `_matching` never added its own `LINEABOVE` in the first place.
+
+**Rule:** When a "belt and suspenders" border is added for page-break safety (item's own
+`LINEABOVE` covering the case the *previous* item's `LINEBELOW` got stranded on the prior page),
+check whether the very first item is exempt — it's never preceded by a possible page break, only
+by the header, which may already be drawing that exact line.
+
+**How to apply:** `_tf_item` and `_choice_item` (`rendering.py`) now only add `LINEABOVE` when
+`index > 1`; item 1 relies solely on the section header's `LINEBELOW`. Verified by rendering the
+PDF and cropping each section's opening rule with PyMuPDF (`fitz.open(path)[page].get_pixmap(dpi=200,
+clip=fitz.Rect(...))`) — faster and more reliable than eyeballing a full-page screenshot for a
+sub-point line-doubling, consistent with [[L04]].
+
+## L09 — L05's False-statement name swap needed to preserve grammatical gender and case, not just avoid duplicate names (2026-08-22)
+
+L05 flagged "Ana era foarte bătrân" (swapped from "Eli era foarte bătrân") as ungrammatical and
+claimed no swap-generation code existed to fix — that was wrong; `_wrong_object` in
+`generation.py` does this swap for every Section I False statement, it just picked *any* other
+name in the corpus with no regard for whether the replacement kept the sentence grammatical.
+Regenerating surfaced the exact bug L05 predicted, plus a second, related one: "Vrăjmașii
+Domnului" swapped to "Vrăjmașii Domnul" — "Domnului" is the genitive/dative case of "Domnul", so
+this wasn't even a different claim, and it broke the case the sentence needed.
+
+**Rule:** A bare-name substitution into existing text is only safe when the replacement can't
+change anything the surrounding words agree with — grammatical gender (feminine name → an
+adjacent adjective needed the feminine ending) and grammatical case (a name already sitting in an
+oblique/genitive slot has no plain nominative stand-in, since nothing here adds "lui X" or
+inflects a feminine name for genitive). Prefer a same-gender replacement when one exists, and
+refuse the swap entirely — pick a different fact — when the slot being swapped is oblique to begin
+with, rather than trying to detect and rewrite the agreeing word.
+
+**How to apply:** `_wrong_object` now prefers a same-gender candidate (`_FEMININE_NAMES`/`_gender`
+in `generation.py`) and excludes inflectional variants of the same entity (`_inflection`, already
+used elsewhere for this). `_safe_to_swap` (reused `_OBLIQUE_MARKERS` from [[L07]]) filters both
+`false_pool` and `true_pool` in `build_test` to only facts whose object sits in a plain,
+swappable position — never "Domnului" (no plain form exists) and never right after a
+preposition/genitive marker. A residual gap: the True/False fallback path (when a pool runs dry)
+can still hand a fact to the opposite branch using a *different* `_concise` call than the one that
+vetted it — not closed here since it doesn't trigger on the current 1 Samuel 1-2 corpus (49
+quality facts against 10 needed slots), but worth tightening if a smaller chapter selection ever
+raises `GenerationError` here.
+
+## L10 — Each section supports several question SHAPES in the reference; implementing only one starves the candidate pool (2026-08-22)
+
+"Nu sunt suficiente versete potrivite pentru Secțiunea II" on a two-chapter selection looked like
+a corpus-size problem. It wasn't: `_section_ii` only ever built one shape — the colon-completion
+stem (`_completion_stem`), which requires the answer word to close its own clause. After [[L06]]
+correctly tightened that requirement, only 3 of 24 verses in 1 Samuel 2 qualified. But the
+reference tests in `data/*.pdf` mix that shape with plain wh-questions ("Cine a zis despre Isus:
+«Eu nu găsesc nicio vină în El»?", "Când a zis Isus …?", "Ce profet …?"), which impose no such
+positional constraint. Adding just the „Cine …?" form roughly doubled the pool (1 Samuel 2: 3 →
+10; 1 Samuel 3-4: 4 → 18).
+
+**Rule:** Before concluding a generator is starved by its corpus, check the reference artifacts
+for how many distinct question shapes that section actually uses. A single-shape implementation
+inherits that shape's positional constraints as a hard corpus filter; a second shape with
+different constraints often unlocks the same verses that the first one rejects. Read
+`data/Faza pe biserică - Corectori - V1 - *.pdf` (via PyMuPDF, per [[L04]]) rather than assuming
+the shape already implemented is the only one.
+
+**How to apply:** `_wh_question` in `generation.py` builds „Cine <predicate>?" and reuses
+`_name_predicate`, whose [[L07]] subject-vs-oblique check is exactly the condition for the
+question to be asking about the right person; it is restricted to `_PERSONAL`
+(`BibleRepository.PEOPLE | DEITY`) because a place needs „Unde?" and a thing „Ce?".
+`_section_ii` tries `_completion_stem` first (scarcer shape) and falls back to `_wh_question`;
+Section IV's single-answer fallback loop does the same for the same reason.
+Section III has the same latent issue and is **not yet fixed**: it only builds the
+name→attribute shape (as in the 2_3 barem), while the 4_5 / 8_9 / 10_11 / 6_7 baremuri use a
+clause-half→clause-half split ("bogăția aduce" → "mare număr de prieteni"). That is why several
+chapter ranges still fail on "Nu sunt suficiente asocieri distincte pentru Sectiunea III" —
+verified pre-existing at commit 1c1bb5b, not a regression from any of today's work.
+
+**Also fixed here:** [[L09]] applied `_safe_to_swap` to *both* Section I pools, but only False
+statements have a name swapped in — True ones are quoted verbatim, so filtering them discarded
+good candidates for a rewrite they never undergo. `true_pool` no longer carries that filter, the
+cross-branch fallback re-checks it for the False branch only, and because the pools overlap with
+`false_pool` the scarcer one, the True branch now consumes shared verses last so it can't starve
+the False branch.

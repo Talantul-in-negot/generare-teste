@@ -5,6 +5,11 @@ import re
 from collections import defaultdict
 
 from .models import Fact, MatchingQuestion, MultiChoiceQuestion, SingleChoiceQuestion, TestDefinition, TrueFalseQuestion
+from .repository import BibleRepository
+
+# Objects that „Cine?" can ask about — a place or a thing needs a different
+# question word, so those are left to the colon-completion shape.
+_PERSONAL = BibleRepository.PEOPLE | BibleRepository.DEITY
 
 
 class GenerationError(ValueError):
@@ -67,15 +72,43 @@ def _round_robin(facts: list[Fact], count: int, rng: random.Random) -> list[Fact
     return selected
 
 
+# Feminine names in the corpus (repository.PEOPLE); everything else — the
+# other people, places, and deity terms — takes masculine agreement.
+_FEMININE_NAMES = {"Ana", "Penina", "Mical", "Batșeba"}
+
+
+def _gender(name: str) -> str:
+    return "f" if name in _FEMININE_NAMES else "m"
+
+
 def _wrong_object(fact: Fact, pool: list[Fact]) -> str:
     # Only names the selected chapters actually use, so a 2 Samuel test never
     # swaps in a character who appears nowhere in it.
     inside = {candidate.object for candidate in pool}
+    # A swap that changes grammatical gender breaks whatever adjective/verb
+    # agreed with the original name (e.g. "Eli era foarte bătrân" swapped to
+    # "Ana era foarte bătrân" — "bătrân" needed to become "bătrână"). Picking
+    # a same-gender replacement keeps the sentence grammatical without having
+    # to detect and rewrite the agreeing word at all.
+    # "Domnul" vs "Domnului" are the same entity in different grammatical
+    # cases, not a distinct wrong answer — swapping one in for the other
+    # both fails to change the claim and breaks whatever case the sentence
+    # needed ("Vrăjmașii Domnului" needs the genitive, not "Vrăjmașii Domnul").
+    safe = lambda value: value != fact.object and not _inflection(value, [fact.object])
+    same_gender = lambda value: _gender(value) == _gender(fact.object)
     for option in fact.options:
-        if option != fact.object and option in inside:
+        if safe(option) and option in inside and same_gender(option):
             return option
     for candidate in pool:
-        if candidate.id != fact.id and candidate.object != fact.object:
+        if candidate.id != fact.id and safe(candidate.object) and same_gender(candidate.object):
+            return candidate.object
+    # No same-gender candidate exists in this chapter selection — fall back
+    # to any distinct, non-inflected name rather than fail generation outright.
+    for option in fact.options:
+        if safe(option) and option in inside:
+            return option
+    for candidate in pool:
+        if candidate.id != fact.id and safe(candidate.object):
             return candidate.object
     raise GenerationError("Nu există suficiente fapte distincte pentru un distractor sigur.")
 
@@ -98,17 +131,53 @@ def _completion_stem(fact: Fact) -> tuple[str, str] | None:
     # Whole-word match only: "Domnul" must not be cut out of "Domnului",
     # which would leave the stem with no correct completion at all.
     hits = list(re.finditer(rf"(?<!\w){re.escape(fact.object)}(?!\w)", fact.statement))
-    if not hits:
-        return None
-    last = hits[-1]
-    prefix, rest = fact.statement[:last.start()], fact.statement[last.end():]
-    sentences = list(re.finditer(r"[.!?]\s+", prefix))
-    if sentences:
-        prefix = prefix[sentences[-1].end():]
-    stem = prefix.strip().rstrip(_TRIM)
-    if not _STEM_MIN_CHARS <= len(stem) <= _STEM_MAX_CHARS:
-        return None
-    return stem + ":", fact.object + rest
+    for hit in reversed(hits):
+        prefix, rest = fact.statement[:hit.start()], fact.statement[hit.end():]
+        # The object must close its own clause — if real words follow it before
+        # the next comma/semicolon/sentence end, a stem cut off there loses the
+        # rest of the clause and stops making sense (e.g. "...pentru că:" when
+        # the verse continues "Domnul o făcuse stearpă"). Try an earlier
+        # occurrence of the same object instead of accepting a dangling stem.
+        punct = re.search(r"[,;:.!?]", rest)
+        clause_tail = rest[:punct.start()] if punct else rest
+        if clause_tail.strip(_TRIM):
+            continue
+        sentences = list(re.finditer(r"[.!?]\s+", prefix))
+        if sentences:
+            prefix = prefix[sentences[-1].end():]
+        stem = prefix.strip().rstrip(_TRIM)
+        if not _STEM_MIN_CHARS <= len(stem) <= _STEM_MAX_CHARS:
+            continue
+        return stem + ":", fact.object + rest
+    return None
+
+
+# Prepositions/genitive markers that put the following name in an oblique
+# role (possessor, direct/indirect object, prepositional complement) instead
+# of the sentence's subject.
+_OBLIQUE_MARKERS = {"lui", "pe", "cu", "din", "la", "în", "de", "pentru", "despre", "asupra", "către", "printre", "peste", "sub", "fără", "ca"}
+
+
+def _safe_to_swap(sentence: str, obj: str) -> bool:
+    """True only if a bare-name swap of `obj` inside `sentence` stays grammatical.
+
+    A False statement is built by dropping a different name in place of `obj`
+    verbatim — no article or case ending gets added. That only works when
+    `obj` itself sits in a plain, uninflected slot (typically the subject).
+    "Domnului" is the deity's genitive/dative form and has no plain-form
+    stand-in in the name pool, so it's never swappable. A name right after a
+    preposition/genitive marker ("Vrăjmașii Domnului", "Casa lui Eli") is in
+    the same oblique position — swapping in another bare name there drops the
+    case marking the sentence needs, the same way "lui Eli" or "Domnului"
+    would.
+    """
+    if obj == "Domnului":
+        return False
+    hit = re.search(rf"(?<!\w){re.escape(obj)}(?!\w)", sentence)
+    if not hit:
+        return True
+    lead = sentence[:hit.start()].rstrip().lower()
+    return not any(lead.endswith(f" {marker}") or lead == marker for marker in _OBLIQUE_MARKERS)
 
 
 def _name_predicate(fact: Fact) -> str | None:
@@ -117,12 +186,32 @@ def _name_predicate(fact: Fact) -> str | None:
         hit = re.search(rf"(?<!\w){re.escape(fact.object)}(?!\w)", sentence)
         if not hit:
             continue
-        predicate = sentence[hit.end():].strip(_TRIM)
+        # A name right after a preposition/genitive marker is an oblique
+        # object, not the sentence's subject — e.g. "Fiii lui Eli erau niște
+        # oameni răi" is about his sons, not Eli, and "...acelora din Israel
+        # care veneau la Silo" describes "acelora" (those people), not
+        # Israel. Pairing the name with what follows would misattribute
+        # a predicate that actually belongs to a different subject.
+        lead = sentence[:hit.start()].rstrip().lower()
+        if any(lead.endswith(f" {marker}") or lead == marker for marker in _OBLIQUE_MARKERS):
+            continue
+        # "Domnului" is the genitive/dative case form ("of/to the Lord") — it
+        # is never itself a sentence's grammatical subject, unlike "Domnul".
+        if fact.object == "Domnului":
+            continue
+        # Only the clause right after the name belongs to it; anything past
+        # the next comma/semicolon may already be a different clause.
+        tail = sentence[hit.end():]
+        punct = re.search(r"[,;:.!?]", tail)
+        predicate = (tail[:punct.start()] if punct else tail).strip(_TRIM)
         words = predicate.split()
         if not 2 <= len(words) <= 9:
             continue
-        # A clean predicate carries no internal punctuation of its own.
-        if not _clean_member(predicate):
+        # If the name sits after its verb ("se suia Ana la Casa Domnului"),
+        # what follows is the verb's own complement, not a fresh predicate
+        # about the name — a real predicate opens with a verb, not another
+        # preposition continuing the earlier phrase.
+        if words[0].lower() in _OBLIQUE_MARKERS:
             continue
         # The name must not reappear, or the association gives itself away.
         if len(predicate) < 10 or _mentions(predicate, fact.object):
@@ -136,6 +225,28 @@ def _name_predicate(fact: Fact) -> str | None:
 # same kind, never beside a full clause such as "El smerește".
 _SUBORDINATE = {"ce", "cum", "cine", "unde", "când", "care", "cui", "dacă", "că", "să", "ca"}
 _LINKERS = {"și", "sau", "dar", "iar"}
+
+
+def _wh_question(fact: Fact) -> tuple[str, str] | None:
+    """Section II's other reference shape: „Cine a zis ...?" answered by a name.
+
+    The colon-completion shape (`_completion_stem`) only fits verses whose answer
+    word happens to close its own clause, which is a minority of them. The
+    reference tests mix that shape with plain wh-questions — "Cine a zis despre
+    Isus: «Eu nu găsesc nicio vină în El»?" — which impose no such constraint,
+    so most verses naming a person can carry one.
+    """
+    # Only people answer „Cine?"; a place would need „Unde?"/„În ce localitate?"
+    # and a thing „Ce?", so those objects are left to the completion shape.
+    if fact.object not in _PERSONAL:
+        return None
+    # `_name_predicate` already verifies the name is the clause's subject rather
+    # than a possessor or prepositional object, which is exactly the condition
+    # for „Cine <predicate>?" to be asking about the right person.
+    predicate = _name_predicate(fact)
+    if not predicate:
+        return None
+    return f"Cine {predicate}?", predicate
 
 
 def _clean_member(value: str) -> bool:
@@ -158,6 +269,12 @@ def _register(value: str) -> str:
     return "plain"
 
 
+# Common openers of a Romanian finite/compound verb form — "a luat", "au
+# zis", "s-a suit" — versus a noun phrase, which opens with an article,
+# adjective, or noun instead.
+_VERB_OPENERS = {"a", "au", "am", "ai", "este", "sunt", "era", "erau", "va", "vor", "s-a", "l-a", "le-a", "i-a", "ne-a", "v-a", "s-au", "le-au"}
+
+
 def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
     """Finds the coordinated list behind the reference's multi-answer items."""
     for sentence in _sentences(fact.statement):
@@ -176,11 +293,22 @@ def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
         members = [mid, tail]
         head = " ".join(head_words[:-size])
         # "a, b si c": a comma right before the second member marks a third one.
+        # There's no punctuation between the verb that introduces the list and
+        # this first member ("...și a luat trei tauri, o efă de făină..."), so
+        # its word count can't be read off the same way `mid`/`tail` were —
+        # guessing `size` words back can just as easily grab the verb itself
+        # ("a luat trei tauri" instead of "trei tauri"). Reject that guess
+        # outright when it starts with a common finite-verb/auxiliary opener;
+        # a real noun-phrase member never does, and leaving the ambiguous
+        # word(s) in the stem instead is always grammatically safe.
         if head.rstrip().endswith(","):
             earlier = head.rstrip().rstrip(",").split()
             if len(earlier) >= size + 4:
                 first = " ".join(earlier[-size:]).strip(_TRIM)
-                if _clean_member(first) and 2 <= len(first.split()) <= 8 and len(first) >= 6:
+                opener = first.split()[0].lower() if first.split() else ""
+                if opener in _VERB_OPENERS:
+                    pass
+                elif _clean_member(first) and 2 <= len(first.split()) <= 8 and len(first) >= 6:
                     members.insert(0, first)
                     head = " ".join(earlier[:-size])
         stem = head.strip(_TRIM)
@@ -239,10 +367,13 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
             if add(fact, stem, [*correct_values, *picks], correct_values):
                 break
     # A verse that merely names a person still makes a sound single-answer item.
+    # Same fallback order as Section II: the colon-completion shape needs the
+    # answer to close its own clause, so a „Cine ...?" question covers most of
+    # what it can't.
     for fact in pool:
         if len(multis) == 3:
             break
-        if fact.id in used or not (built := _completion_stem(fact)):
+        if fact.id in used or not (built := _completion_stem(fact) or _wh_question(fact)):
             continue
         stem, segment = built
         distractors = [f.object for f in facts if f.object != fact.object and not _mentions(segment, f.object) and not _inflection(f.object, [fact.object])]
@@ -293,7 +424,10 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     for fact in pool:
         if len(singles) == 10:
             break
-        if fact.id in used or not (built := _completion_stem(fact)):
+        # Either reference shape works here: a stem broken off at a colon, or a
+        # „Cine ...?" question. The colon shape is tried first because it needs
+        # the answer word to close its clause and so fits far fewer verses.
+        if fact.id in used or not (built := _completion_stem(fact) or _wh_question(fact)):
             continue
         stem, segment = built
         # A distractor present in the answer segment could also complete the stem,
@@ -338,15 +472,31 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     matching = _section_iii(pool, used, rng)
     singles = _section_ii(pool, facts, used, rng)
 
-    false_pool = [fact for fact in pool if fact.id not in used and _concise(fact, True)]
+    # Only a False statement has a name swapped into it, so only false_pool is
+    # constrained by _safe_to_swap; a True statement is quoted verbatim and any
+    # concise verse will do. Applying the swap filter to both would discard
+    # perfectly good True candidates for a rewrite they never undergo.
+    false_pool = [fact for fact in pool if fact.id not in used and (stmt := _concise(fact, True)) and _safe_to_swap(stmt, fact.object)]
     true_pool = [fact for fact in pool if fact.id not in used and _concise(fact, False)]
+    # The pools overlap, and false_pool is the scarcer of the two. Spending a
+    # shared verse on a True item can therefore starve the False branch while
+    # True-only verses sit unused, so the True branch takes the verses
+    # false_pool also wants last.
+    false_ids = {fact.id for fact in false_pool}
     tf: list[TrueFalseQuestion] = []
     for index in range(1, 11):
         is_true = index % 2 == 1
         source_pool = true_pool if is_true else false_pool
-        fact = next((item for item in source_pool if item.id not in used), None)
+        available = [item for item in source_pool if item.id not in used]
+        if is_true:
+            available.sort(key=lambda item: item.id in false_ids)
+        fact = next(iter(available), None)
         if fact is None:
-            fact = next((item for item in false_pool + true_pool if item.id not in used), None)
+            # Falling back across branches must respect the same constraint: a
+            # verse with no swappable name cannot carry a False statement.
+            spare = true_pool if is_true else false_pool
+            other = false_pool if is_true else true_pool
+            fact = next((item for item in spare + other if item.id not in used and (is_true or item.id in false_ids)), None)
         if fact is None:
             raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
         used.add(fact.id)

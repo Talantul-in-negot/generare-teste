@@ -20,7 +20,15 @@ def _corpus(path):
     for number in range(1, 31):
         chapter = 1 if number % 2 else 2
         verse = (number + 1) // 2
-        text = f"În ziua aceea, Personajul {number} s-a suit la casa Domnului și a adus lucrul {number} înaintea preotului din cetatea {number}."
+        # Alternate two shapes: odd numbers trail the object with a predicate
+        # (what Section III's name-to-predicate matching needs), even numbers
+        # end the sentence right on the object (what Section II/IV's
+        # fill-in-the-blank completion needs — the object must close its own
+        # clause, or the stem left after cutting it out reads as unfinished).
+        if number % 2:
+            text = f"În ziua aceea, Personajul {number} s-a suit la casa Domnului și a adus lucrul {number} înaintea preotului din cetatea {number}."
+        else:
+            text = f"În ziua aceea, Personajul {number} s-a suit la casa Domnului și a adus lucrul {number}."
         chapters[str(chapter)][str(verse)] = text
         facts.append({"id": f"fact-{number}", "statement": text, "subject": f"Personajul {number}", "predicate": "a făcut", "object": f"lucrul {number}", "evidence": {"book": "1 Samuel", "chapter": chapter, "verse_start": verse, "text": text}})
     path.write_text(json.dumps({"translation": "Synthetic test corpus", "books": {"1 Samuel": chapters}, "facts": facts}), encoding="utf-8")
@@ -30,7 +38,16 @@ class RealCorpusSectionIVTests(unittest.TestCase):
     """The real corpus is what actually has multi-member coordinated lists;
     the synthetic fixture above is too uniform to exercise that shape."""
 
-    def test_spans_one_two_and_three_correct_answers(self):
+    def test_spans_a_mix_of_correct_answer_counts(self):
+        # `_enumeration`'s three-member case can only place a list item ahead of
+        # `mid`/`tail` when a genuine word-count boundary is findable; when the
+        # verb that introduces the list is glued to it with no delimiter (as in
+        # 1 Samuel 1:24, "...și a luat trei tauri, o efă de făină..."), guessing
+        # a fixed word count risks grabbing the verb into the "member" instead
+        # of leaving it in the stem. `_enumeration` now declines that guess
+        # rather than emit a grammatically broken option, so a 3-correct item
+        # isn't guaranteed for every chapter range — only that real, clean
+        # lists still produce more than one shape of item.
         from src.biblical_tests.selection import parse_selection
         repo = BibleRepository(Path("data"))
         selection = parse_selection("1 Samuel 1-4")
@@ -40,7 +57,8 @@ class RealCorpusSectionIVTests(unittest.TestCase):
             {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}, 777, 1,
         )
         counts = sorted(len(q.correct) for q in test.section_iv)
-        self.assertEqual(counts, [1, 2, 3])
+        self.assertTrue(all(1 <= count <= 3 for count in counts), counts)
+        self.assertGreater(len(set(counts)), 1, counts)
 
     def test_distractors_match_the_correct_answers_register(self):
         # A distractor pulled from an unrelated verse must open the same way
