@@ -30,7 +30,12 @@ const TestTracker = (() => {
       const bodyText = await response.text();
       let message = `HTTP ${response.status}`;
       try { message = JSON.parse(bodyText).message || JSON.parse(bodyText).hint || message; } catch { message = bodyText || message; }
-      throw new Error(message);
+      const error = new Error(message);
+      // O cerere care nu se va rezolva niciodată (schema/formă veche, ex. după o
+      // migrare de nume de parametru) nu trebuie să blocheze coada offline la
+      // infinit — o marcăm ca definitivă ca s-o putem elimina, nu doar reîncerca.
+      error.permanent = response.status === 404 || /Could not find the function/i.test(message);
+      throw error;
     }
     if (response.status === 204) return null;
     const text = await response.text();
@@ -54,7 +59,10 @@ const TestTracker = (() => {
         try {
           await rpc('talant_record_test_attempt', queue[0]);
           writeQueue(queue.slice(1));
-        } catch (error) { lastError = error; return false; }
+        } catch (error) {
+          if (error.permanent) { writeQueue(queue.slice(1)); continue; }
+          lastError = error; return false;
+        }
       }
     })().finally(() => { flushing = null; });
     return flushing;
