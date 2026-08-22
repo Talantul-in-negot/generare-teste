@@ -126,6 +126,9 @@ def _tf_item(index: int, q, answer_key: bool, styles: dict):
         ("LEFTPADDING", (3, 0), (3, 0), 3),  # small gap so the statement text isn't glued to the A/F box wall
         ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ("LINEBELOW", (1, 0), (-1, 0), 0.75, colors.black),
+        # Also drawn above: on any page but the first item's, this is the item's only top
+        # border (a page break lands here before the previous item's own LINEBELOW would show).
+        ("LINEABOVE", (1, 0), (-1, 0), 0.75, colors.black),
     ]))
     return table
 
@@ -143,14 +146,21 @@ def _choice_item(index: int, q, answer_key: bool, styles: dict, wrap: bool = Tru
         ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 1), ("RIGHTPADDING", (0, 0), (-1, -1), 1),
         ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
         ("LINEBELOW", (1, -1), (-1, -1), 0.75, colors.black),
+        # Also drawn above: if a page break lands right before this item, it would
+        # otherwise start with no top border at all (the previous item's own line stays
+        # behind on the prior page).
+        ("LINEABOVE", (1, 0), (-1, 0), 0.75, colors.black),
     ]))
-    # ReportLab cannot size a KeepTogether nested inside another KeepTogether: the
-    # outer one treats the inner one's height as unbounded and always page-breaks,
-    # wasting whatever space was left. Callers that need to keep this item together
-    # with something else (the IV section header) take the raw flowable instead.
+    # A bare Table can split its rows across a page break, scattering a question's answer
+    # options onto the next page — KeepTogether keeps the whole question+options block intact.
+    # ReportLab cannot size a KeepTogether nested inside another KeepTogether though: the
+    # outer one treats the inner one's height as unbounded and always page-breaks, wasting
+    # whatever space was left. Callers that need to keep this item together with something
+    # else (the IV section header) take the raw flowable instead and let the outer
+    # KeepTogether (built by the caller) cover it.
     if not wrap:
         return [table]
-    return table
+    return KeepTogether([table])
 
 
 def _matching(q, answer_key: bool, styles: dict):
