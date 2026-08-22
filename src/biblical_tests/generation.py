@@ -101,35 +101,71 @@ def _gender(name: str) -> str:
     return "f" if name in _FEMININE_NAMES else "m"
 
 
-def _wrong_object(fact: Fact, pool: list[Fact]) -> str:
+# "Israel"/"Filistenii" are plural/collective nouns living in PLACES, not the
+# singular place names beside them — swapping one in where a singular clitic
+# expects it ("l-au luat pe Dagon" -> "l-au luat pe Filistenii") mismatches
+# in number, the same way DEITY terms mismatch in declension (see
+# `_swap_class`).
+_COLLECTIVE = {"Israel", "Filistenii"}
+
+
+def _swap_class(name: str) -> str:
+    """Deity and collective/plural terms decline or agree irregularly —
+    "Domnul" self-inflects to "Domnului" rather than taking "lui" the way an
+    ordinary indeclinable name does, and "Filistenii"/"Israel" are plural
+    where the clitic pronoun/marker beside an ordinary name usually assumes
+    singular. Restricting a swap to the same class keeps whatever marker or
+    clitic the sentence already has correct, without needing to detect and
+    rewrite it."""
+    if name in _DEITY:
+        return "deity"
+    if name in _COLLECTIVE:
+        return "collective"
+    return "ordinary"
+
+
+# "Domnul" and "Filistenii" each carry their own built-in definite-article
+# ending ("-ul", "-ii") — unlike an ordinary indeclinable name, they clash
+# when dropped in right after "lui" or a demonstrative, which already
+# supplies definiteness of its own ("lui Domnul", "acestui Domnul sfânt",
+# "lui Filistenii" all double up on it).
+_ARTICLED = {"Domnul", "Filistenii"}
+_DEFINITE_LEAD = {"lui", "acest", "acesta", "această", "aceasta", "acestui", "acestei", "aceste", "acești", "acestor"}
+
+
+def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "") -> str:
     # Only names the selected chapters actually use, so a 2 Samuel test never
     # swaps in a character who appears nowhere in it.
     inside = {candidate.object for candidate in pool}
     # A swap that changes grammatical gender breaks whatever adjective/verb
     # agreed with the original name (e.g. "Eli era foarte bătrân" swapped to
     # "Ana era foarte bătrân" — "bătrân" needed to become "bătrână"). Picking
-    # a same-gender replacement keeps the sentence grammatical without having
-    # to detect and rewrite the agreeing word at all.
+    # a same-gender, same-class replacement keeps the sentence grammatical
+    # without having to detect and rewrite the agreeing word at all.
     # "Domnul" vs "Domnului" are the same entity in different grammatical
     # cases, not a distinct wrong answer — swapping one in for the other
     # both fails to change the claim and breaks whatever case the sentence
     # needed ("Vrăjmașii Domnului" needs the genitive, not "Vrăjmașii Domnul").
-    safe = lambda value: value != fact.object and not _inflection(value, [fact.object])
+    lead_word = lead.rstrip().split()[-1].lower() if lead.split() else ""
+    double_definite = lead_word in _DEFINITE_LEAD
+    # "Domnului" is never a safe drop-in either direction: same reasoning as
+    # _safe_to_swap banning it as the *source* — it's a case-inflected form,
+    # not a name, so it only fits back into the exact genitive/dative slot
+    # it came from, which isn't guaranteed here.
+    safe = lambda value: value != fact.object and value != "Domnului" and not _inflection(value, [fact.object]) and not (double_definite and value in _ARTICLED)
     same_gender = lambda value: _gender(value) == _gender(fact.object)
-    for option in fact.options:
-        if safe(option) and option in inside and same_gender(option):
-            return option
-    for candidate in pool:
-        if candidate.id != fact.id and safe(candidate.object) and same_gender(candidate.object):
-            return candidate.object
-    # No same-gender candidate exists in this chapter selection — fall back
-    # to any distinct, non-inflected name rather than fail generation outright.
-    for option in fact.options:
-        if safe(option) and option in inside:
-            return option
-    for candidate in pool:
-        if candidate.id != fact.id and safe(candidate.object):
-            return candidate.object
+    same_class = lambda value: _swap_class(value) == _swap_class(fact.object)
+    # Tried in order from safest to riskiest: matching both class and gender
+    # first, then relaxing gender, then relaxing class, and only using a
+    # mismatched fallback if this chapter selection genuinely has nothing
+    # better — rather than fail generation outright.
+    for match in (lambda v: same_class(v) and same_gender(v), same_class, same_gender, lambda v: True):
+        for option in fact.options:
+            if safe(option) and option in inside and match(option):
+                return option
+        for candidate in pool:
+            if candidate.id != fact.id and safe(candidate.object) and match(candidate.object):
+                return candidate.object
     raise GenerationError("Nu există suficiente fapte distincte pentru un distractor sigur.")
 
 
@@ -183,21 +219,23 @@ def _safe_to_swap(sentence: str, obj: str) -> bool:
 
     A False statement is built by dropping a different name in place of `obj`
     verbatim — no article or case ending gets added. That only works when
-    `obj` itself sits in a plain, uninflected slot (typically the subject).
-    "Domnului" is the deity's genitive/dative form and has no plain-form
-    stand-in in the name pool, so it's never swappable. A name right after a
-    preposition/genitive marker ("Vrăjmașii Domnului", "Casa lui Eli") is in
-    the same oblique position — swapping in another bare name there drops the
-    case marking the sentence needs, the same way "lui Eli" or "Domnului"
-    would.
+    `obj` itself isn't a word that carries its own case inflection.
+    "Domnului" is the deity's genitive/dative *form* — the word itself
+    changes, not a marker beside it — and has no plain-form stand-in in the
+    name pool, so it's never swappable.
+
+    A name that merely sits after an invariant preposition or "lui" ("Casa
+    lui Eli", "pe Dagon", "la Ecron") is fine to swap: the marker word stays
+    exactly as written regardless of which name follows it — unlike
+    "Domnului", nothing about the marker itself needs to change. The
+    remaining risk there is gender/number agreement with an earlier clitic
+    ("l-au luat pe Dagon" needs the singular masculine "l-", which
+    "Filistenii" — plural — would break) and declension class ("lui Domnul"
+    is wrong because "Domnul" self-inflects to "Domnului" instead of taking
+    "lui" the way an ordinary name does). `_wrong_object` already guards
+    both by preferring a same-class, same-gender replacement first.
     """
-    if obj == "Domnului":
-        return False
-    hit = re.search(rf"(?<!\w){re.escape(obj)}(?!\w)", sentence)
-    if not hit:
-        return True
-    lead = sentence[:hit.start()].rstrip().lower()
-    return not any(lead.endswith(f" {marker}") or lead == marker for marker in _OBLIQUE_MARKERS)
+    return obj != "Domnului"
 
 
 def _name_predicate(fact: Fact) -> str | None:
@@ -565,6 +603,7 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
 
 
 def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, scoring: dict[str, int], seed: int, version: int) -> TestDefinition:
+    all_facts = facts
     facts = [fact for fact in facts if fact.quality]
     if len(facts) < 20:
         raise GenerationError("Corpusul selectat necesită cel puțin 20 de facts verificate pentru un test complet.")
@@ -607,33 +646,48 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     # concise verse will do. Applying the swap filter to both would discard
     # perfectly good True candidates for a rewrite they never undergo.
     false_pool = [fact for fact in pool if fact.id not in used and (stmt := _concise(fact, True)) and _safe_to_swap(stmt, fact.object)]
-    true_pool = [fact for fact in pool if fact.id not in used and _concise(fact, False)]
-    # The pools overlap, and false_pool is the scarcer of the two. Spending a
-    # shared verse on a True item can therefore starve the False branch while
-    # True-only verses sit unused, so the True branch takes the verses
-    # false_pool also wants last.
-    false_ids = {fact.id for fact in false_pool}
+    # A True statement needs no recognised object at all — it's quoted as-is —
+    # so restricting it to `quality`-filtered facts (needed by every other
+    # section) excludes verses for no reason but happening to lack a known
+    # name. Falls after the quality-filtered candidates so it's only reached
+    # when they don't cover the need on their own.
+    non_quality_true = [fact for fact in all_facts if not fact.quality and fact.id not in used and _concise(fact, False)]
+    true_pool = [fact for fact in pool if fact.id not in used and _concise(fact, False)] + non_quality_true
+    # _concise(fact, False) (True's requirement) is strictly weaker than
+    # _concise(fact, True) + _safe_to_swap (False's requirement) — every
+    # false_pool fact is also a true_pool fact, so on a small corpus
+    # false_pool can be a *subset* of true_pool, not just an overlapping set.
+    # Interleaving by index (True always goes first, at odd indices) then
+    # lets True claim shared facts before False gets a turn, no matter how
+    # the sort inside one branch is biased — reserving all 5 of the scarcer
+    # False picks *before* any True pick is chosen is the only way to
+    # guarantee True doesn't starve it.
+    false_facts: list[Fact] = []
+    for fact in false_pool:
+        if len(false_facts) == 5:
+            break
+        if fact.id not in used:
+            false_facts.append(fact)
+            used.add(fact.id)
+    if len(false_facts) != 5:
+        raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
+    true_facts: list[Fact] = []
+    for fact in true_pool:
+        if len(true_facts) == 5:
+            break
+        if fact.id not in used:
+            true_facts.append(fact)
+            used.add(fact.id)
+    if len(true_facts) != 5:
+        raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
     tf: list[TrueFalseQuestion] = []
     for index in range(1, 11):
         is_true = index % 2 == 1
-        source_pool = true_pool if is_true else false_pool
-        available = [item for item in source_pool if item.id not in used]
-        if is_true:
-            available.sort(key=lambda item: item.id in false_ids)
-        fact = next(iter(available), None)
-        if fact is None:
-            # Falling back across branches must respect the same constraint: a
-            # verse with no swappable name cannot carry a False statement.
-            spare = true_pool if is_true else false_pool
-            other = false_pool if is_true else true_pool
-            fact = next((item for item in spare + other if item.id not in used and (is_true or item.id in false_ids)), None)
-        if fact is None:
-            raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
-        used.add(fact.id)
+        fact = (true_facts if is_true else false_facts).pop(0)
         statement = _concise(fact, not is_true) or _concise(fact, False)
         if not is_true:
             before, _, after = statement.rpartition(fact.object)
-            statement = before + _wrong_object(fact, facts) + after
+            statement = before + _wrong_object(fact, facts, lead=before) + after
         tf.append(TrueFalseQuestion(f"I-{index}", statement, "A" if is_true else "F", fact.evidence, fact.id))
 
     return TestDefinition(source, seed, version, contest, scoring, section_i=tf, section_ii=singles, section_iii=matching, section_iv=multis)
