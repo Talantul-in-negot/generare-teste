@@ -116,7 +116,7 @@ def _tf_item(index: int, q, answer_key: bool, styles: dict):
         [["", _p(f"{index}.", styles["body"]), _p(answer, answer_style), _p(q.statement, styles["body"]), _reference(q.evidence, styles)]],
         colWidths=[SECTION_NUMERAL_WIDTH, 7*mm, 8*mm, 133*mm - SECTION_NUMERAL_WIDTH, 42*mm],
     )
-    table.setStyle(TableStyle([
+    style_commands = [
         ("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (2, 0), "CENTER"),
         # Only the side walls are drawn here; the top/bottom walls are the shared
         # LINEBELOW separators above and below each row, so they coincide exactly
@@ -126,10 +126,14 @@ def _tf_item(index: int, q, answer_key: bool, styles: dict):
         ("LEFTPADDING", (3, 0), (3, 0), 3),  # small gap so the statement text isn't glued to the A/F box wall
         ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ("LINEBELOW", (1, 0), (-1, 0), 0.75, colors.black),
+    ]
+    if index > 1:
         # Also drawn above: on any page but the first item's, this is the item's only top
         # border (a page break lands here before the previous item's own LINEBELOW would show).
-        ("LINEABOVE", (1, 0), (-1, 0), 0.75, colors.black),
-    ]))
+        # The first item skips it — the section header already draws that same line right
+        # above it, and a page break can never land between a header and its first item.
+        style_commands.append(("LINEABOVE", (1, 0), (-1, 0), 0.75, colors.black))
+    table.setStyle(TableStyle(style_commands))
     return table
 
 
@@ -142,15 +146,18 @@ def _choice_item(index: int, q, answer_key: bool, styles: dict, wrap: bool = Tru
         escaped = html.escape(q.options[letter])
         rows.append(["", "", Paragraph(f"{letter}&nbsp;&nbsp;&nbsp;&nbsp;{escaped}", style), ""])
     table = Table(rows, colWidths=[SECTION_NUMERAL_WIDTH, 10*mm, 138*mm - SECTION_NUMERAL_WIDTH, 42*mm])
-    table.setStyle(TableStyle([
+    style_commands = [
         ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 1), ("RIGHTPADDING", (0, 0), (-1, -1), 1),
         ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
         ("LINEBELOW", (1, -1), (-1, -1), 0.75, colors.black),
+    ]
+    if index > 1:
         # Also drawn above: if a page break lands right before this item, it would
         # otherwise start with no top border at all (the previous item's own line stays
-        # behind on the prior page).
-        ("LINEABOVE", (1, 0), (-1, 0), 0.75, colors.black),
-    ]))
+        # behind on the prior page). The first item skips it — the section header
+        # already draws that same line right above it.
+        style_commands.append(("LINEABOVE", (1, 0), (-1, 0), 0.75, colors.black))
+    table.setStyle(TableStyle(style_commands))
     # A bare Table can split its rows across a page break, scattering a question's answer
     # options onto the next page — KeepTogether keeps the whole question+options block intact.
     # ReportLab cannot size a KeepTogether nested inside another KeepTogether though: the
