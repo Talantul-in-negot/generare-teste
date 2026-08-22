@@ -10,8 +10,8 @@ from .models import Evidence, Fact
 class BibleRepository:
     """A local, auditable Bible corpus. It never downloads a translation."""
 
-    PEOPLE = {"Ana", "Penina", "Elcana", "Eli", "Hofni", "Fineas", "Samuel", "David", "Saul", "Ionatan", "Abner", "Ioab", "Natan", "Absalom", "Mical", "Batșeba", "Goliat", "Isai", "Chis", "Ahimelec"}
-    PLACES = {"Silo", "Rama", "Efraim", "Israel", "Filisteni", "Ghilboa", "Ierusalim", "Hebron", "Betleem", "Gat", "Rama", "Mițpa", "Iordan", "Iuda"}
+    PEOPLE = {"Ana", "Penina", "Elcana", "Eli", "Hofni", "Fineas", "Samuel", "David", "Saul", "Ionatan", "Abner", "Ioab", "Natan", "Absalom", "Mical", "Batșeba", "Goliat", "Isai", "Chis", "Ahimelec", "Dagon", "Iosua"}
+    PLACES = {"Silo", "Rama", "Efraim", "Israel", "Filisteni", "Filistenii", "Ghilboa", "Ierusalim", "Hebron", "Betleem", "Gat", "Rama", "Mițpa", "Iordan", "Iuda", "Ecron", "Asdod", "Gaza", "Ascalon"}
     DEITY = {"Domnul", "Domnului", "Dumnezeu", "Dumnezeul"}
     QUALITY_TERMS = PEOPLE | PLACES | DEITY
 

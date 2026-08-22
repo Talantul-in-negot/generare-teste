@@ -279,3 +279,49 @@ and is much harder to diagnose from the error alone.
 a safety net (`len(set(values)) != 3`) so it self-heals by trying the next candidate rather than
 failing outright — left alone rather than touched speculatively, since it wasn't the reported
 failure and duplicate-caused skips there just cost a little efficiency, not correctness.
+
+## L12 — Section III's name-vocabulary gap and second shape (1 Samuel 5-6) (2026-08-22)
+
+Closed the Section III gap flagged in [[L10]] for "1 Samuel 5,6" specifically. Two separate causes
+stacked:
+
+1. **Vocabulary, not logic.** `BibleRepository.PEOPLE`/`PLACES` only covered chapters 1-4's cast —
+   real, repeated proper nouns in 5-6 (Dagon, Ecron, Asdod, Gaza, Ascalon, Iosua, "Filistenii") were
+   invisible to `_extract_target`, so those chapters only had 3 distinct recognised names total
+   (Domnul/Domnului merged, Israel, Dumnezeu) — structurally impossible to reach 5 no matter how
+   good the matching logic is. Added the confirmed names actually present (verified by grepping
+   `data/1samuel-reference-text.md` directly, not guessed). A full-book vocabulary audit turned up
+   ~200 more candidate words, but almost all were common words, not names (`Astfel`, `Cine`, `Ea`,
+   `Du`, …) — that curation is a separate, much bigger task, not done here.
+
+2. **Missing second shape.** Even with the wider vocabulary, `_name_predicate` alone tops out at 2
+   rows for 5-6 — most of its verses use "Filistenii"/"El" as subject, not a name. `_clause_halves`
+   (new) splits a short, clean sub-clause in half at the point nearest the middle, matching the
+   reference's other Section III shape (`8_9`/`10_11`/`4_5`/`6_7` baremuri: "bogăția aduce" →
+   "mare număr de prieteni"). Two things made the first version produce nonsense before it was
+   usable: (a) requiring the *whole sentence* clean/short — 1 Samuel's narrative prose runs long,
+   comma-heavy sentences unlike the reference's terse poetic verses, so almost nothing passed;
+   switched to trying each comma/semicolon-delimited sub-clause instead, the same move
+   `_completion_stem` already makes. (b) nothing stopped the split landing on a bound clitic
+   ("care se" / "sculaseră…") or a bare determiner+numeral with its noun stranded on the other side
+   ("Cei cinci" / "domnitori ai filistenilor") — added a short-word-at-the-seam reject (`len <= 2`)
+   and a `_DETERMINERS` blocklist alongside the existing `_OBLIQUE_MARKERS`/`_SUBORDINATE` checks.
+
+**Rule:** A "no candidates" error from a heuristic extractor can have a vocabulary-level cause
+completely separate from the extraction logic itself — check what proper nouns the raw text
+actually contains (`re.findall(r'\b[A-ZĂÂÎȘȚ][a-zăâîșț]+\b', text)`) against the known-names set
+before assuming the matching/splitting logic needs work.
+
+**Also:** adding a second, looser shape to a section changes the "most constrained first" claiming
+order from [[L06]]'s comment in `build_test` — `_clause_halves` has no named-subject requirement,
+so it's looser than Section II's shapes and was silently outcompeting Section II for verses when
+both ran before it. Split `_section_iii` into `_section_iii_named` (scarce, runs where `_section_iii`
+used to, before Section II) and `_section_iii_fill` (loose fallback, now runs *after* Section II)
+so the claiming order matches actual scarcity, not just which section number is smaller.
+
+**Still open:** "1 Samuel 5,6" now clears Section III but fails Section II instead — only 8 of 28
+quality facts satisfy `_completion_stem`/`_wh_question` there (need 10), and this is independent of
+Section III's claims (checked with only 5 facts used before Section II runs). A `_wh_question`
+analogue for places ("Unde…?") might help, since several PLACES were just added to the vocabulary
+this session — not attempted here; flagged for the next session rather than expanding scope further
+in one sitting.

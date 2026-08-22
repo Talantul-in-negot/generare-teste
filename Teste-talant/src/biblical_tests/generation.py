@@ -267,7 +267,7 @@ def _wh_question(fact: Fact) -> tuple[str, str] | None:
 
 
 def _clean_member(value: str) -> bool:
-    if any(mark in value for mark in ('.', ',', ';', ':', '"', '„', '”', '«', '»', '!', '?')):
+    if any(mark in value for mark in ('.', ',', ';', ':', '"', '„', '”', '«', '»', '!', '?', '(', ')')):
         return False
     first_word = value.split()[0].lower() if value.split() else ""
     return first_word not in _LINKERS
@@ -290,6 +290,63 @@ def _register(value: str) -> str:
 # zis", "s-a suit" — versus a noun phrase, which opens with an article,
 # adjective, or noun instead.
 _VERB_OPENERS = {"a", "au", "am", "ai", "este", "sunt", "era", "erau", "va", "vor", "s-a", "l-a", "le-a", "i-a", "ne-a", "v-a", "s-au", "le-au"}
+
+
+# Determiners/quantifiers/numerals that need a following noun to mean
+# anything — splitting right after one leaves a dangling "Cei cinci" with its
+# head noun ("domnitori") stranded on the other side.
+_DETERMINERS = {"cei", "cele", "niște", "toți", "toate", "fiecare", "alt", "altă", "alți", "alte", "doi", "două", "trei", "patru", "cinci", "șase", "șapte", "opt", "nouă", "zece"}
+
+
+def _clause_halves(fact: Fact) -> tuple[str, str] | None:
+    """Section III's other reference shape: a short clause split into two
+    matched halves, as in the 8_9/10_11 baremuri ("bogăția aduce" -> "mare
+    număr de prieteni"), rather than `_name_predicate`'s name -> attribute.
+
+    `_name_predicate` only fits verses where a *recognised* name is the
+    clause's subject, which is scarce on chapters that mostly use common
+    nouns and pronouns as subjects ("Filistenii au adus", "El a lovit"). This
+    tries every split point of a short, clean clause and keeps the one
+    closest to the middle whose right half doesn't open on a dangling
+    conjunction/preposition and whose left half doesn't end on one either —
+    the same signals already used to keep `_enumeration`'s guesses honest.
+
+    The reference's own examples are terse poetic verses (Psalms, Proverbs);
+    1 Samuel's narrative prose runs long, comma-heavy sentences instead, so a
+    whole-sentence length/cleanliness check almost never passes here. Working
+    clause-by-clause (split on comma/semicolon, same as `_completion_stem`'s
+    `clause_tail`) finds the same short, clean fragments those long sentences
+    are actually built from.
+    """
+    for sentence in _sentences(fact.statement):
+        for raw_clause in re.split(r"[,;]\s*", sentence):
+            clause = raw_clause.strip(_TRIM)
+            if not clause or not _clean_member(clause) or not 12 <= len(clause) <= 70:
+                continue
+            words = clause.split()
+            if not 3 <= len(words) <= 10:
+                continue
+            midpoint = len(words) / 2
+            for split in sorted(range(1, len(words)), key=lambda i: abs(i - midpoint)):
+                left, right = words[:split], words[split:]
+                if not 1 <= len(left) <= 8 or not 1 <= len(right) <= 8:
+                    continue
+                opener, closer = right[0].lower(), left[-1].lower()
+                if opener in _SUBORDINATE or opener in _OBLIQUE_MARKERS or closer in _OBLIQUE_MARKERS:
+                    continue
+                if opener in _DETERMINERS or closer in _DETERMINERS:
+                    continue
+                # A word this short at the seam is almost always a clitic or
+                # bound particle ("se", "să", "-l", "și") rather than content
+                # — splitting there orphans it from the verb/noun it belongs
+                # to ("care se" / "sculaseră..." instead of a clean pair).
+                if len(opener) <= 2 or len(closer) <= 2:
+                    continue
+                left_text, right_text = " ".join(left), " ".join(right)
+                if len(left_text) < 6 or len(right_text) < 6:
+                    continue
+                return left_text, right_text
+    return None
 
 
 def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
@@ -402,7 +459,12 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     return multis
 
 
-def _section_iii(pool: list[Fact], used: set[str], rng: random.Random) -> MatchingQuestion:
+def _section_iii_named(pool: list[Fact], used: set[str], rng: random.Random) -> list[tuple[Fact, str, str]]:
+    """The scarcer of Section III's two shapes: a recognised name as the
+    clause's subject, paired with its predicate. Claims facts before Section
+    II runs, same as the enumeration shape in Section IV — a name needing to
+    be the clause's *subject* is a tighter constraint than anything Section
+    II's shapes require."""
     rows: list[tuple[Fact, str, str]] = []
     seen: list[str] = []
     # Named characters read best; divine forms are a fallback because "Domnul",
@@ -419,6 +481,27 @@ def _section_iii(pool: list[Fact], used: set[str], rng: random.Random) -> Matchi
                 continue
             rows.append((fact, fact.object, predicate))
             seen.append(fact.object)
+            used.add(fact.id)
+    return rows
+
+
+def _section_iii_fill(pool: list[Fact], used: set[str], rng: random.Random, rows: list[tuple[Fact, str, str]]) -> MatchingQuestion:
+    """Tops `rows` up to 5 with the looser clause-split shape (`_clause_halves`,
+    no named-subject requirement) and builds the matching question. Called
+    only after Section II has already claimed what it needs — this shape is
+    loose enough to otherwise compete with Section II for the same verses."""
+    if len(rows) < 5:
+        seen_lower = {name.lower() for _, name, _ in rows}
+        for fact in pool:
+            if len(rows) == 5:
+                break
+            if fact.id in used or not (halves := _clause_halves(fact)):
+                continue
+            left, right = halves
+            if left.lower() in seen_lower or any(right == other[2] for other in rows):
+                continue
+            rows.append((fact, left, right))
+            seen_lower.add(left.lower())
             used.add(fact.id)
     if len(rows) != 5:
         raise GenerationError("Nu sunt suficiente asocieri distincte pentru Sectiunea III.")
@@ -483,11 +566,15 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
         return result
 
     # The sections are built from the most constrained verse shape to the least:
-    # enumerations are scarce, split clauses less so, and a plain affirmation
-    # can be made from almost any verse.
+    # enumerations are scarce, a named clause-subject less so, Section II's
+    # shapes next, and a plain affirmation can be made from almost any verse.
+    # Section III's other shape (_clause_halves, no named-subject requirement)
+    # is looser than Section II's, so it's deferred until after Section II has
+    # claimed what it needs — otherwise it competes for the same verses.
     multis = _section_iv(pool, facts, used, rng)
-    matching = _section_iii(pool, used, rng)
+    iii_rows = _section_iii_named(pool, used, rng)
     singles = _section_ii(pool, facts, used, rng)
+    matching = _section_iii_fill(pool, used, rng, iii_rows)
 
     # Only a False statement has a name swapped into it, so only false_pool is
     # constrained by _safe_to_swap; a True statement is quoted verbatim and any
