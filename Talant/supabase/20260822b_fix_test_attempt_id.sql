@@ -3,6 +3,8 @@
 -- pentru talant_record_attempt). Rulează după 20260822_talant_test_scoring.sql.
 begin;
 
+drop function if exists public.talant_record_test_attempt(text, uuid, integer, integer, jsonb, timestamptz);
+
 create or replace function public.talant_record_test_attempt(
   quiz_version text,
   p_client_attempt_id uuid,
@@ -30,5 +32,8 @@ begin
   perform public.talant_test_recalculate_own_score(left(coalesce(quiz_version, ''), 40));
 end;
 $$;
+
+revoke all on function public.talant_record_test_attempt(text, uuid, integer, integer, jsonb, timestamptz) from public;
+grant execute on function public.talant_record_test_attempt(text, uuid, integer, integer, jsonb, timestamptz) to authenticated;
 
 commit;
