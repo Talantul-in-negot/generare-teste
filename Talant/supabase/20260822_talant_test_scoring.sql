@@ -61,7 +61,7 @@ $$;
 
 create or replace function public.talant_record_test_attempt(
   quiz_version text,
-  client_attempt_id uuid,
+  p_client_attempt_id uuid,
   total_points integer,
   max_points integer,
   section_scores jsonb,
@@ -79,7 +79,7 @@ begin
   insert into public.talant_test_attempts
     (user_id, user_name, client_attempt_id, quiz_version, total_points, max_points, section_scores, attempted_at)
   values
-    (v_user_id, v_name, client_attempt_id, left(coalesce(quiz_version, ''), 40),
+    (v_user_id, v_name, p_client_attempt_id, left(coalesce(quiz_version, ''), 40),
      total_points, max_points, section_scores, now())
   on conflict (client_attempt_id) do nothing;
 

@@ -40,7 +40,7 @@ const TestTracker = (() => {
   function log(attempt) {
     if (!enabled || !Auth.userId()) return;
     const queue = readQueue();
-    queue.push({ ...attempt, client_attempt_id: attemptId(), attempted_at: new Date().toISOString() });
+    queue.push({ ...attempt, p_client_attempt_id: attemptId(), attempted_at: new Date().toISOString() });
     writeQueue(queue);
   }
 
