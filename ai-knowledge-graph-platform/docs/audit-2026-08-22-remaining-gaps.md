@@ -14,6 +14,7 @@ snapshot, not a new audit pass — see that document and
 | Reliability | Chaos/retry-storm tests, concurrency tests, property-based invariants, failure-exercise harness rewired to actually execute (previously hardcoded `True` with nothing run) |
 | Observability | Real metrics wired to real code paths, alert rules cross-checked against actual metric names, Grafana dashboard, SLO doc |
 | Knowledge representation (partial) | Exact-fidelity RDF round-trip tests, OWL/SHACL interoperability verified against real third-party engines (`owlrl`, `pyshacl`), not just triple-count checks |
+| Testing (item 5, CI gate integration) | Corrected a root-vs-subdirectory search mistake in this same audit: a real, comprehensive CI workflow already exists at the monorepo root and is pushed to `origin/main` — see item 5 below |
 
 ## Still open, and why
 
@@ -53,14 +54,31 @@ verify against would mean trading a measured pass rate for an unmeasured one
 — not an improvement, a gamble. Multi-region/multi-tenant architecture
 documentation is otherwise unwritten.
 
-### 5. Testing — CI gate integration — unverified
+### 5. Testing — CI gate integration — closed (this session)
 
-New tests exist and pass locally (1654 passed, 7 skipped, 0 failed as of the
-last full run), but nothing in this session confirmed whether they are wired
-into the actual CI pipeline that gates merges — no `.github/workflows/` or
-equivalent was inspected. Docker/live tests still are not confirmed part of
-the standard gate. No fuzz/mutation-testing tooling exists beyond the manual,
-one-off mutation checks performed by hand during this session's work.
+Previously marked "unverified" because `.github/workflows/` was inspected
+only inside `ai-knowledge-graph-platform/`, not at the actual git root —
+this is a monorepo (`Generative-AI/`), and GitHub Actions only reads
+workflows from the repository root, not a subdirectory. Correcting that:
+
+`Generative-AI/.github/workflows/ai-knowledge-graph-platform-ci.yml` exists,
+is correctly placed, and is pushed to `origin/main` (added 2026-08-20,
+`e159a41`). It runs unit, integration, load, and e2e (real Neo4j/Redis via
+testcontainers, with a hard failure if e2e silently skips instead of a false
+green), lint, and Terraform/Kubernetes manifest validation, triggered on
+push/PR to `main`/`develop` plus a nightly unattended cron run. Its own
+commit message documents that an earlier copy lived at
+`ai-knowledge-graph-platform/.github/workflows/ci.yml` and never executed —
+not once — because of the same root-vs-subdirectory mistake this audit
+initially repeated.
+
+**Still not verifiable from this environment**: whether GitHub's
+branch-protection rule on `main` actually requires this workflow to pass
+before merge. That's a repo-settings toggle on GitHub, not a file in the
+repo — checking it needs authenticated `gh`/GitHub API access, which this
+session does not have. Fuzz/mutation-testing tooling beyond the manual,
+one-off mutation checks performed by hand during earlier session work is
+still absent.
 
 ## Bottom line
 
@@ -80,6 +98,8 @@ alone unlocks:
 - then safely attempting the aerospace-prompt decoupling with a real
   before/after comparison (item 4).
 
-A separate, lower-cost next step that does **not** need live infrastructure:
-inspect the CI workflow configuration to close item 5 (or at least state its
-real status precisely, instead of "unverified").
+Item 5 (CI gate integration) is now closed as of this session — see above.
+The one loose end left on it, branch-protection enforcement, needs
+authenticated GitHub access (`gh auth login`, or connecting the GitHub MCP
+connector) rather than live infrastructure — a cheap follow-up whenever
+that's available.
