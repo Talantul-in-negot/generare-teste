@@ -255,3 +255,27 @@ good candidates for a rewrite they never undergo. `true_pool` no longer carries 
 cross-branch fallback re-checks it for the False branch only, and because the pools overlap with
 `false_pool` the scarcer one, the True branch now consumes shared verses last so it can't starve
 the False branch.
+
+## L11 — Distractor lists built straight from `facts` need deduping — a small corpus repeats the same names (2026-08-22)
+
+"Nu s-au putut construi trei intrebari verificabile pentru Sectiunea IV" on "1 Samuel 5,6" looked
+like too few candidates, same shape as [[L10]] — it wasn't. There were 11 `_completion_stem`
+candidates, plenty. The fallback built its distractor list as
+`[f.object for f in facts if ...]` with no dedup, and 1 Samuel 5-6 leans hard on a handful of
+repeated deity terms — most facts in that range have `object` in {"Domnul", "Domnului",
+"Dumnezeu", "Israel"}. `distractors[:2]` kept grabbing `["Domnului", "Domnului"]` or `["Dumnezeu",
+"Dumnezeu"]` — the same term twice — which `add()`'s own dedup check (`len({v.lower()...}) != 3`)
+then correctly rejected. Every single fallback candidate failed the same way, which reads
+identically to "not enough distractors" even though there were 9-19 per fact.
+
+**Rule:** Any list built by scanning `facts`/`pool` for candidate values (not already deduped by
+construction, unlike `_enumeration`'s `members` or `_completion_stem`'s single answer) must be
+deduped case-insensitively *before* slicing a fixed count off it — slicing first and letting a
+downstream dedup check reject the whole candidate afterward looks like scarcity, not duplication,
+and is much harder to diagnose from the error alone.
+
+**How to apply:** Added `_dedup()` in `generation.py`, used at the Section IV fallback's
+`distractors` list. `_section_ii`'s equivalent `choices` list already had a per-fact `continue` as
+a safety net (`len(set(values)) != 3`) so it self-heals by trying the next candidate rather than
+failing outright — left alone rather than touched speculatively, since it wasn't the reported
+failure and duplicate-caused skips there just cost a little efficiency, not correctness.
