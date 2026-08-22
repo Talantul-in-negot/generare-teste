@@ -93,7 +93,7 @@ def _tf_item(index: int, q, answer_key: bool, styles: dict):
     return KeepTogether([table, _line()])
 
 
-def _choice_item(index: int, q, answer_key: bool, styles: dict):
+def _choice_item(index: int, q, answer_key: bool, styles: dict, wrap: bool = True):
     evidence = getattr(q, "supporting_evidence", None) or [q.evidence]
     reference = "; ".join(item.reference for item in evidence)
     rows = [[_p(f"{index}.", styles["body"]), _p(q.question, styles["body"]), _p(reference, styles["red"])]]
@@ -103,6 +103,12 @@ def _choice_item(index: int, q, answer_key: bool, styles: dict):
         rows.append(["", _p(content, style), ""])
     table = Table(rows, colWidths=[10*mm, 138*mm, 42*mm])
     table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 1), ("RIGHTPADDING", (0, 0), (-1, -1), 1), ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
+    # ReportLab cannot size a KeepTogether nested inside another KeepTogether: the
+    # outer one treats the inner one's height as unbounded and always page-breaks,
+    # wasting whatever space was left. Callers that need to keep this item together
+    # with something else (the IV section header) take the raw flowables instead.
+    if not wrap:
+        return [table, _line()]
     return KeepTogether([table, _line()])
 
 
@@ -132,9 +138,9 @@ def render_pdf(test: TestDefinition, path: str | Path, answer_key: bool = False)
     story += [_p(f"II  Marcați litera corespunzătoare răspunsului corect pe foaia cu răspunsuri: (câte {s['section_2']} puncte fiecare)\n(doar un răspuns corect)", styles["section"]), _line()]
     story += [_choice_item(i, q, answer_key, styles) for i, q in enumerate(test.section_ii, 1)]
     story += [_p(f"III  Faceți asocierea și marcați litera corespunzătoare pe foaia cu răspunsuri: (câte {s['section_3']} puncte fiecare)", styles["section"]), _line(), _matching(test.section_iii, answer_key, styles)]
-    iv_items = [_choice_item(i, q, answer_key, styles) for i, q in enumerate(test.section_iv, 1)]
-    story += [KeepTogether([_p(f"IV  Marcați litera corespunzătoare răspunsului corect pe foaia cu răspunsuri: (câte {s['section_4']} puncte fiecare)\n(poate fi unul, două, trei sau nici un răspuns corect)", styles["section"]), _line(), iv_items[0]])]
-    story += iv_items[1:]
+    iv_header = [_p(f"IV  Marcați litera corespunzătoare răspunsului corect pe foaia cu răspunsuri: (câte {s['section_4']} puncte fiecare)\n(poate fi unul, două, trei sau nici un răspuns corect)", styles["section"]), _line()]
+    story += [KeepTogether(iv_header + _choice_item(1, test.section_iv[0], answer_key, styles, wrap=False))]
+    story += [_choice_item(i, q, answer_key, styles) for i, q in enumerate(test.section_iv[1:], 2)]
     doc.build(story)
     return path
 
