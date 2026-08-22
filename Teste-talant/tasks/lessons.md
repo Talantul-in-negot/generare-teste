@@ -369,3 +369,55 @@ a fully general fix (compute every section's true minimum requirement before any
 was assessed as the "B" alternative to this session's "A" (targeted, incremental) approach and
 explicitly not chosen; this is documented as the honest tradeoff, not a promise that no chapter
 range will ever fail again.
+
+## L14 — "Not enough content" needs to survive being asked "are you sure?" — the actual blockers were a bad heuristic and two more allocation gaps (2026-08-22)
+
+Told the user 1 Samuel 5,6 hit a genuine content ceiling for Section I (2 of 28 safely-swappable
+facts, need 5). Asked directly why 48-ish verses of real text wasn't enough. Re-measuring instead
+of restating the earlier conclusion found three separate, fixable causes — the "ceiling" was an
+artifact of three different pieces of code, not the text:
+
+1. **`_safe_to_swap` was checking the wrong thing.** It rejected any name preceded by a
+   preposition/genitive marker ("lui", "pe", "la", "din", …), on the theory that swapping there
+   drops needed case marking. That's true for "Domnului" (the word itself *is* the genitive case
+   of "Domnul" — no separate marker exists to preserve), but false for an ordinary indeclinable
+   name after an invariant marker: "L-au luat pe Dagon" → "L-au luat pe Eli" is fine, because "pe"
+   doesn't change based on which name follows it. Conflating "the object itself is case-inflected"
+   with "the object is merely preceded by a case-marking word" banned roughly a third of the pool
+   (10 of 28 facts) for no real reason. Narrowed the check to just `obj != "Domnului"`.
+
+2. **True statements were needlessly restricted to `quality`-filtered facts.** A True statement is
+   quoted verbatim — it never needs a recognised name/object at all — but `build_test` filtered
+   `facts` to `quality`-only *before* building any pool, so `true_pool` could never see the ~4
+   perfectly good concise verses per range that just happen to lack a listed proper noun. Kept the
+   unfiltered list (`all_facts`) alongside the quality-filtered one and let True's pool draw from
+   both, quality-filtered candidates first.
+
+3. **True's pool is a superset of False's, and True ran first.** `_concise(fact, False)` (True's
+   requirement) accepts everything `_concise(fact, True) + _safe_to_swap` (False's requirement)
+   does, plus more — so on a small corpus `false_pool ⊆ true_pool`. The old loop alternated
+   True/False by index parity, meaning True (index 1) always got first pick, and could exhaust the
+   *entire* shared subset before False got a single turn at index 2. Reordering within one branch
+   (as in [[L13]]) can't fix this — the fix has to reserve the scarcer pool's full quota (False)
+   *before* the more permissive pool (True) claims anything, then let True fill its own slots from
+   whatever's left, only reaching into shared candidates if its own True-only supply runs short.
+
+Fixing (1) then surfaced a second-order problem: relaxing the oblique-marker check let genuinely
+bad swaps back in — "L-au luat pe Filistenii" (singular clitic "l-" vs. the plural/collective
+"Filistenii"), "înaintea acestui Domnul sfânt" and "lui Domnul" (both wrong because "Domnul"
+carries its own built-in definite "-ul" and can't sit after something that already supplies
+definiteness — a demonstrative, or "lui"). Fixed by splitting swap candidates into a `_swap_class`
+(ordinary / deity / collective) that `_wrong_object` now matches before falling back cross-class,
+plus a small `_ARTICLED` check (`Domnul`, `Filistenii`, and always `Domnului`) against the specific
+word immediately before the swap point.
+
+**Rule:** When a "not enough content" error survives a first pass of fixes, don't treat a second
+"still not enough" as confirmation of the same conclusion — re-derive it. Count what's actually
+available at each stage (`_safe_to_swap`-eligible count, pool sizes before *and* after each
+section claims from them) rather than reasoning from the error message's category alone; three
+independent, measurable causes were hiding behind what looked like one immovable number.
+
+**Result:** 1 Samuel 5,6 — the case that prompted this whole investigation — now builds cleanly,
+and a 15-selection sweep spanning both books (1 Samuel 1 through 2 Samuel 8) passes in full,
+including every range flagged as still-failing in [[L12]]/[[L13]]. Verified by reading the actual
+generated Section I text aloud for the fixed range, not just checking `build_test` didn't raise.
