@@ -5996,3 +5996,199 @@ general project guidance, merge duplicates by subject, and retain one dated
 lesson entry per measured finding with the command, evidence, decision, and
 known limitations. Do not delete a lesson merely because the implementation
 later changed; mark it superseded and link the newer evidence.
+
+## A163 - Testing a wiring fix requires proving the wiring, not the endpoints
+
+Fixing dead GenAI token-usage telemetry (`FallbackLLM.generate()` opened a
+span but nothing ever populated it) surfaced a specific test-writing trap:
+the first draft of the regression test asserted against an *outer* span the
+test itself opened, while `FallbackLLM.generate()` opens its *own* internal
+span with its own separate response dict. The outer span's dict was never
+populated, but the fix was correct — the test's premise was wrong. The
+signal that caught it was a `KeyError` on the exact key the fix was meant to
+populate, not a silent pass. When a wiring fix is validated by wrapping the
+call in an externally-observable span/context, always check what the
+production code path *actually* opens internally before asserting against an
+outer capture; nesting semantics of the same context manager are not always
+what a fresh reading of the call site suggests.
+
+Once corrected, the real regression test asserted against
+`record_token_usage()` (the Prometheus-facing sink that fires unconditionally
+inside the span's `finally` block, whether or not any caller captures the
+yielded dict) rather than against span capture. That produced a stronger and
+more accurate test than the original design: it also revealed that a *failed*
+primary call still triggers a `(provider, None, None)` recording — correct
+production behavior (the function that no-ops on `None` rather than
+fabricating a zero already handles it), but not something the first draft's
+assertion (`recorded == [exactly one entry]`) anticipated. Prefer asserting
+against the actual telemetry sink over span-capture plumbing when the two
+diverge; the sink is what a dashboard or alert actually reads.
+
+Every fix in this pattern was verified by mutation check before being
+trusted: disable the fix (patch the new code path back to a no-op) and
+confirm the specific new assertion fails, reproducing the original bug's
+exact observable shape. This caught nothing wrong here, but it is what
+distinguishes "the test passes" from "the test would have caught the bug it
+was written for" — do this before treating a regression test as done, not
+only when a review asks for it.
+
+## A164 - Round-trip tests must assert content, not count; interoperability claims need a genuinely external tool
+
+Existing RDF Turtle round-trip tests (`test_export_rdf.py`,
+`test_owl_reasoner.py`) checked `len(graph_in) == len(graph_out)` after a
+serialize/reparse cycle. That is a real but narrow check: a serializer bug
+that drops one triple and fabricates an unrelated one preserves the count
+while destroying the content, and the existing tests would not have noticed.
+Prefer `set(graph_in) == set(graph_out)` for any round-trip claim; it is no
+more expensive to compute and catches a whole class of corruption that count
+equality is structurally blind to. Verified this directly before trusting it:
+hand-built a corrupted graph with the same triple count and different
+content, confirmed count-equality passed and set-equality correctly failed.
+
+A stronger, separate check for "interoperability" claims specifically: prove
+that a *genuinely independent* third-party tool consuming only the
+serialized artifact (not the in-memory object) reaches the same result as
+reasoning over the pre-serialization graph. For this project, `owlrl`
+(`OWLRLReasoner.from_turtle`) computing an identical entailed closure
+pre/post round-trip is real interoperability evidence; `pyshacl` reaching
+the same conformance verdict for the same reason is real interoperability
+evidence. A test that only re-uses the same in-memory graph object, or that
+reimplements the same assertions the production code already makes, is not
+interoperability evidence — it is circular. Mutation-checked this too:
+dropped one `rdfs:subClassOf` edge before serialization and confirmed the
+closure-equality check failed, and that the loss silently broke a transitive
+entailment three hops away — exactly the failure mode invisible to a
+count-only check and invisible without a real second reasoner run.
+
+## A165 - Respect a documented prerequisite gate rather than working around it
+
+The roadmap names one specific, well-scoped Architecture debt item — the
+aerospace-specific rules hardcoded in `hybrid_retriever.py`'s answer prompt —
+with an explicit stated prerequisite: "a runnable golden eval — this must not
+be changed on inspection alone," citing a documented regression history
+(`tasks/lessons.md` A124/A125, where plausible-looking retrieval-config
+changes regressed measured pass rates). When asked to make general
+architectural progress, the correct response was to check whether that
+prerequisite was actually met (`docker compose ps` — it was not; Docker
+Desktop was not running, so Neo4j/Redis/RabbitMQ were unavailable) and, on
+finding it unmet, deliberately not touch that item — pivoting to a
+different, offline-verifiable row (RDF/OWL/SHACL/SKOS round-trip
+interoperability, A164) instead of either skipping the request or attempting
+the gated change without its stated evidence. State the redirect and the
+reason explicitly rather than silently substituting a different task; the
+roadmap's own gate is the authority here, not a judgment call to override
+when the live eval happens to be unavailable.
+
+## A166 - Session-level self-corrections belong in lessons.md too, not only user corrections
+
+The project's own instruction ties lessons capture to "any correction from
+the user," but the more common failure mode in an autonomous multi-file
+session is self-caught: a test written against a wrong assumption about
+nesting semantics (A163), a first-draft assertion that was too strict for
+real, correct behavior (A163's `record_token_usage` dual-call case), a
+constructor call missing a required argument one provider class happens not
+to default. None of these needed a user correction to be caught — they were
+caught by running the test and reading the failure. Treat "I wrote a test,
+ran it, and it failed for a reason that revealed my own wrong assumption" as
+exactly the same category of correction as a user pointing out a mistake:
+both are evidence that an assumption looked right on inspection and was
+wrong in practice, which is the entire reason this file exists.
+
+## A167 - A helper's "return value" can lie about which branch actually ran
+
+`token_revocation.py`'s `revoke_token` ended with `return self._redis is not
+None` — but that line is only reached *after* the durable write attempt,
+including after it failed and fell through to the in-memory fallback. The
+client object is still non-`None` at that point, so the function reported
+`durable=True` for a revocation that had actually landed only in one
+process's memory. `POST /auth/revoke` then told an operator mid-incident
+that a leaked credential was dead fleet-wide when it was not — the most
+dangerous kind of wrong answer, since it is wrong in the direction that stops
+further action. The bug was caught only because a failure-injection test
+specifically modeled a durable-write failure and asserted on the returned
+`durable` flag, not merely on "no exception was raised." When a function's
+return value is derived from object identity/existence (`is not None`,
+truthiness of a handle) rather than from the actual outcome of the operation
+that return value claims to describe, treat that as a code smell worth a
+second look — the object can easily still exist after the meaningful part of
+the work has failed.
+
+## A168 - Duplicated small helpers drift in exactly the field that matters
+
+Three separate modules had independently implemented the same "get a sync
+Redis client" factory. Two copies were byte-identical, but the third had
+drifted to resolve its URL from the environment while the other two read
+`settings.yml` — so on a deployment configured one way but not the other,
+alert history and authentication state disagreed about whether Redis even
+existed. This is the generic failure mode of copy-pasted infrastructure
+glue: it doesn't drift in gross, obviously-wrong ways; it drifts in exactly
+the one input-resolution detail nobody thought to keep in sync, and the
+divergence is invisible until two code paths that use different copies are
+compared side by side under a specific deployment configuration. Consolidate
+into one shared resolver that is a strict superset of every copy's behavior
+(check both the env var and the YAML key) rather than picking one copy as
+canonical and silently dropping what the others did differently.
+
+## A169 - `load_dotenv()` at import time makes tests non-hermetic transitively
+
+`graphrag/dashboard/utils.py` calls `load_dotenv()` at module import time
+(needed for documented Dash reloader behavior). Any test that transitively
+imports the Dash app — including one that has nothing to do with dashboards
+— injects the repository's `.env` into `os.environ` for the rest of that
+test process. A test asserting "no Timescale URL is configured anywhere"
+passed only because it happened to run before some other test imported the
+dashboard module in the same session; run in a different order or file
+selection, and it silently started asserting against real `.env` values
+instead of an empty environment. The fix is to make the specific test
+hermetic (explicit `monkeypatch.delenv` for every variable it depends on
+being absent), not to remove the import-time `load_dotenv()` call, since that
+exists for a real, documented reason unrelated to the test. When a test's
+assertion depends on an environment variable being *absent*, that absence
+must be asserted or forced explicitly — never assumed from clean local
+execution, since import order across the full suite is not something any one
+test file controls.
+
+## A170 - A strict evidence gate can suppress the exact case it was designed to allow
+
+The agentic-fallback trigger required "low confidence AND no citations"
+before escalating to IRCoT. That is correct for the common case — an
+incidental, unrelated citation should not by itself excuse a hedging answer.
+But a global-search-only retrieval mode intentionally returns
+`local_results = {}`, and the routing policy separately and explicitly
+records `policy_reason_code == "missing_evidence"` for that mode — the
+system already knows, by design, that it has no chunk-level evidence. The
+strict citation-count gate did not distinguish "an incidental citation
+slipped in despite real uncertainty" from "the planner already declared no
+evidence exists," and treated a single incidental citation from the global
+step as sufficient to suppress a fallback the planner had explicitly
+requested (golden-eval regression AGT-02). The fix threads the routing
+reason and the policy's own stated reason code into the trigger condition,
+so a *planned* no-evidence state overrides the citation-count heuristic
+instead of being silently overridden by it. General pattern: when a
+safety/quality gate is built from an indirect proxy (citation count) instead
+of the system's own more direct, already-computed signal for the same
+condition (a policy reason code), the proxy can end up overriding the direct
+signal in exactly the case the direct signal exists to handle. Prefer wiring
+the direct signal through explicitly, even if the proxy heuristic still
+covers the general case.
+
+## A171 - A judge metric returning NaN is not an exception, and `sum()` propagates it silently
+
+RAGAS's faithfulness metric returns `NaN` (not an exception, not a sentinel
+that raises) when its claim-decomposition step cannot extract any verifiable
+statements from an answer — routine for short or yes/no answers. Averaging
+scores with plain `sum(scores) / len(scores)` silently poisons the *entire*
+batch average the moment one `NaN` enters it, since `sum()` of any sequence
+containing a NaN is NaN, and the corrupted result gives no indication which
+record caused it or that anything went wrong at all — a full evaluation run
+can report "faithfulness: nan" with no further signal. The same NaN also
+must not silently become a zero or a missing value fed into calibration
+sampling; both hide the same information loss two different ways. The fix
+requires a fourth explicit state (`UNSCORABLE`) alongside scored, low-score,
+and correct-refusal, filtered out of the average and reported separately
+with a retry count — mirrored in A162's "RAGAS result interpretation" lesson
+for the live-run-report version of the same principle. When integrating any
+external scoring function whose failure mode is "returns a numeric
+non-value" rather than "raises," explicitly check for that non-value
+(`math.isnan`) before it enters an aggregate; do not assume a missing score
+looks like an exception.
