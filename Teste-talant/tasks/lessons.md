@@ -241,7 +241,8 @@ the shape already implemented is the only one.
 `_name_predicate`, whose [[L07]] subject-vs-oblique check is exactly the condition for the
 question to be asking about the right person; it is restricted to `_PERSONAL`
 (`BibleRepository.PEOPLE | DEITY`) because a place needs „Unde?" and a thing „Ce?".
-`_section_ii` tries `_completion_stem` first (scarcer shape) and falls back to `_wh_question`.
+`_section_ii` tries `_completion_stem` first (scarcer shape) and falls back to `_wh_question`;
+Section IV's single-answer fallback loop does the same for the same reason.
 Section III has the same latent issue and is **not yet fixed**: it only builds the
 name→attribute shape (as in the 2_3 barem), while the 4_5 / 8_9 / 10_11 / 6_7 baremuri use a
 clause-half→clause-half split ("bogăția aduce" → "mare număr de prieteni"). That is why several
