@@ -106,7 +106,18 @@ class BibleRepository:
         terms = re.findall(r"\b[A-ZĂÂÎȘȚ][a-zăâîșț]+\b", text)
         quality = [value for value in terms if value in BibleRepository.QUALITY_TERMS]
         if quality:
-            return quality[0]
+            # "Domnului" is the genitive/dative case of "Domnul" — it can never
+            # be a sentence's subject or a name safely swapped in elsewhere, so
+            # a fact built around it is unusable for most question shapes. In
+            # narratives where "chivotul Domnului" repeats constantly it's also
+            # almost always the *first* capitalised word, so picking quality[0]
+            # unconditionally locks a large share of verses out of every shape
+            # that needs the object to be a plain, swappable name — even when
+            # the same verse names someone else too. Prefer any other quality
+            # term the verse offers; fall back to "Domnului" only when it's the
+            # sole one present.
+            non_oblique = [value for value in quality if value != "Domnului"]
+            return non_oblique[0] if non_oblique else quality[0]
         proper = [value for value in terms if value in preferred and value not in ignored]
         if proper:
             return proper[0]
