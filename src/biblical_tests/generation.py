@@ -5,6 +5,11 @@ import re
 from collections import defaultdict
 
 from .models import Fact, MatchingQuestion, MultiChoiceQuestion, SingleChoiceQuestion, TestDefinition, TrueFalseQuestion
+from .repository import BibleRepository
+
+# Objects that „Cine?" can ask about — a place or a thing needs a different
+# question word, so those are left to the colon-completion shape.
+_PERSONAL = BibleRepository.PEOPLE | BibleRepository.DEITY
 
 
 class GenerationError(ValueError):
@@ -222,6 +227,28 @@ _SUBORDINATE = {"ce", "cum", "cine", "unde", "când", "care", "cui", "dacă", "c
 _LINKERS = {"și", "sau", "dar", "iar"}
 
 
+def _wh_question(fact: Fact) -> tuple[str, str] | None:
+    """Section II's other reference shape: „Cine a zis ...?" answered by a name.
+
+    The colon-completion shape (`_completion_stem`) only fits verses whose answer
+    word happens to close its own clause, which is a minority of them. The
+    reference tests mix that shape with plain wh-questions — "Cine a zis despre
+    Isus: «Eu nu găsesc nicio vină în El»?" — which impose no such constraint,
+    so most verses naming a person can carry one.
+    """
+    # Only people answer „Cine?"; a place would need „Unde?"/„În ce localitate?"
+    # and a thing „Ce?", so those objects are left to the completion shape.
+    if fact.object not in _PERSONAL:
+        return None
+    # `_name_predicate` already verifies the name is the clause's subject rather
+    # than a possessor or prepositional object, which is exactly the condition
+    # for „Cine <predicate>?" to be asking about the right person.
+    predicate = _name_predicate(fact)
+    if not predicate:
+        return None
+    return f"Cine {predicate}?", predicate
+
+
 def _clean_member(value: str) -> bool:
     if any(mark in value for mark in ('.', ',', ';', ':', '"', '„', '”', '«', '»', '!', '?')):
         return False
@@ -394,7 +421,10 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     for fact in pool:
         if len(singles) == 10:
             break
-        if fact.id in used or not (built := _completion_stem(fact)):
+        # Either reference shape works here: a stem broken off at a colon, or a
+        # „Cine ...?" question. The colon shape is tried first because it needs
+        # the answer word to close its clause and so fits far fewer verses.
+        if fact.id in used or not (built := _completion_stem(fact) or _wh_question(fact)):
             continue
         stem, segment = built
         # A distractor present in the answer segment could also complete the stem,
@@ -439,18 +469,31 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     matching = _section_iii(pool, used, rng)
     singles = _section_ii(pool, facts, used, rng)
 
-    # Both pools are filtered by _safe_to_swap: the fallback below can hand a
-    # true_pool fact to the False-statement branch (and vice versa) when its
-    # own pool runs dry, so either one may end up having a name swapped in.
+    # Only a False statement has a name swapped into it, so only false_pool is
+    # constrained by _safe_to_swap; a True statement is quoted verbatim and any
+    # concise verse will do. Applying the swap filter to both would discard
+    # perfectly good True candidates for a rewrite they never undergo.
     false_pool = [fact for fact in pool if fact.id not in used and (stmt := _concise(fact, True)) and _safe_to_swap(stmt, fact.object)]
-    true_pool = [fact for fact in pool if fact.id not in used and (stmt := _concise(fact, False)) and _safe_to_swap(stmt, fact.object)]
+    true_pool = [fact for fact in pool if fact.id not in used and _concise(fact, False)]
+    # The pools overlap, and false_pool is the scarcer of the two. Spending a
+    # shared verse on a True item can therefore starve the False branch while
+    # True-only verses sit unused, so the True branch takes the verses
+    # false_pool also wants last.
+    false_ids = {fact.id for fact in false_pool}
     tf: list[TrueFalseQuestion] = []
     for index in range(1, 11):
         is_true = index % 2 == 1
         source_pool = true_pool if is_true else false_pool
-        fact = next((item for item in source_pool if item.id not in used), None)
+        available = [item for item in source_pool if item.id not in used]
+        if is_true:
+            available.sort(key=lambda item: item.id in false_ids)
+        fact = next(iter(available), None)
         if fact is None:
-            fact = next((item for item in false_pool + true_pool if item.id not in used), None)
+            # Falling back across branches must respect the same constraint: a
+            # verse with no swappable name cannot carry a False statement.
+            spare = true_pool if is_true else false_pool
+            other = false_pool if is_true else true_pool
+            fact = next((item for item in spare + other if item.id not in used and (is_true or item.id in false_ids)), None)
         if fact is None:
             raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
         used.add(fact.id)
