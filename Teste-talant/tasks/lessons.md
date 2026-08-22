@@ -189,3 +189,32 @@ by the header, which may already be drawing that exact line.
 PDF and cropping each section's opening rule with PyMuPDF (`fitz.open(path)[page].get_pixmap(dpi=200,
 clip=fitz.Rect(...))`) — faster and more reliable than eyeballing a full-page screenshot for a
 sub-point line-doubling, consistent with [[L04]].
+
+## L09 — L05's False-statement name swap needed to preserve grammatical gender and case, not just avoid duplicate names (2026-08-22)
+
+L05 flagged "Ana era foarte bătrân" (swapped from "Eli era foarte bătrân") as ungrammatical and
+claimed no swap-generation code existed to fix — that was wrong; `_wrong_object` in
+`generation.py` does this swap for every Section I False statement, it just picked *any* other
+name in the corpus with no regard for whether the replacement kept the sentence grammatical.
+Regenerating surfaced the exact bug L05 predicted, plus a second, related one: "Vrăjmașii
+Domnului" swapped to "Vrăjmașii Domnul" — "Domnului" is the genitive/dative case of "Domnul", so
+this wasn't even a different claim, and it broke the case the sentence needed.
+
+**Rule:** A bare-name substitution into existing text is only safe when the replacement can't
+change anything the surrounding words agree with — grammatical gender (feminine name → an
+adjacent adjective needed the feminine ending) and grammatical case (a name already sitting in an
+oblique/genitive slot has no plain nominative stand-in, since nothing here adds "lui X" or
+inflects a feminine name for genitive). Prefer a same-gender replacement when one exists, and
+refuse the swap entirely — pick a different fact — when the slot being swapped is oblique to begin
+with, rather than trying to detect and rewrite the agreeing word.
+
+**How to apply:** `_wrong_object` now prefers a same-gender candidate (`_FEMININE_NAMES`/`_gender`
+in `generation.py`) and excludes inflectional variants of the same entity (`_inflection`, already
+used elsewhere for this). `_safe_to_swap` (reused `_OBLIQUE_MARKERS` from [[L07]]) filters both
+`false_pool` and `true_pool` in `build_test` to only facts whose object sits in a plain,
+swappable position — never "Domnului" (no plain form exists) and never right after a
+preposition/genitive marker. A residual gap: the True/False fallback path (when a pool runs dry)
+can still hand a fact to the opposite branch using a *different* `_concise` call than the one that
+vetted it — not closed here since it doesn't trigger on the current 1 Samuel 1-2 corpus (49
+quality facts against 10 needed slots), but worth tightening if a smaller chapter selection ever
+raises `GenerationError` here.
