@@ -169,3 +169,23 @@ instead of a mis-parsed three-option one — this is a deliberate reduction in h
 Section IV item appears (see `tests/test_generator.py::RealCorpusSectionIVTests`, relaxed from
 requiring an exact `[1, 2, 3]` spread), not a bug. Regenerate and read Section III/IV aloud with
 each option substituted in, not just check they satisfy the length/punctuation rules.
+
+## L08 — Section header's own LINEBELOW doubled up with item 1's LINEABOVE (2026-08-22)
+
+L03 gave every list item both `LINEABOVE` and `LINEBELOW` so a page break landing right before an
+item never leaves it without a top border. That's correct for item 2 onward, but item 1 never has
+a page break above it — it's preceded by the section header, which *already* draws its own
+`LINEBELOW` right there (`_section_header`, `rendering.py`). The two lines sit at (nearly) the same
+y-coordinate, rendering as a visibly doubled rule above item 1 in Sections I, II and IV. Section
+III didn't show it because `_matching` never added its own `LINEABOVE` in the first place.
+
+**Rule:** When a "belt and suspenders" border is added for page-break safety (item's own
+`LINEABOVE` covering the case the *previous* item's `LINEBELOW` got stranded on the prior page),
+check whether the very first item is exempt — it's never preceded by a possible page break, only
+by the header, which may already be drawing that exact line.
+
+**How to apply:** `_tf_item` and `_choice_item` (`rendering.py`) now only add `LINEABOVE` when
+`index > 1`; item 1 relies solely on the section header's `LINEBELOW`. Verified by rendering the
+PDF and cropping each section's opening rule with PyMuPDF (`fitz.open(path)[page].get_pixmap(dpi=200,
+clip=fitz.Rect(...))`) — faster and more reliable than eyeballing a full-page screenshot for a
+sub-point line-doubling, consistent with [[L04]].
