@@ -20,7 +20,7 @@ def _corpus(path):
     for number in range(1, 31):
         chapter = 1 if number % 2 else 2
         verse = (number + 1) // 2
-        text = f"Personajul {number} a făcut lucrul {number}."
+        text = f"În ziua aceea, Personajul {number} s-a suit la casa Domnului și a făcut lucrul {number}."
         chapters[str(chapter)][str(verse)] = text
         facts.append({"id": f"fact-{number}", "statement": text, "subject": f"Personajul {number}", "predicate": "a făcut", "object": f"lucrul {number}", "evidence": {"book": "1 Samuel", "chapter": chapter, "verse_start": verse, "text": text}})
     path.write_text(json.dumps({"translation": "Synthetic test corpus", "books": {"1 Samuel": chapters}, "facts": facts}), encoding="utf-8")
@@ -64,6 +64,19 @@ class GeneratorTests(unittest.TestCase):
             self.assertIn("III", text)
             self.assertIn("IV", text)
             self.assertNotIn("V Marcați ordinea", text)
+
+    def test_section_iv_matches_reference_completion_format(self):
+        for question in self.test_definition.section_iv:
+            # The reference documents end every Section IV stem with a colon and
+            # offer short, parallel completions rather than whole statements.
+            self.assertTrue(question.question.endswith(":"), question.question)
+            self.assertNotIn("sunt menționate", question.question)
+            for value in question.options.values():
+                self.assertLess(len(value), 60, value)
+            # Every option marked correct must be supported by the cited verse.
+            self.assertTrue(question.correct, f"{question.id} nu are niciun răspuns corect")
+            for letter in question.correct:
+                self.assertIn(question.options[letter], question.evidence.text)
 
     def test_multi_choice_accepts_zero_to_three_correct_options(self):
         original = self.test_definition.section_iv[0]

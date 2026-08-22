@@ -60,22 +60,89 @@ def _blanked_statement(fact: Fact, limit: int | None = None) -> str:
     return result
 
 
-def _named_terms(facts: list[Fact]) -> list[str]:
-    divine_forms = {"Domnul", "Domnului", "Dumnezeu", "Dumnezeul"}
-    return sorted({fact.object for fact in facts if fact.object[:1].isupper() and fact.object not in divine_forms})
+# Section IV follows the reference documents: a stem that breaks off at a colon
+# and three short, parallel completions. One, two or three of them may be right.
+_STEM_MIN_CHARS = 25
+_STEM_MAX_CHARS = 150
+# Only terms coordinated with the answer ("X și Y", "X, Y și Z") are also correct.
+# Presence anywhere after the cut is not enough: in "fiul lui Saul, și doisprezece
+# din slujitorii lui David", David follows Saul but does not complete "fiul lui:".
+_COORDINATION = re.compile(r"^\s*(?:,\s*(?:și\s+|sau\s+)?|\s+(?:și|sau)\s+)")
+_TERM = re.compile(r"[A-ZĂÂÎȘȚ][\wăâîșț-]*")
 
 
 def _mentions(text: str, value: str) -> bool:
     return bool(re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text))
 
 
-def _multi_question(statement: str, rng: random.Random) -> str:
-    templates = [
-        "În enunțul „{statement}”, sunt menționate:",
-        "Citiți enunțul „{statement}”. Care dintre următoarele persoane sau locuri apar?",
-        "După enunțul „{statement}”, selectați persoanele sau locurile menționate.",
-    ]
-    return rng.choice(templates).format(statement=statement)
+def _coordinated_answers(answer_segment: str, answer: str) -> list[str]:
+    """Reads the enumeration the verse opens with, so „Hofni și Fineas" yields both."""
+    answers, rest = [answer], answer_segment[len(answer):]
+    while True:
+        link = _COORDINATION.match(rest)
+        if not link:
+            break
+        rest = rest[link.end():]
+        term = _TERM.match(rest)
+        if not term:
+            break
+        answers.append(term.group(0))
+        rest = rest[term.end():]
+    return answers
+
+
+def _completion_stem(fact: Fact) -> tuple[str, list[str], str] | None:
+    """Splits a verse into a stem ending in ':' and the answers that complete it."""
+    # Whole-word match only: "Domnul" must not be cut out of "Domnului",
+    # which would leave the stem with no correct completion at all.
+    hits = list(re.finditer(rf"(?<!\w){re.escape(fact.object)}(?!\w)", fact.statement))
+    if not hits:
+        return None
+    last = hits[-1]
+    prefix, rest = fact.statement[:last.start()], fact.statement[last.end():]
+    # Keep only the closing sentence so the stem reads as a single clause.
+    sentences = list(re.finditer(r"[.!?]\s+", prefix))
+    if sentences:
+        prefix = prefix[sentences[-1].end():]
+    stem = prefix.strip().rstrip(" ,;:-–—„”\"'")
+    if len(stem) < _STEM_MIN_CHARS:
+        return None
+    if len(stem) > _STEM_MAX_CHARS:
+        tail = stem[-_STEM_MAX_CHARS:]
+        space = tail.find(" ")
+        stem = "…" + (tail[space + 1:] if space != -1 else tail)
+    segment = fact.object + rest
+    return stem + ":", _coordinated_answers(segment, fact.object), segment
+
+
+def _completion_options(fact: Fact, facts: list[Fact], answers: list[str], segment: str, rng: random.Random) -> list[str] | None:
+    """Builds three same-kind completions: the verse answers plus plausible distractors."""
+    correct = answers[:3]
+    # A distractor must be absent from the answer segment altogether. A term that
+    # appears there without being provably coordinated is unsafe either way, so it
+    # is never offered rather than being marked wrong on the key.
+    # Inflected forms of the answer ("Domnul" against "Domnului") are not real
+    # choices, so distractors must not share a stem with any correct answer.
+    def variant(value: str) -> bool:
+        for answer in answers:
+            low, other = value.lower(), answer.lower()
+            short, long = sorted((low, other), key=len)
+            if len(short) >= 4 and long.startswith(short):
+                return True
+        return False
+
+    usable = lambda value: value not in answers and not variant(value) and not _mentions(segment, value)
+    distractors: list[str] = [value for value in fact.options if usable(value)]
+    for candidate in facts:
+        if len(distractors) >= 3 - len(correct):
+            break
+        if usable(candidate.object) and candidate.object not in distractors:
+            distractors.append(candidate.object)
+    values = [*correct, *distractors[:3 - len(correct)]]
+    if len(set(values)) != 3:
+        return None
+    rng.shuffle(values)
+    return values
 
 
 def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, scoring: dict[str, int], seed: int, version: int) -> TestDefinition:
@@ -139,45 +206,31 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     matching = MatchingQuestion("III-1", [fact.object for fact in match_facts], right, answers, [f.evidence for f in match_facts], [f.id for f in match_facts])
 
     multis: list[MultiChoiceQuestion] = []
-    multi_pool = [fact for fact in pool if fact.id not in used]
-    if len(multi_pool) < 3:
-        raise GenerationError("Nu sunt suficiente facts distincte pentru o întrebare din Secțiunea IV.")
-    names = _named_terms(facts)
-    for index in range(1, 4):
-        count = rng.randint(0, 3)
-        eligible = []
-        for fact in multi_pool:
-            present = [name for name in names if _mentions(fact.statement, name)]
-            absent = [name for name in names if name not in present]
-            if len(present) >= count and len(absent) >= 3 - count:
-                eligible.append((fact, present, absent))
-        if eligible:
-            shortest = sorted(eligible, key=lambda item: len(item[0].statement))[:8]
-            fact, present, absent = rng.choice(shortest)
-            values = rng.sample(present, count) + rng.sample(absent, 3 - count)
-            rng.shuffle(values)
-            options = dict(zip("ABC", values))
-            correct = [letter for letter, value in options.items() if value in present]
-            evidence = [fact.evidence]
-            fact_ids = [fact.id]
-            question = _multi_question(fact.statement, rng)
-        else:
-            # Fallback for a corpus without enough named entities in one verse.
-            group = rng.sample(multi_pool, 3)
-            correct_positions = set(rng.sample(range(3), count))
-            options = {}
-            correct = []
-            for position, fact in enumerate(group):
-                letter = "ABC"[position]
-                if position in correct_positions:
-                    options[letter] = fact.statement
-                    correct.append(letter)
-                else:
-                    options[letter] = fact.statement.replace(fact.object, _wrong_object(fact, facts), 1)
-            evidence = [fact.evidence for fact in group]
-            fact_ids = [fact.id for fact in group]
-            question = "Care dintre următoarele afirmații sunt adevărate?"
-        multis.append(MultiChoiceQuestion(
-            f"IV-{index}", question, options, correct, evidence[0], fact_ids[0], evidence, fact_ids,
-        ))
+    candidates = []
+    for fact in (item for item in pool if item.id not in used):
+        built = _completion_stem(fact)
+        if built:
+            candidates.append((fact, *built))
+    if len(candidates) < 3:
+        raise GenerationError("Nu sunt suficiente versete potrivite pentru Secțiunea IV.")
+    # Shorter stems read closer to the reference documents.
+    readable = sorted(candidates, key=lambda item: len(item[1]))[:12]
+    rng.shuffle(readable)
+    index = 1
+    for fact, stem, answers, segment in readable:
+        if index > 3:
+            break
+        values = _completion_options(fact, facts, answers, segment, rng)
+        if values is None:
+            continue
+        options = dict(zip("ABC", values))
+        correct = [letter for letter, value in options.items() if value in answers]
+        # The verse answer must survive as a correct option, or the key is wrong.
+        if not any(options[letter] == fact.object for letter in correct):
+            continue
+        multis.append(MultiChoiceQuestion(f"IV-{index}", stem, options, correct, fact.evidence, fact.id, [fact.evidence], [fact.id]))
+        used.add(fact.id)
+        index += 1
+    if len(multis) != 3:
+        raise GenerationError("Nu s-au putut construi trei întrebări verificabile pentru Secțiunea IV.")
     return TestDefinition(source, seed, version, contest, scoring, section_i=tf, section_ii=singles, section_iii=matching, section_iv=multis)
