@@ -218,3 +218,39 @@ can still hand a fact to the opposite branch using a *different* `_concise` call
 vetted it — not closed here since it doesn't trigger on the current 1 Samuel 1-2 corpus (49
 quality facts against 10 needed slots), but worth tightening if a smaller chapter selection ever
 raises `GenerationError` here.
+
+## L10 — Each section supports several question SHAPES in the reference; implementing only one starves the candidate pool (2026-08-22)
+
+"Nu sunt suficiente versete potrivite pentru Secțiunea II" on a two-chapter selection looked like
+a corpus-size problem. It wasn't: `_section_ii` only ever built one shape — the colon-completion
+stem (`_completion_stem`), which requires the answer word to close its own clause. After [[L06]]
+correctly tightened that requirement, only 3 of 24 verses in 1 Samuel 2 qualified. But the
+reference tests in `data/*.pdf` mix that shape with plain wh-questions ("Cine a zis despre Isus:
+«Eu nu găsesc nicio vină în El»?", "Când a zis Isus …?", "Ce profet …?"), which impose no such
+positional constraint. Adding just the „Cine …?" form roughly doubled the pool (1 Samuel 2: 3 →
+10; 1 Samuel 3-4: 4 → 18).
+
+**Rule:** Before concluding a generator is starved by its corpus, check the reference artifacts
+for how many distinct question shapes that section actually uses. A single-shape implementation
+inherits that shape's positional constraints as a hard corpus filter; a second shape with
+different constraints often unlocks the same verses that the first one rejects. Read
+`data/Faza pe biserică - Corectori - V1 - *.pdf` (via PyMuPDF, per [[L04]]) rather than assuming
+the shape already implemented is the only one.
+
+**How to apply:** `_wh_question` in `generation.py` builds „Cine <predicate>?" and reuses
+`_name_predicate`, whose [[L07]] subject-vs-oblique check is exactly the condition for the
+question to be asking about the right person; it is restricted to `_PERSONAL`
+(`BibleRepository.PEOPLE | DEITY`) because a place needs „Unde?" and a thing „Ce?".
+`_section_ii` tries `_completion_stem` first (scarcer shape) and falls back to `_wh_question`.
+Section III has the same latent issue and is **not yet fixed**: it only builds the
+name→attribute shape (as in the 2_3 barem), while the 4_5 / 8_9 / 10_11 / 6_7 baremuri use a
+clause-half→clause-half split ("bogăția aduce" → "mare număr de prieteni"). That is why several
+chapter ranges still fail on "Nu sunt suficiente asocieri distincte pentru Sectiunea III" —
+verified pre-existing at commit 1c1bb5b, not a regression from any of today's work.
+
+**Also fixed here:** [[L09]] applied `_safe_to_swap` to *both* Section I pools, but only False
+statements have a name swapped in — True ones are quoted verbatim, so filtering them discarded
+good candidates for a rewrite they never undergo. `true_pool` no longer carries that filter, the
+cross-branch fallback re-checks it for the False branch only, and because the pools overlap with
+`false_pool` the scarcer one, the True branch now consumes shared verses last so it can't starve
+the False branch.
