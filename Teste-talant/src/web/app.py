@@ -24,10 +24,10 @@ def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
     <style>body{{font:16px Calibri,Arial,sans-serif;background:#f5f5f5;margin:0}}main{{max-width:760px;margin:38px auto;background:white;padding:32px;border-radius:12px;box-shadow:0 4px 22px #bbb}}label{{display:block;font-weight:bold;margin-top:14px}}input,textarea,select{{box-sizing:border-box;width:100%;padding:9px;margin-top:4px;font:inherit}}textarea{{height:76px}}button,.download{{display:inline-block;background:#202020;color:white;border:0;border-radius:5px;padding:11px 16px;margin-top:22px;text-decoration:none;cursor:pointer}}.ok{{color:#147a35;font-weight:bold}}</style>
     <main><h1>Generator teste biblice</h1><p>Folosește numai corpusul local verificabil și păstrează I-IV.</p>{message}
     <form method='post' action='/generate'><label>Material biblic</label><textarea name='chapters'>1 Samuel 1,2</textarea>
-    <label>Categorie</label><input name='category' value='6_7'><label>Ediție</label><input name='edition' value='2027'>
-    <label>Etapă</label><input name='stage' value='Faza pe biserică'><label>Data</label><input name='date' value='28 martie 2026'>
+    <label>Categorie</label><input name='category' value=''><label>Ediție</label><input name='edition' value='2027'>
+    <label>Etapă</label><input name='stage' value=''><label>Data</label><input name='date' value=''>
     <label>Dificultate</label><select name='difficulty'><option>mixed</option><option>easy</option><option>medium</option><option>hard</option></select>
-    <label>Număr variante</label><input type='number' min='1' max='10' name='versions' value='1'><label>Seed (opțional)</label><input name='seed' value='12345'>
+    <label>Număr variante</label><input type='number' min='1' max='10' name='versions' value=''><label>Seed (opțional)</label><input name='seed' value='12345'>
     <button>GENEREAZĂ TESTUL</button></form>{buttons}</main></html>"""
 
 
@@ -35,7 +35,7 @@ def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
     selection = parse_selection(data["chapters"])
     repo = BibleRepository("data")
     base_seed = int(data["seed"]) if data.get("seed", "").strip() else secrets.randbelow(2**31)
-    versions = max(1, min(10, int(data.get("versions", "1"))))
+    versions = max(1, min(10, int(data.get("versions", "").strip() or "1")))
     contest = {"title": "TALANTUL ÎN NEGOȚ", "category": data.get("category", "6_7"), "edition": int(data.get("edition", "2027")), "stage": data.get("stage", "Faza pe biserică"), "date": data.get("date", "")}
     scoring = {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}
     links = []

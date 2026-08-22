@@ -69,6 +69,15 @@ def _mentions(text: str, value: str) -> bool:
     return bool(re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text))
 
 
+def _multi_question(statement: str, rng: random.Random) -> str:
+    templates = [
+        "În enunțul „{statement}”, sunt menționate:",
+        "Citiți enunțul „{statement}”. Care dintre următoarele persoane sau locuri apar?",
+        "După enunțul „{statement}”, selectați persoanele sau locurile menționate.",
+    ]
+    return rng.choice(templates).format(statement=statement)
+
+
 def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, scoring: dict[str, int], seed: int, version: int) -> TestDefinition:
     facts = [fact for fact in facts if fact.quality]
     if len(facts) < 20:
@@ -143,14 +152,15 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
             if len(present) >= count and len(absent) >= 3 - count:
                 eligible.append((fact, present, absent))
         if eligible:
-            fact, present, absent = rng.choice(eligible)
+            shortest = sorted(eligible, key=lambda item: len(item[0].statement))[:8]
+            fact, present, absent = rng.choice(shortest)
             values = rng.sample(present, count) + rng.sample(absent, 3 - count)
             rng.shuffle(values)
             options = dict(zip("ABC", values))
             correct = [letter for letter, value in options.items() if value in present]
             evidence = [fact.evidence]
             fact_ids = [fact.id]
-            question = "Care dintre următoarele persoane sau locuri sunt menționate în pasaj?"
+            question = _multi_question(fact.statement, rng)
         else:
             # Fallback for a corpus without enough named entities in one verse.
             group = rng.sample(multi_pool, 3)
