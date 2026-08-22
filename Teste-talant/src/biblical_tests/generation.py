@@ -119,18 +119,44 @@ def _completion_stem(fact: Fact) -> tuple[str, str] | None:
     return None
 
 
+# Prepositions/genitive markers that put the following name in an oblique
+# role (possessor, direct/indirect object, prepositional complement) instead
+# of the sentence's subject.
+_OBLIQUE_MARKERS = {"lui", "pe", "cu", "din", "la", "în", "de", "pentru", "despre", "asupra", "către", "printre", "peste", "sub", "fără", "ca"}
+
+
 def _name_predicate(fact: Fact) -> str | None:
     """Section III pairs a name with what the verse says about it, as barem 2_3 does."""
     for sentence in _sentences(fact.statement):
         hit = re.search(rf"(?<!\w){re.escape(fact.object)}(?!\w)", sentence)
         if not hit:
             continue
-        predicate = sentence[hit.end():].strip(_TRIM)
+        # A name right after a preposition/genitive marker is an oblique
+        # object, not the sentence's subject — e.g. "Fiii lui Eli erau niște
+        # oameni răi" is about his sons, not Eli, and "...acelora din Israel
+        # care veneau la Silo" describes "acelora" (those people), not
+        # Israel. Pairing the name with what follows would misattribute
+        # a predicate that actually belongs to a different subject.
+        lead = sentence[:hit.start()].rstrip().lower()
+        if any(lead.endswith(f" {marker}") or lead == marker for marker in _OBLIQUE_MARKERS):
+            continue
+        # "Domnului" is the genitive/dative case form ("of/to the Lord") — it
+        # is never itself a sentence's grammatical subject, unlike "Domnul".
+        if fact.object == "Domnului":
+            continue
+        # Only the clause right after the name belongs to it; anything past
+        # the next comma/semicolon may already be a different clause.
+        tail = sentence[hit.end():]
+        punct = re.search(r"[,;:.!?]", tail)
+        predicate = (tail[:punct.start()] if punct else tail).strip(_TRIM)
         words = predicate.split()
         if not 2 <= len(words) <= 9:
             continue
-        # A clean predicate carries no internal punctuation of its own.
-        if not _clean_member(predicate):
+        # If the name sits after its verb ("se suia Ana la Casa Domnului"),
+        # what follows is the verb's own complement, not a fresh predicate
+        # about the name — a real predicate opens with a verb, not another
+        # preposition continuing the earlier phrase.
+        if words[0].lower() in _OBLIQUE_MARKERS:
             continue
         # The name must not reappear, or the association gives itself away.
         if len(predicate) < 10 or _mentions(predicate, fact.object):
@@ -166,6 +192,12 @@ def _register(value: str) -> str:
     return "plain"
 
 
+# Common openers of a Romanian finite/compound verb form — "a luat", "au
+# zis", "s-a suit" — versus a noun phrase, which opens with an article,
+# adjective, or noun instead.
+_VERB_OPENERS = {"a", "au", "am", "ai", "este", "sunt", "era", "erau", "va", "vor", "s-a", "l-a", "le-a", "i-a", "ne-a", "v-a", "s-au", "le-au"}
+
+
 def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
     """Finds the coordinated list behind the reference's multi-answer items."""
     for sentence in _sentences(fact.statement):
@@ -184,11 +216,22 @@ def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
         members = [mid, tail]
         head = " ".join(head_words[:-size])
         # "a, b si c": a comma right before the second member marks a third one.
+        # There's no punctuation between the verb that introduces the list and
+        # this first member ("...și a luat trei tauri, o efă de făină..."), so
+        # its word count can't be read off the same way `mid`/`tail` were —
+        # guessing `size` words back can just as easily grab the verb itself
+        # ("a luat trei tauri" instead of "trei tauri"). Reject that guess
+        # outright when it starts with a common finite-verb/auxiliary opener;
+        # a real noun-phrase member never does, and leaving the ambiguous
+        # word(s) in the stem instead is always grammatically safe.
         if head.rstrip().endswith(","):
             earlier = head.rstrip().rstrip(",").split()
             if len(earlier) >= size + 4:
                 first = " ".join(earlier[-size:]).strip(_TRIM)
-                if _clean_member(first) and 2 <= len(first.split()) <= 8 and len(first) >= 6:
+                opener = first.split()[0].lower() if first.split() else ""
+                if opener in _VERB_OPENERS:
+                    pass
+                elif _clean_member(first) and 2 <= len(first.split()) <= 8 and len(first) >= 6:
                     members.insert(0, first)
                     head = " ".join(earlier[:-size])
         stem = head.strip(_TRIM)

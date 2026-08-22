@@ -128,3 +128,44 @@ trailing-predicate shape (for Section III's `_name_predicate`), so the test suit
 exercises the real constraint instead of masking it. Regenerate (`python generate.py --chapters
 "1 Samuel 1,2" --version 1`) and spot-check every Section II/IV `question` string reads as a
 complete sentence with the answer dropped in, not just that it satisfies length bounds.
+
+## L07 — `_name_predicate` (Section III) and `_enumeration` (Section IV) assumed the extracted
+object was always the sentence's subject and always at a guessable word-count boundary (2026-08-22)
+
+Two more misattributions surfaced right after L06's fix: Section III paired "Eli" with "erau
+niște oameni răi" (evidence: "**Fiii lui** Eli erau niște oameni răi" — the verse is about Eli's
+*sons*, not Eli) and "Israel" with "care veneau la Silo" (evidence: "...acelora **din** Israel
+care veneau la Silo" — describes "those people", not Israel). Both times `_name_predicate` found
+*a* occurrence of `fact.object` in the sentence and took everything after it as "what the verse
+says about it", without checking the name was actually functioning as the subject there rather
+than as a genitive possessor ("lui Eli") or a prepositional complement ("din Israel").
+
+Separately, `_enumeration` (Section IV's coordinated-list items, e.g. "a luat trei tauri, o efă de
+făină și un burduf cu vin") assumed every list member has the same word count as the *last* one —
+true for `mid`/`tail` (no punctuation between them to measure by), but the optional third/earliest
+member is separated from the verb that introduces the list by nothing at all ("...și **a luat**
+trei tauri, o efă de făină..."), so guessing its length off `tail`'s length can walk backward
+straight into the verb: "a luat trei tauri" got offered as one option next to bare noun phrases
+"o efă de făină" / "un burduf cu vin" — inconsistent register, and grammatically the verb doesn't
+belong to the option.
+
+**Rule:** Extracting "object → what's said about it" or "list item" from free text is not safe
+just because a regex match succeeded and a length bound was satisfied — check the *role* the
+matched span is actually playing (subject vs. possessor/oblique object; list member vs. verb that
+introduces the list) before treating it as reusable copy. When a word-count-based guess can't be
+independently verified (no punctuation boundary to confirm it), prefer under-including — leave the
+ambiguous words in the stem — over risking a wrong pairing reaching students.
+
+**How to apply:** `_name_predicate` now rejects a match whose preceding word is a
+preposition/genitive marker (`_OBLIQUE_MARKERS` in `generation.py`: lui, pe, cu, din, la, în, de,
+pentru, …), excludes the literal genitive/dative form "Domnului" outright (it's never a subject),
+truncates the predicate at the first clause boundary instead of requiring the whole sentence
+remainder to be clean, and rejects a predicate whose own first word is itself one of those
+markers (catches verb-subject inversion, e.g. "se suia Ana la Casa Domnului" — the phrase after
+"Ana" belongs to "suia", not to Ana). `_enumeration`'s triple-member branch now refuses a guessed
+first-member candidate that opens with a common verb/auxiliary token (`_VERB_OPENERS`: a, au, s-a,
+l-a, …) and falls back to leaving those words in the stem, producing a valid two-option item
+instead of a mis-parsed three-option one — this is a deliberate reduction in how often a 3-correct
+Section IV item appears (see `tests/test_generator.py::RealCorpusSectionIVTests`, relaxed from
+requiring an exact `[1, 2, 3]` spread), not a bug. Regenerate and read Section III/IV aloud with
+each option substituted in, not just check they satisfy the length/punctuation rules.
