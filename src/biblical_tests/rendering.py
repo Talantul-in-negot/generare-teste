@@ -65,11 +65,13 @@ def _matching_description(letter: str, text: str, styles: dict) -> Paragraph:
 
 def _header(test: TestDefinition, styles: dict) -> list:
     c = test.contest
-    category = str(c.get("category", ""))
+    center_lines = [str(c.get("title", ""))]
+    if c.get("edition", ""):
+        center_lines.append(f"Ediția {c['edition']}")
     header = Table([
-        [_p(f"Categoria {category}", styles["header"]),
-         _p(f"{c.get('title', '')}\n{'Ediția ' + str(c.get('edition', ''))}\n\n{c.get('stage', '')}\n{c.get('date', '')}", ParagraphStyle("center", parent=styles["header"], alignment=TA_CENTER)),
-         _p(f"Versiune Test:     {test.version}", ParagraphStyle("right", parent=styles["header"], alignment=TA_RIGHT))]
+        [_p("", styles["header"]),
+         _p("\n".join(center_lines), ParagraphStyle("center", parent=styles["header"], alignment=TA_CENTER)),
+         _p("", styles["header"])]
     ], colWidths=[62*mm, 66*mm, 62*mm])
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     return [header, Spacer(1, 9*mm)]
