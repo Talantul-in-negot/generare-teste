@@ -325,3 +325,47 @@ Section III's claims (checked with only 5 facts used before Section II runs). A 
 analogue for places ("Unde…?") might help, since several PLACES were just added to the vocabulary
 this session — not attempted here; flagged for the next session rather than expanding scope further
 in one sitting.
+
+## L13 — Widening a shared shape's eligibility can turn a same-fact competition into a *new* one; sections need to claim in scarcity order, not just section-number order (2026-08-22)
+
+Chasing [[L12]]'s open item for "1 Samuel 5,6" specifically: widened `_PERSONAL` to include
+"Israel"/"Filistenii" (collective people-group subjects — "Cine au adus înapoi chivotul?" reads
+naturally) and `_name_predicate`'s predicate cap from 9 to 14 words (a clean single clause stays
+readable well past 9). Section II's eligible pool grew 10 → 12 for that range. Should have been
+enough — except it wasn't, because **Section IV's own single-answer fallback uses the exact same
+gate** (`_completion_stem(fact) or _wh_question(fact)`, mirrored deliberately from [[L10]]), so
+widening it handed Section IV *more* candidates it could steal from Section II too, not just more
+candidates for Section II itself.
+
+Tried reordering first: sort each section's traversal so facts *not* in Section II's eligible set
+are tried before ones that are (`priority_pool` in `build_test`), so IV/III only reach into II's
+scarce pool as a last resort. This measurably helped (2 Samuel 5,6 started passing) but didn't
+fully close 1 Samuel 5,6, because Section IV's enumeration tier only ever added **one** item per
+correct-count tier (`break` after the first success) even when more enumeration candidates existed
+— so it fell through to the shared fallback shape even though 4 enumeration candidates were sitting
+unused. Removed that early break so each tier exhausts every candidate at that count before moving
+to the next tier; enumeration candidates never overlap with Section II's shapes at all (they need a
+coordinated "și"/"sau" list), so maximizing how much of Section IV's 3 slots come from there is pure
+upside for Section II. This closed 1 Samuel 5,6's Section II shortfall entirely — and moved its
+failure point to **Section I** instead, where only 2 of 28 quality facts allow a safe name-swap
+(need 5) — a genuine content ceiling, not an ordering problem; verified by measuring the
+false-swappable count directly rather than assuming reordering would fix it too.
+
+**Rule:** When two code paths share an eligibility gate (deliberately, for consistency — see
+[[L10]]'s "same fallback order as Section II" comment), widening that gate helps *both* paths
+draw from the same enlarged pool, so it doesn't automatically reduce contention between them — it
+can just as easily increase it. Before declaring a widening "done", re-measure the actual
+downstream shortfall (build the full test, not just recount the gate's own eligible set) — a
+larger eligible count upstream doesn't mean a smaller shortfall downstream. And before reordering
+to fix a resource conflict, check whether one side's "loses more than it needs to" pattern (a tier
+that stops after one success while candidates remain) is the real cause — reordering can't fix a
+shape that's leaving free candidates on the table and reaching into a shared pool instead.
+
+**Result:** the L10/L12/L13 chain moved from a hard, unconditional failure on several chapter
+ranges to real passes on most of them, with the remaining failures being genuine content scarcity
+in a specific section (verified by direct count, not inferred) rather than an artifact of claim
+order. Sections still greedily claim without knowing every other section's exact need in advance —
+a fully general fix (compute every section's true minimum requirement before any claiming starts)
+was assessed as the "B" alternative to this session's "A" (targeted, incremental) approach and
+explicitly not chosen; this is documented as the honest tradeoff, not a promise that no chapter
+range will ever fail again.

@@ -38,7 +38,7 @@ class RealCorpusSectionIVTests(unittest.TestCase):
     """The real corpus is what actually has multi-member coordinated lists;
     the synthetic fixture above is too uniform to exercise that shape."""
 
-    def test_spans_a_mix_of_correct_answer_counts(self):
+    def test_correct_answer_counts_are_always_valid(self):
         # `_enumeration`'s three-member case can only place a list item ahead of
         # `mid`/`tail` when a genuine word-count boundary is findable; when the
         # verb that introduces the list is glued to it with no delimiter (as in
@@ -46,8 +46,16 @@ class RealCorpusSectionIVTests(unittest.TestCase):
         # a fixed word count risks grabbing the verb into the "member" instead
         # of leaving it in the stem. `_enumeration` now declines that guess
         # rather than emit a grammatically broken option, so a 3-correct item
-        # isn't guaranteed for every chapter range — only that real, clean
-        # lists still produce more than one shape of item.
+        # isn't guaranteed for every chapter range.
+        #
+        # Nor is a *mix* of counts: the enumeration tier now exhausts every
+        # candidate at each count (not just the first) before falling back to
+        # the single-answer shape, because that fallback draws from exactly
+        # the same scarce pool Section II needs (`_completion_stem`/
+        # `_wh_question`) while enumeration candidates never do — so on a
+        # chapter range where enumeration alone can cover all 3 slots, every
+        # item legitimately ends up the same count (e.g. [2, 2, 2]) rather
+        # than reaching into Section II's pool just for variety.
         from src.biblical_tests.selection import parse_selection
         repo = BibleRepository(Path("data"))
         selection = parse_selection("1 Samuel 1-4")
@@ -58,7 +66,6 @@ class RealCorpusSectionIVTests(unittest.TestCase):
         )
         counts = sorted(len(q.correct) for q in test.section_iv)
         self.assertTrue(all(1 <= count <= 3 for count in counts), counts)
-        self.assertGreater(len(set(counts)), 1, counts)
 
     def test_distractors_match_the_correct_answers_register(self):
         # A distractor pulled from an unrelated verse must open the same way
