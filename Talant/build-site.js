@@ -11,6 +11,7 @@ const sourceFiles = {
   '/tracker.js': ['tracker.js', 'application/javascript; charset=utf-8'],
   '/1samuel-test.html': ['1samuel-test.html', 'text/html; charset=utf-8'],
   '/data/1samuel-1-2.js': ['data/1samuel-1-2.js', 'application/javascript; charset=utf-8'],
+  '/data/1samuel-3-4.js': ['data/1samuel-3-4.js', 'application/javascript; charset=utf-8'],
   '/test-tracker.js': ['test-tracker.js', 'application/javascript; charset=utf-8'],
   '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json; charset=utf-8'],
   '/service-worker.js': ['service-worker.js', 'application/javascript; charset=utf-8'],

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Talantul în negoț – 1 Samuel 1-2</title>
+<title id="pageTitle">Talantul în negoț</title>
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:'Segoe UI',Arial,sans-serif; background:linear-gradient(160deg,#160047,#3b0764 60%,#1e1b4b); min-height:100vh; padding:24px 14px 60px; }
@@ -93,6 +93,11 @@
   .stat b { display:block; color:#6d28d9; font-size:1.15rem; }
   .leaderboard-row { display:grid; grid-template-columns:40px 1fr auto; gap:8px; align-items:center; padding:9px 0; border-bottom:1px solid #ede9fe; font-size:.9rem; }
   .leaderboard-row.me { background:#f3e8ff; margin:0 -8px; padding:9px 8px; border-radius:8px; }
+
+  #testSwitcher { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:0 0 16px; }
+  .test-pill { background:rgba(255,255,255,.14); color:#fff; border:1.5px solid rgba(255,255,255,.35); padding:7px 16px; border-radius:20px; font-size:.85rem; font-weight:700; cursor:pointer; text-decoration:none; transition:.15s; }
+  .test-pill:hover { background:rgba(255,255,255,.24); }
+  .test-pill.active { background:#fff; color:#6d28d9; border-color:#fff; }
 </style>
 </head>
 <body>
@@ -106,6 +111,7 @@
     <h1 id="testTitle"></h1>
     <div class="subtitle" id="testSubtitle"></div>
   </div>
+  <div id="testSwitcher"></div>
   <div id="sections"></div>
   <div class="submit-wrap">
     <button id="submitBtn">Finalizează testul</button>
@@ -133,24 +139,39 @@
 <div class="modal-backdrop" id="statsModal" hidden>
   <section class="modal" aria-labelledby="statsTitle">
     <button class="modal-close" id="statsClose" type="button" aria-label="Închide">×</button>
-    <h2 id="statsTitle">🏆 Clasament — 1 Samuel 1-2</h2>
+    <h2 id="statsTitle">🏆 Clasament</h2>
     <div id="statsContent">Se încarcă…</div>
   </section>
 </div>
 
 <script src="data/1samuel-1-2.js?v=3"></script>
+<script src="data/1samuel-3-4.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="auth.js"></script>
 <script src="test-tracker.js?v=3"></script>
 <script>
-const QUIZ_VERSION = 'samuel1-2-v1';
-const DATA = TEST_1SAMUEL;
+// ── Fiecare test are propriul quiz_version → scor și clasament separate,
+// deși toate folosesc același cont și aceleași tabele Supabase. ──
+const TESTS = {
+  'samuel1-2': { quizVersion: 'samuel1-2-v1', label: '1 Samuel 1-2', data: () => TEST_1SAMUEL },
+  'samuel3-4': { quizVersion: 'samuel3-4-v1', label: '1 Samuel 3-4', data: () => TEST_1SAMUEL_3_4 },
+};
+const params = new URLSearchParams(location.search);
+const activeTestId = TESTS[params.get('test')] ? params.get('test') : 'samuel1-2';
+const activeTest = TESTS[activeTestId];
+const QUIZ_VERSION = activeTest.quizVersion;
+const DATA = activeTest.data();
 const state = { af: {}, single: {}, match: {}, multi: {} };
 let activeMatchRow = null;
 
+document.getElementById('pageTitle').textContent = `Talantul în negoț – ${DATA.subtitle}`;
 document.getElementById('testTitle').textContent = DATA.title;
 document.getElementById('testSubtitle').textContent = DATA.subtitle;
+document.getElementById('statsTitle').textContent = `🏆 Clasament — ${DATA.subtitle}`;
+document.getElementById('testSwitcher').innerHTML = Object.entries(TESTS).map(([id, t]) =>
+  `<a class="test-pill${id === activeTestId ? ' active' : ''}" href="?test=${id}">${t.label}</a>`
+).join('');
 
 const sectionsEl = document.getElementById('sections');
 
