@@ -20,10 +20,48 @@ def _corpus(path):
     for number in range(1, 31):
         chapter = 1 if number % 2 else 2
         verse = (number + 1) // 2
-        text = f"În ziua aceea, Personajul {number} s-a suit la casa Domnului și a făcut lucrul {number}."
+        text = f"În ziua aceea, Personajul {number} s-a suit la casa Domnului și a adus lucrul {number} înaintea preotului din cetatea {number}."
         chapters[str(chapter)][str(verse)] = text
         facts.append({"id": f"fact-{number}", "statement": text, "subject": f"Personajul {number}", "predicate": "a făcut", "object": f"lucrul {number}", "evidence": {"book": "1 Samuel", "chapter": chapter, "verse_start": verse, "text": text}})
     path.write_text(json.dumps({"translation": "Synthetic test corpus", "books": {"1 Samuel": chapters}, "facts": facts}), encoding="utf-8")
+
+
+class RealCorpusSectionIVTests(unittest.TestCase):
+    """The real corpus is what actually has multi-member coordinated lists;
+    the synthetic fixture above is too uniform to exercise that shape."""
+
+    def test_spans_one_two_and_three_correct_answers(self):
+        from src.biblical_tests.selection import parse_selection
+        repo = BibleRepository(Path("data"))
+        selection = parse_selection("1 Samuel 1-4")
+        test = build_test(
+            repo.facts_for(selection), selection,
+            {"title": "T", "stage": "F", "edition": 2027, "date": "x", "category": "6_7"},
+            {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}, 777, 1,
+        )
+        counts = sorted(len(q.correct) for q in test.section_iv)
+        self.assertEqual(counts, [1, 2, 3])
+
+    def test_distractors_match_the_correct_answers_register(self):
+        # A distractor pulled from an unrelated verse must open the same way
+        # the correct options do (e.g. all "El ..." or all lowercase verb
+        # forms) — otherwise grammar alone gives the right answer away.
+        from src.biblical_tests.generation import _register
+        from src.biblical_tests.selection import parse_selection
+        repo = BibleRepository(Path("data"))
+        selection = parse_selection("1 Samuel 1,2")
+        test = build_test(
+            repo.facts_for(selection), selection,
+            {"title": "T", "stage": "F", "edition": 2027, "date": "x", "category": "6_7"},
+            {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}, 12345, 1,
+        )
+        for question in test.section_iv:
+            correct_values = [question.options[letter] for letter in question.correct]
+            if not correct_values:
+                continue
+            registers = {_register(value) for value in correct_values}
+            for letter, value in question.options.items():
+                self.assertIn(_register(value), registers, f"{question.id} option {letter} breaks register: {value!r}")
 
 
 class GeneratorTests(unittest.TestCase):
@@ -77,6 +115,16 @@ class GeneratorTests(unittest.TestCase):
             self.assertTrue(question.correct, f"{question.id} nu are niciun răspuns corect")
             for letter in question.correct:
                 self.assertIn(question.options[letter], question.evidence.text)
+
+    def test_section_iii_matches_name_to_verified_predicate(self):
+        match = self.test_definition.section_iii
+        for index, (name, evidence) in enumerate(zip(match.left, match.evidence), 1):
+            letter = match.answers[str(index)]
+            predicate = match.right[letter]
+            self.assertIn(name, evidence.text)
+            self.assertIn(predicate, evidence.text)
+            # The predicate must not repeat the name, or the match gives itself away.
+            self.assertNotIn(name, predicate)
 
     def test_multi_choice_accepts_zero_to_three_correct_options(self):
         original = self.test_definition.section_iv[0]

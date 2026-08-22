@@ -114,8 +114,7 @@ def _matching(q, answer_key: bool, styles: dict):
         answer_style = styles["correct"] if answer_key else styles["body"]
         letter = chr(64 + i)
         rows.append([_p(f"{i}.", styles["body"]), _p(answer, answer_style), _p(left, styles["body"]), _matching_description(letter, q.right[letter], styles), _p(q.evidence[i-1].reference, styles["red"])])
-    # The left column is reserved for names, while the right column carries
-    # the longer verse-based descriptions to be associated with those names.
+    # The left column holds the name, the right column the clause about it.
     table = Table(rows, colWidths=[7*mm, 8*mm, 32*mm, 101*mm, 42*mm])
     table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("GRID", (1, 0), (1, -1), 0.8, colors.black), ("ALIGN", (0, 0), (1, -1), "CENTER"), ("LEFTPADDING", (0, 0), (-1, -1), 1), ("RIGHTPADDING", (0, 0), (-1, -1), 1), ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
     return table
