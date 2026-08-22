@@ -67,15 +67,43 @@ def _round_robin(facts: list[Fact], count: int, rng: random.Random) -> list[Fact
     return selected
 
 
+# Feminine names in the corpus (repository.PEOPLE); everything else — the
+# other people, places, and deity terms — takes masculine agreement.
+_FEMININE_NAMES = {"Ana", "Penina", "Mical", "Batșeba"}
+
+
+def _gender(name: str) -> str:
+    return "f" if name in _FEMININE_NAMES else "m"
+
+
 def _wrong_object(fact: Fact, pool: list[Fact]) -> str:
     # Only names the selected chapters actually use, so a 2 Samuel test never
     # swaps in a character who appears nowhere in it.
     inside = {candidate.object for candidate in pool}
+    # A swap that changes grammatical gender breaks whatever adjective/verb
+    # agreed with the original name (e.g. "Eli era foarte bătrân" swapped to
+    # "Ana era foarte bătrân" — "bătrân" needed to become "bătrână"). Picking
+    # a same-gender replacement keeps the sentence grammatical without having
+    # to detect and rewrite the agreeing word at all.
+    # "Domnul" vs "Domnului" are the same entity in different grammatical
+    # cases, not a distinct wrong answer — swapping one in for the other
+    # both fails to change the claim and breaks whatever case the sentence
+    # needed ("Vrăjmașii Domnului" needs the genitive, not "Vrăjmașii Domnul").
+    safe = lambda value: value != fact.object and not _inflection(value, [fact.object])
+    same_gender = lambda value: _gender(value) == _gender(fact.object)
     for option in fact.options:
-        if option != fact.object and option in inside:
+        if safe(option) and option in inside and same_gender(option):
             return option
     for candidate in pool:
-        if candidate.id != fact.id and candidate.object != fact.object:
+        if candidate.id != fact.id and safe(candidate.object) and same_gender(candidate.object):
+            return candidate.object
+    # No same-gender candidate exists in this chapter selection — fall back
+    # to any distinct, non-inflected name rather than fail generation outright.
+    for option in fact.options:
+        if safe(option) and option in inside:
+            return option
+    for candidate in pool:
+        if candidate.id != fact.id and safe(candidate.object):
             return candidate.object
     raise GenerationError("Nu există suficiente fapte distincte pentru un distractor sigur.")
 
@@ -123,6 +151,28 @@ def _completion_stem(fact: Fact) -> tuple[str, str] | None:
 # role (possessor, direct/indirect object, prepositional complement) instead
 # of the sentence's subject.
 _OBLIQUE_MARKERS = {"lui", "pe", "cu", "din", "la", "în", "de", "pentru", "despre", "asupra", "către", "printre", "peste", "sub", "fără", "ca"}
+
+
+def _safe_to_swap(sentence: str, obj: str) -> bool:
+    """True only if a bare-name swap of `obj` inside `sentence` stays grammatical.
+
+    A False statement is built by dropping a different name in place of `obj`
+    verbatim — no article or case ending gets added. That only works when
+    `obj` itself sits in a plain, uninflected slot (typically the subject).
+    "Domnului" is the deity's genitive/dative form and has no plain-form
+    stand-in in the name pool, so it's never swappable. A name right after a
+    preposition/genitive marker ("Vrăjmașii Domnului", "Casa lui Eli") is in
+    the same oblique position — swapping in another bare name there drops the
+    case marking the sentence needs, the same way "lui Eli" or "Domnului"
+    would.
+    """
+    if obj == "Domnului":
+        return False
+    hit = re.search(rf"(?<!\w){re.escape(obj)}(?!\w)", sentence)
+    if not hit:
+        return True
+    lead = sentence[:hit.start()].rstrip().lower()
+    return not any(lead.endswith(f" {marker}") or lead == marker for marker in _OBLIQUE_MARKERS)
 
 
 def _name_predicate(fact: Fact) -> str | None:
@@ -389,8 +439,11 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     matching = _section_iii(pool, used, rng)
     singles = _section_ii(pool, facts, used, rng)
 
-    false_pool = [fact for fact in pool if fact.id not in used and _concise(fact, True)]
-    true_pool = [fact for fact in pool if fact.id not in used and _concise(fact, False)]
+    # Both pools are filtered by _safe_to_swap: the fallback below can hand a
+    # true_pool fact to the False-statement branch (and vice versa) when its
+    # own pool runs dry, so either one may end up having a name swapped in.
+    false_pool = [fact for fact in pool if fact.id not in used and (stmt := _concise(fact, True)) and _safe_to_swap(stmt, fact.object)]
+    true_pool = [fact for fact in pool if fact.id not in used and (stmt := _concise(fact, False)) and _safe_to_swap(stmt, fact.object)]
     tf: list[TrueFalseQuestion] = []
     for index in range(1, 11):
         is_true = index % 2 == 1
