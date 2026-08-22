@@ -98,17 +98,25 @@ def _completion_stem(fact: Fact) -> tuple[str, str] | None:
     # Whole-word match only: "Domnul" must not be cut out of "Domnului",
     # which would leave the stem with no correct completion at all.
     hits = list(re.finditer(rf"(?<!\w){re.escape(fact.object)}(?!\w)", fact.statement))
-    if not hits:
-        return None
-    last = hits[-1]
-    prefix, rest = fact.statement[:last.start()], fact.statement[last.end():]
-    sentences = list(re.finditer(r"[.!?]\s+", prefix))
-    if sentences:
-        prefix = prefix[sentences[-1].end():]
-    stem = prefix.strip().rstrip(_TRIM)
-    if not _STEM_MIN_CHARS <= len(stem) <= _STEM_MAX_CHARS:
-        return None
-    return stem + ":", fact.object + rest
+    for hit in reversed(hits):
+        prefix, rest = fact.statement[:hit.start()], fact.statement[hit.end():]
+        # The object must close its own clause — if real words follow it before
+        # the next comma/semicolon/sentence end, a stem cut off there loses the
+        # rest of the clause and stops making sense (e.g. "...pentru că:" when
+        # the verse continues "Domnul o făcuse stearpă"). Try an earlier
+        # occurrence of the same object instead of accepting a dangling stem.
+        punct = re.search(r"[,;:.!?]", rest)
+        clause_tail = rest[:punct.start()] if punct else rest
+        if clause_tail.strip(_TRIM):
+            continue
+        sentences = list(re.finditer(r"[.!?]\s+", prefix))
+        if sentences:
+            prefix = prefix[sentences[-1].end():]
+        stem = prefix.strip().rstrip(_TRIM)
+        if not _STEM_MIN_CHARS <= len(stem) <= _STEM_MAX_CHARS:
+            continue
+        return stem + ":", fact.object + rest
+    return None
 
 
 def _name_predicate(fact: Fact) -> str | None:

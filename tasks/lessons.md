@@ -100,3 +100,31 @@ LLM-generated swaps and any hand-authored ones.
 this was a content-level fix in the generated JSON output (`output/V1/test.json`, gitignored).
 If/when an automated subject-swap generator is added, this check needs to be part of its
 validation step in `validation.py`.
+
+## L06 — `_completion_stem` cut the stem at the *last* occurrence of the answer word, not at the end of its clause (2026-08-22)
+
+Two Section II questions read as nonsense once truncated: "...pentru că:" (verse continues
+"Domnul o făcuse stearpă" — dropped) and "...în timp ce:" (verse continues "Israel va fi copleșit
+de bunătăți de Domnul; ..." — dropped). `_completion_stem` in `generation.py` found the object's
+last regex match, sliced everything before it into the stem, and silently discarded everything
+after it (`rest`) except for using it as a distractor-safety check — it never verified the object
+was actually the *last* meaningful word of its clause. Whenever the object sat mid-clause (a
+subject right after a conjunction like "în timp ce", or right before a verb like "pentru că
+Domnul o făcuse"), the stem lost the predicate and the fill-in-the-blank stopped making sense
+even though every length/format check still passed.
+
+**Rule:** A completion/cloze stem is only valid if the word being blanked is immediately followed
+by clause-ending punctuation (comma, semicolon, colon, sentence end) — not just "within
+`_STEM_MIN_CHARS`/`_STEM_MAX_CHARS`". If real words remain before the next punctuation mark,
+either try an earlier occurrence of the same object in the statement or reject the fact — never
+render a stem that silently amputates a clause.
+
+**How to apply:** Fixed in `_completion_stem` (`generation.py`) — it now iterates occurrences from
+last to first, skipping any whose trailing clause (`rest` up to the next `[,;:.!?]`) has non-trim
+characters left in it. The synthetic fixture in `tests/test_generator.py::_corpus` had baked in
+the same anti-pattern (object always followed by more words) and only "passed" because the old
+code accepted broken stems — it now alternates a clause-ending shape (for Section II/IV) with a
+trailing-predicate shape (for Section III's `_name_predicate`), so the test suite actually
+exercises the real constraint instead of masking it. Regenerate (`python generate.py --chapters
+"1 Samuel 1,2" --version 1`) and spot-check every Section II/IV `question` string reads as a
+complete sentence with the answer dropped in, not just that it satisfies length bounds.

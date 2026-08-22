@@ -20,7 +20,15 @@ def _corpus(path):
     for number in range(1, 31):
         chapter = 1 if number % 2 else 2
         verse = (number + 1) // 2
-        text = f"În ziua aceea, Personajul {number} s-a suit la casa Domnului și a adus lucrul {number} înaintea preotului din cetatea {number}."
+        # Alternate two shapes: odd numbers trail the object with a predicate
+        # (what Section III's name-to-predicate matching needs), even numbers
+        # end the sentence right on the object (what Section II/IV's
+        # fill-in-the-blank completion needs — the object must close its own
+        # clause, or the stem left after cutting it out reads as unfinished).
+        if number % 2:
+            text = f"În ziua aceea, Personajul {number} s-a suit la casa Domnului și a adus lucrul {number} înaintea preotului din cetatea {number}."
+        else:
+            text = f"În ziua aceea, Personajul {number} s-a suit la casa Domnului și a adus lucrul {number}."
         chapters[str(chapter)][str(verse)] = text
         facts.append({"id": f"fact-{number}", "statement": text, "subject": f"Personajul {number}", "predicate": "a făcut", "object": f"lucrul {number}", "evidence": {"book": "1 Samuel", "chapter": chapter, "verse_start": verse, "text": text}})
     path.write_text(json.dumps({"translation": "Synthetic test corpus", "books": {"1 Samuel": chapters}, "facts": facts}), encoding="utf-8")
