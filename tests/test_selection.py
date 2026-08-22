@@ -10,6 +10,8 @@ class SelectionTests(unittest.TestCase):
             ("1 Samuel 1-3", {"1 Samuel": [1, 2, 3]}),
             ("1Sam 1,3-5", {"1 Samuel": [1, 3, 4, 5]}),
             ("1 Samuel 1,2\nRut 1\nIoan 3-4", {"1 Samuel": [1, 2], "Rut": [1], "Ioan": [3, 4]}),
+            ("2 Samuel 1,2", {"2 Samuel": [1, 2]}),
+            ("2Sam 1-3", {"2 Samuel": [1, 2, 3]}),
         ]
         for value, expected in cases:
             self.assertEqual(parse_selection(value), expected)
