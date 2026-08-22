@@ -15,7 +15,7 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from typing import Any
 
-from api.auth.jwt import decode_access_token
+from api.auth.jwt import decode_access_token, decode_access_token_async
 
 # Env var an MCP client config supplies the caller's bearer token through,
 # e.g. `claude mcp add graphrag --env GRAPHRAG_MCP_TOKEN=<token> -- python mcp_server/server.py`.
@@ -76,6 +76,15 @@ class CallerIdentity:
         from the environment instead of following the OAuth flow, and a stdio
         process is bound to one launcher rather than reachable by a network
         caller holding some other resource's token.
+
+        This is sync, so it cannot warm a cold external-issuer JWKS cache
+        (see `api.auth.jwt.decode_access_token_async`). It verifies
+        self-issued tokens and external-issuer tokens whose keys are already
+        warm in this process; a token from a just-trusted external issuer as
+        the very first request in a process's lifetime resolves to
+        anonymous rather than fetching keys. Accepted as-is: stdio is bound
+        to one trusted launcher, not an arbitrary network caller presenting
+        a fresh external-issuer token.
         """
         if not token or not token.strip():
             return cls.anonymous()
@@ -117,28 +126,33 @@ class CallerIdentity:
         audience: str | None = None,
         strict_audience: bool = False,
     ) -> "CallerIdentity":
-        """`from_token`, plus the revocation deny-list.
+        """`from_token`, plus the revocation deny-list, in a single decode.
 
         Revocation needs I/O, so it cannot live in the sync `from_token` that
         stdio and the capability tests use. The remote HTTP transport is
         already async and is the surface a leaked token would be replayed
         against, so it calls this instead.
+
+        Decodes via `decode_access_token_async` rather than delegating to
+        `from_token` -- this can await the remote-issuer JWKS warm-up, so a
+        token from a just-trusted external issuer verifies here even on a
+        cold cache, which `from_token`'s sync path cannot do.
         """
-        identity = cls.from_token(
-            token, audience=audience, strict_audience=strict_audience,
-        )
+        if not token or not token.strip():
+            return cls.anonymous()
+        try:
+            claims = await decode_access_token_async(
+                token, audience=audience, strict=strict_audience,
+            )
+        except ValueError:
+            return cls.anonymous()
+        identity = cls.from_claims(claims)
         if not identity.authenticated:
             return identity
         from graphrag.core.token_revocation import get_revocation_store
 
-        try:
-            claims = decode_access_token(
-                token or "", audience=audience, strict=strict_audience,
-            )
-            store = await get_revocation_store()
-            if await store.is_revoked(claims):
-                return cls.anonymous()
-        except ValueError:
+        store = await get_revocation_store()
+        if await store.is_revoked(claims):
             return cls.anonymous()
         return identity
 

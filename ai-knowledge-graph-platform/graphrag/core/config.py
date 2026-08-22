@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from pydantic import model_validator
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -42,6 +42,27 @@ def _load_yaml() -> dict:
     path = ROOT / "config" / "settings.yml"
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+class TrustedIssuerConfig(BaseModel):
+    """One externally-issued-token trust anchor.
+
+    ``audiences`` is a closed allow-list: this issuer's tokens may only ever
+    claim these resources, never any other resource this deployment happens
+    to host (see ``graphrag/core/issuer_trust.py`` for the enforcement side).
+    HS256 is never an option here -- a JWKS has no symmetric-key concept, so
+    federation is RS256-only structurally, not by a runtime check.
+
+    An external issuer is expected to mint tokens whose ``aud`` matches these
+    strings exactly, in their canonical form (see
+    ``graphrag/core/resource_identifiers.py``). A differently-spelled but
+    equivalent URI is a configuration mismatch to fix at the source, not
+    something silently normalized on the verifying side.
+    """
+
+    issuer: str
+    jwks_uri: str
+    audiences: list[str] = Field(default_factory=list)
 
 
 def resolve_tenant_config(base: dict, tenant: str = "default") -> dict:
@@ -185,6 +206,17 @@ class Settings(BaseSettings):
     # has to outlive the token itself; anything longer is storage spent on
     # credentials that already expired.
     jwt_revocation_ttl_seconds: int = 3900
+    # External issuers this deployment trusts, beyond itself. Empty means no
+    # federation -- every token must be self-issued, today's behaviour.
+    # JSON-decoded from the env var by pydantic-settings, the same mechanism
+    # already used for cors_origins. Example:
+    #   JWT_TRUSTED_ISSUERS='[{"issuer":"https://idp.partner.example",
+    #     "jwks_uri":"https://idp.partner.example/.well-known/jwks.json",
+    #     "audiences":["https://api.graphrag.example"]}]'
+    # See graphrag/core/issuer_trust.py for how these are consulted.
+    jwt_trusted_issuers: list[TrustedIssuerConfig] = Field(default_factory=list)
+    # How long a trusted issuer's fetched JWKS is cached before re-fetching.
+    jwt_issuer_jwks_cache_ttl_seconds: int = 300
     # Separate secret for SessionMiddleware cookie signing.
     # When empty, main.py derives one from jwt_secret_key + ":session".
     # Set explicitly in production to allow independent rotation.
@@ -224,6 +256,29 @@ class Settings(BaseSettings):
         env = self.env.strip().lower()
         if self.api_max_request_bytes <= 0:
             raise ValueError("api_max_request_bytes must be positive")
+        # Unconditional (every env, not just production): a typo'd or stale
+        # audience here is a pure misconfiguration, not a dev-convenience
+        # tradeoff -- catch it at settings-load time rather than at first
+        # token verification. known_resources() is env-derived, not
+        # Settings-derived, so importing it here carries no import cycle.
+        if self.jwt_trusted_issuers:
+            from graphrag.core.resource_identifiers import known_resources
+
+            hosted = set(known_resources())
+            for entry in self.jwt_trusted_issuers:
+                if not entry.audiences:
+                    raise ValueError(
+                        f"jwt_trusted_issuers entry for {entry.issuer!r} must "
+                        "declare at least one audience -- an issuer trusted "
+                        "for no resource can never mint a usable token."
+                    )
+                unknown = [a for a in entry.audiences if a not in hosted]
+                if unknown:
+                    raise ValueError(
+                        f"jwt_trusted_issuers entry for {entry.issuer!r} "
+                        f"names audience(s) {unknown} that this deployment "
+                        f"does not host (known resources: {sorted(hosted)})."
+                    )
         if env not in DEV_ENVS:
             if env == "":
                 raise ValueError(
@@ -274,6 +329,14 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "cors_origins must contain only approved HTTPS production origins."
                 )
+            for entry in self.jwt_trusted_issuers:
+                if not entry.issuer.startswith("https://") or not entry.jwks_uri.startswith("https://"):
+                    raise ValueError(
+                        f"jwt_trusted_issuers entry for {entry.issuer!r} must use "
+                        "https:// for both issuer and jwks_uri in production -- "
+                        "fetching signing keys over plain HTTP lets a network "
+                        "attacker substitute their own keys."
+                    )
         return self
 
     def __init__(self, **data):

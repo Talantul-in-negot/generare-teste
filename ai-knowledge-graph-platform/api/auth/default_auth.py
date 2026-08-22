@@ -34,7 +34,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from api.auth.dependencies import request_access_token, validate_cookie_csrf
-from api.auth.jwt import assert_not_revoked, decode_access_token
+from api.auth.jwt import assert_not_revoked, decode_access_token_async
 from graphrag.core.config import get_settings, is_dev_env
 from graphrag.core.resource_identifiers import api_resource
 
@@ -155,7 +155,7 @@ class RequireAuthMiddleware(BaseHTTPMiddleware):
         try:
             # See api/auth/dependencies.py: the API is a resource server too,
             # so it rejects tokens minted for the MCP resource.
-            claims = decode_access_token(token, audience=api_resource())
+            claims = await decode_access_token_async(token, audience=api_resource())
             await assert_not_revoked(claims)
         except ValueError as exc:
             log.info("auth.middleware_denied", path=path, reason="invalid_token", error=str(exc))

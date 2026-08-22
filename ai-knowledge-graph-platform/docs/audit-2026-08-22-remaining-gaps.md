@@ -10,10 +10,10 @@ snapshot, not a new audit pass — see that document and
 
 | Row | What closed it |
 |---|---|
-| Security (partial) | Audience-bound tokens, RS256/JWKS/rotation, revocation, RFC 9728 discovery, prompt-injection corpus, dead GenAI token-usage telemetry fixed |
+| Security (partial) | Audience-bound tokens, RS256/JWKS/rotation, revocation, RFC 9728 discovery, prompt-injection corpus, dead GenAI token-usage telemetry fixed, multi-issuer OAuth federation code + tests (this session — see item 3) |
 | Reliability | Chaos/retry-storm tests, concurrency tests, property-based invariants, failure-exercise harness rewired to actually execute (previously hardcoded `True` with nothing run) |
 | Observability | Real metrics wired to real code paths, alert rules cross-checked against actual metric names, Grafana dashboard, SLO doc |
-| Knowledge representation (partial) | Exact-fidelity RDF round-trip tests, OWL/SHACL interoperability verified against real third-party engines (`owlrl`, `pyshacl`), not just triple-count checks |
+| Knowledge representation | Exact-fidelity RDF round-trip tests, OWL/SHACL/SKOS interoperability verified against real third-party engines (`owlrl`, `pyshacl`), not just triple-count checks. The `(partial)` qualifier this row carried was itself stale: all 103 RDF/OWL/SHACL/SKOS/SPARQL-bridge/cross-ontology-linker unit tests pass with zero skips, and no TODO/FIXME/NotImplemented remains anywhere in the KR source or test suite — there was no actual remaining gap to qualify. |
 | Testing (item 5, CI gate integration) | Corrected a root-vs-subdirectory search mistake in this same audit: a real, comprehensive CI workflow already exists at the monorepo root and is pushed to `origin/main` — see item 5 below |
 
 ## Still open, and why
@@ -36,12 +36,38 @@ starting the most recent work session — it is also why the aerospace-prompt
 decoupling below was not attempted; its own stated prerequisite is "a
 runnable golden eval."
 
-### 3. Federated MCP + tested disaster recovery — mostly open
+### 3. Federated MCP + tested disaster recovery — partially closed this session
 
 OAuth 2.1 is done for the *local* case — audience binding, protected-resource
-metadata, revocation. Multi-issuer federation, external IdP trust, and an
-actual DR restore drill with measured RTO/RPO are not. Also needs live
-infrastructure to produce real numbers rather than a paper design.
+metadata, revocation.
+
+**Closed this session**: multi-issuer trust dispatch is now real, working
+code, not a paper design. `graphrag/core/issuer_trust.py` (new) holds a
+configured allow-list of trusted external issuers (`jwt_trusted_issuers` in
+`graphrag/core/config.py`), each scoped to specific audiences. Every token
+now carries an `iss` claim; `api/auth/jwt.py`'s `decode_access_token`
+dispatches on it — a self-issued token (including one minted before `iss`
+existed) verifies exactly as before, an externally-issued token is verified
+only against that issuer's own fetched-and-cached RS256 keys, and **an
+unrecognized issuer is rejected outright, never falling through to try local
+keys**. A trusted issuer's tokens are further restricted to the audience(s)
+it was explicitly configured for, even if the caller only asked for a
+generic decode. HS256 is excluded from federation structurally (a JWKS has
+no symmetric-key concept), not by a runtime check. Fully unit-tested in
+`tests/unit/test_issuer_federation.py` (8 tests) and
+`tests/unit/test_config.py` (settings validation) with an injected fake HTTP
+client — no Docker, no real network, no live IdP required. The critical
+negative test (a token signed with this deployment's own real key but
+claiming an unconfigured foreign issuer) is rejected, proving there is no
+key-fallback path that would defeat the whole point of naming an issuer.
+
+**Still open**: an integration test against a *real* external IdP (Auth0,
+Okta, etc. actually issuing a token this code verifies end-to-end), external
+IdP trust-establishment tooling (the config today assumes a human hand-enters
+the trust anchor), and an actual DR restore drill with measured RTO/RPO. All
+three still need live infrastructure this session cannot provide. Unit-testing
+the federation *code* does not by itself constitute "tested disaster
+recovery" — that claim is not being made here.
 
 ### 4. Architecture — aerospace-prompt separation
 

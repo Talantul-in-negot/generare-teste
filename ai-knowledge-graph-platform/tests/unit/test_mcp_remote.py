@@ -54,7 +54,7 @@ class TestRemoteMCPAuth:
 
     def test_verified_token_is_bound_only_for_the_request(self):
         client = TestClient(_protected_app())
-        with patch("mcp_server.identity.decode_access_token", return_value={
+        with patch("mcp_server.identity.decode_access_token_async", return_value={
             "sub": "agent-1", "tenant": "automotive", "scope": "read", "type": "m2m",
         }):
             response = client.post(
@@ -68,10 +68,10 @@ class TestRemoteMCPAuth:
 
     def test_invalid_token_and_oversized_body_are_rejected_before_dispatch(self):
         client = TestClient(_protected_app(max_request_bytes=3))
-        with patch("mcp_server.identity.decode_access_token", side_effect=ValueError("bad")):
+        with patch("mcp_server.identity.decode_access_token_async", side_effect=ValueError("bad")):
             invalid = client.post("/mcp", content=b"{}", headers={"Authorization": "Bearer invalid"})
         assert invalid.status_code == 401
-        with patch("mcp_server.identity.decode_access_token", return_value={
+        with patch("mcp_server.identity.decode_access_token_async", return_value={
             "sub": "agent-1", "tenant": "aerospace", "scope": "read",
         }):
             oversized = client.post("/mcp", content=b"too-long", headers={"Authorization": "Bearer valid"})
@@ -83,7 +83,7 @@ class TestRemoteMCPAuth:
             yield b"cd"
 
         transport = ASGITransport(app=_body_reading_app(max_request_bytes=3))
-        with patch("mcp_server.identity.decode_access_token", return_value={
+        with patch("mcp_server.identity.decode_access_token_async", return_value={
             "sub": "agent-1", "tenant": "aerospace", "scope": "read",
         }):
             async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -94,7 +94,7 @@ class TestRemoteMCPAuth:
 
     def test_browser_origin_must_be_explicitly_allowed(self):
         client = TestClient(_protected_app(allowed_origins={"https://agent.example"}))
-        with patch("mcp_server.identity.decode_access_token", return_value={
+        with patch("mcp_server.identity.decode_access_token_async", return_value={
             "sub": "agent-1", "tenant": "aerospace", "scope": "read",
         }):
             denied = client.post(

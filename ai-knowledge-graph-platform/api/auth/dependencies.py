@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from api.auth.jwt import assert_not_revoked, decode_access_token
+from api.auth.jwt import assert_not_revoked, decode_access_token_async
 from graphrag.core.resource_identifiers import api_resource
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -72,7 +72,7 @@ async def get_current_user(
         # reach REST endpoints any more than an API token may reach the MCP
         # tool surface. Non-strict, so a token minted before audience binding
         # existed still works for its remaining lifetime -- see ADR 0010.
-        claims = decode_access_token(token, audience=api_resource())
+        claims = await decode_access_token_async(token, audience=api_resource())
         # Signature/expiry/audience are proven offline above; whether the token
         # has since been revoked is the one question that needs I/O, so it is
         # asked once, here, rather than inside every decode.

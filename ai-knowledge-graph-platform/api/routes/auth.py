@@ -611,7 +611,7 @@ async def revoke_token(
     security one, so the ability to invalidate another caller's session is
     gated at the same level as user provisioning.
     """
-    from api.auth.jwt import decode_access_token
+    from api.auth.jwt import decode_access_token_async
     from graphrag.core.token_revocation import get_revocation_store
 
     store = await get_revocation_store()
@@ -627,7 +627,7 @@ async def revoke_token(
         # minted for the MCP resource, and refusing to revoke it here because
         # it is not an API token would be exactly backwards.
         try:
-            claims = decode_access_token(req.token)
+            claims = await decode_access_token_async(req.token)
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

@@ -11,7 +11,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from graphrag.core.config import DEV_ENVS, Settings, is_dev_env
+from graphrag.core.config import DEV_ENVS, Settings, TrustedIssuerConfig, is_dev_env
+from graphrag.core.resource_identifiers import api_resource, mcp_resource
 
 
 def _settings_with_yaml(retrieval: dict) -> Settings:
@@ -142,6 +143,82 @@ class TestProductionSettings:
         # Development keeps its convenience defaults; the gate is deliberately
         # non-dev only, like every other check in this validator.
         assert Settings(_env_file=None, env="development", jwt_secret_key="short").env == "development"
+
+    def test_production_rejects_a_plain_http_trusted_issuer(self):
+        # Fetching signing keys over plain HTTP lets a network attacker
+        # substitute their own keys -- production-only, like cors_origins.
+        with pytest.raises(ValidationError, match="must use https://"):
+            self._production(
+                jwt_trusted_issuers=[
+                    TrustedIssuerConfig(
+                        issuer="http://idp.partner.example",
+                        jwks_uri="http://idp.partner.example/.well-known/jwks.json",
+                        audiences=[api_resource()],
+                    ),
+                ],
+            )
+
+    def test_production_accepts_an_https_trusted_issuer(self):
+        settings = self._production(
+            jwt_trusted_issuers=[
+                TrustedIssuerConfig(
+                    issuer="https://idp.partner.example",
+                    jwks_uri="https://idp.partner.example/.well-known/jwks.json",
+                    audiences=[api_resource()],
+                ),
+            ],
+        )
+        assert settings.jwt_trusted_issuers[0].issuer == "https://idp.partner.example"
+
+
+class TestTrustedIssuerAudienceScope:
+    """Unlike the production-only checks above, these apply in every
+    environment: a typo'd or unscoped trusted-issuer audience is a pure
+    misconfiguration, not a dev-convenience tradeoff. See
+    graphrag/core/issuer_trust.py for how the scope is enforced at
+    verification time."""
+
+    def test_an_audience_outside_known_resources_is_rejected_even_in_dev(self):
+        with pytest.raises(ValidationError, match="does not host"):
+            Settings(
+                _env_file=None,
+                env="development",
+                jwt_trusted_issuers=[
+                    TrustedIssuerConfig(
+                        issuer="https://idp.partner.example",
+                        jwks_uri="https://idp.partner.example/.well-known/jwks.json",
+                        audiences=["https://not-a-real-resource.example"],
+                    ),
+                ],
+            )
+
+    def test_an_issuer_with_no_audiences_is_rejected_even_in_dev(self):
+        with pytest.raises(ValidationError, match="must declare at least one audience"):
+            Settings(
+                _env_file=None,
+                env="development",
+                jwt_trusted_issuers=[
+                    TrustedIssuerConfig(
+                        issuer="https://idp.partner.example",
+                        jwks_uri="https://idp.partner.example/.well-known/jwks.json",
+                        audiences=[],
+                    ),
+                ],
+            )
+
+    def test_a_correctly_scoped_issuer_is_accepted_in_development(self):
+        settings = Settings(
+            _env_file=None,
+            env="development",
+            jwt_trusted_issuers=[
+                TrustedIssuerConfig(
+                    issuer="https://idp.partner.example",
+                    jwks_uri="https://idp.partner.example/.well-known/jwks.json",
+                    audiences=[mcp_resource()],
+                ),
+            ],
+        )
+        assert settings.jwt_trusted_issuers[0].audiences == [mcp_resource()]
 
 
 class TestEnvFailClosedOnUnset:
