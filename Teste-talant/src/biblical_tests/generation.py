@@ -8,8 +8,11 @@ from .models import Fact, MatchingQuestion, MultiChoiceQuestion, SingleChoiceQue
 from .repository import BibleRepository
 
 # Objects that „Cine?" can ask about — a place or a thing needs a different
-# question word, so those are left to the colon-completion shape.
-_PERSONAL = BibleRepository.PEOPLE | BibleRepository.DEITY
+# question word, so those are left to the colon-completion shape. "Israel"
+# and "Filistenii" are geographic/national terms in PLACES, but they act as
+# collective people-group subjects ("Filistenii au adus înapoi chivotul" —
+# "Cine au adus înapoi chivotul?" reads naturally), so they're added here too.
+_PERSONAL = BibleRepository.PEOPLE | BibleRepository.DEITY | {"Israel", "Filistenii"}
 
 
 class GenerationError(ValueError):
@@ -222,7 +225,11 @@ def _name_predicate(fact: Fact) -> str | None:
         punct = re.search(r"[,;:.!?]", tail)
         predicate = (tail[:punct.start()] if punct else tail).strip(_TRIM)
         words = predicate.split()
-        if not 2 <= len(words) <= 9:
+        # Reference predicates are usually short, but a plain, clean single
+        # clause ("au luat chivotul lui Dumnezeu ... la Asdod") stays
+        # readable well past 9 words — the punctuation truncation above
+        # already guarantees it's one clause, not a run-on.
+        if not 2 <= len(words) <= 14:
             continue
         # If the name sits after its verb ("se suia Ana la Casa Domnului"),
         # what follows is the verb's own complement, not a fresh predicate
@@ -415,8 +422,15 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
         return True
 
     # Three, then two, then one correct answer, matching how the reference varies.
+    # Enumeration candidates never overlap with Section II's shapes (they need
+    # a coordinated "și"/"sau" list, not a clause-ending or subject-led verse),
+    # so exhausting every candidate at each count before falling back to the
+    # single-answer shape below (which does overlap) keeps IV out of II's way
+    # whenever there happen to be enough enumerations to cover all 3 alone.
     for wanted in (3, 2, 1):
         for fact, stem, members in candidates:
+            if len(multis) == 3:
+                break
             if fact.id in used or len(members) < wanted:
                 continue
             correct_values = members[:wanted]
@@ -438,8 +452,9 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
                     picks.append(value)
             if len(picks) != 3 - wanted:
                 continue
-            if add(fact, stem, [*correct_values, *picks], correct_values):
-                break
+            add(fact, stem, [*correct_values, *picks], correct_values)
+        if len(multis) == 3:
+            break
     # A verse that merely names a person still makes a sound single-answer item.
     # Same fallback order as Section II: the colon-completion shape needs the
     # answer to close its own clause, so a „Cine ...?" question covers most of
@@ -571,8 +586,19 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     # Section III's other shape (_clause_halves, no named-subject requirement)
     # is looser than Section II's, so it's deferred until after Section II has
     # claimed what it needs — otherwise it competes for the same verses.
-    multis = _section_iv(pool, facts, used, rng)
-    iii_rows = _section_iii_named(pool, used, rng)
+    #
+    # Sections IV and III-named can often satisfy their own quota from several
+    # different facts. When a fact also happens to be one of the few that
+    # qualifies for Section II, spending it here instead of there can turn a
+    # comfortable margin into a shortfall two steps later. Trying the pool in
+    # an order that tries non-II-eligible facts first — falling back to
+    # II-eligible ones only when nothing else works — costs those sections
+    # nothing (they still get the same number of facts) and protects II's
+    # much smaller candidate set.
+    ii_eligible = {fact.id for fact in facts if _completion_stem(fact) or _wh_question(fact)}
+    priority_pool = sorted(pool, key=lambda fact: fact.id in ii_eligible)
+    multis = _section_iv(priority_pool, facts, used, rng)
+    iii_rows = _section_iii_named(priority_pool, used, rng)
     singles = _section_ii(pool, facts, used, rng)
     matching = _section_iii_fill(pool, used, rng, iii_rows)
 
