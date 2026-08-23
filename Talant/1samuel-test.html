@@ -155,7 +155,10 @@
       <input id="authUsername" maxlength="30" autocomplete="username" placeholder="Nume utilizator">
       <input id="authPassword" type="password" maxlength="64" autocomplete="current-password" placeholder="Parolă">
       <p class="auth-error" id="authError" role="alert"></p>
-      <div class="modal-actions"><button id="loginBtn" type="button">Intră în cont</button></div>
+      <div class="modal-actions">
+        <button id="loginBtn" type="button">Intră în cont</button>
+        <button id="registerBtn" class="secondary" type="button">Creează cont</button>
+      </div>
     </div>
     <div id="authLogged" hidden>
       <p>Conectat ca <strong id="authLoggedName"></strong>.</p>
@@ -563,6 +566,7 @@ document.getElementById('authClose').addEventListener('click', closeAuth);
 document.getElementById('statsBtn').addEventListener('click', openStats);
 document.getElementById('statsClose').addEventListener('click', () => { document.getElementById('statsModal').hidden = true; });
 document.getElementById('loginBtn').addEventListener('click', () => submitAuth('login'));
+document.getElementById('registerBtn').addEventListener('click', () => submitAuth('register'));
 document.getElementById('logoutBtn').addEventListener('click', async () => { await Auth.signOut(); accountUser = ''; updateAccount(); });
 document.getElementById('authModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeAuth(); });
 document.getElementById('statsModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.hidden = true; });
