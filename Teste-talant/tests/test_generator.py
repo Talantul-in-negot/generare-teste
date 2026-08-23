@@ -75,7 +75,7 @@ class RealCorpusSectionIVTests(unittest.TestCase):
         from src.biblical_tests.generation import _MAX_SAME_ANSWER
         from src.biblical_tests.selection import parse_selection
         repo = BibleRepository(Path("data"))
-        selection = parse_selection("1 Samuel 6,7")
+        selection = parse_selection("1 Samuel 5,6,7")
         test = build_test(
             repo.facts_for(selection), selection,
             {"title": "T", "stage": "F", "edition": 2027, "date": "x", "category": "6_7"},
@@ -187,6 +187,26 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(pattern.count("A"), 5)
         self.assertEqual(pattern.count("F"), 5)
         self.assertNotEqual(pattern, list("AFAFAFAFAF"))
+
+    def test_no_question_depends_on_context_outside_itself(self):
+        from src.biblical_tests.generation import _self_contained
+        texts = (
+            [q.statement for q in self.test_definition.section_i]
+            + [q.question for q in self.test_definition.section_ii]
+            + [q.question for q in self.test_definition.section_iv]
+        )
+        for text in texts:
+            self.assertTrue(_self_contained(text), text)
+
+    def test_wh_questions_include_the_quoted_speech_they_ask_about(self):
+        # Truncating "s-a rugat și a zis" right at the colon that introduces
+        # the quotation left nothing for the student to reason from — the
+        # quote is the whole point of the question.
+        for question in self.test_definition.section_ii:
+            if not question.question.startswith("Cine "):
+                continue
+            if question.question.rstrip("?").rstrip().endswith(("a zis", "a răspuns", "a strigat")):
+                self.fail(f"{question.id} promises reported speech but quotes none: {question.question!r}")
 
     def test_section_iii_matches_name_to_verified_predicate(self):
         match = self.test_definition.section_iii
