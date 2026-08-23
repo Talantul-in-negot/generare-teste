@@ -680,9 +680,16 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
             used.add(fact.id)
     if len(true_facts) != 5:
         raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
+    # The True/False pattern across the 10 statements must not be predictable —
+    # a fixed odd/even alternation would let a student answer half the section
+    # from position alone, without reading a single statement. Shuffling the
+    # sequence of True/False slots (independent of which facts filled them
+    # above) keeps the layout random each time while still guaranteeing
+    # exactly 5 of each.
+    pattern = [True] * 5 + [False] * 5
+    rng.shuffle(pattern)
     tf: list[TrueFalseQuestion] = []
-    for index in range(1, 11):
-        is_true = index % 2 == 1
+    for index, is_true in zip(range(1, 11), pattern):
         fact = (true_facts if is_true else false_facts).pop(0)
         statement = _concise(fact, not is_true) or _concise(fact, False)
         if not is_true:
