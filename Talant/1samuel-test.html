@@ -75,6 +75,16 @@
   .correction.ok { color:#059669; }
   .correction.bad { color:#dc2626; }
 
+  .report-section h3 { font-size:.95rem; color:#4c1d95; margin:16px 0 8px; }
+  .report-section:first-of-type h3 { margin-top:6px; }
+  .report-item { padding:9px 12px; border-radius:10px; margin-bottom:6px; font-size:.85rem; line-height:1.5; }
+  .report-item .item-ref { font-size:.72rem; color:inherit; opacity:.65; font-style:italic; margin-left:6px; }
+  .report-item.ok { background:#ecfdf5; color:#065f46; }
+  .report-item.bad { background:#fef2f2; color:#991b1b; }
+  .report-q { font-weight:700; margin-bottom:3px; }
+  .report-a { opacity:.92; }
+  .report-a b { font-weight:700; }
+
   #accountBar { position:fixed; top:14px; left:14px; z-index:20; display:flex; gap:6px; flex-wrap:wrap; }
   .account-btn { background:rgba(0,0,0,.38); backdrop-filter:blur(8px); color:#fff; border:0; padding:7px 14px; border-radius:20px; font-size:.82rem; font-weight:700; cursor:pointer; }
   #syncNotice { position:fixed; top:52px; left:14px; z-index:20; color:#d8b4fe; font-size:.78rem; max-width:280px; }
@@ -393,52 +403,75 @@ function renderMulti(sec, block) {
   });
 }
 
+// ── Raport detaliat: ce a fost bine / ce s-a greșit, întrebare cu întrebare ──
+function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function letterText(options, letter) { return letter ? `${letter}. ${options[letter.charCodeAt(0) - 65]}` : '(niciun răspuns)'; }
+function lettersText(options, letters) {
+  const arr = Array.from(letters || []);
+  if (!arr.length) return '(niciun răspuns)';
+  return arr.slice().sort().map(l => letterText(options, l)).join(', ');
+}
+function buildReportItem(num, text, ref, userText, correctText, isCorrect) {
+  return `<div class="report-item ${isCorrect ? 'ok' : 'bad'}">
+    <div class="report-q">${num}. ${esc(text)}${ref ? `<span class="item-ref">${esc(ref)}</span>` : ''}</div>
+    <div class="report-a">${isCorrect ? '✓' : '✗'} Răspunsul tău: <b>${esc(userText)}</b>${!isCorrect ? `<br>Răspuns corect: <b>${esc(correctText)}</b>` : ''}</div>
+  </div>`;
+}
+
 document.getElementById('submitBtn').addEventListener('click', async () => {
   const results = [];
   let grandTotal = 0, grandMax = 0;
+  let reportHtml = '';
 
   DATA.sections.forEach(sec => {
     let earned = 0, max = 0, answered = 0, total = 0;
+    let sectionReport = '';
     if (sec.type === 'af') {
       total = sec.items.length;
       sec.items.forEach((item, idx) => {
         max += sec.points;
-        if (state.af[idx]) {
-          answered++;
-          if (state.af[idx] === item.correct) earned += sec.points;
-        }
+        const chosen = state.af[idx];
+        const ok = chosen === item.correct;
+        if (chosen) { answered++; if (ok) earned += sec.points; }
+        const toText = v => v === 'A' ? 'Adevărat' : v === 'F' ? 'Fals' : '(niciun răspuns)';
+        sectionReport += buildReportItem(idx + 1, item.text, item.ref, toText(chosen), toText(item.correct), ok);
       });
     } else if (sec.type === 'single') {
       total = sec.items.length;
       sec.items.forEach((item, idx) => {
         max += sec.points;
-        if (state.single[idx]) {
-          answered++;
-          if (state.single[idx] === item.correct) earned += sec.points;
-        }
+        const chosen = state.single[idx];
+        const ok = chosen === item.correct;
+        if (chosen) { answered++; if (ok) earned += sec.points; }
+        sectionReport += buildReportItem(idx + 1, item.text, item.ref, letterText(item.options, chosen), letterText(item.options, item.correct), ok);
       });
     } else if (sec.type === 'match') {
       total = sec.left.length;
+      const rightText = letter => { const r = sec.right.find(r => r.letter === letter); return r ? `${letter}. ${r.text}` : '(niciun răspuns)'; };
       sec.left.forEach((l, idx) => {
         max += sec.points;
-        if (state.match[idx]) {
-          answered++;
-          if (state.match[idx] === l.correct) earned += sec.points;
-        }
+        const chosen = state.match[idx];
+        const ok = chosen === l.correct;
+        if (chosen) { answered++; if (ok) earned += sec.points; }
+        sectionReport += buildReportItem(idx + 1, l.label, l.ref, rightText(chosen), rightText(l.correct), ok);
       });
     } else if (sec.type === 'multi') {
       total = sec.items.length;
       sec.items.forEach((item, idx) => {
         max += sec.points;
-        const chosen = Array.from(state.multi[idx] || []).sort();
+        const chosenSet = state.multi[idx] || new Set();
+        const chosen = Array.from(chosenSet).sort();
         const correct = [...item.correct].sort();
+        const ok = JSON.stringify(chosen) === JSON.stringify(correct);
         if (chosen.length) answered++;
-        if (JSON.stringify(chosen) === JSON.stringify(correct)) earned += sec.points;
+        if (ok) earned += sec.points;
+        sectionReport += buildReportItem(idx + 1, item.text, item.ref, lettersText(item.options, chosenSet), lettersText(item.options, item.correct), ok);
       });
     }
     grandTotal += earned;
     grandMax += max;
     results.push({ id: sec.id, heading: sectionHeading(sec), earned, max, answered, total });
+    reportHtml += `<div class="report-section"><h3>Categoria ${sec.id} — ${sectionHeading(sec)}</h3>${sectionReport}</div>`;
   });
 
   const box = document.getElementById('resultBox');
@@ -460,6 +493,10 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     ${results.map(r => `<div class="result-row"><span>Categoria ${r.id} — ${r.heading} (${r.answered}/${r.total} răspunsuri date)</span><span>${r.earned} / ${r.max} p</span></div>`).join('')}
     <div class="result-row total"><span>Total</span><span>${grandTotal} / ${grandMax} p</span></div>
     ${saveNote}
+  </div>
+  <div class="result-card">
+    <h2>Raport — ce a fost bine și ce s-a greșit</h2>
+    ${reportHtml}
   </div>`;
   box.scrollIntoView({ behavior: 'smooth' });
 });
