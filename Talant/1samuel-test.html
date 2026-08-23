@@ -161,8 +161,24 @@
   </section>
 </div>
 
-<script src="data/1samuel-1-2.js?v=3"></script>
-<script src="data/1samuel-3-4.js?v=1"></script>
+<script src="data/1samuel-1-3.js?v=1"></script>
+<script src="data/1samuel-4-6.js?v=1"></script>
+<script src="data/1samuel-7-9.js?v=1"></script>
+<script src="data/1samuel-10-12.js?v=1"></script>
+<script src="data/1samuel-13-15.js?v=1"></script>
+<script src="data/1samuel-16-18.js?v=1"></script>
+<script src="data/1samuel-19-21.js?v=1"></script>
+<script src="data/1samuel-22-24.js?v=1"></script>
+<script src="data/1samuel-25-27.js?v=1"></script>
+<script src="data/1samuel-28-30.js?v=1"></script>
+<script src="data/1samuel31-2samuel1-2.js?v=1"></script>
+<script src="data/2samuel-3-5.js?v=1"></script>
+<script src="data/2samuel-6-8.js?v=1"></script>
+<script src="data/2samuel-9-11.js?v=1"></script>
+<script src="data/2samuel-12-14.js?v=1"></script>
+<script src="data/2samuel-15-17.js?v=1"></script>
+<script src="data/2samuel-18-20.js?v=1"></script>
+<script src="data/2samuel-21-24.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="auth.js"></script>
@@ -171,8 +187,24 @@
 // ── Fiecare test are propriul quiz_version → scor și clasament separate,
 // deși toate folosesc același cont și aceleași tabele Supabase. ──
 const TESTS = {
-  'samuel1-2': { quizVersion: 'samuel1-2-v1', label: '1 Samuel 1-2', data: () => TEST_1SAMUEL },
-  'samuel3-4': { quizVersion: 'samuel3-4-v1', label: '1 Samuel 3-4', data: () => TEST_1SAMUEL_3_4 },
+  'samuel1-3': { quizVersion: 'samuel1-3-v1', label: '1 Samuel 1-3', data: () => TEST_1SAMUEL_1_3 },
+  'samuel4-6': { quizVersion: 'samuel4-6-v1', label: '1 Samuel 4-6', data: () => TEST_1SAMUEL_4_6 },
+  'samuel7-9': { quizVersion: 'samuel7-9-v1', label: '1 Samuel 7-9', data: () => TEST_1SAMUEL_7_9 },
+  'samuel10-12': { quizVersion: 'samuel10-12-v1', label: '1 Samuel 10-12', data: () => TEST_1SAMUEL_10_12 },
+  'samuel13-15': { quizVersion: 'samuel13-15-v1', label: '1 Samuel 13-15', data: () => TEST_1SAMUEL_13_15 },
+  'samuel16-18': { quizVersion: 'samuel16-18-v1', label: '1 Samuel 16-18', data: () => TEST_1SAMUEL_16_18 },
+  'samuel19-21': { quizVersion: 'samuel19-21-v1', label: '1 Samuel 19-21', data: () => TEST_1SAMUEL_19_21 },
+  'samuel22-24': { quizVersion: 'samuel22-24-v1', label: '1 Samuel 22-24', data: () => TEST_1SAMUEL_22_24 },
+  'samuel25-27': { quizVersion: 'samuel25-27-v1', label: '1 Samuel 25-27', data: () => TEST_1SAMUEL_25_27 },
+  'samuel28-30': { quizVersion: 'samuel28-30-v1', label: '1 Samuel 28-30', data: () => TEST_1SAMUEL_28_30 },
+  'samuel31-2samuel1-2': { quizVersion: 'samuel31-2samuel1-2-v1', label: '1 Samuel 31; 2 Samuel 1-2', data: () => TEST_1SAMUEL31_2SAMUEL1_2 },
+  '2samuel3-5': { quizVersion: '2samuel3-5-v1', label: '2 Samuel 3-5', data: () => TEST_2SAMUEL_3_5 },
+  '2samuel6-8': { quizVersion: '2samuel6-8-v1', label: '2 Samuel 6-8', data: () => TEST_2SAMUEL_6_8 },
+  '2samuel9-11': { quizVersion: '2samuel9-11-v1', label: '2 Samuel 9-11', data: () => TEST_2SAMUEL_9_11 },
+  '2samuel12-14': { quizVersion: '2samuel12-14-v1', label: '2 Samuel 12-14', data: () => TEST_2SAMUEL_12_14 },
+  '2samuel15-17': { quizVersion: '2samuel15-17-v1', label: '2 Samuel 15-17', data: () => TEST_2SAMUEL_15_17 },
+  '2samuel18-20': { quizVersion: '2samuel18-20-v1', label: '2 Samuel 18-20', data: () => TEST_2SAMUEL_18_20 },
+  '2samuel21-24': { quizVersion: '2samuel21-24-v1', label: '2 Samuel 21-24', data: () => TEST_2SAMUEL_21_24 },
 };
 let activeTestId = null, activeTest = null, QUIZ_VERSION = null, DATA = null;
 let state = { af: {}, single: {}, match: {}, multi: {} };

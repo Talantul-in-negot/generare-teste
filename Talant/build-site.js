@@ -10,14 +10,19 @@ const sourceFiles = {
   '/auth.js': ['auth.js', 'application/javascript; charset=utf-8'],
   '/tracker.js': ['tracker.js', 'application/javascript; charset=utf-8'],
   '/1samuel-test.html': ['1samuel-test.html', 'text/html; charset=utf-8'],
-  '/data/1samuel-1-2.js': ['data/1samuel-1-2.js', 'application/javascript; charset=utf-8'],
-  '/data/1samuel-3-4.js': ['data/1samuel-3-4.js', 'application/javascript; charset=utf-8'],
   '/test-tracker.js': ['test-tracker.js', 'application/javascript; charset=utf-8'],
   '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json; charset=utf-8'],
   '/service-worker.js': ['service-worker.js', 'application/javascript; charset=utf-8'],
   '/icon-192.png': ['icon-192.png', 'image/png'],
   '/icon-512.png': ['icon-512.png', 'image/png'],
 };
+
+// All Samuel quiz data files are bundled automatically — no per-file maintenance needed.
+for (const file of fs.readdirSync(path.join(__dirname, 'data'))) {
+  if (/^(1samuel|2samuel).*\.js$/.test(file)) {
+    sourceFiles[`/data/${file}`] = [`data/${file}`, 'application/javascript; charset=utf-8'];
+  }
+}
 
 const assets = Object.fromEntries(Object.entries(sourceFiles).map(([url, [file, contentType]]) => {
   const binary = contentType.startsWith('image/');
