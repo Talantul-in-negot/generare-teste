@@ -30,6 +30,19 @@ _TRIM = " ,;:-–—„”\"'!?."
 _DEITY = {"Domnul", "Domnului", "Dumnezeu", "Dumnezeul"}
 _STEM_MIN_CHARS = 25
 _STEM_MAX_CHARS = 150
+# The blank shape quotes a whole sentence rather than a prefix of one, so it
+# needs the same headroom `_concise` gives Section I's full-sentence quotes.
+_BLANK_MAX_CHARS = 175
+_BLANK = "__________"
+# Real words a blanked stem must keep, so the gap sits inside a recognisable
+# verse rather than a fragment that could be almost anything.
+_BLANK_MIN_WORDS = 6
+# Two stems sharing this fraction of their words are the same question wearing
+# different verse ids — 1 Samuel repeats formulaic clauses often enough that
+# exact-match deduping alone lets visible near-twins through.
+_STEM_OVERLAP_LIMIT = 0.7
+# No more than this many of Section II's ten questions may share one answer.
+_MAX_SAME_ANSWER = 3
 
 
 def _sentences(text: str) -> list[str]:
@@ -64,6 +77,40 @@ def _inflection(value: str, answers: list[str]) -> bool:
         if len(short) >= 4 and long.startswith(short):
             return True
     return False
+
+
+class _StemLedger:
+    """Remembers every stem already issued, so two verses that phrase the same
+    thing don't both become questions.
+
+    Deduping on `fact.id` — all the sections used to do — misses this
+    entirely: 1 Samuel repeats formulaic clauses ("chivotul Domnului", "fiii
+    lui Israel") across many distinct verses, so two different facts can
+    render as the same question and still look unique by id. Comparing the
+    stems themselves is what actually catches it, and comparing them by word
+    overlap rather than exact text also catches the near-twins that differ by
+    a connective or two.
+    """
+
+    def __init__(self) -> None:
+        self._seen: list[set[str]] = []
+        # Near-duplicate rejection is a quality preference, so the sections
+        # turn it off for their relaxed second pass; outright identical stems
+        # stay rejected either way, since that is a defect at any corpus size.
+        self.strict = True
+
+    def claim(self, stem: str) -> bool:
+        """Records `stem` and returns True, or returns False if it repeats one."""
+        # The blank itself is a word character run, and every blanked stem
+        # carries it — counting it would inflate every pair's overlap alike.
+        words = {word for word in re.findall(r"\w+", stem.lower()) if word.strip("_")}
+        if not words:
+            return False
+        limit = _STEM_OVERLAP_LIMIT if self.strict else 1.0
+        if any(len(words & earlier) / max(len(words), len(earlier)) >= limit for earlier in self._seen):
+            return False
+        self._seen.append(words)
+        return True
 
 
 def _balanced_letters(count: int, rng: random.Random) -> list[str]:
@@ -183,28 +230,51 @@ def _concise(fact: Fact, need_object: bool) -> str | None:
 
 
 def _completion_stem(fact: Fact) -> tuple[str, str] | None:
-    """Splits a verse into a stem ending in ':' and the segment that answers it."""
-    # Whole-word match only: "Domnul" must not be cut out of "Domnului",
-    # which would leave the stem with no correct completion at all.
-    hits = list(re.finditer(rf"(?<!\w){re.escape(fact.object)}(?!\w)", fact.statement))
-    for hit in reversed(hits):
-        prefix, rest = fact.statement[:hit.start()], fact.statement[hit.end():]
-        # The object must close its own clause — if real words follow it before
-        # the next comma/semicolon/sentence end, a stem cut off there loses the
-        # rest of the clause and stops making sense (e.g. "...pentru că:" when
-        # the verse continues "Domnul o făcuse stearpă"). Try an earlier
-        # occurrence of the same object instead of accepting a dangling stem.
-        punct = re.search(r"[,;:.!?]", rest)
-        clause_tail = rest[:punct.start()] if punct else rest
-        if clause_tail.strip(_TRIM):
+    """Quotes the verse with the answer blanked out where it actually stands.
+
+    The earlier shape cut the verse off at the answer and closed the stem with
+    ':'. That forced the answer to be the last thing in its clause and threw
+    away everything after it, so the stem often lost the very words that said
+    what it was about — "Locuitorii din Chiriat-Iearim au venit și au suit
+    chivotul:" gives no clue which of three names belongs there, because the
+    part of the verse that would have told you was the part that got cut.
+
+    The reference baremuri never truncate. They quote the verse whole and
+    blank the answer in place ("Cât este ziuă, trebuie să __________; vine
+    noaptea, când nimeni nu mai poate să lucreze."), which keeps context on
+    both sides of the gap and, as a bonus, fits the many verses whose answer
+    word sits mid-clause rather than at its end.
+    """
+    for sentence in _sentences(fact.statement):
+        # Whole-word match only: "Domnul" must not be cut out of "Domnului",
+        # which would leave the stem with no correct completion at all.
+        hits = list(re.finditer(rf"(?<!\w){re.escape(fact.object)}(?!\w)", sentence))
+        # Blanking one occurrence while an identical word stays visible
+        # elsewhere in the same sentence hands the student the answer.
+        if len(hits) != 1:
             continue
-        sentences = list(re.finditer(r"[.!?]\s+", prefix))
-        if sentences:
-            prefix = prefix[sentences[-1].end():]
-        stem = prefix.strip().rstrip(_TRIM)
-        if not _STEM_MIN_CHARS <= len(stem) <= _STEM_MAX_CHARS:
+        hit = hits[0]
+        # A quotation split across the blank reads as an unterminated fragment;
+        # the same balance check `_concise` already applies to Section I.
+        if sentence.count('"') % 2 or sentence.count("„") != sentence.count("”"):
             continue
-        return stem + ":", fact.object + rest
+        if not sentence[:1].isupper():
+            continue
+        stem = (sentence[:hit.start()] + _BLANK + sentence[hit.end():]).strip()
+        # A blank opening the sentence has no left context at all — that is a
+        # bare "who?", which the wh-question shape phrases properly instead.
+        if stem.startswith(_BLANK):
+            continue
+        if not _STEM_MIN_CHARS <= len(stem) <= _BLANK_MAX_CHARS:
+            continue
+        # Character count alone lets a stem through that is long only because
+        # of the blank itself: "Și s-au strâns la __________." clears 25
+        # characters while naming neither who gathered nor when, so the student
+        # has nothing to reason from. Counting the real words instead is what
+        # actually measures how much of the verse survived around the gap.
+        if len(stem.split()) - 1 < _BLANK_MIN_WORDS:
+            continue
+        return stem, sentence
     return None
 
 
@@ -334,7 +404,7 @@ def _register(value: str) -> str:
 # Common openers of a Romanian finite/compound verb form — "a luat", "au
 # zis", "s-a suit" — versus a noun phrase, which opens with an article,
 # adjective, or noun instead.
-_VERB_OPENERS = {"a", "au", "am", "ai", "este", "sunt", "era", "erau", "va", "vor", "s-a", "l-a", "le-a", "i-a", "ne-a", "v-a", "s-au", "le-au"}
+_VERB_OPENERS = {"a", "au", "am", "ai", "este", "sunt", "era", "erau", "va", "vor", "s-a", "l-a", "le-a", "i-a", "ne-a", "v-a", "s-au", "le-au", "se", "s"}
 
 
 # Determiners/quantifiers/numerals that need a following noun to mean
@@ -394,6 +464,36 @@ def _clause_halves(fact: Fact) -> tuple[str, str] | None:
     return None
 
 
+# Prepositions that can open a list member. Kept separate from
+# `_OBLIQUE_MARKERS`, which drives Section III's subject detection — widening
+# that set to serve this check would quietly change which verses III accepts.
+_PREPOSITIONS = {"împotriva", "înaintea", "asupra", "lângă", "după", "prin", "spre", "către", "peste", "sub", "fără", "din", "dintre", "de", "la", "în", "cu", "pentru", "despre", "printre", "până"}
+
+
+def _parallel_member(value: str) -> bool:
+    """True for a phrase that can stand on its own beside the other options.
+
+    A coordinated „și"/„sau" joins list items ("trei tauri" / "o efă de
+    făină") just as readily as it joins two whole *clauses* ("pe care au pus
+    chivotul Domnului" / "care este astăzi în câmpul lui Iosua"). Splitting the
+    second kind produces fragments that answer no question at all and only
+    look like options because they were printed under A/B/C — which is exactly
+    what makes such an item unanswerable. A real list member is a noun phrase:
+    it never opens with a finite verb, nor with a relative/subordinating word
+    that introduces a clause of its own.
+    """
+    words = value.split()
+    if not words:
+        return False
+    head = words[0].lower()
+    # Romanian glues clitic pronouns onto the opening word with a hyphen
+    # ("să-I aducă", "s-a suit", "și-au luat"), so the bare word won't match
+    # these sets — "să-i" isn't "să". Testing the pre-hyphen stem as well
+    # catches the clause openers that would otherwise pass as noun phrases.
+    heads = {head, head.split("-")[0]}
+    return not (heads & _VERB_OPENERS or heads & _SUBORDINATE or heads & _LINKERS)
+
+
 def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
     """Finds the coordinated list behind the reference's multi-answer items."""
     for sentence in _sentences(fact.statement):
@@ -404,10 +504,10 @@ def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
         tail = sentence[link.end():].strip(_TRIM)
         head_words = sentence[:link.start()].split()
         size = len(tail.split())
-        if not _clean_member(tail) or not 2 <= size <= 8 or len(head_words) < size + 4:
+        if not _clean_member(tail) or not _parallel_member(tail) or not 2 <= size <= 8 or len(head_words) < size + 4:
             continue
         mid = " ".join(head_words[-size:]).strip(_TRIM)
-        if not _clean_member(mid) or not 2 <= len(mid.split()) <= 8:
+        if not _clean_member(mid) or not _parallel_member(mid) or not 2 <= len(mid.split()) <= 8:
             continue
         members = [mid, tail]
         head = " ".join(head_words[:-size])
@@ -427,7 +527,7 @@ def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
                 opener = first.split()[0].lower() if first.split() else ""
                 if opener in _VERB_OPENERS:
                     pass
-                elif _clean_member(first) and 2 <= len(first.split()) <= 8 and len(first) >= 6:
+                elif _clean_member(first) and _parallel_member(first) and 2 <= len(first.split()) <= 8 and len(first) >= 6:
                     members.insert(0, first)
                     head = " ".join(earlier[:-size])
         stem = head.strip(_TRIM)
@@ -437,11 +537,35 @@ def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
             continue
         if len({member.lower() for member in members}) != len(members):
             continue
-        return stem + ":", members
+        # Options the student is asked to judge one by one have to be
+        # comparable to each other; a capitalised name sitting beside two bare
+        # noun phrases is answerable on shape alone, and more importantly it
+        # signals the split found two different kinds of thing rather than one
+        # list.
+        if len({_register(member) for member in members}) != 1:
+            continue
+        # A prepositional phrase and a bare clause are not alternatives for the
+        # same gap — "împotriva lui Israel" beside "lupta a început" reads as two
+        # unrelated things rather than two entries in one list, which is what
+        # makes such an item hard to answer even when both are in the verse.
+        if len({member.split()[0].lower() in _PREPOSITIONS for member in members}) != 1:
+            continue
+        # A head ending on a genitive marker or preposition promises a noun next
+        # ("...împotriva casei lui __________"), so the blank reads as asking for
+        # a name while the options are in fact the clause that followed a
+        # semicolon. The stem has to end somewhere the list can actually attach.
+        if head.strip(_TRIM).split()[-1].lower() in _OBLIQUE_MARKERS | _PREPOSITIONS:
+            continue
+        # A colon here made the item look exactly like Section II's
+        # single-answer completions, so nothing on the page told the student
+        # this one may have one, two, three or no correct options. The blank
+        # matches the reference's own multi-answer items and reads as a gap to
+        # be filled rather than a sentence that simply stops.
+        return f"{stem} {_BLANK}", members
     return None
 
 
-def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random) -> list[MultiChoiceQuestion]:
+def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger) -> list[MultiChoiceQuestion]:
     """Mirrors the reference mix: items with three, two and one correct answer."""
     candidates = [(fact, *found) for fact in pool if (found := _enumeration(fact))]
     foreign = [member for _, _, members in candidates for member in members]
@@ -455,58 +579,68 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
         correct = [letter for letter, value in options.items() if value in correct_values]
         if len(correct) != len(correct_values):
             return False
+        if not stems.claim(stem):
+            return False
         multis.append(MultiChoiceQuestion(f"IV-{len(multis) + 1}", stem, options, correct, fact.evidence, fact.id, [fact.evidence], [fact.id]))
         used.add(fact.id)
         return True
 
-    # Three, then two, then one correct answer, matching how the reference varies.
-    # Enumeration candidates never overlap with Section II's shapes (they need
-    # a coordinated "și"/"sau" list, not a clause-ending or subject-led verse),
-    # so exhausting every candidate at each count before falling back to the
-    # single-answer shape below (which does overlap) keeps IV out of II's way
-    # whenever there happen to be enough enumerations to cover all 3 alone.
-    for wanted in (3, 2, 1):
-        for fact, stem, members in candidates:
+    # Both the enumeration filters above and the stem ledger can, on a thin or
+    # very repetitive chapter range, refuse every remaining candidate. They are
+    # quality preferences rather than correctness rules, so the whole selection
+    # runs twice: once holding them, once with near-duplicate rejection relaxed
+    # to identical-only, which beats failing to produce a test at all.
+    for enforce in (True, False):
+        stems.strict = enforce
+        # Three, then two, then one correct answer, matching how the reference varies.
+        # Enumeration candidates never overlap with Section II's shapes (they need
+        # a coordinated "și"/"sau" list, not a clause-ending or subject-led verse),
+        # so exhausting every candidate at each count before falling back to the
+        # single-answer shape below (which does overlap) keeps IV out of II's way
+        # whenever there happen to be enough enumerations to cover all 3 alone.
+        for wanted in (3, 2, 1):
+            for fact, stem, members in candidates:
+                if len(multis) == 3:
+                    break
+                if fact.id in used or len(members) < wanted:
+                    continue
+                correct_values = members[:wanted]
+                # A distractor has to match the correct answers in register as well as
+                # in length, or grammar alone gives it away.
+                registers = {_register(value) for value in correct_values}
+                outside = [
+                    value for value in foreign
+                    if not _mentions(fact.statement, value) and value not in members
+                    and _register(value) in registers
+                ]
+                target = sum(len(value.split()) for value in correct_values) / len(correct_values)
+                outside.sort(key=lambda value: abs(len(value.split()) - target))
+                picks = []
+                for value in outside:
+                    if len(picks) == 3 - wanted:
+                        break
+                    if value.lower() not in {item.lower() for item in picks}:
+                        picks.append(value)
+                if len(picks) != 3 - wanted:
+                    continue
+                add(fact, stem, [*correct_values, *picks], correct_values)
             if len(multis) == 3:
                 break
-            if fact.id in used or len(members) < wanted:
+        # A verse that merely names a person still makes a sound single-answer item.
+        # Same shape pair as Section II: the verse quoted with its answer blanked
+        # out, or a „Cine ...?" question for the verses that read better as one.
+        for fact in pool:
+            if len(multis) == 3:
+                break
+            if fact.id in used or not (built := _completion_stem(fact) or _wh_question(fact)):
                 continue
-            correct_values = members[:wanted]
-            # A distractor has to match the correct answers in register as well as
-            # in length, or grammar alone gives it away.
-            registers = {_register(value) for value in correct_values}
-            outside = [
-                value for value in foreign
-                if not _mentions(fact.statement, value) and value not in members
-                and _register(value) in registers
-            ]
-            target = sum(len(value.split()) for value in correct_values) / len(correct_values)
-            outside.sort(key=lambda value: abs(len(value.split()) - target))
-            picks = []
-            for value in outside:
-                if len(picks) == 3 - wanted:
-                    break
-                if value.lower() not in {item.lower() for item in picks}:
-                    picks.append(value)
-            if len(picks) != 3 - wanted:
+            stem, segment = built
+            distractors = _dedup(f.object for f in facts if f.object != fact.object and not _mentions(segment, f.object) and not _inflection(f.object, [fact.object]))
+            if len(distractors) < 2:
                 continue
-            add(fact, stem, [*correct_values, *picks], correct_values)
+            add(fact, stem, [fact.object, *distractors[:2]], [fact.object])
         if len(multis) == 3:
             break
-    # A verse that merely names a person still makes a sound single-answer item.
-    # Same fallback order as Section II: the colon-completion shape needs the
-    # answer to close its own clause, so a „Cine ...?" question covers most of
-    # what it can't.
-    for fact in pool:
-        if len(multis) == 3:
-            break
-        if fact.id in used or not (built := _completion_stem(fact) or _wh_question(fact)):
-            continue
-        stem, segment = built
-        distractors = _dedup(f.object for f in facts if f.object != fact.object and not _mentions(segment, f.object) and not _inflection(f.object, [fact.object]))
-        if len(distractors) < 2:
-            continue
-        add(fact, stem, [fact.object, *distractors[:2]], [fact.object])
     if len(multis) != 3:
         raise GenerationError("Nu s-au putut construi trei intrebari verificabile pentru Sectiunea IV.")
     return multis
@@ -571,32 +705,65 @@ def _section_iii_fill(pool: list[Fact], used: set[str], rng: random.Random, rows
     )
 
 
-def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random) -> list[SingleChoiceQuestion]:
+def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger) -> list[SingleChoiceQuestion]:
     singles: list[SingleChoiceQuestion] = []
     letters = _balanced_letters(10, rng)
-    for fact in pool:
+    answers: dict[str, int] = defaultdict(int)
+    shapes: dict[str, int] = defaultdict(int)
+
+    # Both quotas below are preferences, not correctness rules, so they get a
+    # relaxed second pass: on a corpus too thin to satisfy them, ten questions
+    # that repeat an answer beat a GenerationError. The stem ledger is *not*
+    # relaxed — a duplicate question is a defect at any corpus size.
+    for enforce in (True, False):
+        stems.strict = enforce
+        for fact in pool:
+            if len(singles) == 10:
+                break
+            if fact.id in used:
+                continue
+            # Both reference shapes are equally valid here, and the blank shape
+            # now fits nearly every verse, so trying it first unconditionally
+            # would make all ten questions look alike. Offering the currently
+            # under-used shape first keeps the section mixed the way the
+            # reference tests are.
+            builders = [("blank", _completion_stem), ("wh", _wh_question)]
+            if shapes["blank"] > shapes["wh"]:
+                builders.reverse()
+            shape, built = "", None
+            for name, builder in builders:
+                if built := builder(fact):
+                    shape = name
+                    break
+            if not built:
+                continue
+            # „Cine?" only ever answers with a name, and the corpus leans hard
+            # on a few of them (the deity terms above all), so without a cap a
+            # run of verses about the same subject turns into a run of
+            # questions with the same answer — guessable without reading them.
+            if enforce and answers[fact.object] >= _MAX_SAME_ANSWER:
+                continue
+            stem, segment = built
+            # A distractor present in the quoted verse could also fill the blank,
+            # so only terms the verse does not offer at all are safe to mark wrong.
+            safe = lambda value: value != fact.object and not _mentions(segment, value) and not _inflection(value, [fact.object])
+            choices = [value for value in fact.options if safe(value)]
+            choices += [f.object for f in facts if safe(f.object) and f.object not in choices]
+            values = [fact.object, *choices[:2]]
+            if len(set(values)) != 3:
+                continue
+            if not stems.claim(stem):
+                continue
+            letter = letters[len(singles)]
+            rng.shuffle(values)
+            values.remove(fact.object)
+            values.insert("ABC".index(letter), fact.object)
+            singles.append(SingleChoiceQuestion(f"II-{len(singles) + 1}", stem, dict(zip("ABC", values)), letter, fact.evidence, fact.id))
+            used.add(fact.id)
+            answers[fact.object] += 1
+            shapes[shape] += 1
         if len(singles) == 10:
             break
-        # Either reference shape works here: a stem broken off at a colon, or a
-        # „Cine ...?" question. The colon shape is tried first because it needs
-        # the answer word to close its clause and so fits far fewer verses.
-        if fact.id in used or not (built := _completion_stem(fact) or _wh_question(fact)):
-            continue
-        stem, segment = built
-        # A distractor present in the answer segment could also complete the stem,
-        # so only terms the verse does not offer at all are safe to mark wrong.
-        safe = lambda value: value != fact.object and not _mentions(segment, value) and not _inflection(value, [fact.object])
-        choices = [value for value in fact.options if safe(value)]
-        choices += [f.object for f in facts if safe(f.object) and f.object not in choices]
-        values = [fact.object, *choices[:2]]
-        if len(set(values)) != 3:
-            continue
-        letter = letters[len(singles)]
-        rng.shuffle(values)
-        values.remove(fact.object)
-        values.insert("ABC".index(letter), fact.object)
-        singles.append(SingleChoiceQuestion(f"II-{len(singles) + 1}", stem, dict(zip("ABC", values)), letter, fact.evidence, fact.id))
-        used.add(fact.id)
     if len(singles) != 10:
         raise GenerationError("Nu sunt suficiente versete potrivite pentru Secțiunea II.")
     return singles
@@ -634,18 +801,36 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     # II-eligible ones only when nothing else works — costs those sections
     # nothing (they still get the same number of facts) and protects II's
     # much smaller candidate set.
-    ii_eligible = {fact.id for fact in facts if _completion_stem(fact) or _wh_question(fact)}
-    priority_pool = sorted(pool, key=lambda fact: fact.id in ii_eligible)
-    multis = _section_iv(priority_pool, facts, used, rng)
-    iii_rows = _section_iii_named(priority_pool, used, rng)
-    singles = _section_ii(pool, facts, used, rng)
-    matching = _section_iii_fill(pool, used, rng, iii_rows)
-
     # Only a False statement has a name swapped into it, so only false_pool is
     # constrained by _safe_to_swap; a True statement is quoted verbatim and any
     # concise verse will do. Applying the swap filter to both would discard
     # perfectly good True candidates for a rewrite they never undergo.
-    false_pool = [fact for fact in pool if fact.id not in used and (stmt := _concise(fact, True)) and _safe_to_swap(stmt, fact.object)]
+    #
+    # These five are claimed before any other section runs. Every other section
+    # has somewhere else to go when its preferred shape runs out — IV falls
+    # back to the single-answer shape, III to `_clause_halves`, II to a relaxed
+    # second pass — but a False statement has no fallback at all: it is the one
+    # requirement that raises rather than degrade. Leaving it until last (where
+    # it used to sit) meant the sections with alternatives got first pick of the
+    # only verses that satisfy the requirement without one.
+    false_pool = [fact for fact in pool if (stmt := _concise(fact, True)) and _safe_to_swap(stmt, fact.object)]
+    false_facts: list[Fact] = []
+    for fact in false_pool:
+        if len(false_facts) == 5:
+            break
+        false_facts.append(fact)
+        used.add(fact.id)
+    if len(false_facts) != 5:
+        raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
+
+    ii_eligible = {fact.id for fact in facts if _completion_stem(fact) or _wh_question(fact)}
+    priority_pool = sorted(pool, key=lambda fact: fact.id in ii_eligible)
+    stems = _StemLedger()
+    multis = _section_iv(priority_pool, facts, used, rng, stems)
+    iii_rows = _section_iii_named(priority_pool, used, rng)
+    singles = _section_ii(pool, facts, used, rng, stems)
+    matching = _section_iii_fill(pool, used, rng, iii_rows)
+
     # A True statement needs no recognised object at all — it's quoted as-is —
     # so restricting it to `quality`-filtered facts (needed by every other
     # section) excludes verses for no reason but happening to lack a known
@@ -657,20 +842,9 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     # _concise(fact, True) + _safe_to_swap (False's requirement) — every
     # false_pool fact is also a true_pool fact, so on a small corpus
     # false_pool can be a *subset* of true_pool, not just an overlapping set.
-    # Interleaving by index (True always goes first, at odd indices) then
-    # lets True claim shared facts before False gets a turn, no matter how
-    # the sort inside one branch is biased — reserving all 5 of the scarcer
-    # False picks *before* any True pick is chosen is the only way to
-    # guarantee True doesn't starve it.
-    false_facts: list[Fact] = []
-    for fact in false_pool:
-        if len(false_facts) == 5:
-            break
-        if fact.id not in used:
-            false_facts.append(fact)
-            used.add(fact.id)
-    if len(false_facts) != 5:
-        raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
+    # That is the other half of why the False picks are reserved above: were
+    # True chosen first it would eat the shared facts and starve False, no
+    # matter how the sort inside either branch is biased.
     true_facts: list[Fact] = []
     for fact in true_pool:
         if len(true_facts) == 5:
@@ -687,7 +861,16 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     # above) keeps the layout random each time while still guaranteeing
     # exactly 5 of each.
     pattern = [True] * 5 + [False] * 5
-    rng.shuffle(pattern)
+    # Two of the 252 possible shuffles are the perfect alternations this
+    # replaced a hardcoded one with. They're as unguessable as any other draw,
+    # but a test that happens to land on one is indistinguishable from the bug,
+    # so it's worth the reshuffle to never ship that page.
+    while True:
+        rng.shuffle(pattern)
+        # With five of each, the odd slots being uniform forces the even slots
+        # to be uniform too, so testing one of them identifies both alternations.
+        if len(set(pattern[::2])) != 1:
+            break
     tf: list[TrueFalseQuestion] = []
     for index, is_true in zip(range(1, 11), pattern):
         fact = (true_facts if is_true else false_facts).pop(0)

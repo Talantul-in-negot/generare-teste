@@ -67,6 +67,25 @@ class RealCorpusSectionIVTests(unittest.TestCase):
         counts = sorted(len(q.correct) for q in test.section_iv)
         self.assertTrue(all(1 <= count <= 3 for count in counts), counts)
 
+    def test_section_ii_does_not_repeat_one_answer_across_the_section(self):
+        # The corpus leans hard on a few subjects (the deity terms above all),
+        # so without a cap a run of verses about the same one turned into a run
+        # of questions with the same answer — guessable without reading them.
+        from collections import Counter
+        from src.biblical_tests.generation import _MAX_SAME_ANSWER
+        from src.biblical_tests.selection import parse_selection
+        repo = BibleRepository(Path("data"))
+        selection = parse_selection("1 Samuel 6,7")
+        test = build_test(
+            repo.facts_for(selection), selection,
+            {"title": "T", "stage": "F", "edition": 2027, "date": "x", "category": "6_7"},
+            {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}, 12345, 1,
+        )
+        counts = Counter(question.options[question.correct] for question in test.section_ii)
+        self.assertLessEqual(max(counts.values()), _MAX_SAME_ANSWER, counts)
+        stems = [question.question for question in test.section_ii]
+        self.assertEqual(len(stems), len(set(stems)), stems)
+
     def test_distractors_match_the_correct_answers_register(self):
         # A distractor pulled from an unrelated verse must open the same way
         # the correct options do (e.g. all "El ..." or all lowercase verb
@@ -129,10 +148,15 @@ class GeneratorTests(unittest.TestCase):
             self.assertNotIn("V Marcați ordinea", text)
 
     def test_section_iv_matches_reference_completion_format(self):
+        from src.biblical_tests.generation import _BLANK
         for question in self.test_definition.section_iv:
-            # The reference documents end every Section IV stem with a colon and
-            # offer short, parallel completions rather than whole statements.
-            self.assertTrue(question.question.endswith(":"), question.question)
+            # A colon made these look exactly like Section II's single-answer
+            # completions, so nothing distinguished an item that may have one,
+            # two, three or no correct options. The reference marks the gap with
+            # a blank instead, and offers short parallel completions rather than
+            # whole statements.
+            self.assertIn(_BLANK, question.question, question.question)
+            self.assertFalse(question.question.endswith(":"), question.question)
             self.assertNotIn("sunt menționate", question.question)
             for value in question.options.values():
                 self.assertLess(len(value), 60, value)
@@ -140,6 +164,29 @@ class GeneratorTests(unittest.TestCase):
             self.assertTrue(question.correct, f"{question.id} nu are niciun răspuns corect")
             for letter in question.correct:
                 self.assertIn(question.options[letter], question.evidence.text)
+
+    def test_section_ii_keeps_context_on_both_sides_of_the_blank(self):
+        from src.biblical_tests.generation import _BLANK
+        for question in self.test_definition.section_ii:
+            if _BLANK not in question.question:
+                continue  # a „Cine ...?" item, which carries its own context
+            # A stem that opens on the blank has no left context at all, and one
+            # that simply stops at it has thrown away the words that said what
+            # the missing term relates to — the defect the colon shape had.
+            self.assertFalse(question.question.startswith(_BLANK), question.question)
+            self.assertNotIn(":" + _BLANK, question.question.replace(" ", ""))
+
+    def test_no_two_questions_repeat_the_same_stem(self):
+        stems = [q.question for q in self.test_definition.section_ii] + [q.question for q in self.test_definition.section_iv]
+        self.assertEqual(len(stems), len(set(stems)), stems)
+
+    def test_section_i_answer_pattern_is_not_fixed_alternation(self):
+        # A strict odd-True/even-False pattern let a student answer half the
+        # section from position alone, without reading a statement.
+        pattern = [q.answer for q in self.test_definition.section_i]
+        self.assertEqual(pattern.count("A"), 5)
+        self.assertEqual(pattern.count("F"), 5)
+        self.assertNotEqual(pattern, list("AFAFAFAFAF"))
 
     def test_section_iii_matches_name_to_verified_predicate(self):
         match = self.test_definition.section_iii
