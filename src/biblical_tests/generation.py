@@ -43,6 +43,55 @@ _BLANK_MIN_WORDS = 6
 _STEM_OVERLAP_LIMIT = 0.7
 # No more than this many of Section II's ten questions may share one answer.
 _MAX_SAME_ANSWER = 3
+# A handful of fixed Romanian phrases that point back at earlier, unquoted
+# narrative ("like the other times", "as usual") rather than at anything in
+# the sentence itself. A verse built around one reads as confusing on its own
+# even though it's a perfectly accurate quote — e.g. "l-a chemat ca și în
+# celelalte dăți" presumes the reader already knows about those other times,
+# which a single isolated sentence never supplies.
+_UNRESOLVED_ANAPHORA = re.compile(
+    r"(?<!\w)ca\s+(?:și\s+)?(?:în\s+)?(?:celelalte|mai\s+înainte|de\s+obicei|alt[ăa]\s+dat[ăa])(?!\w)",
+    re.IGNORECASE,
+)
+# Bare 3rd-person plural pronouns ("ei", "ele") stand in for a group named
+# earlier in the narrative — 1 Samuel 1's "ei" is Elcana's whole household,
+# introduced several verses before the sentence that uses it. A singular named
+# subject can never itself be that antecedent, so a plural pronoun beside one
+# is a reliable sign the sentence depends on context it doesn't carry.
+#
+# "ei" is also, confusingly, the genitive/dative of "ea" ("her/of her"):
+# "la gura ei" is "at her mouth", not "at their mouth", and needs no
+# antecedent beyond the noun sitting right next to it. That reading always
+# closes its own clause — nothing but punctuation follows "ei" — while the
+# plural "they" keeps going ("făceau ei tuturor...", "Ei vor căuta..."). That
+# position is what tells the two apart without deeper parsing.
+_PLURAL_PRONOUN = re.compile(r"(?<!\w)(?:ei|ele)(?!\w)", re.IGNORECASE)
+
+
+def _self_contained(text: str) -> bool:
+    """False if `text` leans on narrative context beyond itself to be understood.
+
+    Applied to whatever a question or Section I statement will actually show
+    the student — not the full verse, just the extracted piece — since context
+    earlier in the same sentence (a name introduced before the pronoun, say)
+    can still make a pronoun resolvable even where a bare heuristic like this
+    can't tell the difference in general. The two checks here are the narrow
+    cases that come up in practice and are unambiguous when they do.
+
+    An earlier version skipped the pronoun check whenever the fact's own
+    object was a collective noun ("Israel", "Filistenii"), on the theory that
+    a plural pronoun could then be referring back to it. That doesn't hold in
+    general — "Israel" can sit in a clause of its own ("acelora din Israel")
+    with no connection at all to an unrelated "ei" elsewhere in the same
+    sentence — so the position check below is applied unconditionally instead.
+    """
+    if _UNRESOLVED_ANAPHORA.search(text):
+        return False
+    for match in _PLURAL_PRONOUN.finditer(text):
+        tail = text[match.end():].lstrip()
+        if not tail or tail[0] not in ",;.!?":
+            return False
+    return True
 
 
 def _sentences(text: str) -> list[str]:
@@ -225,6 +274,8 @@ def _concise(fact: Fact, need_object: bool) -> str | None:
             continue
         if need_object and not _mentions(sentence, fact.object):
             continue
+        if not _self_contained(sentence):
+            continue
         return sentence
     return None
 
@@ -259,6 +310,11 @@ def _completion_stem(fact: Fact) -> tuple[str, str] | None:
         if sentence.count('"') % 2 or sentence.count("„") != sentence.count("”"):
             continue
         if not sentence[:1].isupper():
+            continue
+        # A pronoun or back-reference elsewhere in the sentence is exactly as
+        # confusing here as it is in Section I's `_concise` — the reader still
+        # only sees this one sentence, blank or not.
+        if not _self_contained(sentence):
             continue
         stem = (sentence[:hit.start()] + _BLANK + sentence[hit.end():]).strip()
         # A blank opening the sentence has no left context at all — that is a
@@ -308,7 +364,51 @@ def _safe_to_swap(sentence: str, obj: str) -> bool:
     return obj != "Domnului"
 
 
-def _name_predicate(fact: Fact) -> str | None:
+# Matching opening/closing marks for Romanian block quotes and plain ASCII
+# quotes (used interchangeably across the corpus's verses).
+_QUOTE_PAIRS = {"„": "”", "«": "»", '"': '"'}
+# A quoted predicate can run well past the 14-word cap that keeps a plain
+# clause readable as one line of a matching table; it just needs its own,
+# more generous ceiling so a whole paragraph of dialogue doesn't slip through.
+_PREDICATE_QUOTE_MAX_CHARS = 220
+
+
+def _opens_quote(tail: str, cut: int) -> bool:
+    """True if `cut` lands on a colon that introduces a quotation.
+
+    A predicate truncated right there — "s-a rugat și a zis" — promises
+    reported speech and then supplies none of it, which is what left
+    `_wh_question`'s "Cine s-a rugat și a zis?" with nothing to ask about. The
+    punctuation search that finds `cut` treats that colon exactly like one
+    that ends a clause; this tells the caller it's a different case.
+    """
+    if tail[cut:cut + 1] != ":":
+        return False
+    stripped = tail[cut + 1:].lstrip()
+    return bool(stripped) and stripped[0] in _QUOTE_PAIRS
+
+
+def _extend_through_quote(tail: str, cut: int) -> int | None:
+    """Pushes `cut` (already confirmed by `_opens_quote`) past the whole
+    quotation, or returns None if it never closes within `tail` — the corpus
+    sometimes trims a fact's statement mid-speech, before the matching mark.
+    """
+    rest = tail[cut + 1:]
+    stripped = rest.lstrip()
+    opener_index = cut + 1 + (len(rest) - len(stripped))
+    closer = _QUOTE_PAIRS[stripped[0]]
+    close_index = tail.find(closer, opener_index + 1)
+    if close_index == -1:
+        return None
+    end = close_index + 1
+    # A sentence-ending mark right after the closing quote still belongs to
+    # this predicate — it closes the quote's own sentence, not a new clause.
+    if end < len(tail) and tail[end] in ".!?":
+        end += 1
+    return end
+
+
+def _name_predicate(fact: Fact, allow_quote: bool = False) -> str | None:
     """Section III pairs a name with what the verse says about it, as barem 2_3 does."""
     for sentence in _sentences(fact.statement):
         hit = re.search(rf"(?<!\w){re.escape(fact.object)}(?!\w)", sentence)
@@ -331,13 +431,32 @@ def _name_predicate(fact: Fact) -> str | None:
         # the next comma/semicolon may already be a different clause.
         tail = sentence[hit.end():]
         punct = re.search(r"[,;:.!?]", tail)
-        predicate = (tail[:punct.start()] if punct else tail).strip(_TRIM)
+        cut = punct.start() if punct else len(tail)
+        quoted = False
+        if _opens_quote(tail, cut):
+            # A truncated "s-a rugat și a zis" is a stub, not a predicate — it
+            # promises reported speech and supplies none of it. Either recover
+            # the quote (when the caller wants it and it actually closes within
+            # this fact) or skip the sentence rather than hand back the stub.
+            extended = _extend_through_quote(tail, cut) if allow_quote else None
+            if extended is None:
+                continue
+            cut = extended
+            quoted = True
+        # `_TRIM` strips quote marks along with ordinary punctuation — fine for
+        # a plain clause, but it would eat the quotation's own closing mark
+        # right back off a quoted predicate, so that one keeps only outer
+        # whitespace trimmed.
+        predicate = tail[:cut].strip() if quoted else tail[:cut].strip(_TRIM)
         words = predicate.split()
+        if quoted:
+            if len(predicate) > _PREDICATE_QUOTE_MAX_CHARS:
+                continue
         # Reference predicates are usually short, but a plain, clean single
         # clause ("au luat chivotul lui Dumnezeu ... la Asdod") stays
         # readable well past 9 words — the punctuation truncation above
         # already guarantees it's one clause, not a run-on.
-        if not 2 <= len(words) <= 14:
+        elif not 2 <= len(words) <= 14:
             continue
         # If the name sits after its verb ("se suia Ana la Casa Domnului"),
         # what follows is the verb's own complement, not a fresh predicate
@@ -347,6 +466,11 @@ def _name_predicate(fact: Fact) -> str | None:
             continue
         # The name must not reappear, or the association gives itself away.
         if len(predicate) < 10 or _mentions(predicate, fact.object):
+            continue
+        # A predicate that itself depends on context outside this sentence
+        # (an unresolved "ei", a bare "ca și în celelalte dăți") reads as a
+        # non sequitur once it's the only thing left of the verse.
+        if not _self_contained(predicate):
             continue
         return predicate
     return None
@@ -375,7 +499,10 @@ def _wh_question(fact: Fact) -> tuple[str, str] | None:
     # `_name_predicate` already verifies the name is the clause's subject rather
     # than a possessor or prepositional object, which is exactly the condition
     # for „Cine <predicate>?" to be asking about the right person.
-    predicate = _name_predicate(fact)
+    # `allow_quote=True`: unlike Section III's short attribute pairs, a
+    # wh-question reads naturally with the reported speech included — "Cine a
+    # zis: «Eu nu găsesc nicio vină în El»?" — so it's worth recovering here.
+    predicate = _name_predicate(fact, allow_quote=True)
     if not predicate:
         return None
     return f"Cine {predicate}?", predicate
@@ -438,6 +565,8 @@ def _clause_halves(fact: Fact) -> tuple[str, str] | None:
             clause = raw_clause.strip(_TRIM)
             if not clause or not _clean_member(clause) or not 12 <= len(clause) <= 70:
                 continue
+            if not _self_contained(clause):
+                continue
             words = clause.split()
             if not 3 <= len(words) <= 10:
                 continue
@@ -497,6 +626,8 @@ def _parallel_member(value: str) -> bool:
 def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
     """Finds the coordinated list behind the reference's multi-answer items."""
     for sentence in _sentences(fact.statement):
+        if not _self_contained(sentence):
+            continue
         links = list(_CONJUNCTION.finditer(sentence))
         if not links:
             continue
@@ -711,12 +842,15 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     answers: dict[str, int] = defaultdict(int)
     shapes: dict[str, int] = defaultdict(int)
 
-    # Both quotas below are preferences, not correctness rules, so they get a
-    # relaxed second pass: on a corpus too thin to satisfy them, ten questions
-    # that repeat an answer beat a GenerationError. The stem ledger is *not*
-    # relaxed — a duplicate question is a defect at any corpus size.
-    for enforce in (True, False):
-        stems.strict = enforce
+    # Both quotas below are preferences, not correctness rules, so a corpus
+    # too thin to satisfy them gets progressively relaxed passes rather than a
+    # GenerationError. The answer cap gives way first (tier 2) — ten questions
+    # that repeat an answer up to a point still reads as a real test. Only the
+    # tier that can't otherwise reach ten relaxes the stem ledger's near-
+    # duplicate check too (tier 3): a visibly repeated question is a worse
+    # defect than an uncapped answer, so it stays last to give way.
+    for enforce_cap, enforce_ledger in ((True, True), (False, True), (False, False)):
+        stems.strict = enforce_ledger
         for fact in pool:
             if len(singles) == 10:
                 break
@@ -741,7 +875,7 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
             # on a few of them (the deity terms above all), so without a cap a
             # run of verses about the same subject turns into a run of
             # questions with the same answer — guessable without reading them.
-            if enforce and answers[fact.object] >= _MAX_SAME_ANSWER:
+            if enforce_cap and answers[fact.object] >= _MAX_SAME_ANSWER:
                 continue
             stem, segment = built
             # A distractor present in the quoted verse could also fill the blank,
