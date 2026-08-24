@@ -40,16 +40,86 @@ def rate_limited(client_ip: str) -> bool:
 
 
 def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
-    buttons = "".join(f'<p><a class="download" href="{html.escape(url)}">{html.escape(label)}</a></p>' for label, url in (links or []))
-    return f"""<!doctype html><html lang='ro'><meta charset='utf-8'><title>Teste biblice</title>
-    <style>body{{font:16px Calibri,Arial,sans-serif;background:#f5f5f5;margin:0}}main{{max-width:760px;margin:38px auto;background:white;padding:32px;border-radius:12px;box-shadow:0 4px 22px #bbb}}label{{display:block;font-weight:bold;margin-top:14px}}input,textarea,select{{box-sizing:border-box;width:100%;padding:9px;margin-top:4px;font:inherit}}textarea{{height:76px}}button,.download{{display:inline-block;background:#202020;color:white;border:0;border-radius:5px;padding:11px 16px;margin-top:22px;text-decoration:none;cursor:pointer}}.ok{{color:#147a35;font-weight:bold}}</style>
-    <main><h1>Generator teste biblice</h1><p>Folosește numai corpusul local verificabil și păstrează I-IV.</p>{message}
-    <form method='post' action='/generate'><label>Material biblic</label><textarea name='chapters'>1 Samuel 1,2</textarea>
-    <label>Categorie</label><input name='category' value=''><label>Ediție</label><input name='edition' value='2027'>
-    <label>Etapă</label><input name='stage' value=''><label>Data</label><input name='date' value=''>
-    <label>Dificultate</label><select name='difficulty'><option>mixed</option><option>easy</option><option>medium</option><option>hard</option></select>
-    <label>Număr variante</label><input type='number' min='1' max='10' name='versions' value=''><label>Seed (opțional)</label><input name='seed' value='12345'>
-    <button>GENEREAZĂ TESTUL</button></form>{buttons}</main></html>"""
+    buttons = "".join(f'<a class="download" href="{html.escape(url)}">⬇ {html.escape(label)}</a>' for label, url in (links or []))
+    results = f'<div class="results"><h2>Teste generate</h2>{buttons}</div>' if buttons else ""
+    return f"""<!doctype html><html lang='ro'><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
+    <title>Generator teste — 1 și 2 Samuel</title>
+    <style>
+    :root{{color-scheme:light}}
+    *{{box-sizing:border-box}}
+    body{{
+      font:16px/1.45 'Segoe UI',Calibri,Arial,sans-serif;margin:0;min-height:100vh;color:#2a231a;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(201,164,90,.35), transparent 45%),
+        radial-gradient(circle at 85% 90%, rgba(120,80,40,.30), transparent 50%),
+        linear-gradient(160deg,#3b2f22 0%,#5a4630 45%,#7a6142 100%);
+      background-attachment:fixed;
+      padding:32px 16px;
+    }}
+    main{{max-width:720px;margin:0 auto;background:rgba(255,252,246,.97);padding:36px 40px;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);border:1px solid rgba(201,164,90,.4)}}
+    h1{{margin:0 0 4px;font-size:1.7rem;color:#3b2f22}}
+    .subtitle{{margin:0 0 26px;color:#6b5a42;font-size:.98rem}}
+    fieldset{{border:1px solid #e4d9c4;border-radius:10px;padding:16px 18px 18px;margin:0 0 18px}}
+    legend{{padding:0 8px;font-weight:600;color:#8a6a2e;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em}}
+    .row{{display:grid;grid-template-columns:1fr 1fr;gap:14px}}
+    label{{display:block;font-weight:600;margin-top:12px;color:#3b2f22;font-size:.93rem}}
+    label:first-child{{margin-top:0}}
+    .hint{{font-weight:400;color:#8a7c65;font-size:.82rem;margin-top:2px}}
+    input,textarea,select{{box-sizing:border-box;width:100%;padding:10px 12px;margin-top:5px;font:inherit;border:1px solid #d8cbb0;border-radius:8px;background:#fffdf9;transition:border-color .15s,box-shadow .15s}}
+    input:focus,textarea:focus,select:focus{{outline:none;border-color:#a3782f;box-shadow:0 0 0 3px rgba(163,120,47,.18)}}
+    textarea{{height:64px;resize:vertical}}
+    button{{display:block;width:100%;background:linear-gradient(160deg,#a3782f,#7a5a22);color:#fff;border:0;border-radius:9px;padding:14px 16px;margin-top:26px;font:inherit;font-weight:600;font-size:1.02rem;letter-spacing:.02em;cursor:pointer;box-shadow:0 4px 14px rgba(122,90,34,.35);transition:transform .1s,box-shadow .15s}}
+    button:hover{{transform:translateY(-1px);box-shadow:0 6px 18px rgba(122,90,34,.45)}}
+    button:active{{transform:translateY(0)}}
+    .ok{{color:#147a35;font-weight:600;background:#e9f7ee;border:1px solid #bfe6cc;border-radius:8px;padding:10px 14px;margin:0 0 18px}}
+    .err{{color:#9c2b1f;font-weight:600;background:#fbeceb;border:1px solid #f0c4bf;border-radius:8px;padding:10px 14px;margin:0 0 18px}}
+    .results{{margin-top:22px;padding-top:18px;border-top:1px dashed #e4d9c4}}
+    .results h2{{margin:0 0 10px;font-size:1rem;color:#8a6a2e;text-transform:uppercase;letter-spacing:.04em}}
+    .download{{display:block;background:#fff;border:1px solid #d8cbb0;color:#3b2f22;border-radius:8px;padding:11px 14px;margin-top:8px;text-decoration:none;font-weight:600;transition:border-color .15s,background .15s}}
+    .download:hover{{border-color:#a3782f;background:#fdf8ef}}
+    footer{{text-align:center;color:rgba(255,252,246,.65);font-size:.82rem;margin-top:22px}}
+    @media (max-width:520px){{.row{{grid-template-columns:1fr}}main{{padding:26px 22px}}}}
+    </style>
+    <main>
+    <h1>📜 Generator teste — 1 și 2 Samuel</h1>
+    <p class="subtitle">Teste biblice pentru Talantul în Negoț, generate exclusiv din corpusul local verificat (Secțiunile I–IV).</p>
+    {message}
+    <form method='post' action='/generate'>
+      <fieldset>
+        <legend>Material</legend>
+        <label>Capitole biblice
+          <span class="hint">ex: „1 Samuel 1,2" sau un interval de versete</span>
+        </label>
+        <textarea name='chapters'>1 Samuel 1,2</textarea>
+        <label>Dificultate
+          <span class="hint">influențează selecția versetelor și a variantelor greșite</span>
+        </label>
+        <select name='difficulty'><option value='mixed'>Mixtă (implicit)</option><option value='easy'>Ușoară</option><option value='medium'>Medie</option><option value='hard'>Dificilă</option></select>
+      </fieldset>
+      <fieldset>
+        <legend>Detalii concurs</legend>
+        <div class="row">
+          <div><label>Categorie</label><input name='category' value='' placeholder='ex: 6-7'></div>
+          <div><label>Ediție</label><input name='edition' value='2027'></div>
+        </div>
+        <div class="row">
+          <div><label>Etapă</label><input name='stage' value='' placeholder='ex: Faza pe biserică'></div>
+          <div><label>Data</label><input name='date' value='' placeholder='ex: 12 aprilie 2027'></div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Generare</legend>
+        <div class="row">
+          <div><label>Număr variante</label><input type='number' min='1' max='10' name='versions' value='1'></div>
+          <div><label>Seed <span class="hint">(opțional, pentru reproducere)</span></label><input name='seed' value='12345'></div>
+        </div>
+      </fieldset>
+      <button>✦ GENEREAZĂ TESTUL</button>
+    </form>
+    {results}
+    </main>
+    <footer>Fiecare întrebare provine dintr-un verset real, validat automat.</footer>
+    </html>"""
 
 
 def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
@@ -104,7 +174,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_error(HTTPStatus.NOT_FOUND)
         client_ip = self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
         if rate_limited(client_ip):
-            message = f"<p style='color:#b00'><strong>Prea multe cereri.</strong> Poți genera din nou peste puțin timp (limită: {RATE_LIMIT_MAX_REQUESTS}/oră per utilizator).</p>"
+            message = f"<p class='err'><strong>Prea multe cereri.</strong> Poți genera din nou peste puțin timp (limită: {RATE_LIMIT_MAX_REQUESTS}/oră per utilizator).</p>"
             return self._html(page(message), HTTPStatus.TOO_MANY_REQUESTS)
         length = int(self.headers.get("Content-Length", 0))
         values = {key: value[-1] for key, value in parse_qs(self.rfile.read(length).decode("utf-8")).items()}
@@ -112,7 +182,7 @@ class Handler(BaseHTTPRequestHandler):
             links = make_tests(values)
             self._html(page("<p class='ok'>✓ Test generat și validat.</p>", links))
         except Exception as exc:
-            self._html(page(f"<p style='color:#b00'><strong>Generarea a eșuat:</strong> {html.escape(str(exc))}</p>"), HTTPStatus.BAD_REQUEST)
+            self._html(page(f"<p class='err'><strong>Generarea a eșuat:</strong> {html.escape(str(exc))}</p>"), HTTPStatus.BAD_REQUEST)
 
 
 def main() -> None:
