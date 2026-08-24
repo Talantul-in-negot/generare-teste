@@ -164,11 +164,14 @@ const Tracker = (() => {
   async function fetchOwnScore() {
     const userName = typeof Auth !== "undefined" && Auth.currentUser ? Auth.currentUser() : null;
     if (!userName) return null;
+    const userId = typeof Auth !== "undefined" && Auth.getUserId ? Auth.getUserId() : null;
     const scores = await fetchScores();
+    // Potrivire după user_id (distinge conturi cu același nume afișat);
+    // recade pe nume doar dacă RPC-ul e neactualizat și nu trimite user_id.
     const target = userName.toLocaleLowerCase("ro-RO");
-    const row = scores.find((entry) =>
-      String(entry.user_name || "").toLocaleLowerCase("ro-RO") === target
-    );
+    const row = userId
+      ? scores.find((entry) => entry.user_id === userId)
+      : scores.find((entry) => String(entry.user_name || "").toLocaleLowerCase("ro-RO") === target);
     return row ? Number(row.points) || 0 : null;
   }
 

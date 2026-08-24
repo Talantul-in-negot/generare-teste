@@ -958,14 +958,13 @@ function renderStatsContent(wrap, events, leaderboardSize) {
 // Clasament din tabelul agregat `scores` (un rând/utilizator) + panoul personal
 // din evenimentele proprii. Calea implicită; renderStatsContent rămâne fallback.
 function renderStatsFromScores(wrap, scores, myEvents, leaderboardSize) {
-  // Normalizează și fuzionează eventualele duplicate de nume (litere mari/mici).
-  const byName = new Map();
-  for (const s of scores) {
-    const name = normName(s.user_name);
-    byName.set(name, Math.max(byName.get(name) || 0, s.points || 0));
-  }
-  const ranking = [...byName.entries()]
-    .map(([name, points]) => ({ name, points }))
+  // Fiecare rând din `scores` e deja unic per user_id (upsert în
+  // recalculate_score_for_user) — nu se mai fuzionează după nume normalizat,
+  // ca să nu se amestece conturi diferite care întâmplător au același nume
+  // afișat (ex. sergiu@citim.app și sergiu@test.com, ambele "Sergiu").
+  const myUserId = typeof Auth !== "undefined" && Auth.getUserId ? Auth.getUserId() : null;
+  const ranking = scores
+    .map((s) => ({ userId: s.user_id || null, name: normName(s.user_name), points: s.points || 0 }))
     .sort((a, b) => b.points - a.points);
 
   wrap.innerHTML = "";
@@ -975,7 +974,11 @@ function renderStatsFromScores(wrap, scores, myEvents, leaderboardSize) {
   board.innerHTML = "<h3>🏆 Clasament</h3>";
   ranking.filter((entry) => entry.points > 0).forEach((entry, i) => {
     const row = document.createElement("div");
-    row.className = "leaderboard-row" + (entry.name === userName ? " me" : "");
+    // Rândul propriu se identifică după user_id când e disponibil (precis,
+    // distinge conturi cu același nume); dacă RPC-ul e neactualizat și nu
+    // trimite user_id, recade pe potrivirea după nume (comportamentul vechi).
+    const isMe = entry.userId ? entry.userId === myUserId : entry.name === userName;
+    row.className = "leaderboard-row" + (isMe ? " me" : "");
     row.innerHTML = `<span class="rank">${i + 1}</span><span class="who">${escapeHtml(entry.name)}</span><span class="pts">${entry.points} pct</span>`;
     board.appendChild(row);
   });
