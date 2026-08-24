@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from .models import Evidence, TestDefinition
+from .models import Evidence, SingleChoiceQuestion, TestDefinition
 from .repository import BibleRepository
 
 
@@ -48,7 +48,8 @@ def validate_test(test: TestDefinition) -> None:
     if test.section_iii:
         core_ids.extend(test.section_iii.fact_ids)
     iv_fact_sets = [set(question.fact_ids or [question.fact_id]) for question in test.section_iv]
-    if len(core_ids) != len(set(core_ids)) or any(not 1 <= len(question.fact_ids or [question.fact_id]) <= 3 for question in test.section_iv) or any(set(core_ids) & fact_ids for fact_ids in iv_fact_sets):
+    all_fact_ids = core_ids + [fact_id for fact_ids in iv_fact_sets for fact_id in fact_ids]
+    if len(all_fact_ids) != len(set(all_fact_ids)) or any(not 1 <= len(question.fact_ids or [question.fact_id]) <= 3 for question in test.section_iv):
         errors.append("Aceeași factă este reutilizată între întrebări.")
     if errors:
         raise ValidationError("\n".join(errors))
@@ -68,6 +69,26 @@ def validate_evidence(test: TestDefinition, repository: BibleRepository) -> None
     evidence.extend(ref for q in test.section_iv for ref in (q.supporting_evidence or [q.evidence]))
     if test.section_iii:
         evidence.extend(test.section_iii.evidence)
+    facts_by_id = {fact.id: fact for fact in repository.facts}
+    for question in test.section_i + test.section_ii:
+        fact = facts_by_id.get(question.fact_id)
+        if fact is None:
+            raise ValidationError(f"Faptă necunoscută: {question.fact_id}")
+        if isinstance(question, SingleChoiceQuestion) and question.options[question.correct] != fact.object:
+            raise ValidationError(f"Răspunsul corect nu coincide cu fapta: {question.id}")
+    for question in test.section_iv:
+        supporting = question.supporting_evidence or [question.evidence]
+        text = " ".join(ref.text for ref in supporting)
+        for letter in question.correct:
+            if question.options[letter] not in text:
+                raise ValidationError(f"Răspunsul corect nu este susținut de dovadă: {question.id}")
+    if test.section_iii:
+        for index, ref in enumerate(test.section_iii.evidence):
+            if index >= len(test.section_iii.left):
+                break
+            letter = test.section_iii.answers.get(str(index + 1))
+            if not letter or test.section_iii.left[index] not in ref.text or test.section_iii.right.get(letter, "") not in ref.text:
+                raise ValidationError(f"Asocierea nu este susținută de dovadă: III-{index + 1}")
     for item in evidence:
         expected = " ".join(repository.get_verse(item.book, item.chapter, verse) for verse in range(item.verse_start, item.verse_end + 1))
         if " ".join(item.text.split()) != " ".join(expected.split()):

@@ -4,6 +4,8 @@ import html
 import json
 import os
 import secrets
+import shutil
+import threading
 import time
 from collections import defaultdict, deque
 from http import HTTPStatus
@@ -25,18 +27,32 @@ REPOSITORY = BibleRepository("data")
 RATE_LIMIT_MAX_REQUESTS = 5
 RATE_LIMIT_WINDOW_SECONDS = 60 * 60
 _REQUEST_LOG: dict[str, deque[float]] = defaultdict(deque)
+_RATE_LIMIT_LOCK = threading.Lock()
+MAX_REQUEST_BYTES = 64 * 1024
+OUTPUT_RETENTION_SECONDS = 24 * 60 * 60
 
 
 def rate_limited(client_ip: str) -> bool:
     """True if client_ip has hit the generation limit for the current window."""
     now = time.monotonic()
-    log = _REQUEST_LOG[client_ip]
-    while log and now - log[0] > RATE_LIMIT_WINDOW_SECONDS:
-        log.popleft()
-    if len(log) >= RATE_LIMIT_MAX_REQUESTS:
-        return True
-    log.append(now)
-    return False
+    with _RATE_LIMIT_LOCK:
+        log = _REQUEST_LOG[client_ip]
+        while log and now - log[0] > RATE_LIMIT_WINDOW_SECONDS:
+            log.popleft()
+        if len(log) >= RATE_LIMIT_MAX_REQUESTS:
+            return True
+        log.append(now)
+        return False
+
+
+def cleanup_output() -> None:
+    """Remove expired generated sessions, keeping the output directory bounded."""
+    if not OUTPUT.exists():
+        return
+    cutoff = time.time() - OUTPUT_RETENTION_SECONDS
+    for item in OUTPUT.iterdir():
+        if item.is_dir() and item.stat().st_mtime < cutoff:
+            shutil.rmtree(item, ignore_errors=True)
 
 
 def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
@@ -172,13 +188,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path != "/generate":
             return self.send_error(HTTPStatus.NOT_FOUND)
-        client_ip = self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
+        client_ip = self.client_address[0]
         if rate_limited(client_ip):
             message = f"<p class='err'><strong>Prea multe cereri.</strong> Poți genera din nou peste puțin timp (limită: {RATE_LIMIT_MAX_REQUESTS}/oră per utilizator).</p>"
             return self._html(page(message), HTTPStatus.TOO_MANY_REQUESTS)
-        length = int(self.headers.get("Content-Length", 0))
-        values = {key: value[-1] for key, value in parse_qs(self.rfile.read(length).decode("utf-8")).items()}
         try:
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+            except ValueError:
+                return self._html(page("<p class='err'>Cerere invalidă.</p>"), HTTPStatus.BAD_REQUEST)
+            if length < 0 or length > MAX_REQUEST_BYTES:
+                return self._html(page("<p class='err'>Cerere prea mare.</p>"), HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+            raw = self.rfile.read(length).decode("utf-8")
+            values = {key: value[-1] for key, value in parse_qs(raw, max_num_fields=32).items()}
+            cleanup_output()
             links = make_tests(values)
             self._html(page("<p class='ok'>✓ Test generat și validat.</p>", links))
         except Exception as exc:
