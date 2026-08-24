@@ -7,7 +7,12 @@
 */
 
 const Auth = (() => {
-  const DOMAIN = '@test.com';
+  const DOMAIN = '@citim.app';
+  // Domeniu vechi, folosit pentru conturile create înainte de fix-ul care a
+  // aliniat codul cu acest comentariu (DOMAIN era hardcodat greșit '@test.com').
+  // Conturile existente rămân valide la autentificare; doar cele noi merg pe
+  // DOMAIN de mai sus.
+  const LEGACY_DOMAIN = '@test.com';
   let _client = null;
   let _session = null;
   let _onChangeCb = null;
@@ -21,8 +26,8 @@ const Auth = (() => {
     return _client;
   }
 
-  function toEmail(username) {
-    return username.trim().toLowerCase().replace(/\s+/g, '_') + DOMAIN;
+  function toEmail(username, domain) {
+    return username.trim().toLowerCase().replace(/\s+/g, '_') + (domain || DOMAIN);
   }
 
   function normalizeUsername(username) {
@@ -35,7 +40,7 @@ const Auth = (() => {
   function extractUsername(user) {
     if (!user) return null;
     const raw = user.user_metadata?.username ||
-                (user.email || '').replace(DOMAIN, '') ||
+                (user.email || '').replace(DOMAIN, '').replace(LEGACY_DOMAIN, '') ||
                 null;
     if (!raw) return null;
     return normalizeUsername(raw);
@@ -66,10 +71,20 @@ const Auth = (() => {
 
   async function signIn(username, password) {
     if (!client()) throw new Error('Serviciul de autentificare nu este disponibil. Verifică conexiunea la internet.');
-    const { data, error } = await client().auth.signInWithPassword({
-      email: toEmail(username),
+    let { data, error } = await client().auth.signInWithPassword({
+      email: toEmail(username, DOMAIN),
       password,
     });
+    // Conturile create înainte de fix-ul de domeniu sunt încă pe @test.com —
+    // dacă noul domeniu nu găsește contul, încearcă domeniul vechi.
+    if (error) {
+      const retry = await client().auth.signInWithPassword({
+        email: toEmail(username, LEGACY_DOMAIN),
+        password,
+      });
+      data = retry.data;
+      error = retry.error;
+    }
     if (error) throw new Error(translateError(error.message));
     _session = data.session;
     return currentUser();
