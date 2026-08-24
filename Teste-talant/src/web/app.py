@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import secrets
+import time
+from collections import defaultdict, deque
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -17,6 +20,23 @@ from src.biblical_tests.validation import coverage_report, validate_evidence, va
 
 OUTPUT = Path("output").resolve()
 REPOSITORY = BibleRepository("data")
+
+# Anti-abuse: max requests to /generate per IP within the rolling window below.
+RATE_LIMIT_MAX_REQUESTS = 5
+RATE_LIMIT_WINDOW_SECONDS = 60 * 60
+_REQUEST_LOG: dict[str, deque[float]] = defaultdict(deque)
+
+
+def rate_limited(client_ip: str) -> bool:
+    """True if client_ip has hit the generation limit for the current window."""
+    now = time.monotonic()
+    log = _REQUEST_LOG[client_ip]
+    while log and now - log[0] > RATE_LIMIT_WINDOW_SECONDS:
+        log.popleft()
+    if len(log) >= RATE_LIMIT_MAX_REQUESTS:
+        return True
+    log.append(now)
+    return False
 
 
 def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
@@ -39,12 +59,13 @@ def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
     versions = max(1, min(10, int(data.get("versions", "").strip() or "1")))
     contest = {"title": "TALANTUL ÎN NEGOȚ", "category": data.get("category", "6_7"), "edition": int(data.get("edition", "2027")), "stage": data.get("stage", "Faza pe biserică"), "date": data.get("date", "")}
     scoring = {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}
+    session_id = secrets.token_urlsafe(9)
     links = []
     for version in range(1, versions + 1):
         test = build_test(repo.facts_for(selection), selection, contest, scoring, base_seed, version)
         validate_test(test)
         validate_evidence(test, repo)
-        folder = OUTPUT / f"V{version}"
+        folder = OUTPUT / session_id / f"V{version}"
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "test.json").write_text(json.dumps(test.to_dict() | {"coverage": coverage_report(test), "translation": repo.translation, "difficulty": data.get("difficulty", "mixed")}, ensure_ascii=False, indent=2), encoding="utf-8")
         candidate, answer_key = render_pair(test, folder)
@@ -81,6 +102,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path != "/generate":
             return self.send_error(HTTPStatus.NOT_FOUND)
+        client_ip = self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
+        if rate_limited(client_ip):
+            message = f"<p style='color:#b00'><strong>Prea multe cereri.</strong> Poți genera din nou peste puțin timp (limită: {RATE_LIMIT_MAX_REQUESTS}/oră per utilizator).</p>"
+            return self._html(page(message), HTTPStatus.TOO_MANY_REQUESTS)
         length = int(self.headers.get("Content-Length", 0))
         values = {key: value[-1] for key, value in parse_qs(self.rfile.read(length).decode("utf-8")).items()}
         try:
@@ -91,8 +116,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", 8000), Handler)
-    print("Interfața este disponibilă la http://127.0.0.1:8000")
+    port = int(os.environ.get("PORT", 8000))
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    print(f"Interfața este disponibilă pe portul {port}")
     server.serve_forever()
 
 
