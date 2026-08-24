@@ -811,6 +811,10 @@ async function syncProgressFromCloud() {
 
 /* --- Ecran de statistici (agregate din evenimentele Supabase) --- */
 async function renderStats() {
+  if (!Auth.isLoggedIn()) {
+    showAuthModal();
+    return;
+  }
   await syncProgressFromCloud();
   el.progress.textContent = "Statistici";
   el.cheer.hidden = true;
