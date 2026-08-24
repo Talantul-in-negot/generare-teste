@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+output/
+tmp/
+data/bible/bible.json
+data/*.pdf
+config.yaml
