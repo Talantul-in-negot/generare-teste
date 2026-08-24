@@ -3,4 +3,5 @@ __pycache__/
 output/
 tmp/
 data/bible/bible.json
+data/*.pdf
 config.yaml
