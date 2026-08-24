@@ -19,6 +19,7 @@ from src.biblical_tests.validation import coverage_report, validate_evidence, va
 
 
 OUTPUT = Path("output").resolve()
+APP_PATH = "/generare-teste"
 REPOSITORY = BibleRepository("data")
 
 # Anti-abuse: max requests to /generate per IP within the rolling window below.
@@ -84,7 +85,7 @@ def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
     <h1>📜 Generator teste — 1 și 2 Samuel</h1>
     <p class="subtitle">Teste biblice pentru Talantul în Negoț, generate exclusiv din corpusul local verificat (Secțiunile I–IV).</p>
     {message}
-    <form method='post' action='/generate'>
+    <form method='post' action='{APP_PATH}/generate'>
       <fieldset>
         <legend>Material</legend>
         <label>Capitole biblice
@@ -139,7 +140,7 @@ def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "test.json").write_text(json.dumps(test.to_dict() | {"coverage": coverage_report(test), "translation": repo.translation, "difficulty": data.get("difficulty", "mixed")}, ensure_ascii=False, indent=2), encoding="utf-8")
         candidate, answer_key = render_pair(test, folder)
-        links.extend([(f"Descarcă Test Concurenți V{version}", f"/download/{candidate.relative_to(OUTPUT).as_posix()}"), (f"Descarcă Barem Corectori V{version}", f"/download/{answer_key.relative_to(OUTPUT).as_posix()}")])
+        links.extend([(f"Descarcă Test Concurenți V{version}", f"{APP_PATH}/download/{candidate.relative_to(OUTPUT).as_posix()}"), (f"Descarcă Barem Corectori V{version}", f"{APP_PATH}/download/{answer_key.relative_to(OUTPUT).as_posix()}")])
     return links
 
 
@@ -154,10 +155,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/":
+        if parsed.path in {"/", APP_PATH}:
             return self._html(page())
-        if parsed.path.startswith("/download/"):
-            file = (OUTPUT / unquote(parsed.path.removeprefix("/download/"))).resolve()
+        download_prefix = f"{APP_PATH}/download/"
+        legacy_download_prefix = "/download/"
+        if parsed.path.startswith(download_prefix) or parsed.path.startswith(legacy_download_prefix):
+            prefix = download_prefix if parsed.path.startswith(download_prefix) else legacy_download_prefix
+            file = (OUTPUT / unquote(parsed.path.removeprefix(prefix))).resolve()
             if OUTPUT not in file.parents or not file.is_file():
                 return self.send_error(HTTPStatus.NOT_FOUND)
             data = file.read_bytes()
@@ -170,7 +174,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
-        if self.path != "/generate":
+        if urlparse(self.path).path not in {"/generate", f"{APP_PATH}/generate"}:
             return self.send_error(HTTPStatus.NOT_FOUND)
         client_ip = self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
         if rate_limited(client_ip):
