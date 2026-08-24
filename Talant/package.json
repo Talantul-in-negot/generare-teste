@@ -5,7 +5,8 @@
   "main": "questions.js",
   "scripts": {
     "build": "node build-site.js",
-    "test": "node verify-questions.js"
+    "test": "node verify-questions.js",
+    "generate:scoring-migration": "node scripts/generate-secure-scoring-migration.js"
   },
   "keywords": [],
   "author": "",

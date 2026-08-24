@@ -1,6 +1,10 @@
 -- Repară conflictul dintre parametrul RPC și coloana client_attempt_id.
 begin;
 
+-- PostgreSQL does not allow CREATE OR REPLACE to rename input parameters.
+-- Remove the original signature before recreating it with p_client_attempt_id.
+drop function if exists public.talant_record_attempt(integer, text, text, jsonb, boolean, uuid, timestamptz);
+
 create or replace function public.talant_record_attempt(
   question_id integer,
   round_key text,

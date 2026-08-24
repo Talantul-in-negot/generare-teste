@@ -72,7 +72,7 @@ const TestTracker = (() => {
     log(attempt);
     const saved = await flush();
     if (!saved) throw lastError || new Error('Rezultatul nu a putut fi salvat.');
-    return ownStats(attempt.quiz_version);
+    return ownStats(attempt.p_quiz_version);
   }
   async function ownStats(quizVersion) {
     if (!enabled || !Auth.userId()) return null;
@@ -80,7 +80,7 @@ const TestTracker = (() => {
     return Array.isArray(rows) ? rows[0] || null : rows;
   }
   async function leaderboard(quizVersion, limit = 20) {
-    return enabled ? rpc('talant_test_leaderboard', { p_quiz_version: quizVersion, p_limit: limit }) : [];
+    return enabled && Auth.userId() ? rpc('talant_test_leaderboard', { p_quiz_version: quizVersion, p_limit: limit }) : [];
   }
   async function myAttempts(quizVersion, limit = 20) {
     return enabled && Auth.userId() ? rpc('talant_test_my_attempts', { p_quiz_version: quizVersion, p_limit: limit }) : [];

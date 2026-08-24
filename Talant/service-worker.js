@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cartea-lui-ioan-v1';
+const CACHE_NAME = 'cartea-lui-ioan-v2';
 const APP_SHELL = [
   './', 'quiz.html', 'questions.js', 'config.js', 'auth.js', 'tracker.js',
   'manifest.webmanifest', 'icon-192.png', 'icon-512.png'
@@ -18,5 +18,12 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request)));
+  event.respondWith(
+    fetch(event.request).then(response => {
+      if (response.ok && new URL(event.request.url).origin === self.location.origin) {
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()));
+      }
+      return response;
+    }).catch(() => caches.match(event.request).then(cached => cached || new Response('Offline', { status: 503 })))
+  );
 });

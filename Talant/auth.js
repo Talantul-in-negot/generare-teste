@@ -18,15 +18,25 @@ const Auth = (() => {
     return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 30);
   }
 
-  function toEmail(username) {
+  function usernameEmail(username) {
     const value = normalizeUsername(username).toLocaleLowerCase('ro-RO').replace(/\s/g, '_');
-    // Formularul este bazat pe nume de utilizator, însă acceptăm și emailul
-    // intern complet pentru conturile create manual din Supabase Dashboard.
-    return value.includes('@') ? value : value + DOMAIN;
+    if (value.includes('@')) throw new Error('La creare, folosește un nume de utilizator, nu o adresă de email.');
+    return value + DOMAIN;
+  }
+
+  function signInEmail(value) {
+    const normalized = normalizeUsername(value).toLocaleLowerCase('ro-RO').replace(/\s/g, '_');
+    // Administratorii pot crea separat conturi cu email pentru grupe. Aceste
+    // adrese pot fi folosite numai pentru conectare, nu pentru auto-înregistrare.
+    return normalized.includes('@') ? normalized : usernameEmail(normalized);
   }
 
   function displayName(user) {
-    const name = normalizeUsername(user?.user_metadata?.username || (user?.email || '').replace(DOMAIN, ''));
+    // Numele afișat nu trebuie să conțină niciodată un email întreg — pentru
+    // conturile mai vechi la care username-ul salvat era încă un email complet,
+    // sau la fallback pe email, păstrăm doar partea dinaintea lui @.
+    const raw = user?.user_metadata?.username || (user?.email || '').replace(DOMAIN, '');
+    const name = normalizeUsername(raw.includes('@') ? raw.split('@')[0] : raw);
     // Afișăm consecvent numele cu inițială mare, indiferent cum a fost creat
     // contul în formular sau direct în Supabase.
     return name ? name.slice(0, 1).toLocaleUpperCase('ro-RO') + name.slice(1) : null;
@@ -57,7 +67,7 @@ const Auth = (() => {
   async function signIn(username, password) {
     const c = client();
     if (!c) throw new Error('Serviciul de autentificare nu este disponibil.');
-    const { data, error } = await c.auth.signInWithPassword({ email: toEmail(username), password });
+    const { data, error } = await c.auth.signInWithPassword({ email: signInEmail(username), password });
     if (error) throw new Error(userFriendlyError(error.message));
     session = data.session;
     return currentUser();
@@ -69,8 +79,9 @@ const Auth = (() => {
     if (password.length < 6) throw new Error('Parola trebuie să aibă cel puțin 6 caractere.');
     const c = client();
     if (!c) throw new Error('Serviciul de autentificare nu este disponibil.');
+    const email = usernameEmail(name);
     const { data, error } = await c.auth.signUp({
-      email: toEmail(name), password, options: { data: { username: name } },
+      email, password, options: { data: { username: name } },
     });
     if (error) throw new Error(userFriendlyError(error.message));
     if (data.user && !data.session) throw new Error('Confirmarea prin email este activă în configurația Supabase.');

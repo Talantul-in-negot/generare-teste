@@ -29,7 +29,11 @@ const Tracker = (() => {
       const bodyText = await response.text();
       let message = `HTTP ${response.status}`;
       try { message = JSON.parse(bodyText).message || JSON.parse(bodyText).hint || message; } catch { message = bodyText || message; }
-      throw new Error(message);
+      const error = new Error(message);
+      // După migrarea la RPC-ul v2, intrările offline v1 au o semnătură
+      // incompatibilă și nu pot deveni valide prin reîncercare.
+      error.permanent = response.status === 404 || /Could not find the function/i.test(message);
+      throw error;
     }
     if (response.status === 204) return null;
     const text = await response.text();
@@ -39,7 +43,7 @@ const Tracker = (() => {
   function log(attempt) {
     if (!enabled || !Auth.userId()) return;
     const queue = readQueue();
-    queue.push({ ...attempt, client_attempt_id: attemptId(), attempted_at: new Date().toISOString() });
+    queue.push({ ...attempt, p_client_attempt_id: attemptId() });
     writeQueue(queue);
   }
 
@@ -53,7 +57,11 @@ const Tracker = (() => {
         try {
           await rpc('talant_record_attempt', queue[0]);
           writeQueue(queue.slice(1));
-        } catch (error) { lastError = error; return false; }
+        } catch (error) {
+          if (error.permanent) { writeQueue(queue.slice(1)); continue; }
+          lastError = error;
+          return false;
+        }
       }
     })().finally(() => { flushing = null; });
     return flushing;

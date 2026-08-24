@@ -4,11 +4,16 @@ Quiz static, cu conturi, punctaj cumulativ, istoric de încercări și clasament
 
 ## Configurare rezultate și clasament
 
-1. Deschide proiectul Supabase folosit de aplicație și rulează o singură dată
-   [migrarea SQL](supabase/20260821_talant_scoring.sql) în SQL Editor.
-2. În Supabase Auth, dezactivează confirmarea prin email dacă vrei ca un cont nou
-   să poată intra imediat.
-3. Rulează `npm run build` înainte de publicare prin Sites; pagina publică
+1. Rulează migrările existente de scor în ordine, apoi
+   [migrarea pentru grupe](supabase/20260823_talant_test_church.sql) dacă folosești
+   clasamentele pe biserici.
+2. Rulează apoi [migrarea de scor securizat](supabase/20260824_secure_scoring.sql)
+   în SQL Editor. Aceasta conține cele 558 de chei pentru quiz și 504 chei pentru
+   testele Samuel, calculate din fișierele de întrebări din acest repository.
+3. În Supabase Auth, confirmarea emailului poate rămâne dezactivată pentru
+   conturile locale `@talant.app`. Auto-înregistrarea nu mai acceptă emailuri
+   externe; conturile de grupă se creează numai de administrator.
+4. Rulează `npm run build` înainte de publicare prin Sites; pagina publică
    răspunde la rădăcina domeniului.
 
 Conturile Talant folosesc intern domeniul `@talant.app`, distinct de cele din
@@ -16,17 +21,23 @@ Conturile Talant folosesc intern domeniul `@talant.app`, distinct de cele din
 
 ## Reguli de punctaj și audit
 
-- 10 puncte pentru fiecare întrebare rezolvată corect, o singură dată per versiune de quiz.
+- Un punct pentru fiecare întrebare rezolvată corect, o singură dată per versiune de quiz.
 - Fiecare răspuns este memorat cu setul, ID-ul întrebării, opțiunile alese,
   rezultatul și momentul încercării.
-- Totalul și clasamentul sunt calculate în Supabase din jurnalul de încercări;
-  browserul nu trimite un total de puncte.
-- Pentru integritate deplină împotriva modificării din DevTools, cheia de răspuns
-  trebuie menținută exclusiv pe server. În această aplicație statică, răspunsurile
-  există și în `questions.js`, deci mecanismul este auditabil, nu anti-trișare.
+- Totalul, corectitudinea și clasamentul sunt calculate în Supabase din cheile
+  de răspuns păstrate în tabele neaccesibile browserului; clientul trimite numai
+  opțiunile selectate.
+- Rezultatele v1 vechi nu sunt șterse, dar sunt izolate ca „legacy” și nu mai
+  intră în statistici sau clasamentele v2. Testele Samuel folosesc separat
+  versiunile v2.
 
 ## Verificare
 
 ```powershell
 npm test
+npm run build
 ```
+
+Dacă modifici întrebările sau baremele, actualizează versiunile quiz-urilor,
+rulează `node scripts/generate-secure-scoring-migration.js`, apoi aplică noua
+migrare generată înainte de publicare.

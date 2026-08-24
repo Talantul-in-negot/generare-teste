@@ -853,7 +853,7 @@ async function recordQuizAttempt(q, selected, isCorrect){
   if(!accountUser){setSyncNotice('Conectează-te înainte de răspuns ca punctele să intre în clasament.',true);return;}
   setSyncNotice('Se salvează răspunsul…');
   try{
-    const stats=await Tracker.record({question_id:q.sourceIndex,round_key:ROUNDS[activeRoundIdx].label,quiz_version:'ioan-v1',selected_indices:selected,correct:isCorrect});
+    const stats=await Tracker.record({p_question_id:q.sourceIndex,p_quiz_version:'ioan-v2',p_selected_indices:selected});
     if(stats){cloudPoints=Number(stats.points)||0;updateAccount();setSyncNotice(`Salvat în clasament: ${cloudPoints} pct.`);}
     else setSyncNotice('Răspunsul a fost pus în coada de sincronizare.');
   }catch(error){setSyncNotice(`Nu s-a salvat: ${error.message||'eroare de conexiune'}`,true);}
