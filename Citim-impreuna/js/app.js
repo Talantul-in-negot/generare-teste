@@ -242,6 +242,35 @@ function save() {
   localStorage.setItem(STORAGE_CYCLE, String(cycle));
 }
 
+// Progresul local (page/cycle/score/pagini rezolvate) nu era legat de contul
+// Supabase logat — la schimbarea contului pe același browser, progresul
+// vechiului cont "scurgea" în cel nou (syncProgressFromCloud face doar
+// Math.max cu ce e local, deci un cont nou moștenea o pagină avansată).
+// STORAGE_USER ține user_id-ul ultimului cont logat pe acest dispozitiv;
+// dacă diferă de cel curent, resetăm local înainte de sync — dar doar dacă
+// exista deja un cont anterior (altfel, un cititor anonim care își face
+// primul cont chiar trebuie să-și păstreze progresul citit fără login).
+function resetLocalProgressForAccountSwitch() {
+  score = 0;
+  page = 0;
+  cycle = 0;
+  solvedThisCycle = new Set();
+  hadMistake = false;
+  localStorage.removeItem(STORAGE_PAGE_MISTAKES);
+  localStorage.removeItem(STORAGE_SOLVED);
+  save();
+}
+
+function guardAgainstAccountSwitch() {
+  const currentId = typeof Auth !== "undefined" && Auth.getUserId ? Auth.getUserId() : null;
+  if (!currentId) return;
+  const lastId = localStorage.getItem(STORAGE_USER);
+  if (lastId && lastId !== currentId) {
+    resetLocalProgressForAccountSwitch();
+  }
+  localStorage.setItem(STORAGE_USER, currentId);
+}
+
 // Pagini deja terminate complet (corect) în ciclul curent — interzice reluarea
 // lor (din reload de browser sau din „← Înapoi la citire"), ca să nu se poată
 // da aceeași pagină de mai multe ori consecutiv fără să înceapă un ciclu nou.
@@ -669,6 +698,7 @@ async function handleLogin() {
     hideAuthModal();
     updateUserChip();
     el.loginPassword.value = "";
+    guardAgainstAccountSwitch();
     progressSynced = false;
     await refreshAndSyncScore();
     await syncProgressFromCloud();
@@ -692,6 +722,7 @@ async function handleRegister() {
     hideAuthModal();
     updateUserChip();
     el.loginPassword.value = "";
+    guardAgainstAccountSwitch();
     progressSynced = false;
     await refreshAndSyncScore();
     await syncProgressFromCloud();
@@ -1317,6 +1348,7 @@ Auth.init((user) => {
   updateUserChip();
   if (user) {
     hideAuthModal();
+    guardAgainstAccountSwitch();
     await refreshAndSyncScore();
     await syncProgressFromCloud();
     showWelcomeMessage(userName);
