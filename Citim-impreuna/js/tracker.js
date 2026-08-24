@@ -3,6 +3,15 @@
 
 const Tracker = (() => {
   const QUEUE_KEY = "ci_pending_events";
+  const QUEUE_LOCK_KEY = "ci_pending_events_lock";
+  const EVENT_ID_FIELD = "_ci_event_id";
+  const EVENT_OWNER_FIELD = "_ci_owner_id";
+  const MAX_QUEUE_EVENTS = 500;
+  const POST_BATCH_SIZE = 100;
+  const LOCK_TTL_MS = 60 * 1000;
+  const tabId = typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const enabled =
     typeof SUPABASE_URL === "string" &&
     SUPABASE_URL.startsWith("https://") &&
@@ -10,6 +19,8 @@ const Tracker = (() => {
     SUPABASE_ANON_KEY.length > 0;
   let flushPromise = null;
   let scoreRefreshPromise = null;
+  let bufferedEvents = [];
+  let bufferedDrainTimer = null;
 
   // Antetele pentru Supabase. `apikey` rămâne mereu cheia anon (identifică
   // proiectul), dar `Authorization` poartă JWT-ul utilizatorului logat — așa
@@ -30,24 +41,114 @@ const Tracker = (() => {
     };
   }
 
+  function makeEventId() {
+    return typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function trimQueue(queue) {
+    return queue.length > MAX_QUEUE_EVENTS
+      ? queue.slice(queue.length - MAX_QUEUE_EVENTS)
+      : queue;
+  }
+
+  // Pending events belong to the account that was active *when they were
+  // created*, never to the account that happens to be active during a later
+  // retry. Legacy/anonymous entries deliberately remain unclaimed: without a
+  // user choice, assigning them to the next person on a shared device is unsafe.
   function readQueue() {
     try {
-      return JSON.parse(localStorage.getItem(QUEUE_KEY)) || [];
+      const raw = JSON.parse(localStorage.getItem(QUEUE_KEY)) || [];
+      if (!Array.isArray(raw)) return [];
+      let migrated = false;
+      const queue = raw
+        .filter((evt) => evt && typeof evt === "object")
+        .map((evt) => {
+          if (typeof evt[EVENT_ID_FIELD] === "string" && EVENT_OWNER_FIELD in evt) return evt;
+          migrated = true;
+          return {
+            ...evt,
+            [EVENT_ID_FIELD]: typeof evt[EVENT_ID_FIELD] === "string" ? evt[EVENT_ID_FIELD] : makeEventId(),
+            [EVENT_OWNER_FIELD]: typeof evt[EVENT_OWNER_FIELD] === "string" ? evt[EVENT_OWNER_FIELD] : null,
+          };
+        });
+      if (migrated) writeQueue(queue);
+      return queue;
     } catch {
       return [];
     }
   }
 
   function writeQueue(q) {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(trimQueue(q)));
+  }
+
+  function lockRecord() {
+    try {
+      const lock = JSON.parse(localStorage.getItem(QUEUE_LOCK_KEY) || "null");
+      return lock && typeof lock === "object" ? lock : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function tryAcquireQueueLock() {
+    const now = Date.now();
+    const existing = lockRecord();
+    if (existing && existing.owner !== tabId && existing.expiresAt > now) return false;
+    const mine = { owner: tabId, expiresAt: now + LOCK_TTL_MS };
+    localStorage.setItem(QUEUE_LOCK_KEY, JSON.stringify(mine));
+    return lockRecord()?.owner === tabId;
+  }
+
+  function releaseQueueLock() {
+    if (lockRecord()?.owner === tabId) localStorage.removeItem(QUEUE_LOCK_KEY);
+  }
+
+  function scheduleBufferedDrain() {
+    if (bufferedDrainTimer) return;
+    bufferedDrainTimer = setTimeout(() => {
+      bufferedDrainTimer = null;
+      drainBufferedEvents();
+    }, 100);
+  }
+
+  function drainBufferedEvents() {
+    if (bufferedEvents.length === 0) return;
+    if (!tryAcquireQueueLock()) {
+      scheduleBufferedDrain();
+      return;
+    }
+    try {
+      writeQueue(readQueue().concat(bufferedEvents));
+      bufferedEvents = [];
+    } finally {
+      releaseQueueLock();
+    }
+    flush();
   }
 
   function log(evt) {
     if (!enabled) return;
-    const q = readQueue();
+    const ownerId = typeof Auth !== "undefined" && Auth.getUserId ? Auth.getUserId() : null;
+    const entry = {
+      ...evt,
+      created_at: new Date().toISOString(),
+      [EVENT_ID_FIELD]: makeEventId(),
+      [EVENT_OWNER_FIELD]: ownerId || null,
+    };
+    if (!tryAcquireQueueLock()) {
+      bufferedEvents.push(entry);
+      scheduleBufferedDrain();
+      return;
+    }
     // păstrează momentul real al răspunsului, chiar dacă trimiterea se face mai târziu
-    q.push({ ...evt, created_at: new Date().toISOString() });
-    writeQueue(q);
+    try {
+      writeQueue(readQueue().concat(entry));
+    } finally {
+      releaseQueueLock();
+    }
     // nu declanșează flush() aici — checkAnswers() apelează log() de mai multe ori
     // la rând (o dată per verset); un singur flush() după buclă evită atât rafala
     // de cereri, cât și cursa în care evenimente adăugate în timpul unui flush
@@ -61,25 +162,35 @@ const Tracker = (() => {
 
     flushPromise = (async () => {
       let sentAny = false;
+      if (!tryAcquireQueueLock()) return sentAny;
       while (true) {
-        const batch = readQueue();
-        if (batch.length === 0) return sentAny;
         const userId = typeof Auth !== "undefined" && Auth.getUserId ? Auth.getUserId() : null;
         if (!userId) return sentAny;
-        const payload = batch.map((evt) => ({ ...evt, user_id: userId }));
+        // Send only events explicitly recorded for this account. Unclaimed
+        // anonymous events stay local until a future explicit claim flow.
+        const batch = readQueue()
+          .filter((evt) => evt[EVENT_OWNER_FIELD] === userId)
+          .slice(0, POST_BATCH_SIZE);
+        if (batch.length === 0) return sentAny;
+        const payload = batch.map(({ [EVENT_ID_FIELD]: eventId, [EVENT_OWNER_FIELD]: _ownerId, ...evt }) => ({
+          ...evt,
+          client_event_id: eventId,
+          user_id: userId,
+        }));
         try {
           const res = await fetch(`${SUPABASE_URL}/rest/v1/events`, {
             method: "POST",
             headers: await authHeaders({
               "Content-Type": "application/json",
-              Prefer: "return=minimal",
+              Prefer: "resolution=ignore-duplicates,return=minimal",
             }),
             body: JSON.stringify(payload),
           });
           if (!res.ok) return sentAny;
           // Evenimente adăugate în timpul trimiterii sunt procesate în următoarea
           // iterație înainte ca apelantul să poată citi scorul serverului.
-          writeQueue(readQueue().slice(batch.length));
+          const sentIds = new Set(batch.map((evt) => evt[EVENT_ID_FIELD]));
+          writeQueue(readQueue().filter((evt) => !sentIds.has(evt[EVENT_ID_FIELD])));
           sentAny = true;
           await refreshScore();
         } catch {
@@ -88,7 +199,9 @@ const Tracker = (() => {
         }
       }
     })().finally(() => {
+      releaseQueueLock();
       flushPromise = null;
+      if (bufferedEvents.length > 0) scheduleBufferedDrain();
     });
     return flushPromise;
   }
@@ -142,19 +255,24 @@ const Tracker = (() => {
   // Clasamentul agregat: un singur rând per utilizator (user_name, points),
   // derivat de Supabase din evenimente. Evită descărcarea întregului istoric
   // la fiecare deschidere de statistici.
+  const LEADERBOARD_PAGE_SIZE = 1000;
+
   async function fetchScores() {
     if (!enabled) return [];
     try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/rpc/get_public_leaderboard`,
-        {
+      const all = [];
+      for (let offset = 0; offset < 100000; offset += LEADERBOARD_PAGE_SIZE) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_leaderboard`, {
           method: "POST",
           headers: await authHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ p_limit: 1000 }),
-        }
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
+          body: JSON.stringify({ p_limit: LEADERBOARD_PAGE_SIZE, p_offset: offset }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rows = await res.json();
+        all.push(...rows);
+        if (rows.length < LEADERBOARD_PAGE_SIZE) break;
+      }
+      return all;
     } catch {
       // tabel lipsă/offline — apelantul recurge la calculul din evenimente
       return [];
@@ -162,17 +280,23 @@ const Tracker = (() => {
   }
 
   async function fetchOwnScore() {
-    const userName = typeof Auth !== "undefined" && Auth.currentUser ? Auth.currentUser() : null;
-    if (!userName) return null;
     const userId = typeof Auth !== "undefined" && Auth.getUserId ? Auth.getUserId() : null;
-    const scores = await fetchScores();
-    // Potrivire după user_id (distinge conturi cu același nume afișat);
-    // recade pe nume doar dacă RPC-ul e neactualizat și nu trimite user_id.
-    const target = userName.toLocaleLowerCase("ro-RO");
-    const row = userId
-      ? scores.find((entry) => entry.user_id === userId)
-      : scores.find((entry) => String(entry.user_name || "").toLocaleLowerCase("ro-RO") === target);
-    return row ? Number(row.points) || 0 : null;
+    if (!userId) return null;
+    try {
+      // The public leaderboard is intentionally limited. This authenticated
+      // RPC reads only the caller's score, so reconciliation also works for
+      // users who are outside the displayed ranking.
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_own_score`, {
+        method: "POST",
+        headers: await authHeaders({ "Content-Type": "application/json" }),
+        body: "{}",
+      });
+      if (!res.ok) return null;
+      const value = await res.json();
+      return Number(value) || 0;
+    } catch {
+      return null;
+    }
   }
 
   // Supabase derivează scorul exclusiv din evenimentele utilizatorului curent.

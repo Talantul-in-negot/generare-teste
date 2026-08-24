@@ -49,7 +49,7 @@ begin
       coalesce(e.cycle, 0) as cycle_number,
       e.page_index,
       e.verse_ref,
-      min(e.created_at) as first_correct_at
+      min(e.recorded_at) as first_correct_at
     from public.events e
     where e.user_id = p_user_id
       and e.correct is true
@@ -94,7 +94,7 @@ begin
             and coalesce(wrong.cycle, 0) = p.cycle_number
             and wrong.page_index = p.page_index
             and wrong.correct is false
-            and wrong.created_at < p.completed_at
+            and wrong.recorded_at < p.completed_at
         )
     ), 0)
   into v_new_points
