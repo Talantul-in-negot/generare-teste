@@ -155,7 +155,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path in {"/", APP_PATH}:
+        if parsed.path in {"/", APP_PATH, f"{APP_PATH}/"}:
             return self._html(page())
         download_prefix = f"{APP_PATH}/download/"
         legacy_download_prefix = "/download/"
@@ -174,7 +174,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path not in {"/generate", f"{APP_PATH}/generate"}:
+        if urlparse(self.path).path not in {"/generate", f"{APP_PATH}/generate", f"{APP_PATH}/generate/"}:
             return self.send_error(HTTPStatus.NOT_FOUND)
         client_ip = self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
         if rate_limited(client_ip):
