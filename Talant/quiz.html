@@ -836,6 +836,7 @@ function fmtQ(t){ return escapeHtml(t).replace(/_{2,}/g,'<span class="blank">___
 
 function updateAccount(){
   document.getElementById('userName').textContent=accountUser||'Conectează-te';
+  document.getElementById('statsBtn').hidden=!accountUser;
   document.getElementById('userPoints').textContent=cloudPoints;
   document.getElementById('authForm').hidden=!!accountUser;
   document.getElementById('authLogged').hidden=!accountUser;

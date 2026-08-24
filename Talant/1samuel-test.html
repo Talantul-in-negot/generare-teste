@@ -516,6 +516,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 let accountUser = '';
 function updateAccount() {
   document.getElementById('userName').textContent = accountUser || 'Conectează-te';
+  document.getElementById('statsBtn').hidden = !accountUser;
   document.getElementById('authForm').hidden = !!accountUser;
   document.getElementById('authLogged').hidden = !accountUser;
   document.getElementById('authLoggedName').textContent = accountUser;
