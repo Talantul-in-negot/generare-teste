@@ -198,6 +198,60 @@ class GeneratorTests(unittest.TestCase):
         for text in texts:
             self.assertTrue(_self_contained(text), text)
 
+    def test_object_clitics_need_the_patient_spelled_out(self):
+        # An „o"/„îl"/„l-a"/„i-a" is a grammatical slot, not a name: it points
+        # at whoever the narrative was last about. „Cine i-a istorisit tot?"
+        # cannot be answered — told whom? — while the same shape with the
+        # object doubled is complete, which is what separates the two here.
+        from src.biblical_tests.generation import _self_contained
+        for text in (
+            "Cine i-a istorisit tot?",
+            "L-au căutat, dar nu l-au găsit.",
+            "Penina o înțepa la fel.",
+            "L-a dus în Casa Domnului, la Silo.",
+        ):
+            self.assertFalse(_self_contained(text), text)
+        for text in (
+            "Cine l-a chemat pe Samuel?",
+            "Samuel i-a zis bucătarului: „Adu porția!”",
+            "David le-a trimis soli oamenilor din Iabesul Galaadului.",
+            "Care este cuvântul pe care ți l-a vorbit Domnul?",
+            # The article „o", not the clitic — the word after it is a noun.
+            "Ana a luat o efă de făină și un burduf cu vin.",
+        ):
+            self.assertTrue(_self_contained(text), text)
+
+    def test_demonstratives_need_the_noun_they_point_at_identified(self):
+        from src.biblical_tests.generation import _self_contained
+        # Which child? Which vision? The verse never says, so the statement is
+        # not gradeable on its own.
+        self.assertFalse(_self_contained("Pentru copilul acesta mă rugam."))
+        self.assertFalse(_self_contained("Samuel s-a temut să istorisească vedenia aceea."))
+        # Identified elsewhere in the same verse, which is why the check reads
+        # the whole fact and not just the sentence it extracted.
+        self.assertTrue(_self_contained(
+            "Pentru copilul acesta mă rugam.",
+            "Copilul Samuel creștea. Pentru copilul acesta mă rugam.",
+        ))
+        # A time word carries no subject matter, and the word beside a
+        # demonstrative is not always a noun at all.
+        self.assertTrue(_self_contained("Domnul a tunat în ziua aceea cu mare vuiet."))
+        self.assertTrue(_self_contained("Și Eli a zis: „Domnul este acesta!”"))
+
+    def test_wh_questions_have_only_one_defensible_answer(self):
+        # 1 Samuel 3 has both Eli and the Lord call Samuel in nearly the same
+        # words, so „Cine l-a chemat pe Samuel?" is right either way and the
+        # answer key only picks one because of which verse it was built from.
+        from src.biblical_tests.generation import _rival_predicates, _uniquely_answered
+        from src.biblical_tests.selection import parse_selection
+
+        repo = BibleRepository("data")
+        selection = parse_selection("1 Samuel 3,4")
+        facts = [fact for fact in repo.facts_for(selection) if fact.quality]
+        rivals = _rival_predicates(facts)
+        self.assertFalse(_uniquely_answered("l-a chemat pe Samuel", "Domnul", rivals))
+        self.assertTrue(_uniquely_answered("era în vârstă de nouăzeci și opt de ani", "Eli", rivals))
+
     def test_wh_questions_include_the_quoted_speech_they_ask_about(self):
         # Truncating "s-a rugat și a zis" right at the colon that introduces
         # the quotation left nothing for the student to reason from — the

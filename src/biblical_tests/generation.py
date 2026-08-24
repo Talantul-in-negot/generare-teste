@@ -66,17 +66,150 @@ _UNRESOLVED_ANAPHORA = re.compile(
 # plural "they" keeps going ("făceau ei tuturor...", "Ei vor căuta..."). That
 # position is what tells the two apart without deeper parsing.
 _PLURAL_PRONOUN = re.compile(r"(?<!\w)(?:ei|ele)(?!\w)", re.IGNORECASE)
+# A 3rd-person object clitic ("îl", "o", "l-a", "le-a", "i-a") names nobody at
+# all: it is a bare grammatical slot pointing at whoever the narrative was
+# last talking about. "Cine i-a istorisit tot?" is unanswerable on its own —
+# told *whom*? — while the very same shape with the patient spelled out,
+# "Cine l-a chemat pe Samuel?", is complete. What separates them is clitic
+# doubling: Romanian repeats the object beside the clitic ("pe Samuel", "lui
+# Eli") exactly when it wants to name it, so whether that doubling appears
+# anywhere in what the student is shown is the test for whether the sentence
+# carries its own patient or borrows one from upstream.
+_OBJECT_CLITIC = re.compile(
+    r"(?<!\w)(?:îl|l-(?=a(?!\w)|au(?!\w)|o(?!\w))|le-(?=a(?!\w)|au(?!\w))|i-(?=a(?!\w)|au(?!\w)|o(?!\w)))",
+    re.IGNORECASE,
+)
+# What a spelled-out patient looks like. Romanian marks it two ways: the
+# accusative takes the preposition „pe" ("l-a chemat pe Samuel", "i-a lovit pe
+# egipteni", "pe care ți l-a vorbit"), and the dative inflects the noun itself
+# ("i-a zis bucătarului", "le-a trimis oamenilor din Iabes") — so a doubling
+# test that only looked for „pe"/„lui" plus a capitalised name threw away a
+# large number of perfectly readable verses.
+_ACCUSATIVE_DOUBLING = re.compile(r"(?<!\w)pe\s+\w+", re.IGNORECASE)
+_DATIVE_NOUN = re.compile(r"(?<!\w)(?:lui\s+\w+|\w{3,}(?:lui|ei|ii|lor))(?!\w)", re.IGNORECASE)
+# The dative endings are also the genitive ones, and a genitive is not a
+# patient: "Casa Domnului" names no recipient, so counting it would exempt
+# exactly the sentences this check exists for ("L-a dus în Casa Domnului" —
+# dus *whom*?). What separates them is the word in front: a genitive hangs off
+# a noun carrying its own definite article ("Casa", "chivotul", "poporul"),
+# while a dative recipient follows the verb ("zis", "trimis", "pus"). The
+# "-ea"/"-ia" exclusion keeps imperfect verbs ("îi dădea", "o vedea") from
+# being read as articled nouns just because they end in a vowel.
+_GENITIVE_HEADS = ("ul", "ua", "ele", "le")
 
 
-def _self_contained(text: str) -> bool:
+def _is_genitive_head(word: str) -> bool:
+    return word.endswith(_GENITIVE_HEADS) or (word.endswith("a") and not word.endswith(("ea", "ia")))
+
+
+_CLITIC_O = re.compile(r"(?<!\w)o\s+(\w+)", re.IGNORECASE)
+_AUXILIARIES = {"voi", "vei", "va", "vom", "veți", "vor", "am", "ai", "ar", "aș", "ați", "au"}
+_VERB_ENDINGS = ("use", "useră", "seră", "ește", "esc", "eau", "ea", "a")
+# Demonstratives ("copilul acesta", "vedenia aceea") point at something the
+# narrative established earlier; the noun beside them is a bare category word
+# ("the child", "that vision") that identifies nobody on its own. Unlike the
+# pronoun checks this one is deliberately narrow, because most demonstratives
+# in the corpus are perfectly resolvable: it fires only when the noun is never
+# tied to a name anywhere in the fact — not in the extracted sentence, but in
+# the whole verse the sentence came from, since "copilul Samuel" earlier in
+# the verse is what makes a later "copilul acesta" readable.
+_DEMONSTRATIVE = re.compile(
+    r"(?<!\w)(?:(?:acest|această|acești|aceste|acel|acea|acei|acele)\s+(\w+)"
+    r"|(\w+)\s+(?:acesta|aceasta|aceștia|acestea|acela|aceea|aceia|acelea))(?!\w)",
+    re.IGNORECASE,
+)
+_NAMES = BibleRepository.PEOPLE | BibleRepository.PLACES | BibleRepository.DEITY
+
+
+# Time words: a demonstrative on one of these is an adjunct, not the subject
+# matter, so it does not make the sentence depend on anything.
+_TEMPORAL = {"ziua", "zilei", "zilele", "vremea", "vremii", "vremurile", "ceasul", "noaptea", "dimineața", "seara", "anul", "clipa", "data", "dată", "oară"}
+# Words that can sit next to a demonstrative without being the thing it points
+# at. The other closed classes the module already keeps (`_PREPOSITIONS`,
+# `_VERB_OPENERS`, ...) cover most of them; these are the copula and quantifier
+# forms that only turn up in this position.
+_NOT_A_NOUN = {"este", "era", "sunt", "erau", "fost", "mare", "mari", "mult", "multă", "tot", "toată", "toți", "toate", "așa"}
+
+
+def _looks_verbal(word: str) -> bool:
+    lowered = word.lower()
+    return lowered in _AUXILIARIES or lowered.endswith(_VERB_ENDINGS)
+
+
+def _has_named_patient(text: str) -> bool:
+    """True if `text` spells out an object a clitic could be doubling."""
+    if _ACCUSATIVE_DOUBLING.search(text):
+        return True
+    for match in _DATIVE_NOUN.finditer(text):
+        head = text[:match.start()].rstrip().rsplit(" ", 1)[-1].strip(_TRIM).lower()
+        if head and _is_genitive_head(head):
+            continue
+        return True
+    return False
+
+
+def _clitic_without_patient(text: str) -> bool:
+    """True if a clitic is the only thing naming who the action was done to.
+
+    Judged over the whole extracted text rather than clause by clause: a
+    resumptive clitic routinely picks up a noun from an earlier clause of the
+    same sentence ("și-a apucat hainele și le-a sfâșiat"), and the student
+    reads the whole of what is shown, so anything inside it counts as supplied.
+    """
+    if _has_named_patient(text):
+        return False
+    if _OBJECT_CLITIC.search(text):
+        return True
+    return any(_looks_verbal(match.group(1)) for match in _CLITIC_O.finditer(text))
+
+
+def _unidentified_demonstrative(text: str, context: str) -> bool:
+    for match in _DEMONSTRATIVE.finditer(text):
+        noun = match.group(1) or match.group(2)
+        # A demonstrative is only pointing at something when the word beside it
+        # is actually a noun. "Domnul este acesta", "Prin aceasta", "Ce ne poate
+        # ajuta acesta?" all put a verb, preposition or connective there
+        # instead — the regex has no way to tell, so the closed classes the
+        # module already maintains for the other shapes do it here.
+        if noun.lower() in _NOT_A_NOUN | _PREPOSITIONS | _VERB_OPENERS | _SUBORDINATE | _LINKERS | _DETERMINERS:
+            continue
+        # A demonstrative on a time word is an adjunct, not the thing the
+        # sentence is about: "Domnul a tunat în ziua aceea cu mare vuiet
+        # împotriva filistenilor" is perfectly gradeable without knowing which
+        # day, whereas "Pentru copilul acesta mă rugam" is not gradeable
+        # without knowing which child. Only the second kind is the defect.
+        if noun.lower() in _TEMPORAL:
+            continue
+        if noun in _NAMES or noun.capitalize() in _NAMES:
+            continue
+        # A name sitting right beside the same noun anywhere in the verse
+        # ("copilul Samuel", "chivotul lui Dumnezeu") is what identifies it;
+        # the demonstrative then merely points back at something the reader
+        # has already been given.
+        # The noun matches case-insensitively (it may open a sentence in one
+        # place and sit mid-clause in another) while the name beside it must
+        # stay capitalised — that capital is the whole signal.
+        if re.search(rf"(?<!\w)(?i:{re.escape(noun)})\s+(?:lui\s+)?[A-ZȘȚĂÎÂ]", context):
+            continue
+        return True
+    return False
+
+
+def _self_contained(text: str, context: str = "") -> bool:
     """False if `text` leans on narrative context beyond itself to be understood.
 
     Applied to whatever a question or Section I statement will actually show
     the student — not the full verse, just the extracted piece — since context
     earlier in the same sentence (a name introduced before the pronoun, say)
     can still make a pronoun resolvable even where a bare heuristic like this
-    can't tell the difference in general. The two checks here are the narrow
-    cases that come up in practice and are unambiguous when they do.
+    can't tell the difference in general. The checks here are the narrow cases
+    that come up in practice and are unambiguous when they do.
+
+    `context` is the whole fact the text was extracted from, and only the
+    demonstrative check consults it: unlike a pronoun, a demonstrative is
+    resolvable from a naming that sits elsewhere in the same verse, so judging
+    it on the extracted fragment alone would reject readable verses. It
+    defaults to `text` for callers that have nothing wider to offer.
 
     An earlier version skipped the pronoun check whenever the fact's own
     object was a collective noun ("Israel", "Filistenii"), on the theory that
@@ -91,6 +224,10 @@ def _self_contained(text: str) -> bool:
         tail = text[match.end():].lstrip()
         if not tail or tail[0] not in ",;.!?":
             return False
+    if _clitic_without_patient(text):
+        return False
+    if _unidentified_demonstrative(text, context or text):
+        return False
     return True
 
 
@@ -274,7 +411,7 @@ def _concise(fact: Fact, need_object: bool) -> str | None:
             continue
         if need_object and not _mentions(sentence, fact.object):
             continue
-        if not _self_contained(sentence):
+        if not _self_contained(sentence, fact.statement):
             continue
         return sentence
     return None
@@ -314,7 +451,7 @@ def _completion_stem(fact: Fact) -> tuple[str, str] | None:
         # A pronoun or back-reference elsewhere in the sentence is exactly as
         # confusing here as it is in Section I's `_concise` — the reader still
         # only sees this one sentence, blank or not.
-        if not _self_contained(sentence):
+        if not _self_contained(sentence, fact.statement):
             continue
         stem = (sentence[:hit.start()] + _BLANK + sentence[hit.end():]).strip()
         # A blank opening the sentence has no left context at all — that is a
@@ -470,7 +607,7 @@ def _name_predicate(fact: Fact, allow_quote: bool = False) -> str | None:
         # A predicate that itself depends on context outside this sentence
         # (an unresolved "ei", a bare "ca și în celelalte dăți") reads as a
         # non sequitur once it's the only thing left of the verse.
-        if not _self_contained(predicate):
+        if not _self_contained(predicate, fact.statement):
             continue
         return predicate
     return None
@@ -506,6 +643,83 @@ def _wh_question(fact: Fact) -> tuple[str, str] | None:
     if not predicate:
         return None
     return f"Cine {predicate}?", predicate
+
+
+def _same_referent(one: str, other: str) -> bool:
+    """True for two answer terms that name the same person.
+
+    „Domnul"/„Dumnezeul" and „Domnul"/„Domnului" are different strings and
+    different `fact.object` values, but a question answered by one is answered
+    by the other — so they must not count as competing answers below.
+    """
+    if one.lower() == other.lower() or (one in _DEITY and other in _DEITY):
+        return True
+    return _inflection(one, [other])
+
+
+def _rival_predicates(facts: list[Fact]) -> list[tuple[str, set[str]]]:
+    """Everything the selection says each person did, as bags of words.
+
+    Deliberately not built with `_name_predicate`: that function answers
+    "would this make a good question?", and rejects for reasons — an
+    unrecoverable quotation, a predicate too long, a name that reappears —
+    that have nothing to do with whether the verse describes a rival doing the
+    same thing. 1 Samuel 3's "Dar Eli l-a chemat pe Samuel și i-a zis:
+    «Samuele, fiule!»" is exactly such a rejection, and it is the single verse
+    that makes „Cine l-a chemat din nou pe Samuel?" ambiguous.
+
+    What it does keep from `_name_predicate` is the clause cut. A rival has to
+    be one person's own action, and everything past the next comma may already
+    belong to someone else — taking the whole rest of the sentence instead
+    swept unrelated clauses into the bag and made almost any question look
+    ambiguous against almost any verse.
+    """
+    rivals = []
+    for fact in facts:
+        for sentence in _sentences(fact.statement):
+            hit = re.search(rf"(?<!\w){re.escape(fact.object)}(?!\w)", sentence)
+            if not hit:
+                continue
+            tail = sentence[hit.end():]
+            punct = re.search(r"[,;:.!?]", tail)
+            cut = punct.start() if punct else len(tail)
+            if _opens_quote(tail, cut):
+                cut = _extend_through_quote(tail, cut) or cut
+            if words := set(re.findall(r"\w+", tail[:cut].lower())):
+                rivals.append((fact.object, words))
+    return rivals
+
+
+def _uniquely_answered(predicate: str, subject: str, rivals: list[tuple[str, set[str]]]) -> bool:
+    """False if some other person in the corpus did the same thing too.
+
+    1 Samuel 3 has Eli call Samuel and the Lord call Samuel, in nearly the same
+    words, several times over. „Cine l-a chemat din nou pe Samuel?" therefore
+    has two defensible answers, and the one in the answer key is only right
+    because of which verse it happened to be built from — a distinction the
+    student cannot see and has no way to reason about.
+
+    Unlike `_StemLedger`, which stops a question repeating one already issued,
+    this compares against every verse in the selection, issued or not: the
+    rival that makes the question ambiguous is usually a verse no section
+    picked up at all, but the student has read it just the same.
+
+    The comparison is containment of the question's own words in the rival's,
+    not overlap between the two — `_StemLedger`'s symmetric measure answers
+    "are these the same question?", which is a different question from this
+    one. A rival that says everything the question says *and more* ("l-a
+    chemat pe Samuel și i-a zis: «Samuele, fiule!»" against "l-a chemat din nou
+    pe Samuel") scores barely half on overlap while still making the question
+    ambiguous, because everything the student is asked about is true of that
+    other person too.
+    """
+    words = set(re.findall(r"\w+", predicate.lower()))
+    if not words:
+        return False
+    return not any(
+        len(words & rival) / len(words) >= _STEM_OVERLAP_LIMIT
+        for other, rival in rivals if not _same_referent(other, subject)
+    )
 
 
 def _clean_member(value: str) -> bool:
@@ -565,7 +779,7 @@ def _clause_halves(fact: Fact) -> tuple[str, str] | None:
             clause = raw_clause.strip(_TRIM)
             if not clause or not _clean_member(clause) or not 12 <= len(clause) <= 70:
                 continue
-            if not _self_contained(clause):
+            if not _self_contained(clause, fact.statement):
                 continue
             words = clause.split()
             if not 3 <= len(words) <= 10:
@@ -626,7 +840,7 @@ def _parallel_member(value: str) -> bool:
 def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
     """Finds the coordinated list behind the reference's multi-answer items."""
     for sentence in _sentences(fact.statement):
-        if not _self_contained(sentence):
+        if not _self_contained(sentence, fact.statement):
             continue
         links = list(_CONJUNCTION.finditer(sentence))
         if not links:
@@ -836,7 +1050,7 @@ def _section_iii_fill(pool: list[Fact], used: set[str], rng: random.Random, rows
     )
 
 
-def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger) -> list[SingleChoiceQuestion]:
+def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger, rivals: list[tuple[str, set[str]]]) -> list[SingleChoiceQuestion]:
     singles: list[SingleChoiceQuestion] = []
     letters = _balanced_letters(10, rng)
     answers: dict[str, int] = defaultdict(int)
@@ -866,9 +1080,17 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
                 builders.reverse()
             shape, built = "", None
             for name, builder in builders:
-                if built := builder(fact):
-                    shape = name
-                    break
+                if not (candidate := builder(fact)):
+                    continue
+                # A „Cine ...?" whose predicate several different people also
+                # satisfy has no single right answer. The blank shape is not
+                # exposed to this — it quotes one specific verse rather than
+                # asking which person a description picks out — so the fact can
+                # still become a question through the other builder.
+                if name == "wh" and not _uniquely_answered(candidate[1], fact.object, rivals):
+                    continue
+                shape, built = name, candidate
+                break
             if not built:
                 continue
             # „Cine?" only ever answers with a name, and the corpus leans hard
@@ -947,7 +1169,24 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     # requirement that raises rather than degrade. Leaving it until last (where
     # it used to sit) meant the sections with alternatives got first pick of the
     # only verses that satisfy the requirement without one.
+    # Which facts Section II could actually use, computed once and consulted by
+    # every section that picks before it. `_uniquely_answered` is applied here
+    # too, so a fact whose only shape is an ambiguous „Cine ...?" counts as
+    # unusable rather than as a verse worth protecting.
+    rivals = _rival_predicates(facts)
+    ii_eligible = {
+        fact.id for fact in facts
+        if _completion_stem(fact)
+        or ((wh := _wh_question(fact)) and _uniquely_answered(wh[1], fact.object, rivals))
+    }
     false_pool = [fact for fact in pool if (stmt := _concise(fact, True)) and _safe_to_swap(stmt, fact.object)]
+    # The False reservation runs before every other section, so on a thin
+    # corpus it is the first place a scarce Section II verse can be lost — and
+    # unlike Sections III and IV, which were already taught to leave those
+    # verses alone, it used to take the pool in plain order. Section I's own
+    # requirement is indifferent to which of the qualifying verses it gets, so
+    # deferring the II-eligible ones costs it nothing.
+    false_pool.sort(key=lambda fact: fact.id in ii_eligible)
     false_facts: list[Fact] = []
     for fact in false_pool:
         if len(false_facts) == 5:
@@ -957,12 +1196,11 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     if len(false_facts) != 5:
         raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
 
-    ii_eligible = {fact.id for fact in facts if _completion_stem(fact) or _wh_question(fact)}
     priority_pool = sorted(pool, key=lambda fact: fact.id in ii_eligible)
     stems = _StemLedger()
     multis = _section_iv(priority_pool, facts, used, rng, stems)
     iii_rows = _section_iii_named(priority_pool, used, rng)
-    singles = _section_ii(pool, facts, used, rng, stems)
+    singles = _section_ii(pool, facts, used, rng, stems, rivals)
     matching = _section_iii_fill(pool, used, rng, iii_rows)
 
     # A True statement needs no recognised object at all — it's quoted as-is —
