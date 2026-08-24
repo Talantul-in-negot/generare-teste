@@ -24,11 +24,11 @@ const Auth = (() => {
     return value + DOMAIN;
   }
 
-  function signInEmail(value) {
+  function signInEmails(value) {
     const normalized = normalizeUsername(value).toLocaleLowerCase('ro-RO').replace(/\s/g, '_');
     // Administratorii pot crea separat conturi cu email pentru grupe. Aceste
     // adrese pot fi folosite numai pentru conectare, nu pentru auto-înregistrare.
-    return normalized.includes('@') ? normalized : usernameEmail(normalized);
+    return normalized.includes('@') ? [normalized] : [usernameEmail(normalized), normalized + '@test.com'];
   }
 
   function displayName(user) {
@@ -67,10 +67,16 @@ const Auth = (() => {
   async function signIn(username, password) {
     const c = client();
     if (!c) throw new Error('Serviciul de autentificare nu este disponibil.');
-    const { data, error } = await c.auth.signInWithPassword({ email: signInEmail(username), password });
-    if (error) throw new Error(userFriendlyError(error.message));
-    session = data.session;
-    return currentUser();
+    let lastError = null;
+    for (const email of signInEmails(username)) {
+      const { data, error } = await c.auth.signInWithPassword({ email, password });
+      if (!error) {
+        session = data.session;
+        return currentUser();
+      }
+      lastError = error;
+    }
+    throw new Error(userFriendlyError(lastError?.message));
   }
 
   async function signUp(username, password) {
