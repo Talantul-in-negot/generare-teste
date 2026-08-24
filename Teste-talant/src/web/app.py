@@ -104,9 +104,9 @@ def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
       <fieldset>
         <legend>Material</legend>
         <label>Capitole biblice
-          <span class="hint">ex: „1 Samuel 1,2" sau un interval de versete</span>
+          <span class="hint">ex: „1 Samuel 1,2,3" sau un interval de capitole</span>
         </label>
-        <textarea name='chapters'>1 Samuel 1,2</textarea>
+        <textarea name='chapters'>1 Samuel 1,2,3</textarea>
         <label>Dificultate
           <span class="hint">influențează selecția versetelor și a variantelor greșite</span>
         </label>
