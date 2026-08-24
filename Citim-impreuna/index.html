@@ -65,15 +65,18 @@
 
   <div class="modal-backdrop" id="auth-modal" hidden>
     <div class="modal auth-modal">
+      <button class="modal-close" id="auth-close-btn" type="button" aria-label="Închide">×</button>
+      <h2>Contul meu</h2>
 
-      <!-- Stare: neconectat — tabs login / register -->
+      <!-- Stare: neconectat — un singur formular, două butoane (Intră / Creează) -->
       <div id="auth-form">
-        <div id="auth-login-panel">
-          <p style="margin:0 0 4px;font-family:system-ui,sans-serif;font-size:0.95rem;font-weight:700;text-align:center;color:var(--ink)">Intră în cont</p>
-          <input id="login-username" type="text" maxlength="30" placeholder="Nume utilizator" autocomplete="username" />
-          <input id="login-password" type="password" maxlength="50" placeholder="Parolă" autocomplete="current-password" />
-          <p class="auth-error" id="login-error" hidden></p>
-          <button class="btn primary" id="login-btn">Intră</button>
+        <p class="auth-intro">Conectează-te ca să-ți salvezi rezultatul și să apari în clasament.</p>
+        <input id="login-username" type="text" maxlength="30" placeholder="Nume utilizator" autocomplete="username" />
+        <input id="login-password" type="password" maxlength="50" placeholder="Parolă" autocomplete="current-password" />
+        <p class="auth-error" id="login-error" hidden></p>
+        <div class="modal-actions">
+          <button class="btn primary" id="login-btn">Intră în cont</button>
+          <button class="btn secondary" id="register-btn">Creează cont</button>
         </div>
       </div>
 

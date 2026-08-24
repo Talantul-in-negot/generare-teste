@@ -65,6 +65,7 @@ const el = {
   bookTitle: document.getElementById("book-title"),
   // auth modal
   authModal: document.getElementById("auth-modal"),
+  authForm: document.getElementById("auth-form"),
   authLogged: document.getElementById("auth-logged"),
   authUsernameDisplay: document.getElementById("auth-username-display"),
   loginUsername: document.getElementById("login-username"),
@@ -72,6 +73,8 @@ const el = {
   loginError: document.getElementById("login-error"),
   loginBtn: document.getElementById("login-btn"),
   authLogoutBtn: document.getElementById("auth-logout-btn"),
+  authCloseBtn: document.getElementById("auth-close-btn"),
+  registerBtn: document.getElementById("register-btn"),
   // reminder modal
   reminderModal: document.getElementById("reminder-modal"),
   reminderEnabled: document.getElementById("reminder-enabled"),
@@ -636,18 +639,17 @@ function showAuthModal() {
   el.authModal.hidden = false;
   if (Auth.isLoggedIn()) {
     el.authLogged.hidden = false;
-    document.getElementById("auth-login-panel").hidden = true;
+    el.authForm.hidden = true;
     el.authUsernameDisplay.textContent = Auth.currentUser();
   } else {
     el.authLogged.hidden = true;
-    document.getElementById("auth-login-panel").hidden = false;
+    el.authForm.hidden = false;
     el.loginError.hidden = true;
     el.loginUsername.focus();
   }
 }
 
 function hideAuthModal() {
-  if (!Auth.isLoggedIn()) return;
   el.authModal.hidden = true;
 }
 
@@ -679,6 +681,28 @@ async function handleLogin() {
   }
 }
 
+async function handleRegister() {
+  const username = el.loginUsername.value.trim();
+  const password = el.loginPassword.value;
+  if (!username || !password) { setAuthError(el.loginError, "Completează ambele câmpuri."); return; }
+  el.registerBtn.disabled = true;
+  el.registerBtn.textContent = "Se creează…";
+  try {
+    userName = await Auth.signUp(username, password);
+    hideAuthModal();
+    updateUserChip();
+    el.loginPassword.value = "";
+    progressSynced = false;
+    await refreshAndSyncScore();
+    await syncProgressFromCloud();
+    showWelcomeMessage(userName);
+  } catch (err) {
+    setAuthError(el.loginError, err.message);
+  } finally {
+    el.registerBtn.disabled = false;
+    el.registerBtn.textContent = "Creează cont";
+  }
+}
 
 async function handleLogout() {
   await Auth.signOut();
@@ -1256,7 +1280,9 @@ el.logoutBtn?.addEventListener("click", handleLogout);
 el.loginBtn?.addEventListener("click", handleLogin);
 el.authLogoutBtn?.addEventListener("click", handleLogout);
 el.loginPassword?.addEventListener("keydown", (e) => { if (e.key === "Enter") handleLogin(); });
-el.authModal?.addEventListener("click", (e) => { if (e.target === el.authModal && Auth.isLoggedIn()) hideAuthModal(); });
+el.registerBtn?.addEventListener("click", handleRegister);
+el.authCloseBtn?.addEventListener("click", hideAuthModal);
+el.authModal?.addEventListener("click", (e) => { if (e.target === el.authModal) hideAuthModal(); });
 
 el.score.textContent = score;
 updateReminderButton();

@@ -525,48 +525,63 @@ select.blank.wrong {
   text-align: center;
 }
 
-/* Auth modal */
+/* Auth modal — template comun cu repo-ul Talant (modal-close, modal-actions) */
 .auth-modal {
-  gap: 0;
-  padding: 0;
-  overflow: hidden;
+  position: relative;
 }
 
-.auth-tabs {
-  display: flex;
-  border-bottom: 2px solid #f0ebe0;
+.auth-modal input {
+  text-align: left;
 }
 
-.auth-tab {
-  flex: 1;
-  padding: 14px 8px;
-  background: none;
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
   border: none;
-  font-family: system-ui, sans-serif;
-  font-size: 0.95rem;
-  font-weight: 700;
+  background: transparent;
   color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
   cursor: pointer;
-  transition: color 0.15s, border-bottom 0.15s;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
+  padding: 4px;
 }
 
-.auth-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+.auth-intro {
+  margin: -4px 0 2px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
 }
 
-#auth-login-panel,
-#auth-register-panel {
+#auth-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 22px 22px 26px;
 }
 
-#auth-login-panel[hidden],
-#auth-register-panel[hidden],
+.modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.modal-actions .btn {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.95rem;
+  padding: 13px 8px;
+  white-space: nowrap;
+}
+
+.modal-actions .btn.secondary {
+  background: #64748b;
+  color: #fff;
+  border: none;
+  box-shadow: none;
+}
+
+#auth-form[hidden],
 #auth-logged[hidden] {
   display: none;
 }
