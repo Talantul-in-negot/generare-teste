@@ -124,6 +124,7 @@
 <body>
 <div id="accountBar">
   <button class="account-btn" id="userBtn" type="button">👤 <span id="userName">Conectează-te</span></button>
+  <span class="account-btn" id="scoreChip" title="Cel mai bun scor la acest test" hidden>⭐ <span id="userScore">0</span> pct</span>
   <button class="account-btn" id="statsBtn" type="button">🏆 Clasament</button>
 </div>
 <p id="syncNotice" role="status" aria-live="polite"></p>
@@ -227,6 +228,17 @@ const sectionsEl = document.getElementById('sections');
 
 function romanBadge(id) { return id; }
 
+function updateScoreChip(stats) {
+  const chip = document.getElementById('scoreChip');
+  if (!accountUser || !activeTestId || !stats || !stats.max_points) { chip.hidden = true; return; }
+  document.getElementById('userScore').textContent = `${stats.best_points}/${stats.max_points}`;
+  chip.hidden = false;
+}
+async function refreshScoreChip() {
+  if (!accountUser || !activeTestId) { updateScoreChip(null); return; }
+  try { updateScoreChip(await TestTracker.ownStats(QUIZ_VERSION)); } catch { /* rămâne ascuns dacă nu are net */ }
+}
+
 function showSelector(pushUrl) {
   document.getElementById('app').style.display = 'none';
   document.getElementById('selectorScreen').style.display = 'block';
@@ -285,6 +297,7 @@ function startTest(id, pushUrl) {
     sectionsEl.appendChild(block);
   });
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  refreshScoreChip();
 }
 
 function sectionHeading(sec) {
@@ -492,7 +505,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     saveNote = '<p style="margin-top:14px;color:#b91c1c;font-size:.85rem">Conectează-te înainte de a finaliza dacă vrei ca rezultatul să intre în clasament.</p>';
   } else {
     try {
-      await TestTracker.record({ p_quiz_version: QUIZ_VERSION, p_answers: submittedAnswers });
+      updateScoreChip(await TestTracker.record({ p_quiz_version: QUIZ_VERSION, p_answers: submittedAnswers }));
       saveNote = '<p style="margin-top:14px;color:#059669;font-size:.85rem">✅ Rezultat salvat în clasament.</p>';
     } catch (error) {
       saveNote = `<p style="margin-top:14px;color:#b91c1c;font-size:.85rem">Nu s-a salvat: ${error.message || 'eroare de conexiune'}</p>`;
@@ -530,6 +543,7 @@ async function submitAuth(mode) {
     accountUser = mode === 'login' ? await Auth.signIn(username, password) : await Auth.signUp(username, password);
     updateAccount();
     await TestTracker.flush();
+    await refreshScoreChip();
     closeAuth();
   } catch (e) { error.textContent = e.message; }
 }
@@ -581,7 +595,7 @@ document.getElementById('statsBtn').addEventListener('click', openStats);
 document.getElementById('statsClose').addEventListener('click', () => { document.getElementById('statsModal').hidden = true; });
 document.getElementById('loginBtn').addEventListener('click', () => submitAuth('login'));
 document.getElementById('registerBtn').addEventListener('click', () => submitAuth('register'));
-document.getElementById('logoutBtn').addEventListener('click', async () => { await Auth.signOut(); accountUser = ''; updateAccount(); });
+document.getElementById('logoutBtn').addEventListener('click', async () => { await Auth.signOut(); accountUser = ''; updateAccount(); updateScoreChip(null); });
 document.getElementById('authModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeAuth(); });
 document.getElementById('statsModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.hidden = true; });
 document.getElementById('backToSelector').addEventListener('click', () => showSelector(true));
@@ -590,7 +604,7 @@ window.addEventListener('popstate', () => {
   if (id && TESTS[id]) startTest(id, false); else showSelector(false);
 });
 updateAccount();
-Auth.init(async user => { accountUser = user || ''; updateAccount(); if (accountUser) await TestTracker.flush(); }).catch(() => updateAccount());
+Auth.init(async user => { accountUser = user || ''; updateAccount(); if (accountUser) await TestTracker.flush(); await refreshScoreChip(); }).catch(() => updateAccount());
 
 // ── Landing: un singur link — testul se alege în pagină, nu prin URL diferit.
 // Un ?test= direct în URL (link vechi/marcat) sare peste selector. ──
