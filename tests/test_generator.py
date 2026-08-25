@@ -135,6 +135,24 @@ class GeneratorTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_test(self.test_definition)
 
+    def test_validator_rejects_reused_section_iv_fact(self):
+        first = self.test_definition.section_iv[0]
+        self.test_definition.section_iv[1] = replace(
+            self.test_definition.section_iv[1],
+            fact_id=first.fact_id,
+            fact_ids=list(first.fact_ids),
+            evidence=first.evidence,
+            supporting_evidence=list(first.supporting_evidence),
+        )
+        with self.assertRaises(ValidationError):
+            validate_test(self.test_definition)
+
+    def test_evidence_validation_rejects_unsupported_answer(self):
+        question = self.test_definition.section_ii[0]
+        question.options[question.correct] = "răspuns inventat"
+        with self.assertRaises(ValidationError):
+            validate_evidence(self.test_definition, self.repo)
+
     def test_paired_pdfs(self):
         competitor, answer_key = render_pair(self.test_definition, self.temp.name)
         self.assertGreater(competitor.stat().st_size, 1000)
