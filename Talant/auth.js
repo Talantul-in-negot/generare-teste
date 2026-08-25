@@ -28,7 +28,13 @@ const Auth = (() => {
     const normalized = normalizeUsername(value).toLocaleLowerCase('ro-RO').replace(/\s/g, '_');
     // Administratorii pot crea separat conturi cu email pentru grupe. Aceste
     // adrese pot fi folosite numai pentru conectare, nu pentru auto-înregistrare.
-    return normalized.includes('@') ? [normalized] : [usernameEmail(normalized), normalized + '@test.com'];
+    if (!normalized.includes('@')) return [usernameEmail(normalized), normalized + '@test.com'];
+    // Emailul complet poate fi tastat cu domeniul greșit față de cel cu care
+    // a fost creat contul (ex. cont creat pe @test.com, dar userul scrie
+    // @talant.app) — încercăm și varianta cu domeniul opus înainte să cedăm.
+    const [local, domain] = normalized.split('@');
+    const sibling = domain === 'test.com' ? DOMAIN.slice(1) : domain === DOMAIN.slice(1) ? 'test.com' : null;
+    return sibling ? [normalized, `${local}@${sibling}`] : [normalized];
   }
 
   function displayName(user) {
