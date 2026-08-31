@@ -11,7 +11,7 @@ from collections import defaultdict, deque
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from src.biblical_tests.generation import build_test
 from src.biblical_tests.rendering import render_pair
@@ -20,8 +20,11 @@ from src.biblical_tests.selection import parse_selection
 from src.biblical_tests.validation import coverage_report, validate_evidence, validate_test
 
 
-OUTPUT = Path("output").resolve()
-REPOSITORY = BibleRepository("data")
+# Resolve storage from the project, not from the process working directory.  A
+# platform may start the web process from a different directory than the repo.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+OUTPUT = PROJECT_ROOT / "output"
+REPOSITORY = BibleRepository(PROJECT_ROOT / "data")
 
 # Anti-abuse: max requests to /generate per IP within the rolling window below.
 RATE_LIMIT_MAX_REQUESTS = 5
@@ -156,7 +159,9 @@ def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "test.json").write_text(json.dumps(test.to_dict() | {"coverage": coverage_report(test), "translation": repo.translation, "difficulty": data.get("difficulty", "mixed")}, ensure_ascii=False, indent=2), encoding="utf-8")
         candidate, answer_key = render_pair(test, folder)
-        links.extend([(f"Descarcă Test Concurenți V{version}", f"{APP_PATH}/download/{candidate.relative_to(OUTPUT).as_posix()}"), (f"Descarcă Barem Corectori V{version}", f"{APP_PATH}/download/{answer_key.relative_to(OUTPUT).as_posix()}")])
+        candidate_url = quote(candidate.relative_to(OUTPUT).as_posix(), safe="/")
+        answer_url = quote(answer_key.relative_to(OUTPUT).as_posix(), safe="/")
+        links.extend([(f"Descarcă Test Concurenți V{version}", f"{APP_PATH}/download/{candidate_url}"), (f"Descarcă Barem Corectori V{version}", f"{APP_PATH}/download/{answer_url}")])
     return links
 
 
