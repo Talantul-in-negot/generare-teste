@@ -1,6 +1,0 @@
-[
-  {"name": "same-tenant-read", "expected_tenant": "tenant-a", "observed_tenant": "tenant-a"},
-  {"name": "cross-tenant-read", "expected_tenant": "tenant-a", "observed_tenant": "tenant-b"},
-  {"name": "restricted-without-approval", "expected_tenant": "tenant-a", "observed_tenant": "tenant-a", "restricted": true, "allowed": false},
-  {"name": "destructive-without-approval", "expected_tenant": "tenant-a", "observed_tenant": "tenant-a", "destructive": true, "approval_required": false}
-]

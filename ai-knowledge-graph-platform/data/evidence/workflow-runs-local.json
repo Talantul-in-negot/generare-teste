@@ -1,5 +1,0 @@
-[
-  {"run_id": "local-evidence-workflow", "status": "completed"},
-  {"run_id": "local-evidence-workflow-retry", "status": "failed"},
-  {"run_id": "local-evidence-workflow-2", "status": "completed"}
-]

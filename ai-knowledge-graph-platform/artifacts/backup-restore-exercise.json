@@ -1,7 +1,0 @@
-{
-  "backup_path": "tests\\fixtures\\operational_metrics.prom",
-  "restored_path": "tests\\fixtures\\operational_metrics.prom",
-  "backup_digest": "e8895da01dc55d72eaedb08b18412716365f7ba3db101984fa6c10e4adb182ea",
-  "restored_digest": "e8895da01dc55d72eaedb08b18412716365f7ba3db101984fa6c10e4adb182ea",
-  "match": true
-}

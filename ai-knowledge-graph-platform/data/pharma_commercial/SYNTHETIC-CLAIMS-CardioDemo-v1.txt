@@ -1,8 +1,0 @@
-SYNTHETIC DEMO DATA ONLY - NO CLINICAL CLAIMS
-
-Document ID: SYNTHETIC-CLAIMS-CardioDemo-v1
-Claim ID: SYNTHETIC-CLAIM-CardioDemo-DE-01
-
-The synthetic commercial claim for CardioDemo must be supported by a controlled
-content document and used only within its approved scope. This text does not
-assert treatment efficacy, safety, or any real medical fact.

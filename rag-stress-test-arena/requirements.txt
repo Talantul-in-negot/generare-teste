@@ -1,5 +1,0 @@
-requests
-psycopg2-binary
-redis[hiredis]
-numpy
-matplotlib
