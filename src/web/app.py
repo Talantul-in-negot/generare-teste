@@ -27,7 +27,7 @@ OUTPUT = PROJECT_ROOT / "output"
 REPOSITORY = BibleRepository(PROJECT_ROOT / "data")
 
 # Anti-abuse: max requests to /generate per IP within the rolling window below.
-RATE_LIMIT_MAX_REQUESTS = 5
+RATE_LIMIT_MAX_REQUESTS = 10
 RATE_LIMIT_WINDOW_SECONDS = 60 * 60
 _REQUEST_LOG: dict[str, deque[float]] = defaultdict(deque)
 _RATE_LIMIT_LOCK = threading.Lock()
