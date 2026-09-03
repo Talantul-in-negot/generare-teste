@@ -5,13 +5,23 @@ import re
 from pathlib import Path
 
 from .models import Evidence, Fact
+from .selection import SelectionError
+
+
+# A verse opens with its number followed by the first word of the verse. The
+# lookahead lists every character the corpus actually starts a verse with — a
+# letter, or one of the marks that open reported speech. „«" was missing, so
+# 1 Samuel 24:13 („«Răul de la cei răi vine», zice vechea zicală.") was never
+# recognised as a verse at all and its text was silently absorbed into verse
+# 12, which then carried a reference covering words it did not contain.
+_VERSE_MARKER = r'(?<![\w-])(\d{1,3})\s+(?=[A-Za-zĂÂÎȘȚăâîșț„"«])'
 
 
 class BibleRepository:
     """A local, auditable Bible corpus. It never downloads a translation."""
 
     PEOPLE = {"Ana", "Penina", "Elcana", "Eli", "Hofni", "Fineas", "Samuel", "David", "Saul", "Ionatan", "Abner", "Ioab", "Natan", "Absalom", "Mical", "Batșeba", "Goliat", "Isai", "Chis", "Ahimelec", "Dagon", "Iosua"}
-    PLACES = {"Silo", "Rama", "Efraim", "Israel", "Filisteni", "Filistenii", "Ghilboa", "Ierusalim", "Hebron", "Betleem", "Gat", "Rama", "Mițpa", "Iordan", "Iuda", "Ecron", "Asdod", "Gaza", "Ascalon"}
+    PLACES = {"Silo", "Rama", "Efraim", "Israel", "Filisteni", "Filistenii", "Ghilboa", "Ierusalim", "Hebron", "Betleem", "Gat", "Mițpa", "Iordan", "Iuda", "Ecron", "Asdod", "Gaza", "Ascalon"}
     DEITY = {"Domnul", "Domnului", "Dumnezeu", "Dumnezeul"}
     QUALITY_TERMS = PEOPLE | PLACES | DEITY
 
@@ -37,6 +47,69 @@ class BibleRepository:
             raise FileNotFoundError(f"Nu există corpusuri Markdown în: {self.path}")
         return self._read_markdown_files(files)
 
+    @staticmethod
+    def _strip_headings(body: list[str]) -> list[str]:
+        """Drops the source's section headings, keeping only verse text.
+
+        A heading is identified structurally — it is the first line of a
+        paragraph — rather than by what it looks like, because the two are not
+        distinguishable by shape. The previous rule popped any trailing line
+        made only of letters, spaces and hyphens, which had both failure
+        directions at once: a heading carrying a comma („Saul, ales împărat
+        prin sorți") survived and was glued onto the end of the preceding
+        verse, while a *verse* that happened to contain no other punctuation
+        („17 Samuel a chemat poporul înaintea Domnului la Mițpa") matched the
+        pattern and was deleted outright. 1 Samuel 10:17 and 2 Samuel 1:17
+        were lost that way, and 34 verses carried a heading they never
+        contained.
+
+        The structural rule is exact for this corpus: the source breaks a
+        paragraph only at a heading, and no heading begins with a verse
+        number, so „first line after a blank one" selects all 116 of them and
+        nothing else. Note a heading can land *inside* a verse (1 Samuel 1:19
+        is split across „Nașterea lui Samuel"), so this runs before verse
+        markers are located rather than per-verse afterwards.
+        """
+        return [
+            line for index, line in enumerate(body)
+            if line.strip() and index and body[index - 1].strip()
+        ]
+
+    def _verify_structure(self, books: dict, folder: Path) -> None:
+        """Checks the parse against an external verse-count table.
+
+        `validate_evidence` compares each question's evidence against
+        `get_verse`, but both sides come out of this same parser — so a
+        parsing defect validates itself as correct and the audit trail the
+        whole generator rests on proves nothing. This is the one check with a
+        source of truth outside the parse: a hand-written table of how many
+        verses each chapter has. It is what makes a silently dropped or
+        merged verse fail loudly instead of quietly shipping on a test paper.
+        """
+        manifest = folder / "verse-counts.json"
+        if not manifest.exists():
+            return
+        expected = json.loads(manifest.read_text(encoding="utf-8"))["chapters"]
+        problems = []
+        for book, counts in expected.items():
+            if book not in books:
+                continue
+            for index, count in enumerate(counts, 1):
+                found = books[book].get(str(index), {})
+                missing = [n for n in range(1, count + 1) if str(n) not in found]
+                if missing:
+                    problems.append(f"{book} {index}: lipsesc versetele {missing}")
+                extra = sorted(int(n) for n in found if int(n) > count)
+                if extra:
+                    problems.append(f"{book} {index}: versete în plus {extra}")
+            if len(books[book]) > len(counts):
+                problems.append(f"{book}: {len(books[book])} capitole, se așteptau {len(counts)}")
+        if problems:
+            raise ValueError(
+                "Corpusul parsat nu corespunde structurii din verse-counts.json:\n  "
+                + "\n  ".join(problems)
+            )
+
     def _read_markdown_files(self, files: list[Path]) -> dict:
         books: dict[str, dict[str, dict[str, str]]] = {}
         records: list[tuple[str, int, int, str]] = []
@@ -45,8 +118,8 @@ class BibleRepository:
             if not book_match:
                 continue
             book = f"{book_match.group(1)} Samuel"
-            raw = "\n".join(file.read_text(encoding="utf-8").splitlines()[1:])
-            markers = list(re.finditer(r'(?<![\w-])(\d{1,3})\s+(?=[A-Za-zĂÂÎȘȚăâîșț„"])', raw))
+            raw = "\n".join(self._strip_headings(file.read_text(encoding="utf-8").splitlines()[1:]))
+            markers = list(re.finditer(_VERSE_MARKER, raw))
             if not markers:
                 raise ValueError(f"Nu am putut identifica versete în: {file}")
             chapter, last_verse = 1, 0
@@ -55,16 +128,13 @@ class BibleRepository:
                 if verse == 1 and last_verse:
                     chapter += 1
                 end = markers[position + 1].start() if position + 1 < len(markers) else len(raw)
-                excerpt = raw[marker.end():end].strip()
-                lines = excerpt.splitlines()
-                while lines and re.fullmatch(r"[A-ZĂÂÎȘȚ][A-Za-zĂÂÎȘȚăâîșț -]{2,}", lines[-1].strip()):
-                    lines.pop()
-                text = " ".join(" ".join(lines).split())
+                text = " ".join(raw[marker.end():end].split())
                 if not text:
                     continue
                 books.setdefault(book, {}).setdefault(str(chapter), {})[str(verse)] = text
                 records.append((book, chapter, verse, text))
                 last_verse = verse
+        self._verify_structure(books, files[0].parent)
         preferred = self._preferred_terms([record[3] for record in records])
         raw_facts = [{"id": f"{book}-{chapter}-{verse}", "statement": text, "subject": f"versetul {book} {chapter}:{verse}", "predicate": "completează", "object": self._extract_target(text, preferred), "evidence": {"book": book, "chapter": chapter, "verse_start": verse, "verse_end": verse, "text": text}} for book, chapter, verse, text in records]
         for fact in raw_facts:
@@ -166,4 +236,20 @@ class BibleRepository:
         return {book: {str(ch): self.get_chapter(book, ch) for ch in chapters} for book, chapters in selection.items()}
 
     def facts_for(self, selection: dict[str, list[int]]) -> list[Fact]:
+        # `parse_selection` accepts every book the aliases know, but the local
+        # corpus holds only what was actually loaded. Without this the request
+        # simply yields no facts and surfaces several layers later as "the
+        # selection needs at least 20 verified facts", which points the reader
+        # at the chapter range rather than at the book that isn't there.
+        self._require_in_corpus(selection)
         return [fact for fact in self.facts if fact.evidence.book in selection and fact.evidence.chapter in selection[fact.evidence.book]]
+
+    def _require_in_corpus(self, selection: dict[str, list[int]]) -> None:
+        available = ", ".join(sorted(self.books))
+        for book, chapters in selection.items():
+            if book not in self.books:
+                raise SelectionError(f"Cartea „{book}” nu există în corpusul local. Disponibile: {available}.")
+            missing = [str(chapter) for chapter in chapters if str(chapter) not in self.books[book]]
+            if missing:
+                last = max(int(number) for number in self.books[book])
+                raise SelectionError(f"„{book}” nu are capitolul {', '.join(missing)} (are 1-{last}).")

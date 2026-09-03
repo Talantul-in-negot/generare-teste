@@ -1248,7 +1248,19 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
         fact = (true_facts if is_true else false_facts).pop(0)
         statement = _concise(fact, not is_true) or _concise(fact, False)
         if not is_true:
-            before, _, after = statement.rpartition(fact.object)
+            # Whole-word match, like every other name lookup in this module.
+            # `str.rpartition` matches a bare substring, so on a sentence that
+            # names „Domnul" and later „Domnului" it split inside the longer
+            # word — replacing the last five letters of an inflected form
+            # („unsul Domnului" -> „unsul Dumnezeului") instead of swapping the
+            # subject the statement is actually about. That yields a sentence
+            # which is neither the verse nor a clean falsehood: the claim the
+            # student is asked to judge is still true, only misspelled.
+            hits = list(re.finditer(rf"(?<!\w){re.escape(fact.object)}(?!\w)", statement))
+            if not hits:
+                raise GenerationError(f"Statementul pentru {fact.id} nu mai conține obiectul de înlocuit.")
+            hit = hits[-1]
+            before, after = statement[:hit.start()], statement[hit.end():]
             statement = before + _wrong_object(fact, facts, lead=before) + after
         tf.append(TrueFalseQuestion(f"I-{index}", statement, "A" if is_true else "F", fact.evidence, fact.id))
 

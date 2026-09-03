@@ -15,11 +15,19 @@ Generator local, determinist și audibil pentru două documente sincronizate: te
 
 `BibleRepository` citește exclusiv corpusul local. Selecția este analizată de `selection.py`, iar un index de facts verificat livrează dovezile către generatorul deterministic. `validation.py` verifică structură, bijecții, distribuția II, duplicate și scope; `rendering.py` produce ambele PDF-uri din exact aceeași `TestDefinition`. `output/Vn/test.json` este sursa de adevăr auditabilă.
 
+Atenție la ce garantează fiecare verificare. `validate_evidence` compară dovada fiecărei întrebări cu `get_verse`, dar ambele provin din același parser — deci confirmă că generatorul a citat corpusul fidel, nu că acel corpus spune ce spune textul sursă. Singura verificare cu adevăr din afara parserului este `data/verse-counts.json`: un tabel scris de mână cu numărul de versete din fiecare capitol, față de care `BibleRepository` își compară parsarea la încărcare și refuză un corpus din care lipsesc sau în care s-au contopit versete. Actualizați-l numai după un text tipărit/autoritativ.
+
 ## Instalare
 
 ```bash
 python -m pip install -r requirements.txt
 copy config.example.yaml config.yaml
+```
+
+Pentru rularea testelor este nevoie și de dependențele de dezvoltare:
+
+```bash
+python -m pip install -r requirements-dev.txt
 ```
 
 ## Configurarea corpusului

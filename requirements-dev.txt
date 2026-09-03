@@ -1,0 +1,2 @@
+-r requirements.txt
+pdfplumber>=0.11  # verifies rendered PDF text in tests/test_generator.py

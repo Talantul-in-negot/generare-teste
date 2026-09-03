@@ -421,3 +421,51 @@ independent, measurable causes were hiding behind what looked like one immovable
 and a 15-selection sweep spanning both books (1 Samuel 1 through 2 Samuel 8) passes in full,
 including every range flagged as still-failing in [[L12]]/[[L13]]. Verified by reading the actual
 generated Section I text aloud for the fixed range, not just checking `build_test` didn't raise.
+
+## L04 — A validator that reads the same parser it is validating proves nothing (2026-09-03)
+
+`validate_evidence` compares every question's stored evidence against
+`BibleRepository.get_verse`, and the README sells that as the audit guarantee. But both
+sides of the comparison come out of the same Markdown parser, so any parsing defect is
+reproduced identically on both sides and validates as correct. Three real defects sat
+underneath it: 34 verses carried a section heading they never contained, two verses had
+been deleted outright (1 Samuel 10:17, 2 Samuel 1:17), and 1 Samuel 24:13 had been
+absorbed into verse 12 — all while every test passed and every generated test.json
+reported its evidence as verified.
+
+**Rule:** A check is only worth what its ground truth is worth. When a check's expected
+value is computed by the same code path that produced the actual value, it is a
+tautology — it can only catch corruption *between* the two reads, never a defect in the
+shared derivation. Before trusting a validator, ask where its expected value comes from;
+if the answer is "the thing being validated", it has no power.
+
+**How to apply:** `data/verse-counts.json` is the external truth for the corpus — a
+hand-written table of verses per chapter, checked in `_verify_structure` at load time.
+Keep it hand-maintained: never regenerate it from the parser, or it becomes another
+tautology. When adding a book or swapping the translation, write the counts from a
+printed/authoritative text first, then make the parser agree. Same principle for any
+future check: the reference must have a provenance independent of the code under test.
+
+## L05 — Heuristics that classify by shape fail in both directions at once (2026-09-03)
+
+Section headings were removed by popping any trailing line made only of capitals,
+letters, spaces and hyphens. That rule missed every heading with a comma („Saul, ales
+împărat prin sorți" stayed glued to the verse before it) *and* matched verses that
+happened to carry no punctuation („Samuel a chemat poporul înaintea Domnului la Mițpa"
+was deleted as if it were a heading). One heuristic, two opposite failure modes, both
+silent.
+
+The fix was to stop describing what a heading looks like and use where it sits: the
+source breaks a paragraph only at a heading, so "first line after a blank line" selects
+all 116 and nothing else. Verified by enumeration before relying on it, not assumed.
+
+**Rule:** When a document has structure, classify by structure, not by the appearance of
+the content. If a shape-based rule seems unavoidable, enumerate its matches and misses
+over the whole corpus before shipping it — both directions, since the expensive failure
+is usually the one that deletes data rather than the one that keeps junk.
+
+**How to apply:** In `repository.py`, any new "is this line/segment real content?"
+decision should key off position within the document (paragraph boundaries, marker
+positions) and be confirmed by a count over both source files, the way
+`_strip_headings` was. Add the invariant to `tests/test_corpus_integrity.py` so a later
+edit that reintroduces a shape rule fails.
