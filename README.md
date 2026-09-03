@@ -50,7 +50,9 @@ Pentru selecția `1 Samuel 1,2`, rezultatele sunt `output/V1/1 Samuel 1-2.pdf`, 
 python -m src.web.app
 ```
 
-Deschideți `http://127.0.0.1:8000`. Interfața susține selecții pe linii, categorie, ediție, etapă, dată, dificultate, seed și mai multe variante.
+Deschideți `http://127.0.0.1:8000`. Interfața susține selecții pe linii, categorie, ediție, etapă, dată, seed și mai multe variante.
+
+Local, serverul ascultă numai pe `127.0.0.1`. Când platforma de găzduire setează `PORT`, ascultă pe toate interfețele; setați `HOST` pentru a forța o adresă anume. În spatele unui router de platformă setați `TRUST_PROXY=1` (așa cum face `Procfile`), altfel limita de generări per utilizator devine o limită globală, comună tuturor vizitatorilor: fără antetul `X-Forwarded-For` toate cererile par să vină de la aceeași adresă, cea a routerului.
 
 ## LLM (opțional, neimplementat intenționat în MVP)
 

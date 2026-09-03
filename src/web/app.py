@@ -7,17 +7,25 @@ import secrets
 import shutil
 import threading
 import time
+import traceback
 from collections import defaultdict, deque
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from src.biblical_tests.generation import build_test
+from src.biblical_tests.generation import GenerationError, build_test
 from src.biblical_tests.rendering import render_pair
 from src.biblical_tests.repository import BibleRepository
-from src.biblical_tests.selection import parse_selection
-from src.biblical_tests.validation import coverage_report, validate_evidence, validate_test
+from src.biblical_tests.selection import SelectionError, parse_selection
+from src.biblical_tests.validation import ValidationError, coverage_report, validate_evidence, validate_test
+
+
+# Everything the caller can get wrong: an unparseable chapter range, a book the
+# corpus lacks, a selection too thin to build a test from. These carry messages
+# written for the person filling in the form, so they are shown as-is. Anything
+# else is a defect in this program and must not be echoed back to a browser.
+USER_ERRORS = (SelectionError, GenerationError, ValidationError)
 
 
 # Resolve storage from the project, not from the process working directory.  A
@@ -34,6 +42,28 @@ _RATE_LIMIT_LOCK = threading.Lock()
 MAX_REQUEST_BYTES = 64 * 1024
 OUTPUT_RETENTION_SECONDS = 24 * 60 * 60
 APP_PATH = "/generare-teste"
+# Set by the Procfile, where exactly one platform router sits in front of this
+# process. Off by default so a directly-reachable instance never lets a caller
+# pick its own rate-limit identity by sending the header itself.
+TRUST_PROXY = os.environ.get("TRUST_PROXY", "").strip().lower() in {"1", "true", "yes"}
+_CLEANUP_LOCK = threading.Lock()
+
+
+def client_key(handler: BaseHTTPRequestHandler) -> str:
+    """The address the rate limiter counts against.
+
+    Behind a platform router every request arrives from the router's own
+    address, so counting `client_address` there makes the limit global: ten
+    generations an hour for all visitors put together, rather than per
+    visitor. The router appends the real caller to X-Forwarded-For, so with
+    exactly one trusted proxy in front the rightmost entry is the one the
+    router itself wrote — the left of it is whatever the caller may have made
+    up, and is deliberately ignored.
+    """
+    forwarded = handler.headers.get("X-Forwarded-For", "") if TRUST_PROXY else ""
+    if forwarded.strip():
+        return forwarded.rsplit(",", 1)[-1].strip()
+    return handler.client_address[0]
 
 
 def rate_limited(client_ip: str) -> bool:
@@ -46,17 +76,39 @@ def rate_limited(client_ip: str) -> bool:
         if len(log) >= RATE_LIMIT_MAX_REQUESTS:
             return True
         log.append(now)
+        # Callers that have gone quiet keep an empty deque under their address
+        # forever otherwise, so the table grows without bound for as long as
+        # the process lives. Sweeping the other entries here keeps it the size
+        # of the active caller set; it is O(callers) under a lock already held,
+        # and the limit above caps how often this runs.
+        for address in [key for key, seen in _REQUEST_LOG.items()
+                        if key != client_ip and (not seen or now - seen[-1] > RATE_LIMIT_WINDOW_SECONDS)]:
+            del _REQUEST_LOG[address]
         return False
 
 
 def cleanup_output() -> None:
-    """Remove expired generated sessions, keeping the output directory bounded."""
-    if not OUTPUT.exists():
+    """Remove expired generated sessions, keeping the output directory bounded.
+
+    Single-flight: two POSTs served on different threads would otherwise walk
+    the same directory at once and the loser would `stat` an entry the winner
+    had just removed, surfacing to its caller as a spurious generation
+    failure. A skipped sweep costs nothing — the next request runs one.
+    """
+    if not OUTPUT.exists() or not _CLEANUP_LOCK.acquire(blocking=False):
         return
-    cutoff = time.time() - OUTPUT_RETENTION_SECONDS
-    for item in OUTPUT.iterdir():
-        if item.is_dir() and item.stat().st_mtime < cutoff:
-            shutil.rmtree(item, ignore_errors=True)
+    try:
+        cutoff = time.time() - OUTPUT_RETENTION_SECONDS
+        for item in OUTPUT.iterdir():
+            try:
+                if item.is_dir() and item.stat().st_mtime < cutoff:
+                    shutil.rmtree(item, ignore_errors=True)
+            except OSError:
+                continue
+    except OSError:
+        return
+    finally:
+        _CLEANUP_LOCK.release()
 
 
 def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
@@ -111,10 +163,6 @@ def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
           <span class="hint">ex: „1 Samuel 1,2,3" sau un interval de capitole</span>
         </label>
         <textarea name='chapters'>1 Samuel 1,2,3</textarea>
-        <label>Dificultate
-          <span class="hint">influențează selecția versetelor și a variantelor greșite</span>
-        </label>
-        <select name='difficulty'><option value='mixed'>Mixtă (implicit)</option><option value='easy'>Ușoară</option><option value='medium'>Medie</option><option value='hard'>Dificilă</option></select>
       </fieldset>
       <fieldset>
         <legend>Detalii concurs</legend>
@@ -142,12 +190,30 @@ def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
     </html>"""
 
 
+def _whole_number(data: dict[str, str], key: str, default: int | None, label: str) -> int | None:
+    """Reads a numeric form field, reporting a bad one in the caller's words.
+
+    Left to bare `int()` a typo raises a ValueError whose message ("invalid
+    literal for int() with base 10: 'douăzeci'") is Python's, not the form's,
+    and would now be classed as an internal fault rather than something the
+    person filling in the field can fix.
+    """
+    raw = (data.get(key) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise SelectionError(f"{label} trebuie să fie un număr întreg.") from None
+
+
 def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
-    selection = parse_selection(data["chapters"])
+    selection = parse_selection(data.get("chapters", ""))
     repo = REPOSITORY
-    base_seed = int(data["seed"]) if data.get("seed", "").strip() else secrets.randbelow(2**31)
-    versions = max(1, min(10, int(data.get("versions", "").strip() or "1")))
-    contest = {"title": "TALANTUL ÎN NEGOȚ", "category": data.get("category", "6_7"), "edition": int(data.get("edition", "2027")), "stage": data.get("stage", "Faza pe biserică"), "date": data.get("date", "")}
+    seed = _whole_number(data, "seed", None, "Seed-ul")
+    base_seed = secrets.randbelow(2**31) if seed is None else seed
+    versions = max(1, min(10, _whole_number(data, "versions", 1, "Numărul de variante")))
+    contest = {"title": "TALANTUL ÎN NEGOȚ", "category": data.get("category", "6_7"), "edition": _whole_number(data, "edition", 2027, "Ediția"), "stage": data.get("stage", "Faza pe biserică"), "date": data.get("date", "")}
     scoring = {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}
     session_id = secrets.token_urlsafe(9)
     links = []
@@ -157,7 +223,7 @@ def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
         validate_evidence(test, repo)
         folder = OUTPUT / session_id / f"V{version}"
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / "test.json").write_text(json.dumps(test.to_dict() | {"coverage": coverage_report(test), "translation": repo.translation, "difficulty": data.get("difficulty", "mixed")}, ensure_ascii=False, indent=2), encoding="utf-8")
+        (folder / "test.json").write_text(json.dumps(test.to_dict() | {"coverage": coverage_report(test), "translation": repo.translation}, ensure_ascii=False, indent=2), encoding="utf-8")
         candidate, answer_key = render_pair(test, folder)
         candidate_url = quote(candidate.relative_to(OUTPUT).as_posix(), safe="/")
         answer_url = quote(answer_key.relative_to(OUTPUT).as_posix(), safe="/")
@@ -165,11 +231,20 @@ def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
     return links
 
 
+# The page loads nothing from anywhere: no scripts, no fonts, no images. The
+# policy says exactly that, so a future edit that reaches for a CDN fails
+# visibly here instead of quietly widening what the page can talk to.
+CONTENT_SECURITY_POLICY = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+CONTENT_TYPES = {".pdf": "application/pdf", ".json": "application/json; charset=utf-8"}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _html(self, body: str, status: HTTPStatus = HTTPStatus.OK) -> None:
         content = body.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self.wfile.write(content)
@@ -187,7 +262,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_error(HTTPStatus.NOT_FOUND)
             data = file.read_bytes()
             self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "application/pdf")
+            # Declared from the suffix: this route also serves the session's
+            # test.json, which was previously labelled application/pdf.
+            self.send_header("Content-Type", CONTENT_TYPES.get(file.suffix.lower(), "application/octet-stream"))
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Disposition", f'attachment; filename="{file.name}"')
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
@@ -197,7 +275,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if urlparse(self.path).path not in {"/generate", f"{APP_PATH}/generate", f"{APP_PATH}/generate/"}:
             return self.send_error(HTTPStatus.NOT_FOUND)
-        client_ip = self.client_address[0]
+        client_ip = client_key(self)
         if rate_limited(client_ip):
             message = f"<p class='err'><strong>Prea multe cereri.</strong> Poți genera din nou peste puțin timp (limită: {RATE_LIMIT_MAX_REQUESTS}/oră per utilizator).</p>"
             return self._html(page(message), HTTPStatus.TOO_MANY_REQUESTS)
@@ -212,15 +290,30 @@ class Handler(BaseHTTPRequestHandler):
             values = {key: value[-1] for key, value in parse_qs(raw, max_num_fields=32).items()}
             cleanup_output()
             links = make_tests(values)
-            self._html(page("<p class='ok'>✓ Test generat și validat.</p>", links))
-        except Exception as exc:
-            self._html(page(f"<p class='err'><strong>Generarea a eșuat:</strong> {html.escape(str(exc))}</p>"), HTTPStatus.BAD_REQUEST)
+        except USER_ERRORS as exc:
+            return self._html(page(f"<p class='err'><strong>Generarea a eșuat:</strong> {html.escape(str(exc))}</p>"), HTTPStatus.BAD_REQUEST)
+        except Exception:
+            # A defect here, not a bad request: the browser gets nothing but
+            # the fact that it failed, and the detail goes to the server log
+            # where it belongs. Echoing `str(exc)` handed out whatever the
+            # exception happened to carry — a filesystem path, a stack of
+            # internals — to anyone who could make the generator throw.
+            traceback.print_exc()
+            return self._html(page("<p class='err'><strong>Eroare internă.</strong> Încercați din nou; dacă persistă, raportați ora exactă a încercării.</p>"), HTTPStatus.INTERNAL_SERVER_ERROR)
+        # Outside the try: a failure while writing this response must not lead
+        # to a second, complete response being written onto the same connection.
+        self._html(page("<p class='ok'>✓ Test generat și validat.</p>", links))
 
 
 def main() -> None:
     port = int(os.environ.get("PORT", 8000))
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
-    print(f"Interfața este disponibilă pe portul {port}")
+    # Local runs stay on the loopback address the README documents; binding
+    # 0.0.0.0 unconditionally published the generator to every machine on the
+    # network the moment someone ran it on a laptop. A platform sets PORT, and
+    # there the bind has to be on all interfaces for the router to reach it.
+    host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
+    server = ThreadingHTTPServer((host, port), Handler)
+    print(f"Interfața este disponibilă pe http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}")
     server.serve_forever()
 
 

@@ -9,6 +9,4 @@ scoring:
   section_2: 4
   section_3: 2
   section_4: 5
-difficulty: mixed
 seed: 12345
-number_of_versions: 1
