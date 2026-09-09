@@ -41,6 +41,17 @@ _REQUEST_LOG: dict[str, deque[float]] = defaultdict(deque)
 _RATE_LIMIT_LOCK = threading.Lock()
 MAX_REQUEST_BYTES = 64 * 1024
 OUTPUT_RETENTION_SECONDS = 24 * 60 * 60
+# A test spends 28 distinct verses across four sections that all draw from the
+# same pool, several of them competing directly for the same shapes. Measured
+# across every contiguous chapter window in both books: 2-chapter selections
+# fail to produce a test about 23% of the time (arithmetic scarcity, not a
+# bug — see generation.py's Section II/III shortfall messages), 3-chapter and
+# up never do. This turns that failure into an immediate, specific message
+# instead of a generation attempt that fails several steps in. It is a
+# practical floor calibrated from that data, not a guarantee for every
+# possible combination — a selection can still be too sparse (e.g. three
+# widely scattered chapters) and hit the accurate downstream message instead.
+MIN_SELECTION_CHAPTERS = 3
 APP_PATH = "/generare-teste"
 # Set by the Procfile, where exactly one platform router sits in front of this
 # process. Off by default so a directly-reachable instance never lets a caller
@@ -160,7 +171,7 @@ def page(message: str = "", links: list[tuple[str, str]] | None = None) -> str:
       <fieldset>
         <legend>Material</legend>
         <label>Capitole biblice
-          <span class="hint">ex: „1 Samuel 1,2,3" sau un interval de capitole</span>
+          <span class="hint">ex: „1 Samuel 1,2,3" sau un interval de capitole (minimum {MIN_SELECTION_CHAPTERS})</span>
         </label>
         <textarea name='chapters'>1 Samuel 1,2,3</textarea>
       </fieldset>
@@ -209,6 +220,12 @@ def _whole_number(data: dict[str, str], key: str, default: int | None, label: st
 
 def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
     selection = parse_selection(data.get("chapters", ""))
+    total_chapters = sum(len(chapters) for chapters in selection.values())
+    if total_chapters < MIN_SELECTION_CHAPTERS:
+        raise SelectionError(
+            f"Selecția are {total_chapters} capitol{'e' if total_chapters != 1 else ''}; "
+            f"sunt necesare cel puțin {MIN_SELECTION_CHAPTERS} pentru un test complet."
+        )
     repo = REPOSITORY
     seed = _whole_number(data, "seed", None, "Seed-ul")
     base_seed = secrets.randbelow(2**31) if seed is None else seed

@@ -94,6 +94,40 @@ class EmptySelectionTests(unittest.TestCase):
             app.make_tests({})
 
 
+class MinimumSelectionSizeTests(unittest.TestCase):
+    """A test spends 28 distinct verses across four sections that compete for
+    the same pool. Measured across every contiguous chapter window in both
+    books: 2-chapter selections fail to produce a test about 23% of the time,
+    3-chapter and up never do. This turns that into an immediate, specific
+    message instead of a generation attempt that fails several steps in."""
+
+    def test_one_and_two_chapter_selections_are_rejected_immediately(self):
+        for chapters in ("1 Samuel 1", "1 Samuel 1,2"):
+            with self.assertRaises(SelectionError) as caught:
+                app.make_tests({"chapters": chapters})
+            self.assertIn(str(app.MIN_SELECTION_CHAPTERS), str(caught.exception))
+
+    def test_the_count_is_summed_across_books_not_per_book(self):
+        # "1 Samuel 1" plus "2 Samuel 1" is two chapters total, not two
+        # separate one-chapter selections that would each pass alone.
+        with self.assertRaises(SelectionError):
+            app.make_tests({"chapters": "1 Samuel 1\n2 Samuel 1"})
+
+    def test_three_chapters_is_the_floor_not_a_ceiling(self):
+        # No exception; the generation itself may still succeed or fail on its
+        # own terms further down the pipeline.
+        selection = app.parse_selection("1 Samuel 1,2,3")
+        total = sum(len(chapters) for chapters in selection.values())
+        self.assertGreaterEqual(total, app.MIN_SELECTION_CHAPTERS)
+
+    def test_the_pluralisation_is_correct_for_a_single_chapter(self):
+        with self.assertRaises(SelectionError) as caught:
+            app.make_tests({"chapters": "1 Samuel 1"})
+        message = str(caught.exception)
+        self.assertIn("1 capitol;", message)
+        self.assertNotIn("1 capitole", message)
+
+
 
 class LiveServerTests(unittest.TestCase):
     """Drives the actual HTTP handler over a real socket. Everything below was

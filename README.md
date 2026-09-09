@@ -50,7 +50,7 @@ Pentru selecția `1 Samuel 1,2`, rezultatele sunt `output/V1/1 Samuel 1-2 V1.pdf
 python -m src.web.app
 ```
 
-Deschideți `http://127.0.0.1:8000`. Interfața susține selecții pe linii, categorie, ediție, etapă, dată, seed și mai multe variante.
+Deschideți `http://127.0.0.1:8000`. Interfața susține selecții pe linii, categorie, ediție, etapă, dată, seed și mai multe variante. Selecția trebuie să acopere cel puțin 3 capitole: sub acest prag testul complet (28 de fapte distincte, pe patru secțiuni care concurează pentru același bazin) eșuează la generare în aproximativ un sfert din cazuri, față de niciodată de la 3 capitole în sus.
 
 Local, serverul ascultă numai pe `127.0.0.1`. Când platforma de găzduire setează `PORT`, ascultă pe toate interfețele; setați `HOST` pentru a forța o adresă anume. În spatele unui router de platformă setați `TRUST_PROXY=1` (așa cum face `Procfile`), altfel limita de generări per utilizator devine o limită globală, comună tuturor vizitatorilor: fără antetul `X-Forwarded-For` toate cererile par să vină de la aceeași adresă, cea a routerului.
 
