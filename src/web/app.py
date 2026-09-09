@@ -217,8 +217,12 @@ def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
     scoring = {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}
     session_id = secrets.token_urlsafe(9)
     links = []
+    # Each variant is told what its siblings already used, so a room handed V1
+    # and V2 does not get two papers built from mostly the same verses.
+    spent: set[str] = set()
     for version in range(1, versions + 1):
-        test = build_test(repo.facts_for(selection), selection, contest, scoring, base_seed, version)
+        test = build_test(repo.facts_for(selection), selection, contest, scoring, base_seed, version, avoid=spent)
+        spent |= test.fact_ids
         validate_test(test)
         validate_evidence(test, repo)
         folder = OUTPUT / session_id / f"V{version}"

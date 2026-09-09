@@ -372,7 +372,7 @@ _ARTICLED = {"Domnul", "Filistenii"}
 _DEFINITE_LEAD = {"lui", "acest", "acesta", "această", "aceasta", "acestui", "acestei", "aceste", "acești", "acestor"}
 
 
-def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "", statement: str = "") -> str:
+def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "", statement: str = "", require_gender: bool = False) -> str:
     # Only names the selected chapters actually use, so a 2 Samuel test never
     # swaps in a character who appears nowhere in it.
     inside = {candidate.object for candidate in pool}
@@ -413,7 +413,16 @@ def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "", statement: str =
     # first, then relaxing gender, then relaxing class, and only using a
     # mismatched fallback if this chapter selection genuinely has nothing
     # better — rather than fail generation outright.
-    for match in (lambda v: same_class(v) and same_gender(v), same_class, same_gender, lambda v: True):
+    #
+    # `require_gender` drops the two tiers that would break agreement. A
+    # gender-mismatched swap is not a subtle degradation: „o iubea pe Ana" ->
+    # „o iubea pe Elcana" leaves a feminine clitic beside a masculine name, and
+    # the sentence reads as broken rather than false. Section I asks for it
+    # because `_falsifiable` has already confirmed, before the verse was
+    # reserved, that a same-gender replacement exists — so raising here means a
+    # caller asked to falsify a verse it never checked, not a thin corpus.
+    tiers = (lambda v: same_class(v) and same_gender(v), same_gender) if require_gender         else (lambda v: same_class(v) and same_gender(v), same_class, same_gender, lambda v: True)
+    for match in tiers:
         for option in fact.options:
             if safe(option) and option in inside and match(option):
                 return option
@@ -513,6 +522,38 @@ def _completion_stem(fact: Fact) -> tuple[str, str] | None:
             continue
         return stem, sentence
     return None
+
+
+def _falsifiable(fact: Fact, pool: list[Fact]) -> tuple[str, bool] | None:
+    """The Section I statement for `fact`, and whether gender survives the swap.
+
+    Reproduces exactly what the emit path does — the same sentence, the same
+    last-occurrence split — and then asks `_wrong_object` for a replacement
+    that keeps grammatical gender. Checking it here rather than at emit time is
+    what lets a verse with no same-gender stand-in be passed over while there
+    are still others to reserve; by the time the statement is being written the
+    five have been committed and the only options left are a broken sentence or
+    a failed generation.
+    """
+    statement = _concise(fact, True)
+    if not statement or not _safe_to_swap(statement, fact.object):
+        return None
+    hits = list(re.finditer(rf"(?<!\w){re.escape(fact.object)}(?!\w)", statement))
+    if not hits:
+        return None
+    hit = hits[-1]
+    before, after = statement[:hit.start()], statement[hit.end():]
+    try:
+        _wrong_object(fact, pool, lead=before, statement=f"{before} {after}", require_gender=True)
+    except GenerationError:
+        # Falsifiable, but only by a name of the other gender. Reported rather
+        # than refused: demanding gender outright cost Section I five times as
+        # many outright failures as the broken sentences it prevented, and a
+        # selection with no second feminine name in it has nothing better to
+        # offer. `build_test` sorts these last and reaches them only when the
+        # clean ones cannot fill the five.
+        return statement, False
+    return statement, True
 
 
 # Prepositions/genitive markers that put the following name in an oblique
@@ -984,7 +1025,7 @@ def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
     return None
 
 
-def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger, rivals: list[tuple[str, set[str]]]) -> list[MultiChoiceQuestion]:
+def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger, rivals: list[tuple[str, set[str]]], reserved: set[str]) -> list[MultiChoiceQuestion]:
     """Mirrors the reference mix: items with three, two and one correct answer."""
     candidates = [(fact, *found) for fact in pool if (found := _enumeration(fact))]
     foreign = [member for _, _, members in candidates for member in members]
@@ -1011,7 +1052,16 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     # quality preferences rather than correctness rules, so the whole selection
     # runs twice: once holding them, once with near-duplicate rejection relaxed
     # to identical-only, which beats failing to produce a test at all.
-    for enforce in (True, False):
+    # `reserved` is Section II's candidate set; `_may_take` stops the
+    # single-answer fallback below — which is literally Section II's two shapes
+    # — from spending a verse Section II cannot spare. The enumeration shape
+    # never collides with Section II, so this costs those items nothing.
+    # `allow_reserved` is the last thing to give way. Section IV must reach three
+    # items or raise, so once its own shapes are exhausted it takes a verse
+    # Section II wanted rather than fail — Section II's shortfall message at
+    # least tells the reader to add a chapter, while a Section IV one on a
+    # selection that could have produced a test is a worse outcome.
+    for allow_reserved, enforce in ((False, True), (False, False), (True, True), (True, False)):
         stems.strict = enforce
         # Three, then two, then one correct answer, matching how the reference varies.
         # Enumeration candidates never overlap with Section II's shapes (they need
@@ -1023,6 +1073,11 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
             for fact, stem, members in candidates:
                 if len(multis) == 3:
                     break
+                # No `_may_take` here: the enumeration shape needs a coordinated
+                # „și"/„sau" list, which none of Section II's shapes can use, so
+                # a fact being in `reserved` says nothing about whether spending
+                # it here costs Section II anything — and Section IV has to
+                # reach three items or raise.
                 if fact.id in used or len(members) < wanted:
                     continue
                 correct_values = members[:wanted]
@@ -1053,7 +1108,10 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
         for fact in pool:
             if len(multis) == 3:
                 break
-            if fact.id in used:
+            # This fallback *is* Section II's two shapes, so unlike the
+            # enumeration loop above it has to respect Section II's floor —
+            # until `allow_reserved` lifts it.
+            if fact.id in used or not (allow_reserved or fact.id not in reserved):
                 continue
             # The „Cine ...?" shape needs the same ambiguity guard Section II
             # applies to it. Without it this loop shipped the very question
@@ -1084,12 +1142,44 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     return multis
 
 
-def _section_iii_named(pool: list[Fact], used: set[str], rng: random.Random) -> list[tuple[Fact, str, str]]:
+# How many questions Section II must end up with. Sections III and IV consult
+# it before spending a verse Section II could have used.
+_SECTION_II_QUOTA = 24
+
+
+def _may_take(fact: Fact, reserved: set[str], used: set[str]) -> bool:
+    """True unless taking `fact` would leave Section II short of its quota.
+
+    Sections III-named and IV both pick before Section II and both want the
+    same verses it does — III's shape *is* `_name_predicate`, which is also
+    Section II's „Cine ...?" shape, and IV's single-answer fallback is literally
+    Section II's two shapes. Sorting the pool to try Section II's candidates
+    last was too weak (it still reached them the moment a non-reserved verse
+    failed the shape, costing Section II 170 candidates across a 53-selection
+    sweep); refusing them outright was too strong (it starved Section III on
+    thin selections, trading one section's failures for another's).
+
+    A budget is neither: a reserved verse is spent freely while Section II
+    still has more than it needs, and protected once it does not. Section II is
+    the one section whose shortfall is fatal — III falls back to
+    `_clause_halves` and IV to its single-answer shape — so it gets the floor.
+    """
+    return fact.id not in reserved or len(reserved - used) > _SECTION_II_QUOTA
+
+
+def _section_iii_named(pool: list[Fact], used: set[str], rng: random.Random, reserved: set[str]) -> list[tuple[Fact, str, str]]:
     """The scarcer of Section III's two shapes: a recognised name as the
     clause's subject, paired with its predicate. Claims facts before Section
     II runs, same as the enumeration shape in Section IV — a name needing to
     be the clause's *subject* is a tighter constraint than anything Section
-    II's shapes require."""
+    II's shapes require.
+
+    `reserved` holds the facts Section II could use; `_may_take` keeps this
+    shape from spending one Section II cannot spare. Returning fewer than five
+    rows is not a failure here, which is what makes deferring cheap:
+    `_section_iii_fill` tops the column up *after* Section II has run, both
+    from `_clause_halves` and from whatever named verses Section II left.
+    """
     rows: list[tuple[Fact, str, str]] = []
     seen: list[str] = []
     # Named characters read best; divine forms are a fallback because "Domnul",
@@ -1099,6 +1189,8 @@ def _section_iii_named(pool: list[Fact], used: set[str], rng: random.Random) -> 
             if len(rows) == 5:
                 break
             if fact.id in used or fact.object in seen or not (predicate := _name_predicate(fact)):
+                continue
+            if not _may_take(fact, reserved, used):
                 continue
             if not allow_deity and fact.object in _DEITY:
                 continue
@@ -1115,8 +1207,8 @@ def _section_iii_fill(pool: list[Fact], used: set[str], rng: random.Random, rows
     no named-subject requirement) and builds the matching question. Called
     only after Section II has already claimed what it needs — this shape is
     loose enough to otherwise compete with Section II for the same verses."""
+    seen_lower = {name.lower() for _, name, _ in rows}
     if len(rows) < 5:
-        seen_lower = {name.lower() for _, name, _ in rows}
         for fact in pool:
             if len(rows) == 5:
                 break
@@ -1127,6 +1219,24 @@ def _section_iii_fill(pool: list[Fact], used: set[str], rng: random.Random, rows
                 continue
             rows.append((fact, left, right))
             seen_lower.add(left.lower())
+            used.add(fact.id)
+    # `_section_iii_named` refuses Section II's candidates outright, which is
+    # what gave Section II its verses back — but Section II has now run, so
+    # whatever it did not take is free. Retrying the named shape over those
+    # leftovers costs Section II nothing and recovers the column on selections
+    # where `_clause_halves` alone could not fill it.
+    if len(rows) < 5:
+        for fact in pool:
+            if len(rows) == 5:
+                break
+            if fact.id in used or not (predicate := _name_predicate(fact)):
+                continue
+            if fact.object.lower() in seen_lower or any(predicate == other[2] for other in rows):
+                continue
+            if _inflection(fact.object, [name for _, name, _ in rows]):
+                continue
+            rows.append((fact, fact.object, predicate))
+            seen_lower.add(fact.object.lower())
             used.add(fact.id)
     if len(rows) != 5:
         raise GenerationError("Nu sunt suficiente asocieri distincte pentru Sectiunea III.")
@@ -1143,7 +1253,7 @@ def _section_iii_fill(pool: list[Fact], used: set[str], rng: random.Random, rows
     )
 
 
-def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger, rivals: list[tuple[str, set[str]]]) -> list[SingleChoiceQuestion]:
+def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger, rivals: list[tuple[str, set[str]]], avoid: set[str]) -> list[SingleChoiceQuestion]:
     singles: list[SingleChoiceQuestion] = []
     letters = _balanced_letters(10, rng)
     answers: dict[str, int] = defaultdict(int)
@@ -1156,12 +1266,21 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     # tier that can't otherwise reach ten relaxes the stem ledger's near-
     # duplicate check too (tier 3): a visibly repeated question is a worse
     # defect than an uncapped answer, so it stays last to give way.
-    for cap, enforce_ledger in ((_MAX_SAME_ANSWER, True), (_MAX_SAME_ANSWER_RELAXED, True), (_MAX_SAME_ANSWER_RELAXED, False)):
+    # `avoid` is what sibling variants of this paper already spent. Ordering the
+    # pool by it is too weak to matter here — Section II's eligible set is small
+    # enough that a reshuffle reaches the same verses regardless — so the whole
+    # tier ladder runs once refusing them outright and again accepting them.
+    # Refusing is still only a preference: two variants of a selection that can
+    # barely fill one test have to be allowed to overlap rather than fail.
+    tiers = [(cap, ledger, skip)
+             for skip in (True, False)
+             for cap, ledger in ((_MAX_SAME_ANSWER, True), (_MAX_SAME_ANSWER_RELAXED, True), (_MAX_SAME_ANSWER_RELAXED, False))]
+    for cap, enforce_ledger, skip_siblings in tiers:
         stems.strict = enforce_ledger
         for fact in pool:
             if len(singles) == 10:
                 break
-            if fact.id in used:
+            if fact.id in used or (skip_siblings and fact.id in avoid):
                 continue
             # Both reference shapes are equally valid here, and the blank shape
             # now fits nearly every verse, so trying it first unconditionally
@@ -1234,7 +1353,7 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     return singles
 
 
-def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, scoring: dict[str, int], seed: int, version: int) -> TestDefinition:
+def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, scoring: dict[str, int], seed: int, version: int, avoid: set[str] | None = None) -> TestDefinition:
     all_facts = facts
     facts = [fact for fact in facts if fact.quality]
     if len(facts) < 20:
@@ -1245,6 +1364,15 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     # (seed, version) pair its own test while staying fully deterministic.
     rng = random.Random(seed * 1_000_003 + version)
     pool = _round_robin(facts, len(facts), rng)
+    # Facts already spent by sibling variants of the same paper. Two variants
+    # handed to neighbouring students shared a median 6 of their 10 Section II
+    # questions, because a different shuffle of the same small eligible set
+    # keeps reaching the same verses. Deferring — not excluding — is deliberate:
+    # a selection barely able to fill one test must still be able to fill the
+    # second, so this only reorders the pool and every downstream sort is
+    # stable, which carries the preference into all four sections at once.
+    if avoid:
+        pool.sort(key=lambda fact: fact.id in avoid)
     used: set[str] = set()
 
     def take(count: int) -> list[Fact]:
@@ -1292,14 +1420,20 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
         if _completion_stem(fact)
         or ((wh := _wh_question(fact)) and _uniquely_answered(wh[1], fact.object, rivals))
     }
-    false_pool = [fact for fact in pool if (stmt := _concise(fact, True)) and _safe_to_swap(stmt, fact.object)]
+    # (fact, keeps_gender) for every verse Section I can turn false at all.
+    falsifiable = [(fact, found[1]) for fact in pool if (found := _falsifiable(fact, facts))]
+    gender_safe = {fact.id for fact, keeps_gender in falsifiable if keeps_gender}
+    false_pool = [fact for fact, _ in falsifiable]
     # The False reservation runs before every other section, so on a thin
     # corpus it is the first place a scarce Section II verse can be lost — and
     # unlike Sections III and IV, which were already taught to leave those
     # verses alone, it used to take the pool in plain order. Section I's own
     # requirement is indifferent to which of the qualifying verses it gets, so
     # deferring the II-eligible ones costs it nothing.
-    false_pool.sort(key=lambda fact: fact.id in ii_eligible)
+    # Gender-safe verses first, then the usual deference to Section II. A swap
+    # that breaks agreement („o iubea pe Ana" -> „o iubea pe Elcana") is a
+    # visibly broken sentence, so it outranks the pool-sharing preference.
+    false_pool.sort(key=lambda fact: (fact.id not in gender_safe, fact.id in ii_eligible))
     false_facts: list[Fact] = []
     for fact in false_pool:
         if len(false_facts) == 5:
@@ -1307,38 +1441,49 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
         false_facts.append(fact)
         used.add(fact.id)
     if len(false_facts) != 5:
-        raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
+        raise GenerationError(
+            f"Secțiunea I are nevoie de 5 afirmații false, dar selecția a produs doar {len(false_facts)}. "
+            "Adăugați încă un capitol la selecție."
+        )
 
-    priority_pool = sorted(pool, key=lambda fact: fact.id in ii_eligible)
-    stems = _StemLedger()
-    multis = _section_iv(priority_pool, facts, used, rng, stems, rivals)
-    iii_rows = _section_iii_named(priority_pool, used, rng)
-    singles = _section_ii(pool, facts, used, rng, stems, rivals)
-    matching = _section_iii_fill(pool, used, rng, iii_rows)
-
-    # A True statement needs no recognised object at all — it's quoted as-is —
-    # so restricting it to `quality`-filtered facts (needed by every other
-    # section) excludes verses for no reason but happening to lack a known
-    # name. Falls after the quality-filtered candidates so it's only reached
-    # when they don't cover the need on their own.
+    # A True statement needs no recognised object at all — it is quoted as-is —
+    # so it may use the `quality`-filtered facts every other section needs *and*
+    # the ones that lack a known name, which no other section can touch. Those
+    # come first for exactly that reason: spending them here is free, while
+    # spending a named verse here may be the fact Section II or III needed.
+    #
+    # Reserved here, beside the False picks, rather than after the other
+    # sections have run. Taken last it was the first thing to starve — all 13
+    # Section I shortfalls in a 53-selection sweep were True statements failing
+    # on a pool the other three sections had already emptied — even though its
+    # own requirement is the loosest in the generator and it is indifferent to
+    # which verses it gets. The False picks still go first: `_concise(fact,
+    # False)` is strictly weaker than False's `_concise(fact, True)` plus
+    # `_falsifiable`, so every false_pool fact is also a true_pool fact and
+    # choosing True first would eat the shared verses either way.
     non_quality_true = [fact for fact in all_facts if not fact.quality and fact.id not in used and _concise(fact, False)]
-    true_pool = [fact for fact in pool if fact.id not in used and _concise(fact, False)] + non_quality_true
-    # _concise(fact, False) (True's requirement) is strictly weaker than
-    # _concise(fact, True) + _safe_to_swap (False's requirement) — every
-    # false_pool fact is also a true_pool fact, so on a small corpus
-    # false_pool can be a *subset* of true_pool, not just an overlapping set.
-    # That is the other half of why the False picks are reserved above: were
-    # True chosen first it would eat the shared facts and starve False, no
-    # matter how the sort inside either branch is biased.
+    quality_true = [fact for fact in pool if fact.id not in used and _concise(fact, False)]
+    quality_true.sort(key=lambda fact: fact.id in ii_eligible)
     true_facts: list[Fact] = []
-    for fact in true_pool:
+    for fact in non_quality_true + quality_true:
         if len(true_facts) == 5:
             break
         if fact.id not in used:
             true_facts.append(fact)
             used.add(fact.id)
     if len(true_facts) != 5:
-        raise GenerationError("Nu sunt suficiente versete potrivite pentru Sectiunea I.")
+        raise GenerationError(
+            f"Secțiunea I are nevoie de 5 afirmații adevărate, dar selecția a produs doar {len(true_facts)}. "
+            "Adăugați încă un capitol la selecție."
+        )
+
+    priority_pool = sorted(pool, key=lambda fact: fact.id in ii_eligible)
+    stems = _StemLedger()
+    multis = _section_iv(priority_pool, facts, used, rng, stems, rivals, ii_eligible)
+    iii_rows = _section_iii_named(priority_pool, used, rng, ii_eligible)
+    singles = _section_ii(pool, facts, used, rng, stems, rivals, avoid or set())
+    matching = _section_iii_fill(pool, used, rng, iii_rows)
+
     # The True/False pattern across the 10 statements must not be predictable —
     # a fixed odd/even alternation would let a student answer half the section
     # from position alone, without reading a single statement. Shuffling the
@@ -1374,7 +1519,8 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
                 raise GenerationError(f"Statementul pentru {fact.id} nu mai conține obiectul de înlocuit.")
             hit = hits[-1]
             before, after = statement[:hit.start()], statement[hit.end():]
-            statement = before + _wrong_object(fact, facts, lead=before, statement=f"{before} {after}") + after
+            replacement = _wrong_object(fact, facts, lead=before, statement=f"{before} {after}", require_gender=fact.id in gender_safe)
+            statement = before + replacement + after
         tf.append(TrueFalseQuestion(f"I-{index}", statement, "A" if is_true else "F", fact.evidence, fact.id))
 
     return TestDefinition(source, seed, version, contest, scoring, section_i=tf, section_ii=singles, section_iii=matching, section_iv=multis)

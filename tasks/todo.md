@@ -170,3 +170,110 @@ fall back deliberately rather than fail generation; unchanged.
 **Tests.** `SemanticSoundnessTests` — 11 cases, each verified to fail against the
 pre-fix code and pass after. Suite: 39 -> 50, all green. CLI regenerates both PDFs
 (85 puncte).
+
+
+---
+
+# Audit remediation — 2026-09-09, second pass (the three left standing)
+
+The first pass fixed what was wrong with individual items and named three
+things it did not fix. All three are now fixed.
+
+## 25. Gender agreement no longer breaks
+
+`_wrong_object` had a same-gender tier and then a final tier that ignored it,
+and Section I reached that tier because it reserved verses without ever asking
+whether one could be falsified cleanly. New `_falsifiable` reproduces the emit
+path exactly — same sentence, same last-occurrence split — and reports whether a
+same-gender replacement exists; `build_test` sorts those verses first and
+reaches a gender-breaking one only when the clean ones cannot fill the five.
+
+Requiring gender outright was tried first and rejected: it cost five times as
+many outright Section I failures as the broken sentences it prevented. Ranking
+it above the pool-sharing preference gets both — 0 mismatched swaps across the
+sweep, 0 extra failures.
+
+## 26. Sibling variants no longer repeat each other
+
+`build_test` takes `avoid: set[str] | None` — the facts earlier variants spent —
+and the web app threads it through its variant loop via a new
+`TestDefinition.fact_ids`. Two mechanisms, because one was not enough: the pool
+is reordered (every downstream sort is stable, so the preference reaches all
+four sections at once), *and* Section II runs its whole tier ladder once
+refusing those facts before running it again accepting them. Ordering alone
+barely moved the number — Section II's eligible set is small enough that a
+reshuffle reaches the same verses regardless.
+
+Deferring, never excluding: a selection that can barely fill one test must still
+be able to fill the second.
+
+V1/V2 Section II overlap fell from a mean of 5.6 of 10 to 3.0. On a four-chapter
+selection — what the web form is actually used for — five coordinated variants
+come out with pairwise overlaps of 0 to 3.
+
+## 27. Pool contention between Sections II and III
+
+Section III's shape is `_name_predicate`; Section II's „Cine ...?" shape is
+`_name_predicate` too. The two wanted nearly the same verses and Section III
+picked first, costing Section II 170 candidates across a 53-selection sweep —
+its single largest drain, and the reason a third of two-chapter selections could
+not produce a test at all.
+
+Three policies were measured before settling:
+
+| policy | 2-chapter failures | 3-chapter |
+|---|---|---|
+| sort the pool to try them last (previous) | 51 of 159 | 4 of 153 |
+| budget: spend one only while Section II has spare | 44 | 1 |
+| refuse outright, recover after Section II | **35** | **0** |
+
+The budget lost because a floor of ten is too tight — Section II's own filters
+reject candidates too, so it needs headroom, and a floor of 24 makes the budget
+behave as the refusal does. `_may_take` keeps the budget shape with that floor.
+
+What makes the refusal free is that Section III returning short is not a failure:
+`_section_iii_fill` tops the column up after Section II has run, both from
+`_clause_halves` and — new here — from whatever named verses Section II left
+behind. Section IV's single-answer fallback is gated the same way but keeps an
+escape pass, because it must reach three items or raise; its enumeration shape
+is not gated at all, since no Section II shape can use a coordinated list.
+
+Section I's True statements were also moved to be reserved beside the False ones
+rather than taken last. Taken last they were the first thing to starve — all 13
+Section I shortfalls in one sweep were True statements failing on a pool the
+other three sections had emptied — even though their requirement is the loosest
+in the generator. They now consume the non-`quality` facts first, which no other
+section can use at all.
+
+## Result
+
+| | first pass | now |
+|---|---|---|
+| 2-chapter selections failing | 51 of 159 (32%) | **35 of 159 (22%)** |
+| 3-chapter selections failing | 4 of 153 (3%) | **0 of 153** |
+| 4-chapter selections failing | 0 | 0 |
+| V1/V2 shared Section II questions | mean 5.6 of 10 | **mean 3.0** |
+| gender-mismatched swaps | present | **0** |
+
+Every first-pass invariant still holds at zero: no two options naming one
+referent, no Section IV item failing the ambiguity guard, no wh-question on a
+bare linker, no still-true False statement, no reused swapped-in name, no
+unclosed quotation.
+
+**Still not fixed.** Two-chapter selections fail 22% of the time, all of it
+Section II (28) and Section III (7) genuinely running out of usable verses —
+there are not enough distinct question shapes to draw 28 items from ~30 verses.
+The errors name the shortfall and say to add a chapter, and any selection of
+three or more chapters now works. Closing the rest means new question shapes,
+which is design work rather than a fix.
+
+**Fixture note.** `_corpus` held 30 facts for a 28-question test — no slack at
+all, so it silently doubled as an assertion that no section may ever return
+short of its quota, and broke the moment Section III was taught to defer and
+recover. Widened to 60. No real selection is that tight.
+
+**Tests.** `AllocationAndAgreementTests` — 9 cases, 8 of which fail against the
+previous commit (the ninth guards the error wording added there). Shared fixture
+extracted to a `_RealCorpusTest` mixin so the first pass's cases are not run
+twice. Suite: 50 -> 59, all green. CLI regenerates both PDFs (85 puncte); the
+web module imports and five coordinated variants all validate.

@@ -8,16 +8,21 @@ from pathlib import Path
 
 import pdfplumber
 
-from src.biblical_tests.generation import build_test
+from src.biblical_tests.generation import GenerationError, build_test
 from src.biblical_tests.rendering import render_pair
 from src.biblical_tests.repository import BibleRepository
 from src.biblical_tests.validation import ValidationError, validate_evidence, validate_test
 
 
+# Deliberately larger than the 28 questions a test needs. At 30 facts this
+# fixture had no slack at all — every verse in it had to be spent — so it
+# silently doubled as an assertion that no section may ever return short of its
+# quota, and broke the moment Section III was taught to leave Section II's
+# candidates alone and recover afterwards. No real selection is that tight.
 def _corpus(path):
     facts = []
     chapters = {"1": {}, "2": {}}
-    for number in range(1, 31):
+    for number in range(1, 61):
         chapter = 1 if number % 2 else 2
         verse = (number + 1) // 2
         # Alternate two shapes: odd numbers trail the object with a predicate
@@ -297,14 +302,8 @@ class GeneratorTests(unittest.TestCase):
             validate_test(self.test_definition)
 
 
-class SemanticSoundnessTests(unittest.TestCase):
-    """Whether an item is *answerable*, which the structural checks never see.
-
-    Every defect below shipped past a green suite: the validator confirms ten
-    questions, a bijection, in-scope references and evidence matching the
-    corpus exactly, and none of that notices a False statement that is true, a
-    question with two correct answers, or a stem that is not a question.
-    """
+class _RealCorpusTest:
+    """Shared fixture: the real corpus, and one call that builds a test from it."""
 
     CONTEST = {"title": "T", "stage": "F", "edition": 2027, "date": "x", "category": "6_7"}
     SCORING = {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}
@@ -318,6 +317,16 @@ class SemanticSoundnessTests(unittest.TestCase):
         selection = parse_selection(chapters)
         facts = self.repo.facts_for(selection)
         return facts, build_test(facts, selection, self.CONTEST, self.SCORING, seed, version)
+
+
+class SemanticSoundnessTests(_RealCorpusTest, unittest.TestCase):
+    """Whether an item is *answerable*, which the structural checks never see.
+
+    Every defect below shipped past a green suite: the validator confirms ten
+    questions, a bijection, in-scope references and evidence matching the
+    corpus exactly, and none of that notices a False statement that is true, a
+    question with two correct answers, or a stem that is not a question.
+    """
 
     def test_a_false_statement_never_swaps_one_divine_title_for_another(self):
         # "Domnul", "Dumnezeu" and "Dumnezeul" are one being under three
@@ -486,3 +495,139 @@ class SemanticSoundnessTests(unittest.TestCase):
             [question.question for question in first.section_ii],
             [question.question for question in again.section_ii],
         )
+
+
+class AllocationAndAgreementTests(_RealCorpusTest, unittest.TestCase):
+    """The three defects the first remediation pass named but left standing:
+    gender agreement, sibling-variant overlap, and the pool contention that
+    made a third of two-chapter selections fail outright.
+    """
+
+    def test_a_swap_never_breaks_gender_agreement_when_it_need_not(self):
+        # "o iubea pe Ana" -> "o iubea pe Elcana" leaves a feminine clitic
+        # beside a masculine name: broken rather than false. `_wrong_object`
+        # had a same-gender tier but a final tier that ignored it, and Section I
+        # reached that tier because it reserved verses without ever checking one
+        # could be falsified cleanly.
+        from src.biblical_tests.generation import _gender, _wrong_object
+        facts, _ = self._build("1 Samuel 1-4")
+        quality = [fact for fact in facts if fact.quality]
+        kept = 0
+        for fact in quality:
+            try:
+                replacement = _wrong_object(fact, quality, statement=fact.statement, require_gender=True)
+            except GenerationError:
+                continue
+            kept += 1
+            self.assertEqual(_gender(replacement), _gender(fact.object), f"{fact.id}: {fact.object!r} -> {replacement!r}")
+        self.assertGreater(kept, 0)
+
+    def test_section_i_only_reserves_a_verse_it_can_actually_falsify(self):
+        # `_falsifiable` reproduces the emit path exactly, so a verse it accepts
+        # cannot fail at emit time and a verse with no same-gender stand-in is
+        # reported rather than refused - it sorts last and is reached only when
+        # the clean ones cannot fill the five.
+        from src.biblical_tests.generation import _concise, _falsifiable
+        facts, _ = self._build("1 Samuel 1-4")
+        quality = [fact for fact in facts if fact.quality]
+        checked = 0
+        for fact in quality:
+            found = _falsifiable(fact, quality)
+            if found is None:
+                continue
+            statement, keeps_gender = found
+            checked += 1
+            self.assertEqual(statement, _concise(fact, True))
+            self.assertIsInstance(keeps_gender, bool)
+        self.assertGreater(checked, 0)
+
+    def test_no_section_i_statement_breaks_gender_agreement(self):
+        from src.biblical_tests.generation import _concise, _gender
+        import re as _re
+        by_id = {fact.id: fact for fact in self.repo.facts}
+        for chapters in ("1 Samuel 1-4", "1 Samuel 17-20", "2 Samuel 11-14"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                for question in test.section_i:
+                    if question.answer != "F":
+                        continue
+                    fact = by_id[question.fact_id]
+                    original = _concise(fact, True)
+                    hits = list(_re.finditer(rf"(?<!\w){_re.escape(fact.object)}(?!\w)", original or ""))
+                    if not hits:
+                        continue
+                    hit = hits[-1]
+                    before, after = original[:hit.start()], original[hit.end():]
+                    if not (question.statement.startswith(before) and question.statement.endswith(after)):
+                        continue
+                    swapped = question.statement[len(before):len(question.statement) - len(after)] if after else question.statement[len(before):]
+                    self.assertEqual(
+                        _gender(swapped), _gender(fact.object),
+                        f"{chapters} v{version} {question.id}: {fact.object!r} -> {swapped!r}",
+                    )
+
+    def test_sibling_variants_are_told_what_the_earlier_ones_spent(self):
+        # Two variants handed to neighbouring students shared a median 6 of
+        # their 10 Section II questions, because a different shuffle of the same
+        # small eligible set keeps reaching the same verses.
+        from src.biblical_tests.selection import parse_selection
+        selection = parse_selection("1 Samuel 1-6")
+        facts = self.repo.facts_for(selection)
+        first = build_test(facts, selection, self.CONTEST, self.SCORING, 12345, 1)
+        blind = build_test(facts, selection, self.CONTEST, self.SCORING, 12345, 2)
+        aware = build_test(facts, selection, self.CONTEST, self.SCORING, 12345, 2, avoid=first.fact_ids)
+        overlap = lambda a, b: len({q.question for q in a.section_ii} & {q.question for q in b.section_ii})
+        self.assertLess(overlap(first, aware), overlap(first, blind))
+        # Deferring, never excluding: a selection that can barely fill one test
+        # must still fill the second.
+        self.assertEqual(len(aware.section_ii), 10)
+
+    def test_avoiding_everything_still_produces_a_test(self):
+        # `avoid` only reorders the pool; handed every fact it must still build.
+        from src.biblical_tests.selection import parse_selection
+        selection = parse_selection("1 Samuel 1-4")
+        facts = self.repo.facts_for(selection)
+        test = build_test(facts, selection, self.CONTEST, self.SCORING, 12345, 1, avoid={fact.id for fact in facts})
+        validate_test(test)
+        validate_evidence(test, self.repo)
+
+    def test_fact_ids_reports_every_verse_the_test_spent(self):
+        _, test = self._build("1 Samuel 1-4")
+        ids = test.fact_ids
+        self.assertEqual(len(ids), 10 + 10 + 5 + len(test.section_iv))
+        for question in test.section_i + test.section_ii:
+            self.assertIn(question.fact_id, ids)
+        self.assertTrue(set(test.section_iii.fact_ids) <= ids)
+
+    def test_section_iii_leaves_section_ii_the_verses_it_cannot_spare(self):
+        # Section III's shape is `_name_predicate`, which is also Section II's
+        # "Cine ...?" shape, so the two want nearly the same verses - and III
+        # picks first. These selections could not produce a test at all until
+        # III was taught to defer while Section II is near its quota and to
+        # recover from `_clause_halves` (and from II's leftovers) afterwards.
+        for chapters, versions in (("1 Samuel 27-29", (1, 2, 3)), ("2 Samuel 10-12", (1,))):
+            for version in versions:
+                _, test = self._build(chapters, version=version)
+                validate_test(test)
+                validate_evidence(test, self.repo)
+                self.assertEqual(len(test.section_ii), 10)
+                self.assertEqual(len(test.section_iii.left), 5)
+
+    def test_every_three_chapter_selection_produces_a_test(self):
+        # The contention fix took three-chapter selections from 3% failing to
+        # none. Two-chapter selections can still genuinely run out, which is why
+        # the error names the shortfall and says to add a chapter.
+        from src.biblical_tests.selection import parse_selection
+        for book, last in (("1 Samuel", 31), ("2 Samuel", 24)):
+            for start in range(1, last - 1):
+                chapters = f"{book} {start}-{start + 2}"
+                selection = parse_selection(chapters)
+                test = build_test(self.repo.facts_for(selection), selection, self.CONTEST, self.SCORING, 12345, 1)
+                self.assertEqual(len(test.section_ii), 10, chapters)
+
+    def test_a_thin_selection_says_what_to_do_about_it(self):
+        from src.biblical_tests.selection import parse_selection
+        selection = parse_selection("1 Samuel 5-6")
+        with self.assertRaises(GenerationError) as caught:
+            build_test(self.repo.facts_for(selection), selection, self.CONTEST, self.SCORING, 12345, 1)
+        self.assertIn("capitol", str(caught.exception))

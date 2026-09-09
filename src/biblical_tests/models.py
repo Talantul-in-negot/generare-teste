@@ -90,6 +90,15 @@ class TestDefinition:
     section_iv: list[MultiChoiceQuestion] = field(default_factory=list)
 
     @property
+    def fact_ids(self) -> set[str]:
+        """Every corpus fact this test spent, for a sibling variant to avoid."""
+        ids = {question.fact_id for question in self.section_i + self.section_ii}
+        ids.update(fact_id for question in self.section_iv for fact_id in (question.fact_ids or [question.fact_id]))
+        if self.section_iii:
+            ids.update(self.section_iii.fact_ids)
+        return ids
+
+    @property
     def total_points(self) -> int:
         return 10 * self.scoring["section_1"] + 10 * self.scoring["section_2"] + 5 * self.scoring["section_3"] + 3 * self.scoring["section_4"]
 
