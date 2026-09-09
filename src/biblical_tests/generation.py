@@ -619,6 +619,134 @@ def _falsifiable(fact: Fact, pool: list[Fact]) -> tuple[str, bool] | None:
     return statement, True
 
 
+# The spelled-out numerals the corpus uses, each mapped to the value it names so
+# two forms of one number never appear as rival options ("doi" and "două" are
+# the masculine and feminine of 2, and offering both asks the student to pick a
+# gender rather than a fact).
+_NUMERAL_VALUES = {
+    "doi": 2, "două": 2, "trei": 3, "patru": 4, "cinci": 5, "șase": 6, "șapte": 7,
+    "opt": 8, "nouă": 9, "zece": 10, "unsprezece": 11, "doisprezece": 12,
+    "treisprezece": 13, "paisprezece": 14, "cincisprezece": 15, "șaisprezece": 16,
+    "șaptesprezece": 17, "optsprezece": 18, "nouăsprezece": 19, "douăzeci": 20,
+    "treizeci": 30, "patruzeci": 40, "cincizeci": 50, "șaizeci": 60, "șaptezeci": 70,
+    "optzeci": 80, "nouăzeci": 90,
+}
+# „sută"/„mie" and their plurals are deliberately absent. They are scale words
+# that need a count in front of them („trei mii de oameni"), not quantities that
+# can stand in a slot by themselves: offered as a distractor one reads „cei mii
+# fii ai lui Eli", and blanked as an answer it leaves „trei __________ de
+# oameni", which asks about the unit rather than the number. „treizeci" in
+# „treizeci de mii" still matches, which is the part worth asking about.
+_NUMERAL = re.compile(rf"(?<!\w)({'|'.join(sorted(_NUMERAL_VALUES, key=len, reverse=True))})(?!\w)")
+# Used only when the selection itself offers too few numerals to choose from.
+# Invariant forms, so they fit whatever noun the blank sits in front of.
+_FALLBACK_NUMERALS = ("trei", "cinci", "șapte", "zece", "patruzeci")
+
+
+def _blank_in_place(sentence: str, start: int, end: int, statement: str) -> str | None:
+    """The shared body of every completion shape: the sentence with one span
+    blanked, or None if what is left would not make a readable item.
+
+    `_completion_stem` grew these checks for the one span it knew about — the
+    fact's own object. They are not about *what* is blanked, only about how much
+    verse survives around the gap, so the place and numeral shapes reuse them
+    rather than restating them and drifting.
+    """
+    if not _quotes_balanced(sentence) or not sentence[:1].isupper():
+        return None
+    if not _self_contained(sentence, statement):
+        return None
+    stem = (sentence[:start] + _BLANK + sentence[end:]).strip()
+    # No leading blank here: unlike the fact's own object, a place or a numeral
+    # opening the sentence leaves the student guessing at a category rather than
+    # recalling a verse, and `_uniquely_answered` cannot vouch for it — it
+    # compares predicates against who performed them, not against where or how
+    # many.
+    if stem.startswith(_BLANK):
+        return None
+    if not _STEM_MIN_CHARS <= len(stem) <= _BLANK_MAX_CHARS:
+        return None
+    if len(stem.split()) - 1 < _BLANK_MIN_WORDS:
+        return None
+    return stem
+
+
+def _sole_match(pattern: re.Pattern[str], sentence: str) -> re.Match[str] | None:
+    """The one match in `sentence`, or None if there are none or several.
+
+    Blanking one occurrence while an identical word stays visible hands the
+    student the answer; blanking a numeral out of "trei tauri și trei oi" leaves
+    an item with two defensible readings.
+    """
+    found = list(pattern.finditer(sentence))
+    return found[0] if len(found) == 1 else None
+
+
+def _numeral_stem(fact: Fact) -> tuple[str, str, str] | None:
+    """„Câți/Câte ...?" as the reference papers actually ask it — the verse with
+    its number blanked, rather than a question needing subject-verb inversion.
+
+    Romanian forms a wh-question by inverting („Unde se suia omul acesta?", not
+    „Unde omul acesta se suia?"), and reordering a clause safely is well beyond
+    what this module can do from a regular expression. The blank needs no
+    inversion, is grammatical by construction, and is the form the reference
+    baremuri use for this anyway.
+
+    The answer is a number rather than a name, which is what makes this worth
+    having: every other Section II shape is answered by a person or a place, so
+    a paper drawn only from those asks the same kind of question ten times.
+    """
+    for sentence in _sentences(fact.statement):
+        if not (hit := _sole_match(_NUMERAL, sentence)):
+            continue
+        if stem := _blank_in_place(sentence, hit.start(), hit.end(), fact.statement):
+            return stem, sentence, hit.group(0)
+    return None
+
+
+def _place_stem(fact: Fact) -> tuple[str, str, str] | None:
+    """„Unde ...?" in the same completion form, answered by a place name.
+
+    Distinct from `_completion_stem` even when a place is the fact's own object:
+    this targets whichever place the sentence names, so it reaches verses whose
+    extracted object is a person the blank shape could not use.
+    """
+    for sentence in _sentences(fact.statement):
+        named = [place for place in BibleRepository.PLACES
+                 if place not in _COLLECTIVE and _mentions(sentence, place)]
+        if len(named) != 1:
+            continue
+        place = named[0]
+        if not (hit := _sole_match(re.compile(rf"(?<!\w){re.escape(place)}(?!\w)"), sentence)):
+            continue
+        if stem := _blank_in_place(sentence, hit.start(), hit.end(), fact.statement):
+            return stem, sentence, place
+    return None
+
+
+def _numeral_options(answer: str, facts: list[Fact]) -> list[str]:
+    """Numerals from the selection that name a different quantity than `answer`."""
+    target = _NUMERAL_VALUES.get(answer.lower())
+    inside = _dedup(match.group(0) for fact in facts for match in _NUMERAL.finditer(fact.statement))
+    pool = [value for value in inside if _NUMERAL_VALUES.get(value.lower()) != target]
+    pool += [value for value in _FALLBACK_NUMERALS if _NUMERAL_VALUES[value] != target]
+    # One form per quantity, so „doi" never stands beside „două".
+    seen: set[int] = set()
+    result = []
+    for value in pool:
+        number = _NUMERAL_VALUES[value.lower()]
+        if number not in seen:
+            seen.add(number)
+            result.append(value)
+    return result
+
+
+def _place_options(answer: str, facts: list[Fact]) -> list[str]:
+    """Place names the selection actually uses, other than `answer`."""
+    return _dedup(place for fact in facts for place in BibleRepository.PLACES
+                  if place != answer and place not in _COLLECTIVE and _mentions(fact.statement, place))
+
+
 # Prepositions/genitive markers that put the following name in an oblique
 # role (possessor, direct/indirect object, prepositional complement) instead
 # of the sentence's subject.
@@ -1372,70 +1500,81 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
                 break
             if fact.id in used or (skip_siblings and fact.id in avoid):
                 continue
-            # Both reference shapes are equally valid here, and the blank shape
-            # now fits nearly every verse, so trying it first unconditionally
-            # would make all ten questions look alike. Offering the currently
-            # under-used shape first keeps the section mixed the way the
-            # reference tests are.
-            builders = [("blank", lambda f: _completion_stem(f, rivals)), ("wh", _wh_question)]
-            if shapes["blank"] > shapes["wh"]:
-                builders.reverse()
-            shape, built = "", None
+            # A shape is usable only if its *options* can be built too, so a
+            # candidate is carried all the way through the answer cap, the
+            # distractor pool, the referent check and the stem ledger before it
+            # is accepted, and a shape that fails any of them falls through to
+            # the next. Choosing the shape first and discovering afterwards that
+            # its options did not work abandoned the whole verse — a fact whose
+            # „Cine ...?" has no safe distractors still makes a perfectly good
+            # blank — and with four shapes competing that was the difference
+            # between a test and a GenerationError.
+            #
+            # Least-used shape first, so ten questions do not all look alike. A
+            # stable sort keeps ties in the order listed, so a given seed still
+            # produces exactly the same paper.
+            builders = [("blank", lambda f: _completion_stem(f, rivals)), ("wh", _wh_question),
+                        ("place", _place_stem), ("numeral", _numeral_stem)]
+            builders.sort(key=lambda item: shapes[item[0]])
+            chosen = None
             for name, builder in builders:
                 if not (candidate := builder(fact)):
                     continue
                 # A „Cine ...?" whose predicate several different people also
-                # satisfy has no single right answer. The blank shape is not
-                # exposed to this — it quotes one specific verse rather than
+                # satisfy has no single right answer. The other shapes are not
+                # exposed to this — they quote one specific verse rather than
                 # asking which person a description picks out — so the fact can
-                # still become a question through the other builder.
+                # still become a question through one of them.
                 if name == "wh" and not _uniquely_answered(candidate[1], fact.object, rivals):
                     continue
-                shape, built = name, candidate
+                stem, segment = candidate[0], candidate[1]
+                # The place and numeral shapes answer with something other than
+                # the fact's own object — a place the verse names, or the
+                # quantity it states — so the answer travels with the stem
+                # instead of being assumed, and each shape brings the pool its
+                # distractors come from.
+                answer = candidate[2] if len(candidate) > 2 else fact.object
+                # „Cine?" only ever answers with a name, and the corpus leans
+                # hard on a few of them (the deity terms above all), so without
+                # a cap a run of verses about one subject becomes a run of
+                # questions with the same answer.
+                if answers[answer] >= cap:
+                    continue
+                # A distractor the quoted verse already offers could fill the
+                # blank too. A place among the options of a „Cine ...?", or a
+                # person among the completions of a blank the verse fills with a
+                # place, is ruled out on category alone. And „Domnului" is a case
+                # form, not a name: against a subject-position blank it reads as
+                # „Domnului au început lupta".
+                safe = lambda value: not _mentions(segment, value) and _compatible_kind(value, answer) and (value == answer or value != "Domnului")
+                if name == "numeral":
+                    available = _numeral_options(answer, facts)
+                elif name == "place":
+                    available = _place_options(answer, facts)
+                else:
+                    available = [*fact.options, *(f.object for f in facts)]
+                # Each option has to name a *different* answer from every other,
+                # not merely differ as a string: „Domnul", „Dumnezeu" and
+                # „Dumnezeul" are one being under three spellings, so an item
+                # offering two of them either has two correct answers or two
+                # distractors the student eliminates at once.
+                values = _distinct_referents([answer, *(value for value in available if safe(value))], 3)
+                if values is None:
+                    continue
+                if not stems.claim(stem):
+                    continue
+                chosen = (name, stem, answer, values)
                 break
-            if not built:
+            if not chosen:
                 continue
-            # „Cine?" only ever answers with a name, and the corpus leans hard
-            # on a few of them (the deity terms above all), so without a cap a
-            # run of verses about the same subject turns into a run of
-            # questions with the same answer — guessable without reading them.
-            if answers[fact.object] >= cap:
-                continue
-            stem, segment = built
-            # A distractor present in the quoted verse could also fill the blank,
-            # so only terms the verse does not offer at all are safe to mark wrong.
-            # A place among the options of a „Cine ...?", or a person among the
-            # completions of a blank the verse fills with a place, is ruled out
-            # on category alone — the same defect as a place swapped into a
-            # Section I statement, on the distractor side.
-            # „Domnului" is the genitive/dative *form*, not a name, so it only
-            # fits the oblique slot it came from — offered against a
-            # subject-position blank it reads as „Domnului au început lupta".
-            # `_wrong_object` has refused it as a replacement since it was
-            # written; the distractor lists never did.
-            safe = lambda value: not _mentions(segment, value) and _compatible_kind(value, fact.object) and (value == fact.object or value != "Domnului")
-            choices = [value for value in fact.options if safe(value)]
-            choices += [f.object for f in facts if safe(f.object)]
-            # Each option has to name a *different* answer from every other one,
-            # not merely differ as a string. „Domnul", „Dumnezeu" and „Dumnezeul"
-            # are one being under three spellings, so an item offering two of
-            # them either has two correct answers („Cine sărăcește și El
-            # îmbogățește?" — A Domnul, C Dumnezeul) or two eliminable
-            # distractors. Accumulating against `_same_referent` rather than
-            # filtering each candidate against the answer alone is what also
-            # keeps two *distractors* from colliding with each other.
-            values = _distinct_referents([fact.object, *choices], 3)
-            if values is None:
-                continue
-            if not stems.claim(stem):
-                continue
+            shape, stem, answer, values = chosen
             letter = letters[len(singles)]
             rng.shuffle(values)
-            values.remove(fact.object)
-            values.insert("ABC".index(letter), fact.object)
+            values.remove(answer)
+            values.insert("ABC".index(letter), answer)
             singles.append(SingleChoiceQuestion(f"II-{len(singles) + 1}", stem, dict(zip("ABC", values)), letter, fact.evidence, fact.id))
             used.add(fact.id)
-            answers[fact.object] += 1
+            answers[answer] += 1
             shapes[shape] += 1
         if len(singles) == 10:
             break

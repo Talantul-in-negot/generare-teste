@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 
 from .generation import _MAX_SAME_ANSWER_RELAXED, _same_referent
@@ -90,8 +91,18 @@ def validate_evidence(test: TestDefinition, repository: BibleRepository) -> None
         fact = facts_by_id.get(question.fact_id)
         if fact is None:
             raise ValidationError(f"Faptă necunoscută: {question.fact_id}")
-        if isinstance(question, SingleChoiceQuestion) and question.options[question.correct] != fact.object:
-            raise ValidationError(f"Răspunsul corect nu coincide cu fapta: {question.id}")
+        # The correct option must be a word the cited verse actually contains.
+        # This used to demand it equal `fact.object`, which was the same thing
+        # while every Section II shape answered with the fact's own object — the
+        # place and numeral shapes answer with a place the verse names or the
+        # quantity it states, and „`fact.object`" would reject them while saying
+        # nothing extra about the ones it accepted. Grounding the answer in the
+        # evidence text is the property a barem actually needs, and it holds for
+        # the object shapes too, since the object is drawn from that same text.
+        if isinstance(question, SingleChoiceQuestion):
+            answer = question.options[question.correct]
+            if not re.search(rf"(?<!\w){re.escape(answer)}(?!\w)", question.evidence.text):
+                raise ValidationError(f"Răspunsul corect nu apare în versetul citat: {question.id}")
     for question in test.section_iv:
         supporting = question.supporting_evidence or [question.evidence]
         text = " ".join(ref.text for ref in supporting)

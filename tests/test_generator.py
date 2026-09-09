@@ -941,3 +941,123 @@ class ReservationTests(_RealCorpusTest, unittest.TestCase):
 class _Stub:
     def __init__(self, ident):
         self.id = ident
+
+
+class PlaceAndNumeralShapeTests(_RealCorpusTest, unittest.TestCase):
+    """"Unde ...?" and "Cati ...?" as completions rather than questions.
+
+    Romanian forms a wh-question by inverting subject and verb ("Unde se suia
+    omul acesta?", not "Unde omul acesta se suia?"), and reordering a clause
+    safely is beyond what this module can do from a regular expression. The
+    blank needs no inversion, is grammatical by construction, and is the form
+    the reference baremuri use for both anyway.
+    """
+
+    def _fact(self, statement, obj="Samuel"):
+        from src.biblical_tests.models import Evidence, Fact
+        return Fact("t1", statement, "s", "p", obj, Evidence("1 Samuel", 1, 3, 3, statement))
+
+    def test_a_numeral_is_blanked_where_it_stands(self):
+        from src.biblical_tests.generation import _BLANK, _numeral_stem
+        fact = self._fact("Acolo se aflau cei doi fii ai lui Eli, Hofni și Fineas, preoți ai Domnului.")
+        stem, sentence, answer = _numeral_stem(fact)
+        self.assertEqual(answer, "doi")
+        self.assertIn(_BLANK, stem)
+        self.assertNotIn("doi", stem.replace("Domnului", ""))
+
+    def test_a_numeral_appearing_twice_is_refused(self):
+        # Blanking one while an identical word stays visible hands the student
+        # the answer; two different numerals leave two defensible readings.
+        from src.biblical_tests.generation import _numeral_stem
+        self.assertIsNone(_numeral_stem(self._fact("El a luat trei tauri și a adus trei oi la casa Domnului acolo.")))
+        self.assertIsNone(_numeral_stem(self._fact("El a luat trei tauri și a adus cinci oi la casa Domnului acolo.")))
+
+    def test_a_place_is_blanked_and_only_when_the_sentence_names_one(self):
+        from src.biblical_tests.generation import _BLANK, _place_stem
+        fact = self._fact("Elcana s-a dus acasă, la Rama, și copilul a rămas în slujba Domnului.")
+        stem, sentence, answer = _place_stem(fact)
+        self.assertEqual(answer, "Rama")
+        self.assertIn(_BLANK, stem)
+        self.assertNotIn("Rama", stem)
+        # Two places named: which one is the blank asking for?
+        self.assertIsNone(_place_stem(self._fact("Elcana s-a dus de la Rama la Silo ca să se închine acolo Domnului.")))
+
+    def test_neither_shape_lets_the_blank_open_the_sentence(self):
+        # `_uniquely_answered` cannot vouch for these: it compares predicates
+        # against who performed them, not against where or how many.
+        from src.biblical_tests.generation import _BLANK, _numeral_stem, _place_stem
+        for fact in (self._fact("Silo era locul unde se ducea tot poporul ca să se închine Domnului."),
+                     self._fact("Trei tauri au fost aduși de omul acela la casa Domnului în ziua aceea.")):
+            for built in (_place_stem(fact), _numeral_stem(fact)):
+                if built:
+                    self.assertFalse(built[0].startswith(_BLANK), built[0])
+
+    def test_scale_words_are_not_treated_as_quantities(self):
+        # "sută"/"mie" and their plurals need a count in front ("trei mii de
+        # oameni"). As a distractor one reads "cei mii fii ai lui Eli"; blanked
+        # as an answer it leaves "trei __________ de oameni", which asks about
+        # the unit rather than the number.
+        from src.biblical_tests.generation import _NUMERAL_VALUES
+        for word in ("sută", "sute", "mie", "mii"):
+            self.assertNotIn(word, _NUMERAL_VALUES)
+        self.assertIn("treizeci", _NUMERAL_VALUES)
+
+    def test_two_forms_of_one_number_are_never_rival_options(self):
+        # "doi" and "două" are the masculine and feminine of 2; offering both
+        # asks the student to pick a gender rather than a fact.
+        from src.biblical_tests.generation import _NUMERAL_VALUES, _numeral_options
+        self.assertEqual(_NUMERAL_VALUES["doi"], _NUMERAL_VALUES["două"])
+        facts = [self._fact("El avea două neveste și trei fii și cinci fiice în cetatea aceea.")]
+        options = _numeral_options("doi", facts)
+        self.assertNotIn("două", options)
+        values = [_NUMERAL_VALUES[value.lower()] for value in options]
+        self.assertEqual(len(values), len(set(values)))
+
+    def test_both_shapes_reach_real_tests(self):
+        from src.biblical_tests.generation import _NUMERAL_VALUES
+        places = {place for place in self.repo.PLACES} - {"Israel", "Filistenii", "Filisteni"}
+        numerals = place_hits = 0
+        for chapters in ("1 Samuel 1-4", "1 Samuel 4-7", "2 Samuel 5-8"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                for question in test.section_ii:
+                    answer = question.options[question.correct]
+                    numerals += answer.lower() in _NUMERAL_VALUES
+                    place_hits += answer in places
+        self.assertGreater(numerals, 0, "the numeral shape never fires")
+        self.assertGreater(place_hits, 0, "the place shape never fires")
+
+    def test_a_shape_whose_options_fail_falls_through_to_another(self):
+        # The shape used to be chosen before anything checked that its options
+        # could be built, so a verse whose chosen shape had no safe distractors
+        # was abandoned outright rather than tried as one of the others. With
+        # four shapes competing that became the difference between a test and a
+        # GenerationError on real selections.
+        from src.biblical_tests.selection import parse_selection
+        for chapters in ("1 Samuel 1-3", "1 Samuel 12-14", "2 Samuel 9-11"):
+            selection = parse_selection(chapters)
+            test = build_test(self.repo.facts_for(selection), selection, self.CONTEST, self.SCORING, 12345, 1)
+            self.assertEqual(len(test.section_ii), 10, chapters)
+
+    def test_every_correct_answer_is_a_word_of_the_verse_it_cites(self):
+        # The validator used to require the answer equal `fact.object`, which
+        # these two shapes do not - they answer with a place the verse names or
+        # the quantity it states. Grounding it in the evidence text is the
+        # property a barem actually needs, and it holds for the older shapes too.
+        import re as _re
+        for chapters in ("1 Samuel 1-4", "2 Samuel 5-8"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                for question in test.section_ii:
+                    answer = question.options[question.correct]
+                    self.assertRegex(question.evidence.text, rf"(?<!\w){_re.escape(answer)}(?!\w)",
+                                     f"{chapters} {question.id}: {answer!r}")
+
+    def test_the_validator_rejects_an_answer_the_verse_does_not_contain(self):
+        _, test = self._build("1 Samuel 1-4")
+        question = test.section_ii[0]
+        broken = dict(question.options)
+        broken[question.correct] = "Nabucodonosor"
+        test.section_ii[0] = replace(question, options=broken)
+        with self.assertRaises(ValidationError):
+            validate_evidence(test, self.repo)

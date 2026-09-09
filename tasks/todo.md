@@ -506,3 +506,100 @@ for variety, not for throughput, and worth measuring per-selection first.
 
 **Tests.** `QuotedSpeechTests`, `ReservationTests` — 7 cases, 5 failing against
 the previous commit. Suite: 73 -> 80, all green.
+
+
+---
+
+# Audit remediation — 2026-09-09, fifth pass (the „Unde" and „Câți" shapes)
+
+## 37. Both shapes are completions, not questions
+
+Romanian forms a wh-question by inverting subject and verb — „Unde se suia omul
+acesta?", never „Unde omul acesta se suia?" — and reordering a clause safely is
+well beyond what this module can do from a regular expression. Writing „Unde
+...?" and „Câți ...?" as questions would have meant emitting ungrammatical
+Romanian, which is the defect class the earlier passes spent their time removing.
+
+The reference baremuri ask both of these as blanks anyway („Elcana s-a dus
+acasă, la __________"), so that is what was built: the verse quoted with the
+place, or the number, blanked where it stands. Grammatical by construction, no
+inversion needed, and the stems are distinct because every verse names a
+different place and states a different quantity.
+
+`_blank_in_place` holds the checks all three completion shapes share — quote
+balance, capital, self-containment, length, surviving word count — so the new
+shapes reuse them rather than restating them and drifting apart. Neither new
+shape allows a leading blank: unlike the fact's own object, a place or a numeral
+opening the sentence leaves the student guessing at a category, and
+`_uniquely_answered` cannot vouch for it, since it compares predicates against
+who performed them rather than against where or how many.
+
+## 38. The answer is no longer always `fact.object`
+
+These are the first shapes whose answer is something other than the verse's
+extracted object, so the answer travels with the stem and each shape brings the
+pool its distractors are drawn from — places the selection actually names,
+numerals it actually states.
+
+`validate_evidence` required Section II's correct option to equal `fact.object`.
+That was the same thing as being grounded in the verse while every shape
+answered with the object, and it would have rejected these two while saying
+nothing extra about the others. It now requires the correct option to appear as
+a whole word in the evidence text, which is the property a barem needs and holds
+for the older shapes too.
+
+Two smaller rules the samples forced:
+
+- „doi"/„două" are the masculine and feminine of 2, so a value map keeps two
+  forms of one number from ever standing as rival options — otherwise the item
+  asks the student to pick a gender rather than a fact.
+- „sută"/„sute"/„mie"/„mii" are scale words needing a count in front („trei mii
+  de oameni"). As a distractor one reads „cei mii fii ai lui Eli"; blanked as an
+  answer it leaves „trei __________ de oameni", asking about the unit rather
+  than the number. They are excluded from the numeral table entirely, while
+  „treizeci" in „treizeci de mii" still matches — that being the part worth
+  asking about.
+
+## 39. A shape was chosen before anything checked its options could be built
+
+Pre-existing, and adding two shapes turned it from a quiet inefficiency into
+real failures: `_section_ii` picked the first shape that produced a stem and
+then, if the distractor pool or the referent check failed, abandoned the *verse*
+— never trying the shape that would have worked. A fact whose „Cine ...?" has no
+safe distractors still makes a perfectly good blank.
+
+Each candidate is now carried all the way through the answer cap, the distractor
+pool, the referent check and the stem ledger before it is accepted, and a shape
+that fails any of them falls through to the next.
+
+The shape-balancing rule is simpler for it: least-used shape first, by a stable
+sort, which extends to four shapes without the special-casing the old
+two-shape `reverse()` needed.
+
+## Result
+
+| | fourth pass | now |
+|---|---|---|
+| Section II shape mix (3-chapter windows) | blank 727 / wh 560 | blank 714 / wh 553 / **place 146** / **numeral 117** |
+| 2-chapter selections failing | 36 of 159 (23%) | 37 of 159 (23%) |
+| 3-chapter / 4-chapter | 0 | 0 |
+| items offering a bare scale word | — | 0 |
+
+Every quality invariant from the earlier passes still holds at zero.
+
+As predicted from the sizing in the fourth pass, this bought **variety, not
+throughput**: the two shapes supply 263 of 1530 Section II items across
+three-chapter windows — a sixth of the section — while the failure rate moved by
+one test in the wrong direction. Section II is no longer a section where every
+answer is a person's name; it now asks where something happened and how many
+there were, which is what the reference papers do.
+
+**Where the remaining 23% stands.** Unchanged, and the diagnosis from the third
+pass still holds: the failing two-chapter selections carry 23 to 31 quality
+verses against the 23 a test must spend. Four shapes now draw on that pool
+instead of two, which helps variety and cannot help arithmetic. Anything further
+has to come from the corpus side — accepting more verses as usable — rather than
+from new ways to ask about the verses already accepted.
+
+**Tests.** `PlaceAndNumeralShapeTests` — 10 cases, 7 failing against the
+previous commit. Suite: 80 -> 90, all green.
