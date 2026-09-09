@@ -277,3 +277,138 @@ previous commit (the ninth guards the error wording added there). Shared fixture
 extracted to a `_RealCorpusTest` mixin so the first pass's cases are not run
 twice. Suite: 50 -> 59, all green. CLI regenerates both PDFs (85 puncte); the
 web module imports and five coordinated variants all validate.
+
+
+---
+
+# Audit remediation — 2026-09-09, third pass (plausibility, the header, one new shape)
+
+Basis, as before: every 2/3/4-chapter window across both books x versions 1-3.
+
+## 28. A place could stand in for someone who acted
+
+`_swap_class` sorts names by how they *decline*, which puts PEOPLE and PLACES in
+one "ordinary" bucket. That is right about grammar and wrong about answers:
+„Efraim l-a chemat din nou pe Samuel" is false because Efraim is a region, and a
+student rules it out on category alone without knowing the passage. 95 items
+over 153 tests, plus 344 of 1530 Section II items offering options of mixed
+kinds.
+
+New `_entity_role` / `_compatible_kind` block only the case that is a defect — a
+known place against a known agent. Deity terms and the collective nouns act, so
+they stay grouped with people („Domnul" -> „Eli" is a perfectly good falsehood),
+and anything the corpus never classified is left alone, since most `fact.object`
+values are common nouns and refusing those pairings would discard far more than
+it protects.
+
+## 29. Number agreement could break the same way gender did
+
+Found while checking 28. „Filistenii s-au așezat în linie de bătaie" swapped to
+„Samuel s-au așezat" leaves a plural verb beside a singular subject.
+`_swap_class` had encoded the collective/singular split since it was written but
+only ever expressed it as a *preference*, so the lower tiers handed it back —
+exactly the shape of the gender defect fixed in the second pass. The strict mode
+`_falsifiable` uses now keeps only the tier that breaks no agreement at all:
+same declension class and same gender.
+
+## 30. Section I had no near-duplicate check of any kind
+
+`_StemLedger` guarded Sections II and IV only, so one test could carry both
+„Efraim l-a chemat din nou pe Samuel" and „Atunci Efraim l-a chemat pe Samuel",
+both keyed F — two of the ten items being one item. New `_reserve` claims each
+candidate's statement into the ledger as the verse is reserved, two passes like
+every other quota here. The ledger is shared with the later sections rather than
+private, so a Section I statement and a Section II stem cannot be near-twins
+either; a fact reserved here is already off the table for them, so sharing costs
+nothing beyond the overlap check. Claimed on the verse as written, before the
+name swap: the pairs that collide differ only in the words around the name.
+
+## 31. „Domnului" was offered as a distractor
+
+The genitive/dative form is not a name and only fits the slot it came from;
+against a subject-position blank it reads „Domnului au început lupta".
+`_wrong_object` had refused it as a replacement since it was written — the
+distractor lists in Sections II and IV never did.
+
+## 32. The PDF header printed two of its six fields
+
+`_header` built a three-zone table with **both outer cells empty**. Printed:
+title and edition. Dropped: category, stage, date — all three collected by the
+web form and threaded through `contest` — and the variant number. The README has
+documented the three zones ("titlu/ediție, categorie-etapă-dată, versiune") the
+whole time.
+
+The operational consequence was worse than the missing text: two variants of one
+selection came out with byte-identical headers *and the same filename*, so a
+room handing out V1 and V2 had only the folder to tell them apart and a browser
+named the downloads "… (1).pdf". The variant number now appears in both places,
+and the answer key says `BAREM CORECTORI` instead of announcing itself only by
+the colour of its answers.
+
+## 33. The minimum-facts guard was arithmetically wrong
+
+A complete test spends 28 *distinct* verses (10 + 10 + 5 + 3), 23 of which must
+carry a recognised name. The guard asked for 20, so selections that could not
+possibly produce a test failed several steps later on whichever section ran out
+first: 1 Samuel 28 has 22 quality verses and reported „Secțiunea II are nevoie
+de 10 întrebări, dar selecția a produs doar 2". 120 of the 150 single-chapter
+failures now fail immediately with the actual numbers.
+
+## 34. The blank may open the stem
+
+`_completion_stem` refused any stem starting with the blank, on the grounds that
+it is a bare "who?" the wh-question shape phrases better. It was the largest
+single source of lost candidates — 238 of 1183 quality facts, 138 of them picked
+up by no other shape — and the premise was wrong: the reference papers blank the
+opening word freely. What an item needs is not context on the left but enough of
+it somewhere.
+
+Allowed now under a stricter version of the rule that follows it: more real
+words than a mid-sentence blank needs, and the remainder must identify the
+subject uniquely (`_uniquely_answered`, the guard the wh shape already gets —
+without it „__________ a zis: «...»" can be as true of one person as another).
+
+**It is deliberately kept out of `ii_eligible`.** Counting these candidates in
+the reservation set measured *worse than not having the shape at all* — 40
+failures against 37 — because they are the corpus's most formulaic stems
+(„__________ a zis:", „__________ l-a chemat"), so Section II's own ledger
+rejects most as near-twins of each other while the reservation had already taken
+them from Sections III and IV. Kept out of it they are what they actually are: a
+fallback Section II reaches when its strong shapes run out.
+
+## Result
+
+| | second pass | now |
+|---|---|---|
+| Section I swaps crossing agent/place | 95 of 153 tests | **0** |
+| Section I swaps breaking number/class | present | **0** |
+| Section II items mixing entity kinds | 344 of 1530 | **0** |
+| near-duplicate Section I statement pairs | 8 | **0** |
+| „Domnului" offered as a distractor | present | **0** |
+| header fields printed | 2 of 6 | **6 of 6** |
+| 1-chapter failures reported accurately | 0 of 150 | **120 of 150** |
+| 2-chapter selections failing | 35 of 159 (22%) | 37 of 159 (23%) |
+| 3-chapter / 4-chapter | 0 | 0 |
+
+The two extra 2-chapter failures are the price of 28 and 29: a swap must now
+preserve kind, number *and* gender, which on the thinnest selections leaves
+nothing to swap in. That is the right trade — those tests were producing
+statements a student answers without reading.
+
+**Still not fixed, and now with a measurement behind it.** 2-chapter selections
+fail 23% of the time. This is not a missing filter or a bad allocation: the
+failing selections carry 23 to 31 quality verses against the 23 a test must
+spend, so they are at the arithmetic edge, and I measured the three obvious ways
+to widen supply. Quote-aware sentence splitting yields +15 facts (the other 226
+"unbalanced quote" rejections are genuinely unbalanced within their own verse).
+The leading-blank shape yields +190 eligible facts and *zero* net failures,
+because they collapse under the duplicate check. Re-tuning the reservation floor
+plateaus. What is actually missing is question shapes that produce *distinct*
+stems — „Unde ...?" for place objects, „Câți ...?" for the numerals the corpus is
+full of — and that is design work with its own correctness questions, not a
+tuning pass.
+
+**Tests.** `AnswerPlausibilityTests`, `LeadingBlankTests`, `SelectionSizeTests`,
+`HeaderTests` — 14 cases, 12 of which fail against the previous commit (the
+other two are guards on shape behaviour rather than defect reproductions).
+Suite: 59 -> 73, all green.

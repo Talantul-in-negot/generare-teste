@@ -348,6 +348,33 @@ def _gender(name: str) -> str:
 _COLLECTIVE = {"Israel", "Filistenii"}
 
 
+# A place is not a thing that acts. `_swap_class` below sorts names by how they
+# *decline*, which is why PEOPLE and PLACES sit together in its "ordinary"
+# bucket — grammatically they behave alike. What that misses is that they are
+# not alike as answers: „Efraim l-a chemat din nou pe Samuel" is false because
+# Efraim is a region, and a student rules it out on that alone without knowing
+# the passage. Deity terms and the collective nouns act, so they group with
+# people; only a true place name stands apart.
+def _entity_role(name: str) -> str:
+    if name in _DEITY or name in _COLLECTIVE or name in BibleRepository.PEOPLE:
+        return "agent"
+    if name in BibleRepository.PLACES:
+        return "place"
+    return "other"
+
+
+def _compatible_kind(one: str, other: str) -> bool:
+    """False only when one name is a known place and the other a known agent.
+
+    Deliberately permissive about "other": most `fact.object` values are common
+    nouns the corpus never classified, and refusing every pairing involving one
+    would discard far more than it protects. The rule fires on the case that is
+    actually a defect and stays quiet everywhere else.
+    """
+    first, second = _entity_role(one), _entity_role(other)
+    return first == second or "other" in (first, second)
+
+
 def _swap_class(name: str) -> str:
     """Deity and collective/plural terms decline or agree irregularly —
     "Domnul" self-inflects to "Domnului" rather than taking "lui" the way an
@@ -406,7 +433,7 @@ def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "", statement: str =
     # quoted verse offers (`_mentions(segment, value)`); this is the same rule
     # for the one shape that rewrites the verse instead of quoting it.
     already_present = lambda value: bool(statement) and _mentions(statement, value)
-    safe = lambda value: value != fact.object and value != "Domnului" and not _same_referent(value, fact.object) and not (double_definite and value in _ARTICLED) and not already_present(value)
+    safe = lambda value: value != fact.object and value != "Domnului" and not _same_referent(value, fact.object) and not (double_definite and value in _ARTICLED) and not already_present(value) and _compatible_kind(value, fact.object)
     same_gender = lambda value: _gender(value) == _gender(fact.object)
     same_class = lambda value: _swap_class(value) == _swap_class(fact.object)
     # Tried in order from safest to riskiest: matching both class and gender
@@ -414,14 +441,19 @@ def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "", statement: str =
     # mismatched fallback if this chapter selection genuinely has nothing
     # better — rather than fail generation outright.
     #
-    # `require_gender` drops the two tiers that would break agreement. A
-    # gender-mismatched swap is not a subtle degradation: „o iubea pe Ana" ->
-    # „o iubea pe Elcana" leaves a feminine clitic beside a masculine name, and
-    # the sentence reads as broken rather than false. Section I asks for it
-    # because `_falsifiable` has already confirmed, before the verse was
-    # reserved, that a same-gender replacement exists — so raising here means a
-    # caller asked to falsify a verse it never checked, not a thin corpus.
-    tiers = (lambda v: same_class(v) and same_gender(v), same_gender) if require_gender         else (lambda v: same_class(v) and same_gender(v), same_class, same_gender, lambda v: True)
+    # `require_gender` keeps only the tier that breaks no agreement at all —
+    # same declension class *and* same gender. Both halves matter and both fail
+    # the same way, by producing a sentence that is broken rather than false:
+    # „o iubea pe Ana" -> „o iubea pe Elcana" leaves a feminine clitic beside a
+    # masculine name, and „Filistenii s-au așezat în linie de bătaie" ->
+    # „Samuel s-au așezat" leaves a plural verb beside a singular subject.
+    # `_swap_class` had encoded the second since it was written but only ever
+    # expressed it as a preference, so the lower tiers handed it back.
+    #
+    # Section I asks for this because `_falsifiable` has already confirmed,
+    # before the verse was reserved, that such a replacement exists — so raising
+    # here means a caller asked to falsify a verse it never checked.
+    tiers = (lambda v: same_class(v) and same_gender(v),) if require_gender         else (lambda v: same_class(v) and same_gender(v), same_class, same_gender, lambda v: True)
     for match in tiers:
         for option in fact.options:
             if safe(option) and option in inside and match(option):
@@ -470,7 +502,22 @@ def _concise(fact: Fact, need_object: bool) -> str | None:
     return None
 
 
-def _completion_stem(fact: Fact) -> tuple[str, str] | None:
+# Extra real words a stem must carry when the blank opens it, on top of
+# `_BLANK_MIN_WORDS`: with nothing to the left, everything the student reasons
+# from sits on one side of the gap.
+_LEADING_BLANK_EXTRA_WORDS = 2
+# Passing `rivals` is what enables the leading-blank shape, and only Section II
+# does it. That is deliberate rather than incidental. Counting these candidates
+# in `ii_eligible` was measurably worse than not having the shape at all (40
+# failures against 37): they are the most formulaic stems in the corpus —
+# „__________ a zis:", „__________ l-a chemat" — so Section II's own stem
+# ledger rejects most of them as near-twins of each other, while `ii_eligible`
+# had already reserved them away from Sections III and IV. Kept out of the
+# reservation set they are what they actually are: a fallback Section II reaches
+# when its strong shapes run out, costing the other sections nothing.
+
+
+def _completion_stem(fact: Fact, rivals: list[tuple[str, set[str]]] | None = None) -> tuple[str, str] | None:
     """Quotes the verse with the answer blanked out where it actually stands.
 
     The earlier shape cut the verse off at the answer and closed the stem with
@@ -507,10 +554,26 @@ def _completion_stem(fact: Fact) -> tuple[str, str] | None:
         if not _self_contained(sentence, fact.statement):
             continue
         stem = (sentence[:hit.start()] + _BLANK + sentence[hit.end():]).strip()
-        # A blank opening the sentence has no left context at all — that is a
-        # bare "who?", which the wh-question shape phrases properly instead.
+        # A blank opening the sentence has no left context, which used to be an
+        # outright rejection on the grounds that it is a bare "who?" the
+        # wh-question shape phrases better. It was the single largest source of
+        # lost candidates — 238 of 1183 quality facts, 138 of them picked up by
+        # no other shape either — and the premise was wrong: the reference
+        # papers blank the opening word freely („__________ a crescut, și
+        # Domnul era cu el"), because what an item needs is not context on the
+        # left but enough of it somewhere.
+        #
+        # So the rule becomes a stricter version of the one below rather than a
+        # refusal: more real words than a mid-sentence blank needs, and the
+        # remainder must identify the subject uniquely. That second half is the
+        # guard the wh shape already gets — without it „__________ a zis:
+        # «...»" can be as true of one person as another, which is precisely
+        # what the old comment was worried about.
         if stem.startswith(_BLANK):
-            continue
+            if len(stem.split()) - 1 < _BLANK_MIN_WORDS + _LEADING_BLANK_EXTRA_WORDS:
+                continue
+            if not rivals or not _uniquely_answered(sentence[hit.end():], fact.object, rivals):
+                continue
         if not _STEM_MIN_CHARS <= len(stem) <= _BLANK_MAX_CHARS:
             continue
         # Character count alone lets a stem through that is long only because
@@ -1130,7 +1193,7 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
             if not built:
                 continue
             stem, segment = built
-            distractors = _dedup(f.object for f in facts if not _mentions(segment, f.object))
+            distractors = _dedup(f.object for f in facts if not _mentions(segment, f.object) and _compatible_kind(f.object, fact.object) and f.object != "Domnului")
             values = _distinct_referents([fact.object, *distractors], 3)
             if values is None:
                 continue
@@ -1140,6 +1203,13 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     if len(multis) != 3:
         raise GenerationError("Nu s-au putut construi trei intrebari verificabile pentru Sectiunea IV.")
     return multis
+
+
+# What one complete test spends: 10 (I) + 10 (II) + 5 (III) + 3 (IV) distinct
+# verses, of which everything but Section I's five True statements needs a
+# `quality` verse — one carrying a recognised name to build an answer around.
+_TOTAL_ITEMS = 28
+_QUALITY_ITEMS = 23
 
 
 # How many questions Section II must end up with. Sections III and IV consult
@@ -1287,7 +1357,7 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
             # would make all ten questions look alike. Offering the currently
             # under-used shape first keeps the section mixed the way the
             # reference tests are.
-            builders = [("blank", _completion_stem), ("wh", _wh_question)]
+            builders = [("blank", lambda f: _completion_stem(f, rivals)), ("wh", _wh_question)]
             if shapes["blank"] > shapes["wh"]:
                 builders.reverse()
             shape, built = "", None
@@ -1314,7 +1384,16 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
             stem, segment = built
             # A distractor present in the quoted verse could also fill the blank,
             # so only terms the verse does not offer at all are safe to mark wrong.
-            safe = lambda value: not _mentions(segment, value)
+            # A place among the options of a „Cine ...?", or a person among the
+            # completions of a blank the verse fills with a place, is ruled out
+            # on category alone — the same defect as a place swapped into a
+            # Section I statement, on the distractor side.
+            # „Domnului" is the genitive/dative *form*, not a name, so it only
+            # fits the oblique slot it came from — offered against a
+            # subject-position blank it reads as „Domnului au început lupta".
+            # `_wrong_object` has refused it as a replacement since it was
+            # written; the distractor lists never did.
+            safe = lambda value: not _mentions(segment, value) and _compatible_kind(value, fact.object) and (value == fact.object or value != "Domnului")
             choices = [value for value in fact.options if safe(value)]
             choices += [f.object for f in facts if safe(f.object)]
             # Each option has to name a *different* answer from every other one,
@@ -1353,11 +1432,44 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     return singles
 
 
+def _reserve(candidates: list[Fact], count: int, used: set[str], stems: _StemLedger, statement_of) -> list[Fact]:
+    """Takes `count` facts whose statements are not near-twins of each other.
+
+    Two passes, like every other quota in this module: near-duplicate rejection
+    is a quality preference, so a selection too thin to satisfy it gets the
+    relaxed pass (identical text only) rather than a failed generation.
+    """
+    picked: list[Fact] = []
+    for strict in (True, False):
+        stems.strict = strict
+        for fact in candidates:
+            if len(picked) == count:
+                break
+            if fact.id in used or not (statement := statement_of(fact)) or not stems.claim(statement):
+                continue
+            picked.append(fact)
+            used.add(fact.id)
+        if len(picked) == count:
+            break
+    return picked
+
+
 def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, scoring: dict[str, int], seed: int, version: int, avoid: set[str] | None = None) -> TestDefinition:
     all_facts = facts
     facts = [fact for fact in facts if fact.quality]
-    if len(facts) < 20:
-        raise GenerationError("Corpusul selectat necesită cel puțin 20 de facts verificate pentru un test complet.")
+    # A complete test spends 28 *distinct* verses — 10 + 10 + 5 + 3 — and every
+    # section but Section I's True statements needs a `quality` one (a verse
+    # with a recognised name to build an answer around). The old floor of 20
+    # let selections through that could not arithmetically produce a test, so
+    # they failed several steps later on whichever section happened to run out
+    # first: 1 Samuel 28 alone has 22 quality verses and reported "Secțiunea II
+    # are nevoie de 10 întrebări, dar selecția a produs doar 2".
+    if len(facts) < _QUALITY_ITEMS or len(all_facts) < _TOTAL_ITEMS:
+        raise GenerationError(
+            f"Un test complet folosește {_TOTAL_ITEMS} versete distincte, dintre care {_QUALITY_ITEMS} trebuie "
+            f"să conțină un nume recunoscut. Selecția are {len(all_facts)} versete ({len(facts)} cu nume). "
+            "Adăugați încă un capitol la selecție."
+        )
     # Not `seed + version`: that makes (seed=100, version=2) and (seed=101,
     # version=1) the same draw, so an off-by-one in the seed silently reissues
     # a paper already handed out. Separating the two axes keeps every
@@ -1434,12 +1546,20 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     # that breaks agreement („o iubea pe Ana" -> „o iubea pe Elcana") is a
     # visibly broken sentence, so it outranks the pool-sharing preference.
     false_pool.sort(key=lambda fact: (fact.id not in gender_safe, fact.id in ii_eligible))
-    false_facts: list[Fact] = []
-    for fact in false_pool:
-        if len(false_facts) == 5:
-            break
-        false_facts.append(fact)
-        used.add(fact.id)
+    # Section I had no near-duplicate check of any kind — `_StemLedger` guarded
+    # Sections II and IV only — so two of its ten statements could be the same
+    # statement: „Efraim l-a chemat din nou pe Samuel" beside „Atunci Efraim l-a
+    # chemat pe Samuel", both keyed F, in one test. The ledger is shared with
+    # the later sections rather than private to this one, so a Section I
+    # statement and a Section II stem cannot be near-twins either; a fact
+    # reserved here is already off the table for them, so sharing costs nothing
+    # beyond the overlap check itself.
+    #
+    # Claimed on the verse as written, before the name swap: the pairs that
+    # collide differ only in the words around the name, so the original catches
+    # them and the swapped form would not necessarily.
+    stems = _StemLedger()
+    false_facts = _reserve(false_pool, 5, used, stems, lambda fact: _concise(fact, True))
     if len(false_facts) != 5:
         raise GenerationError(
             f"Secțiunea I are nevoie de 5 afirmații false, dar selecția a produs doar {len(false_facts)}. "
@@ -1464,13 +1584,7 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     non_quality_true = [fact for fact in all_facts if not fact.quality and fact.id not in used and _concise(fact, False)]
     quality_true = [fact for fact in pool if fact.id not in used and _concise(fact, False)]
     quality_true.sort(key=lambda fact: fact.id in ii_eligible)
-    true_facts: list[Fact] = []
-    for fact in non_quality_true + quality_true:
-        if len(true_facts) == 5:
-            break
-        if fact.id not in used:
-            true_facts.append(fact)
-            used.add(fact.id)
+    true_facts = _reserve(non_quality_true + quality_true, 5, used, stems, lambda fact: _concise(fact, False))
     if len(true_facts) != 5:
         raise GenerationError(
             f"Secțiunea I are nevoie de 5 afirmații adevărate, dar selecția a produs doar {len(true_facts)}. "
@@ -1478,7 +1592,6 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
         )
 
     priority_pool = sorted(pool, key=lambda fact: fact.id in ii_eligible)
-    stems = _StemLedger()
     multis = _section_iv(priority_pool, facts, used, rng, stems, rivals, ii_eligible)
     iii_rows = _section_iii_named(priority_pool, used, rng, ii_eligible)
     singles = _section_ii(pool, facts, used, rng, stems, rivals, avoid or set())

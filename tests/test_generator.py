@@ -631,3 +631,219 @@ class AllocationAndAgreementTests(_RealCorpusTest, unittest.TestCase):
         with self.assertRaises(GenerationError) as caught:
             build_test(self.repo.facts_for(selection), selection, self.CONTEST, self.SCORING, 12345, 1)
         self.assertIn("capitol", str(caught.exception))
+
+
+class AnswerPlausibilityTests(_RealCorpusTest, unittest.TestCase):
+    """An option has to be the same *kind* of thing as the answer it competes
+    with, and a statement has to differ from the other nine on the page."""
+
+    def test_a_place_never_stands_in_for_someone_who_acted(self):
+        # "Efraim l-a chemat din nou pe Samuel" is false because Efraim is a
+        # region - a student rules it out on category alone. `_swap_class`
+        # sorted names by how they decline, which puts PEOPLE and PLACES in one
+        # bucket; that is right about grammar and wrong about answers.
+        from src.biblical_tests.generation import _compatible_kind, _entity_role
+        self.assertEqual(_entity_role("Efraim"), "place")
+        self.assertEqual(_entity_role("Samuel"), "agent")
+        self.assertEqual(_entity_role("Domnul"), "agent")
+        # Israel and Filistenii live in PLACES but act, so they group with people.
+        self.assertEqual(_entity_role("Israel"), "agent")
+        self.assertEqual(_entity_role("Filistenii"), "agent")
+        self.assertFalse(_compatible_kind("Efraim", "Samuel"))
+        self.assertTrue(_compatible_kind("Israel", "Samuel"))
+        self.assertTrue(_compatible_kind("Silo", "Efraim"))
+        # Permissive about anything the corpus never classified, or the rule
+        # would discard far more than it protects.
+        self.assertTrue(_compatible_kind("chivotul", "Samuel"))
+
+    def test_no_section_i_swap_crosses_agent_and_place(self):
+        from src.biblical_tests.generation import _compatible_kind
+        for original, swapped in self._swaps():
+            self.assertTrue(_compatible_kind(swapped, original), f"{original!r} -> {swapped!r}")
+
+    def test_no_section_i_swap_breaks_number_agreement(self):
+        # "Filistenii s-au asezat in linie de bataie" -> "Samuel s-au asezat"
+        # leaves a plural verb beside a singular subject. `_swap_class` had
+        # encoded the collective/singular split since it was written, but only
+        # ever as a preference the lower tiers handed back.
+        from src.biblical_tests.generation import _swap_class
+        for original, swapped in self._swaps():
+            self.assertEqual(_swap_class(swapped), _swap_class(original), f"{original!r} -> {swapped!r}")
+
+    def test_no_two_section_i_statements_are_near_twins(self):
+        # Section I had no near-duplicate check at all - `_StemLedger` guarded
+        # Sections II and IV only - so one test could carry both "Efraim l-a
+        # chemat din nou pe Samuel" and "Atunci Efraim l-a chemat pe Samuel".
+        import itertools
+        import re as _re
+        from src.biblical_tests.generation import _STEM_OVERLAP_LIMIT
+        for chapters in ("1 Samuel 1-3", "1 Samuel 2-4", "2 Samuel 5-7"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                bags = [{w for w in _re.findall(r"\w+", q.statement.lower())} for q in test.section_i]
+                for i, j in itertools.combinations(range(len(bags)), 2):
+                    if not bags[i] or not bags[j]:
+                        continue
+                    share = len(bags[i] & bags[j]) / max(len(bags[i]), len(bags[j]))
+                    self.assertLess(share, _STEM_OVERLAP_LIMIT, f"{chapters} v{version}: {test.section_i[i].statement!r} / {test.section_i[j].statement!r}")
+
+    def test_options_within_one_item_are_the_same_kind_of_thing(self):
+        from src.biblical_tests.generation import _compatible_kind
+        for chapters in ("1 Samuel 1-4", "1 Samuel 13-16", "2 Samuel 5-8"):
+            for version in (1, 2):
+                _, test = self._build(chapters, version=version)
+                for question in test.section_ii + test.section_iv:
+                    values = list(question.options.values())
+                    for index, one in enumerate(values):
+                        for other in values[index + 1:]:
+                            self.assertTrue(_compatible_kind(one, other), f"{chapters} {question.id}: {one!r} / {other!r}")
+
+    def test_an_oblique_form_is_never_offered_as_a_distractor(self):
+        # "Domnului" is the genitive/dative form, not a name, so it only fits
+        # the slot it came from - offered against a subject-position blank it
+        # reads as "Domnului au inceput lupta". `_wrong_object` refused it as a
+        # replacement from the start; the distractor lists never did.
+        for chapters in ("1 Samuel 1-4", "1 Samuel 4-7", "2 Samuel 5-8", "2 Samuel 20-23"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                for question in test.section_ii + test.section_iv:
+                    wrong = [v for letter, v in question.options.items() if letter not in question.correct]
+                    self.assertNotIn("Domnului", wrong, f"{chapters} {question.id}")
+
+    def _swaps(self):
+        """Every Section I False item, as (original object, what replaced it)."""
+        import re as _re
+        from src.biblical_tests.generation import _concise
+        by_id = {fact.id: fact for fact in self.repo.facts}
+        found = []
+        for chapters in ("1 Samuel 1-4", "1 Samuel 5-8", "1 Samuel 15-18", "2 Samuel 1-4", "2 Samuel 20-23"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                for question in test.section_i:
+                    if question.answer != "F":
+                        continue
+                    fact = by_id[question.fact_id]
+                    original = _concise(fact, True)
+                    hits = list(_re.finditer(rf"(?<!\w){_re.escape(fact.object)}(?!\w)", original or ""))
+                    if not hits:
+                        continue
+                    hit = hits[-1]
+                    before, after = original[:hit.start()], original[hit.end():]
+                    if not (question.statement.startswith(before) and question.statement.endswith(after)):
+                        continue
+                    swapped = question.statement[len(before):len(question.statement) - len(after)] if after else question.statement[len(before):]
+                    found.append((fact.object, swapped))
+        self.assertGreater(len(found), 50)
+        return found
+
+
+class LeadingBlankTests(_RealCorpusTest, unittest.TestCase):
+    """The blank may open the stem. It used to be refused outright, which was
+    the largest single source of lost Section II candidates."""
+
+    def _fact(self, statement, obj):
+        from src.biblical_tests.models import Evidence, Fact
+        return Fact("t1", statement, "s", "p", obj, Evidence("1 Samuel", 3, 15, 15, statement))
+
+    def test_a_leading_blank_is_allowed_when_the_rest_carries_the_question(self):
+        from src.biblical_tests.generation import _BLANK, _completion_stem, _rival_predicates
+        fact = self._fact("Samuel a rămas culcat până dimineața, apoi a deschis ușile Casei Domnului.", "Samuel")
+        self.assertIsNone(_completion_stem(fact), "without rivals the shape stays off")
+        built = _completion_stem(fact, _rival_predicates([fact]))
+        self.assertIsNotNone(built)
+        self.assertTrue(built[0].startswith(_BLANK))
+
+    def test_a_leading_blank_needs_more_of_the_verse_than_a_mid_sentence_one(self):
+        # With nothing to the left, everything the student reasons from sits on
+        # one side of the gap, so the word floor is higher.
+        from src.biblical_tests.generation import _BLANK_MIN_WORDS, _LEADING_BLANK_EXTRA_WORDS, _completion_stem, _rival_predicates
+        self.assertGreater(_LEADING_BLANK_EXTRA_WORDS, 0)
+        short = self._fact("Samuel a rămas culcat până dimineața.", "Samuel")
+        self.assertIsNone(_completion_stem(short, _rival_predicates([short])))
+
+    def test_a_leading_blank_several_people_could_fill_is_refused(self):
+        # The guard the wh shape already gets: without it "__________ a zis:
+        # «...»" can be as true of one person as of another.
+        from src.biblical_tests.generation import _completion_stem, _rival_predicates
+        selection_facts = [
+            self._fact("Domnul l-a chemat pe Samuel și i-a zis vorbele acelea.", "Domnul"),
+            self._fact("Eli l-a chemat pe Samuel și i-a zis vorbele acelea.", "Eli"),
+        ]
+        rivals = _rival_predicates(selection_facts)
+        self.assertIsNone(_completion_stem(selection_facts[0], rivals))
+
+    def test_the_shape_is_kept_out_of_section_iis_reservation_set(self):
+        # Counting these in `ii_eligible` measured worse than not having the
+        # shape at all: they are the corpus's most formulaic stems, so Section
+        # II's ledger rejects most as near-twins while the reservation had
+        # already taken them from Sections III and IV.
+        from src.biblical_tests.generation import _BLANK, _completion_stem
+        facts, test = self._build("1 Samuel 1-4")
+        for fact in facts:
+            built = _completion_stem(fact)
+            if built:
+                self.assertFalse(built[0].startswith(_BLANK))
+        self.assertEqual(len(test.section_ii), 10)
+
+
+class SelectionSizeTests(_RealCorpusTest, unittest.TestCase):
+    def test_a_selection_too_small_for_a_test_says_so_immediately(self):
+        # A complete test spends 28 distinct verses, 23 of them carrying a
+        # recognised name. The floor was 20, so selections that could not
+        # arithmetically produce a test failed several steps later on whichever
+        # section happened to run out first - 1 Samuel 28 has 22 quality verses
+        # and reported "Sectiunea II are nevoie de 10 intrebari ... doar 2".
+        from src.biblical_tests.generation import _QUALITY_ITEMS, _TOTAL_ITEMS
+        from src.biblical_tests.selection import parse_selection
+        self.assertEqual(_TOTAL_ITEMS, 28)
+        self.assertEqual(_QUALITY_ITEMS, 23)
+        for chapters in ("1 Samuel 5", "1 Samuel 28", "2 Samuel 9"):
+            selection = parse_selection(chapters)
+            with self.assertRaises(GenerationError) as caught:
+                build_test(self.repo.facts_for(selection), selection, self.CONTEST, self.SCORING, 12345, 1)
+            self.assertIn("Un test complet folosește", str(caught.exception), chapters)
+
+
+class HeaderTests(_RealCorpusTest, unittest.TestCase):
+    """The three zones the reference papers carry. Two of them were built as
+    empty cells, so category, stage, date and the variant number were collected
+    by the web form, threaded through `contest`, and printed nowhere."""
+
+    CONTEST = {"title": "TALANTUL ÎN NEGOȚ", "stage": "Faza pe biserică", "edition": 2027,
+               "date": "28 martie 2026", "category": "6_7"}
+
+    def _pages(self, version):
+        import pdfplumber
+        from src.biblical_tests.rendering import render_pair
+        from src.biblical_tests.selection import parse_selection
+        selection = parse_selection("1 Samuel 1-3")
+        test = build_test(self.repo.facts_for(selection), selection, self.CONTEST, self.SCORING, 999, version)
+        with tempfile.TemporaryDirectory() as folder:
+            competitor, key = render_pair(test, folder)
+            out = []
+            for path in (competitor, key):
+                with pdfplumber.open(path) as pdf:
+                    out.append((path.name, pdf.pages[0].extract_text()))
+            return out
+
+    def test_the_header_carries_category_stage_date_edition_and_variant(self):
+        (_, competitor), _ = self._pages(1)
+        for expected in ("Categoria 6_7", "Faza pe biserică", "28 martie 2026", "TALANTUL ÎN NEGOȚ", "Ediția 2027", "Varianta 1"):
+            self.assertIn(expected, competitor)
+
+    def test_the_answer_key_announces_itself_and_the_paper_does_not(self):
+        (_, competitor), (_, key) = self._pages(1)
+        self.assertIn("BAREM CORECTORI", key)
+        self.assertNotIn("BAREM", competitor)
+
+    def test_variants_are_distinguishable_on_the_page_and_in_the_filename(self):
+        # Two variants of one selection produced byte-identical headers and the
+        # same filename, so a room handing out V1 and V2 had only the folder to
+        # tell them apart and the browser named them "... (1).pdf".
+        (first_name, first_text), _ = self._pages(1)
+        (second_name, second_text), _ = self._pages(2)
+        self.assertNotEqual(first_name, second_name)
+        self.assertIn("V1", first_name)
+        self.assertIn("V2", second_name)
+        self.assertIn("Varianta 1", first_text)
+        self.assertIn("Varianta 2", second_text)

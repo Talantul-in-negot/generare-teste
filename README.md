@@ -42,7 +42,7 @@ Pentru corectitudinea baremului, fiecare `fact` conține textul exact al dovezii
 python generate.py --chapters "1 Samuel 1,2" --version 1
 ```
 
-Pentru selecția `1 Samuel 1,2`, rezultatele sunt `output/V1/1 Samuel 1-2.pdf`, `output/V1/1 Samuel 1-2 barem.pdf` și `output/V1/test.json`.
+Pentru selecția `1 Samuel 1,2`, rezultatele sunt `output/V1/1 Samuel 1-2 V1.pdf`, `output/V1/1 Samuel 1-2 V1 barem.pdf` și `output/V1/test.json`. Numărul variantei apare atât în numele fișierului, cât și în colțul din dreapta al paginii; baremul se anunță acolo ca atare.
 
 ## Interfață web locală
 

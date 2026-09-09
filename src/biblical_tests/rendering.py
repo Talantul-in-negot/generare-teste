@@ -91,15 +91,33 @@ def _matching_description(letter: str, text: str, styles: dict) -> Paragraph:
     return Paragraph(f"{letter}.&nbsp;&nbsp;&nbsp;„{escaped}”", styles["matching_text"])
 
 
-def _header(test: TestDefinition, styles: dict) -> list:
+def _header(test: TestDefinition, styles: dict, answer_key: bool = False) -> list:
+    """The three zones the reference papers carry: category/stage/date on the
+    left, title and edition in the middle, which variant on the right.
+
+    The outer two were built as empty cells. Everything the web form asks for
+    beyond the title — category, stage, date — was collected, threaded through
+    `contest`, and then printed nowhere; so was the variant number. Two variants
+    of one selection came out with byte-identical headers, which is exactly what
+    a room handing out V1 and V2 needs to tell apart, and the answer key
+    announced itself only by the colour of its answers.
+    """
     c = test.contest
+    left_lines = [line for line in (
+        f"Categoria {c['category']}" if c.get("category") else "",
+        str(c.get("stage", "")),
+        str(c.get("date", "")),
+    ) if line]
     center_lines = [str(c.get("title", ""))]
     if c.get("edition", ""):
         center_lines.append(f"Ediția {c['edition']}")
+    right_lines = [f"Varianta {test.version}"]
+    if answer_key:
+        right_lines.append("BAREM CORECTORI")
     header = Table([
-        [_p("", styles["header"]),
+        [_p("\n".join(left_lines), styles["header"]),
          _p("\n".join(center_lines), ParagraphStyle("center", parent=styles["header"], alignment=TA_CENTER)),
-         _p("", styles["header"])]
+         _p("\n".join(right_lines), ParagraphStyle("right", parent=styles["header"], alignment=TA_RIGHT))]
     ], colWidths=[62*mm, 66*mm, 62*mm])
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     return [header, Spacer(1, 9*mm)]
@@ -195,7 +213,7 @@ def render_pdf(test: TestDefinition, path: str | Path, answer_key: bool = False)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     doc = SimpleDocTemplate(str(path), pagesize=A4, leftMargin=10*mm, rightMargin=10*mm, topMargin=11*mm, bottomMargin=10*mm, title="Talantul în Negoț")
-    story = _header(test, styles)
+    story = _header(test, styles, answer_key)
     s = test.scoring
     story += [_section_header("I", f"Marcați răspunsul corect pe foaia cu răspunsuri, A (adevărat) sau F (fals): (câte {s['section_1']} puncte fiecare)", styles)]
     story += [_tf_item(i, q, answer_key, styles) for i, q in enumerate(test.section_i, 1)]
@@ -223,7 +241,11 @@ def render_pair(test: TestDefinition, directory: str | Path) -> tuple[Path, Path
             start = previous = chapter
         ranges.append(str(start) if start == previous else f"{start}-{previous}")
         labels.append(f"{book} {','.join(ranges)}")
-    label = "; ".join(labels)
+    # The variant number belongs in the filename as well as on the page: every
+    # variant of one selection produced the same name, so downloading V1 and V2
+    # left the browser to disambiguate them as "… (1).pdf" and nothing but the
+    # folder said which was which.
+    label = f"{'; '.join(labels)} V{test.version}"
     competitor = render_pdf(test, folder / f"{label}.pdf")
     key = render_pdf(test, folder / f"{label} barem.pdf", answer_key=True)
     return competitor, key
