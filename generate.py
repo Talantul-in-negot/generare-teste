@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import secrets
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from src.biblical_tests import USER_ERRORS
@@ -51,10 +54,12 @@ def load_config(path: Path) -> dict:
         line = raw.split("#", 1)[0].rstrip()
         if not line.strip():
             continue
-        if not line.startswith((" ", "\t")) and line.endswith(":"):
-            section = line[:-1].strip()
-            result.setdefault(section, {})
-            continue
+        if not line.startswith((" ", "\t")):
+            section = None
+            if line.endswith(":"):
+                section = line[:-1].strip()
+                result.setdefault(section, {})
+                continue
         if ":" not in line:
             continue
         key, value = (part.strip() for part in line.split(":", 1))
@@ -93,10 +98,37 @@ def build_versions(repository: BibleRepository, selection: dict[str, list[int]],
 
 
 def write_version(test: TestDefinition, repository: BibleRepository, folder: Path) -> tuple[Path, Path]:
-    """Writes the auditable JSON and both PDFs for one variant."""
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / "test.json").write_text(json.dumps(test.to_dict() | {"coverage": coverage_report(test), "translation": repository.translation}, ensure_ascii=False, indent=2), encoding="utf-8")
-    return render_pair(test, folder)
+    """Writes the auditable JSON and both PDFs for one variant, all or nothing.
+
+    Written into a staging directory and swapped in only once everything is
+    there. Writing in place meant `test.json` landed before the PDFs were
+    rendered, so a rendering failure on a re-run left the folder holding a new
+    answer key beside the previous run's two PDFs — three files that no longer
+    describe the same test, with nothing to say so. A variant that cannot be
+    completed now leaves the previous one exactly as it was.
+    """
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{folder.name}-staging-", dir=folder.parent))
+    try:
+        (staging / "test.json").write_text(json.dumps(test.to_dict() | {"coverage": coverage_report(test), "translation": repository.translation}, ensure_ascii=False, indent=2), encoding="utf-8")
+        competitor, answer_key = render_pair(test, staging)
+        # Rename the old variant aside rather than deleting it, so a failure
+        # during the swap itself can still put it back.
+        superseded = folder.with_name(f".{folder.name}-superseded-{secrets.token_hex(4)}") if folder.exists() else None
+        if superseded is not None:
+            os.replace(folder, superseded)
+        try:
+            os.replace(staging, folder)
+        except OSError:
+            if superseded is not None:
+                os.replace(superseded, folder)
+            raise
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    if superseded is not None:
+        shutil.rmtree(superseded, ignore_errors=True)
+    return folder / competitor.name, folder / answer_key.name
 
 
 def generated_entries(output: Path) -> list[Path]:

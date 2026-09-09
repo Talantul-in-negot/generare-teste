@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from dataclasses import replace
 
-from .generation import _MAX_SAME_ANSWER_RELAXED, _same_referent
-from .models import Evidence, SingleChoiceQuestion, TestDefinition
+from .generation import GenerationError, _MAX_SAME_ANSWER_RELAXED, _concise, _enumeration, _same_referent, _safe_to_swap, _sentences, _wrong_object
+from .models import Evidence, Fact, SingleChoiceQuestion, TestDefinition, TrueFalseQuestion
 from .repository import BibleRepository
 
 
@@ -14,6 +15,37 @@ class ValidationError(ValueError):
 
 def _in_scope(evidence: Evidence, selected: dict[str, list[int]]) -> bool:
     return evidence.book in selected and evidence.chapter in selected[evidence.book]
+
+
+def _validate_true_false(question: TrueFalseQuestion, fact: Fact, targets: set[str]) -> None:
+    # Reconstruct the source from the cited text, never from an independently
+    # supplied JSON statement. Equality alone cannot establish a false answer:
+    # it must be precisely one permitted entity substitution in that source.
+    authentic = replace(fact, statement=question.evidence.text)
+    if question.evidence != fact.evidence:
+        raise ValidationError(f"Referința nu corespunde faptei: {question.id}")
+    if question.answer == "A":
+        if question.statement in _sentences(authentic.statement):
+            return
+    elif question.answer == "F":
+        source = _concise(authentic, True)
+        if source and _safe_to_swap(source, fact.object):
+            hits = list(re.finditer(rf"(?<!\w){re.escape(fact.object)}(?!\w)", source))
+            if hits:
+                hit = hits[-1]
+                before, after = source[:hit.start()], source[hit.end():]
+                statement = question.statement
+                if statement.startswith(before) and statement.endswith(after):
+                    end = len(statement) - len(after) if after else len(statement)
+                    replacement = statement[len(before):end]
+                    candidate = replace(authentic, id=authentic.id + "-replacement", object=replacement)
+                    try:
+                        accepted = _wrong_object(replace(authentic, options=()), [candidate], lead=before, statement=f"{before} {after}")
+                    except GenerationError:
+                        accepted = None
+                    if replacement in targets and accepted == replacement and statement == before + replacement + after:
+                        return
+    raise ValidationError(f"Baremul A/F nu este susținut de dovadă: {question.id}")
 
 
 def validate_test(test: TestDefinition) -> None:
@@ -53,6 +85,8 @@ def validate_test(test: TestDefinition) -> None:
             errors.append(f"Două variante desemnează același răspuns: {question.id}")
     if test.section_iii:
         match = test.section_iii
+        if len(match.evidence) != 5 or len(match.fact_ids) != 5:
+            errors.append("Secțiunea III trebuie să aibă cinci dovezi și cinci fapte.")
         if set(match.right) != set("ABCDE") or set(match.answers) != set("12345") or set(match.answers.values()) != set("ABCDE") or len(set(match.right.values())) != 5:
             errors.append("Asocierile din III nu formează o bijecție.")
         if not all(_in_scope(item, test.source) for item in match.evidence):
@@ -87,10 +121,13 @@ def validate_evidence(test: TestDefinition, repository: BibleRepository) -> None
     if test.section_iii:
         evidence.extend(test.section_iii.evidence)
     facts_by_id = {fact.id: fact for fact in repository.facts}
+    targets = {fact.object for fact in repository.facts if _in_scope(fact.evidence, test.source)}
     for question in test.section_i + test.section_ii:
         fact = facts_by_id.get(question.fact_id)
         if fact is None:
             raise ValidationError(f"Faptă necunoscută: {question.fact_id}")
+        if isinstance(question, TrueFalseQuestion):
+            _validate_true_false(question, fact, targets)
         # The correct option must be a word the cited verse actually contains.
         # This used to demand it equal `fact.object`, which was the same thing
         # while every Section II shape answered with the fact's own object — the
@@ -106,9 +143,43 @@ def validate_evidence(test: TestDefinition, repository: BibleRepository) -> None
     for question in test.section_iv:
         supporting = question.supporting_evidence or [question.evidence]
         text = " ".join(ref.text for ref in supporting)
+        # An item nobody can answer correctly is not a harder item, it is a
+        # broken one, and every check below this was written to inspect the
+        # letters in `correct` — so an empty list satisfied all of them by
+        # having nothing to inspect.
+        if not question.correct:
+            raise ValidationError(f"Întrebarea nu are niciun răspuns corect: {question.id}")
         for letter in question.correct:
             if question.options[letter] not in text:
                 raise ValidationError(f"Răspunsul corect nu este susținut de dovadă: {question.id}")
+        # The other direction: a *missing* correct answer. Checking only the
+        # marked letters can never see one, so the barem could credit two of
+        # the three vessels Ioram brought and silently mark the third wrong.
+        #
+        # The test is not "does this option appear in the verse" — a plausible
+        # distractor often does, and legitimately so ("Domnul" named elsewhere
+        # in a verse whose answer is "Samuel"). It is the enumeration itself:
+        # when the item was built from a coordinated list, that list says
+        # exactly which options belong to it, and every one of them has to be
+        # credited. Items of any other shape have no such list and are left to
+        # the support check above.
+        # Only for an item that *is* the enumeration shape. A fact carrying a
+        # coordinated list can just as easily be the source of a wh-question
+        # built on something else in the same verse, and that item's options
+        # have no reason to be members of the list. Its own stem is what says
+        # which: the enumeration shape asks with exactly the stem
+        # `_enumeration` derives, so comparing them tells the two apart
+        # without guessing from the answer count.
+        fact = facts_by_id.get(question.fact_id)
+        listed = _enumeration(fact) if fact else None
+        if listed and question.question == f"{listed[0]}":
+            members = set(listed[1])
+            belong = {letter for letter, value in question.options.items() if value in members}
+            if belong != set(question.correct):
+                raise ValidationError(
+                    f"Baremul nu acoperă toate răspunsurile din enumerare: {question.id} "
+                    f"(în dovadă: {sorted(belong)}; în barem: {sorted(question.correct)})"
+                )
     if test.section_iii:
         for index, ref in enumerate(test.section_iii.evidence):
             if index >= len(test.section_iii.left):

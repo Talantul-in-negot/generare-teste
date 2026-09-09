@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import secrets
 import shutil
 import threading
@@ -81,6 +82,28 @@ def rate_limited(client_ip: str) -> bool:
         return False
 
 
+# What `secrets.token_urlsafe(9)` produces: 12 characters of the URL-safe
+# base64 alphabet. Only a directory named like one of this app's own sessions
+# is a candidate for deletion.
+_SESSION_NAME = re.compile(r"^[A-Za-z0-9_-]{12}$")
+
+
+def is_web_session(entry: Path) -> bool:
+    """True only for a directory this web app created and still recognises.
+
+    The sweep used to accept *any* directory under `output` older than the
+    retention window, which is not the same thing. `output` is also where the
+    CLI writes — `output/V1`, kept deliberately and for as long as its author
+    likes — and where a person can reasonably park a folder of their own. Both
+    were being deleted by an unrelated visitor's HTTP request. Requiring the
+    session-token name *and* the `V<n>/test.json` a generated session always
+    contains keeps the sweep to what this app is actually responsible for.
+    """
+    return (entry.is_dir() and _SESSION_NAME.match(entry.name) is not None
+            and any(version.joinpath("test.json").is_file()
+                    for version in entry.glob("V[0-9]*") if version.is_dir()))
+
+
 def cleanup_output() -> None:
     """Remove expired generated sessions, keeping the output directory bounded.
 
@@ -95,7 +118,7 @@ def cleanup_output() -> None:
         cutoff = time.time() - OUTPUT_RETENTION_SECONDS
         for item in OUTPUT.iterdir():
             try:
-                if item.is_dir() and item.stat().st_mtime < cutoff:
+                if item.stat().st_mtime < cutoff and is_web_session(item):
                     shutil.rmtree(item, ignore_errors=True)
             except OSError:
                 continue

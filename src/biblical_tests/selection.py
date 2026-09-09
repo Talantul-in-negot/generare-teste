@@ -23,6 +23,17 @@ def canonical_book(value: str) -> str:
         raise SelectionError(f"Carte necunoscută sau ambiguă: {value!r}") from exc
 
 
+# No book of the Bible has more chapters than Psalms. A number above this is
+# not a chapter anyone can mean, so it is refused rather than expanded.
+#
+# The bound has to be applied *before* `range()`, not after: `1-99999999999`
+# is thirteen characters that ask for a hundred billion integers, and a
+# selection is parsed before anything checks whether those chapters exist. The
+# web app's 64 KB body limit does not help — the request is tiny; it is the
+# expansion that is enormous. Bounding the endpoints bounds the expansion.
+MAX_CHAPTER = 150
+
+
 def _chapters(value: str) -> list[int]:
     result: list[int] = []
     for part in value.split(","):
@@ -35,6 +46,10 @@ def _chapters(value: str) -> list[int]:
         start, end = int(match.group(1)), int(match.group(2) or match.group(1))
         if start < 1 or end < start:
             raise SelectionError(f"Interval de capitole invalid: {part!r}")
+        if end > MAX_CHAPTER:
+            raise SelectionError(
+                f"Capitol inexistent: {end}. Nicio carte biblică nu are mai mult de {MAX_CHAPTER} de capitole."
+            )
         result.extend(range(start, end + 1))
     return sorted(set(result))
 

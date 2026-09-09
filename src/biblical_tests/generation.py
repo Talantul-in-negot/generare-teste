@@ -494,6 +494,22 @@ def _concise(fact: Fact, need_object: bool) -> str | None:
             continue
         if not _quotes_balanced(sentence) or "(" in sentence:
             continue
+        # Verse boundaries can split a sentence. A comma/semicolon ending is
+        # still a fragment, even when it is a faithful quotation of the verse.
+        if not re.search(r'[.!?][\"”»]*$', sentence):
+            continue
+        # A question is not an assertion, so it cannot be keyed true or false.
+        # „Cine ne va izbăvi din mâna acestor dumnezei puternici?" shipped as a
+        # Section I item marked A: the verse it came from is inside a speech
+        # whose opening quote sits in the *previous* verse, so nothing was left
+        # around it to make it a report of what someone asked.
+        #
+        # The mark has to be the sentence's own, which is why a closing quote
+        # after it is decisive rather than incidental: „Samuel i-a zis: «Ce
+        # s-a întâmplat, fiule?»" asserts that Samuel said it, and that is
+        # true or false in the ordinary way.
+        if re.search(r'\?[\s]*$', sentence):
+            continue
         if need_object and not _mentions(sentence, fact.object):
             continue
         if not _self_contained(sentence, fact.statement):
@@ -905,6 +921,13 @@ def _name_predicate(fact: Fact, allow_quote: bool = False) -> str | None:
         # and „Cine și-a ales trei mii de bărbați?" is perfectly good.
         if words[0].lower() in _OBLIQUE_MARKERS | _SUBORDINATE | _LINKERS:
             continue
+        # The same defect at the other end. Truncating at the next comma cuts
+        # „David a luat cuvântul și, ..." down to „a luat cuvântul și" — a
+        # predicate that announces a second half and then stops, which shipped
+        # into Section III as an association for David. A clause this program
+        # hands over has to end on something, not on the promise of more.
+        if not quoted and words[-1].lower().strip("-") in _OBLIQUE_MARKERS | _SUBORDINATE | _LINKERS:
+            continue
         # The name must not reappear, or the association gives itself away.
         if len(predicate) < 10 or _mentions(predicate, fact.object):
             continue
@@ -1113,6 +1136,11 @@ def _clause_halves(fact: Fact) -> tuple[str, str] | None:
                 opener, closer = right[0].lower(), left[-1].lower()
                 if opener in _SUBORDINATE or opener in _OBLIQUE_MARKERS or closer in _OBLIQUE_MARKERS:
                     continue
+                # A half ending on „și"/„sau"/„dar"/„iar" dangles exactly the
+                # way a comma-truncated predicate does; the seam is a different
+                # mechanism reaching the same broken pair.
+                if closer in _LINKERS or opener in _LINKERS:
+                    continue
                 if opener in _DETERMINERS or closer in _DETERMINERS:
                     continue
                 # A word this short at the seam is almost always a clitic or
@@ -1134,100 +1162,84 @@ def _clause_halves(fact: Fact) -> tuple[str, str] | None:
 _PREPOSITIONS = {"împotriva", "înaintea", "asupra", "lângă", "după", "prin", "spre", "către", "peste", "sub", "fără", "din", "dintre", "de", "la", "în", "cu", "pentru", "despre", "printre", "până"}
 
 
-def _parallel_member(value: str) -> bool:
-    """True for a phrase that can stand on its own beside the other options.
+# Explicit nominal forms, rather than a word-count guess. Unknown phrases
+# remain available to the other question shapes; they are not assumed to be
+# list members merely because a conjunction precedes them.
+_ENUMERATION_FORMS = {
+    "quantity": re.compile(
+        r"(?:un|o|doi|două|trei|patru|cinci|șase|șapte|opt|nouă|zece|"
+        r"(?:două|trei|patru|cinci) sute de|o sută de) "
+        r"(?:fii|fiice|tauri|oi(?: pregătite)?|efă de făină|burduf(?:uri)? cu vin|"
+        r"pâini|pâine|bucată de carne|turtă de stafide|turte de stafide|"
+        r"măsuri de grâu prăjit|legături de smochine|suliță|sabie|bou|vițel gras)"
+    ),
+    "vessels": re.compile(r"vase de (?:argint|aur|aramă)"),
+    "instruments": re.compile(r"cu (?:harfe|lăute|timpane|fluiere|chimvale)"),
+    "kinship": re.compile(r"(?:os din oasele|carne din carnea) (?:tale|mele)"),
+}
 
-    A coordinated „și"/„sau" joins list items ("trei tauri" / "o efă de
-    făină") just as readily as it joins two whole *clauses* ("pe care au pus
-    chivotul Domnului" / "care este astăzi în câmpul lui Iosua"). Splitting the
-    second kind produces fragments that answer no question at all and only
-    look like options because they were printed under A/B/C — which is exactly
-    what makes such an item unanswerable. A real list member is a noun phrase:
-    it never opens with a finite verb, nor with a relative/subordinating word
-    that introduces a clause of its own.
-    """
-    words = value.split()
-    if not words:
-        return False
-    head = words[0].lower()
-    # Romanian glues clitic pronouns onto the opening word with a hyphen
-    # ("să-I aducă", "s-a suit", "și-au luat"), so the bare word won't match
-    # these sets — "să-i" isn't "să". Testing the pre-hyphen stem as well
-    # catches the clause openers that would otherwise pass as noun phrases.
-    heads = {head, head.split("-")[0]}
-    return not (heads & _VERB_OPENERS or heads & _SUBORDINATE or heads & _LINKERS)
+
+def _member_kind(value: str) -> str | None:
+    return next((kind for kind, pattern in _ENUMERATION_FORMS.items()
+                 if pattern.fullmatch(value)), None)
+
+
+def _parallel_member(value: str) -> bool:
+    return _member_kind(value) is not None
 
 
 def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
-    """Finds the coordinated list behind the reference's multi-answer items."""
+    """Extract only whole, recognised nominal phrases in a coordinated list.
+
+    The complete suffix must parse, and each preceding member is matched at
+    its actual boundary. In particular a seven-word item does not imply that
+    its neighbour also has seven words. Clauses and open quotations are never
+    converted to a multiple-answer completion.
+    """
     for sentence in _sentences(fact.statement):
         if not _self_contained(sentence, fact.statement):
+            continue
+        # Quoted lists need the surrounding speaker/context and punctuation
+        # preserved; leave these to the quoted-speech and blank shapes.
+        if any(mark in sentence for mark in ('"', '„', '”', '«', '»')):
             continue
         links = list(_CONJUNCTION.finditer(sentence))
         if not links:
             continue
         link = links[-1]
         tail = sentence[link.end():].strip(_TRIM)
-        head_words = sentence[:link.start()].split()
-        size = len(tail.split())
-        if not _clean_member(tail) or not _parallel_member(tail) or not 2 <= size <= 8 or len(head_words) < size + 4:
+        kind = _member_kind(tail)
+        if kind is None:
             continue
-        mid = " ".join(head_words[-size:]).strip(_TRIM)
-        if not _clean_member(mid) or not _parallel_member(mid) or not 2 <= len(mid.split()) <= 8:
+        members = [tail]
+        head = sentence[:link.start()].rstrip()
+        while True:
+            # Longest recognised suffix, preserving determiners and modifiers.
+            found = None
+            for match in re.finditer(r"(?<!\S)\S", head):
+                value = head[match.start():]
+                if _member_kind(value) == kind:
+                    found = (head[:match.start()].rstrip(), value)
+                    break
+            if found is None:
+                break
+            head, value = found
+            members.insert(0, value)
+            if head.endswith(','):
+                head = head[:-1].rstrip()
+            elif (separator := re.search(r"\s+(?:și|sau)$", head)):
+                head = head[:separator.start()].rstrip()
+            else:
+                break
+        if len(members) < 2 or len(set(members)) != len(members):
             continue
-        members = [mid, tail]
-        head = " ".join(head_words[:-size])
-        # "a, b si c": a comma right before the second member marks a third one.
-        # There's no punctuation between the verb that introduces the list and
-        # this first member ("...și a luat trei tauri, o efă de făină..."), so
-        # its word count can't be read off the same way `mid`/`tail` were —
-        # guessing `size` words back can just as easily grab the verb itself
-        # ("a luat trei tauri" instead of "trei tauri"). Reject that guess
-        # outright when it starts with a common finite-verb/auxiliary opener;
-        # a real noun-phrase member never does, and leaving the ambiguous
-        # word(s) in the stem instead is always grammatically safe.
-        if head.rstrip().endswith(","):
-            earlier = head.rstrip().rstrip(",").split()
-            if len(earlier) >= size + 4:
-                first = " ".join(earlier[-size:]).strip(_TRIM)
-                opener = first.split()[0].lower() if first.split() else ""
-                if opener in _VERB_OPENERS:
-                    pass
-                elif _clean_member(first) and _parallel_member(first) and 2 <= len(first.split()) <= 8 and len(first) >= 6:
-                    members.insert(0, first)
-                    head = " ".join(earlier[:-size])
-        stem = head.strip(_TRIM)
-        if not _STEM_MIN_CHARS <= len(stem) <= _STEM_MAX_CHARS:
+        # A short named predicate such as "Ioram a adus" is sufficient once
+        # the entire list (rather than an arbitrary suffix) has been removed.
+        if not 12 <= len(head) <= _STEM_MAX_CHARS or not _self_contained(head, fact.statement):
             continue
-        if len(mid) < 6 or len(tail) < 6:
+        if head.split()[-1].lower() in _OBLIQUE_MARKERS | _PREPOSITIONS:
             continue
-        if len({member.lower() for member in members}) != len(members):
-            continue
-        # Options the student is asked to judge one by one have to be
-        # comparable to each other; a capitalised name sitting beside two bare
-        # noun phrases is answerable on shape alone, and more importantly it
-        # signals the split found two different kinds of thing rather than one
-        # list.
-        if len({_register(member) for member in members}) != 1:
-            continue
-        # A prepositional phrase and a bare clause are not alternatives for the
-        # same gap — "împotriva lui Israel" beside "lupta a început" reads as two
-        # unrelated things rather than two entries in one list, which is what
-        # makes such an item hard to answer even when both are in the verse.
-        if len({member.split()[0].lower() in _PREPOSITIONS for member in members}) != 1:
-            continue
-        # A head ending on a genitive marker or preposition promises a noun next
-        # ("...împotriva casei lui __________"), so the blank reads as asking for
-        # a name while the options are in fact the clause that followed a
-        # semicolon. The stem has to end somewhere the list can actually attach.
-        if head.strip(_TRIM).split()[-1].lower() in _OBLIQUE_MARKERS | _PREPOSITIONS:
-            continue
-        # A colon here made the item look exactly like Section II's
-        # single-answer completions, so nothing on the page told the student
-        # this one may have one, two, three or no correct options. The blank
-        # matches the reference's own multi-answer items and reads as a gap to
-        # be filled rather than a sentence that simply stops.
-        return f"{stem} {_BLANK}", members
+        return f"{head} {_BLANK}", members
     return None
 
 
@@ -1294,6 +1306,7 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
                     value for value in foreign
                     if not _mentions(fact.statement, value) and value not in members
                     and _register(value) in registers
+                    and _member_kind(value) == _member_kind(correct_values[0])
                 ]
                 target = sum(len(value.split()) for value in correct_values) / len(correct_values)
                 outside.sort(key=lambda value: abs(len(value.split()) - target))
