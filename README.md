@@ -39,10 +39,22 @@ Pentru corectitudinea baremului, fiecare `fact` conține textul exact al dovezii
 ## Rulare CLI
 
 ```bash
-python generate.py --chapters "1 Samuel 1,2" --version 1
+python generate.py --chapters "1 Samuel 1,2,3" --version 1
 ```
 
-Pentru selecția `1 Samuel 1,2`, rezultatele sunt `output/V1/1 Samuel 1-2 V1.pdf`, `output/V1/1 Samuel 1-2 V1 barem.pdf` și `output/V1/test.json`. Numărul variantei apare atât în numele fișierului, cât și în colțul din dreapta al paginii; baremul se anunță acolo ca atare.
+Pentru selecția `1 Samuel 1,2,3`, rezultatele sunt `output/V1/1 Samuel 1-3 V1.pdf`, `output/V1/1 Samuel 1-3 V1 barem.pdf` și `output/V1/test.json`. Numărul variantei apare atât în numele fișierului, cât și în colțul din dreapta al paginii; baremul se anunță acolo ca atare.
+
+Selecția trebuie să acopere cel puțin 3 capitole — același prag pe care îl aplică și interfața web, din același motiv (vezi mai jos).
+
+Mai multe variante se cer într-o singură rulare, cu `--versions`:
+
+```bash
+python generate.py --chapters "1 Samuel 1,2,3" --versions 2
+```
+
+Astfel fiecare variantă află ce au consumat surorile ei și le ocolește pe cât poate: pe `1 Samuel 1,2,3`, versetele comune între V1 și V2 scad de la 13 din 28 la 7. Nu la zero, și anume intenționat — `build_test` amână faptele deja folosite (le trimite la coada bazinului), nu le exclude, ca o selecție abia suficientă pentru un test să poată produce totuși al doilea în loc să eșueze.
+
+Cerute în rulări separate, variantele nu beneficiază deloc: generatorul nu ține minte nimic între procese. `--version` rămâne numărul primei variante.
 
 ## Interfață web locală
 
@@ -50,7 +62,7 @@ Pentru selecția `1 Samuel 1,2`, rezultatele sunt `output/V1/1 Samuel 1-2 V1.pdf
 python -m src.web.app
 ```
 
-Deschideți `http://127.0.0.1:8000`. Interfața susține selecții pe linii, categorie, ediție, etapă, dată, seed și mai multe variante. Selecția trebuie să acopere cel puțin 3 capitole: sub acest prag testul complet (28 de fapte distincte, pe patru secțiuni care concurează pentru același bazin) eșuează la generare în aproximativ un sfert din cazuri, față de niciodată de la 3 capitole în sus.
+Deschideți `http://127.0.0.1:8000`. Interfața susține selecții pe linii, categorie, ediție, etapă, dată, seed și mai multe variante. Selecția trebuie să acopere cel puțin 3 capitole (`MIN_SELECTION_CHAPTERS`, definit lângă parser în `selection.py` pentru ca CLI-ul și formularul să nu poată ajunge la praguri diferite): sub acest prag testul complet (28 de fapte distincte, pe patru secțiuni care concurează pentru același bazin) eșuează la generare în aproximativ un sfert din cazuri, față de niciodată de la 3 capitole în sus.
 
 Local, serverul ascultă numai pe `127.0.0.1`. Când platforma de găzduire setează `PORT`, ascultă pe toate interfețele; setați `HOST` pentru a forța o adresă anume. În spatele unui router de platformă setați `TRUST_PROXY=1` (așa cum face `Procfile`), altfel limita de generări per utilizator devine o limită globală, comună tuturor vizitatorilor: fără antetul `X-Forwarded-For` toate cererile par să vină de la aceeași adresă, cea a routerului.
 

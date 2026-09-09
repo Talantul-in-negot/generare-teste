@@ -53,3 +53,32 @@ def parse_selection(value: str) -> dict[str, list[int]]:
     if not result:
         raise SelectionError("Introduceți cel puțin o carte și un capitol.")
     return {book: sorted(set(chapters)) for book, chapters in result.items()}
+
+
+# A complete test spends 28 *distinct* verses across four sections that all
+# draw from the same pool, several of them competing directly for the same
+# shapes. Measured across every contiguous chapter window in both books:
+# 2-chapter selections fail to produce a test about 23% of the time
+# (arithmetic scarcity, not a bug — see generation.py's Section II/III
+# shortfall messages), 3-chapter and up never do. Checking it here turns that
+# into an immediate, specific message instead of a generation attempt that
+# fails several steps in. It is a practical floor calibrated from that data,
+# not a guarantee for every possible combination — a selection can still be
+# too sparse (e.g. three widely scattered chapters) and hit the accurate
+# downstream message instead.
+#
+# It lives beside the parser rather than in either entrypoint because both of
+# them need it and they must not disagree about it: the web form enforced this
+# floor while the CLI let the same selection through unwarned, and the README
+# then documented a 2-chapter CLI example the form would have rejected.
+MIN_SELECTION_CHAPTERS = 3
+
+
+def require_minimum_chapters(selection: dict[str, list[int]]) -> None:
+    """Rejects a selection too thin to build a complete test from."""
+    total_chapters = sum(len(chapters) for chapters in selection.values())
+    if total_chapters < MIN_SELECTION_CHAPTERS:
+        raise SelectionError(
+            f"Selecția are {total_chapters} capitol{'e' if total_chapters != 1 else ''}; "
+            f"sunt necesare cel puțin {MIN_SELECTION_CHAPTERS} pentru un test complet."
+        )

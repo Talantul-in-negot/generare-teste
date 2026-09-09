@@ -14,18 +14,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from src.biblical_tests.generation import GenerationError, build_test
+from src.biblical_tests import USER_ERRORS
+from src.biblical_tests.generation import build_test
 from src.biblical_tests.rendering import render_pair
 from src.biblical_tests.repository import BibleRepository
-from src.biblical_tests.selection import SelectionError, parse_selection
-from src.biblical_tests.validation import ValidationError, coverage_report, validate_evidence, validate_test
-
-
-# Everything the caller can get wrong: an unparseable chapter range, a book the
-# corpus lacks, a selection too thin to build a test from. These carry messages
-# written for the person filling in the form, so they are shown as-is. Anything
-# else is a defect in this program and must not be echoed back to a browser.
-USER_ERRORS = (SelectionError, GenerationError, ValidationError)
+from src.biblical_tests.selection import MIN_SELECTION_CHAPTERS, SelectionError, parse_selection, require_minimum_chapters
+from src.biblical_tests.validation import coverage_report, validate_evidence, validate_test
 
 
 # Resolve storage from the project, not from the process working directory.  A
@@ -41,17 +35,6 @@ _REQUEST_LOG: dict[str, deque[float]] = defaultdict(deque)
 _RATE_LIMIT_LOCK = threading.Lock()
 MAX_REQUEST_BYTES = 64 * 1024
 OUTPUT_RETENTION_SECONDS = 24 * 60 * 60
-# A test spends 28 distinct verses across four sections that all draw from the
-# same pool, several of them competing directly for the same shapes. Measured
-# across every contiguous chapter window in both books: 2-chapter selections
-# fail to produce a test about 23% of the time (arithmetic scarcity, not a
-# bug — see generation.py's Section II/III shortfall messages), 3-chapter and
-# up never do. This turns that failure into an immediate, specific message
-# instead of a generation attempt that fails several steps in. It is a
-# practical floor calibrated from that data, not a guarantee for every
-# possible combination — a selection can still be too sparse (e.g. three
-# widely scattered chapters) and hit the accurate downstream message instead.
-MIN_SELECTION_CHAPTERS = 3
 APP_PATH = "/generare-teste"
 # Set by the Procfile, where exactly one platform router sits in front of this
 # process. Off by default so a directly-reachable instance never lets a caller
@@ -220,12 +203,7 @@ def _whole_number(data: dict[str, str], key: str, default: int | None, label: st
 
 def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
     selection = parse_selection(data.get("chapters", ""))
-    total_chapters = sum(len(chapters) for chapters in selection.values())
-    if total_chapters < MIN_SELECTION_CHAPTERS:
-        raise SelectionError(
-            f"Selecția are {total_chapters} capitol{'e' if total_chapters != 1 else ''}; "
-            f"sunt necesare cel puțin {MIN_SELECTION_CHAPTERS} pentru un test complet."
-        )
+    require_minimum_chapters(selection)
     repo = REPOSITORY
     seed = _whole_number(data, "seed", None, "Seed-ul")
     base_seed = secrets.randbelow(2**31) if seed is None else seed
@@ -260,6 +238,14 @@ CONTENT_TYPES = {".pdf": "application/pdf", ".json": "application/json; charset=
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Without this the socket has no deadline: a client that announces a
+    # Content-Length and then stops sending pins its worker thread inside
+    # `rfile.read(length)` for as long as the process lives, and
+    # ThreadingHTTPServer will happily spawn another for the next such caller.
+    # Generating ten variants is the slowest legitimate request and finishes
+    # well inside this; the timeout bounds silence, not work.
+    timeout = 30
+
     def _html(self, body: str, status: HTTPStatus = HTTPStatus.OK) -> None:
         content = body.encode("utf-8")
         self.send_response(status)
