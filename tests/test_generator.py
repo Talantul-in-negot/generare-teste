@@ -847,3 +847,97 @@ class HeaderTests(_RealCorpusTest, unittest.TestCase):
         self.assertIn("V2", second_name)
         self.assertIn("Varianta 1", first_text)
         self.assertIn("Varianta 2", second_text)
+
+
+class QuotedSpeechTests(_RealCorpusTest, unittest.TestCase):
+    """`_name_predicate(allow_quote=True)` exists to recover reported speech
+    into a question. It had never once fired on this corpus."""
+
+    def test_a_quotation_closed_with_the_ascii_mark_is_recovered(self):
+        # `_QUOTE_PAIRS` mapped the low quote to the right double quote, which
+        # appears zero times in this corpus against 648 ASCII closers - so
+        # `_extend_through_quote` searched for a character that was never there
+        # and always returned None.
+        from src.biblical_tests.generation import _extend_through_quote, _opens_quote
+        tail = ' a răspuns: „Iată-mă, căci m-ai chemat!" Și a plecat.'
+        cut = tail.index(":")
+        self.assertTrue(_opens_quote(tail, cut))
+        end = _extend_through_quote(tail, cut)
+        self.assertIsNotNone(end)
+        self.assertEqual(tail[:end].strip(), 'a răspuns: „Iată-mă, căci m-ai chemat!"')
+
+    def test_the_corpus_closer_appears_and_the_mapped_one_does_not(self):
+        # The assumption the bug rested on, asserted so it cannot rot silently.
+        from src.biblical_tests.generation import _QUOTE_PAIRS
+        text = "".join(fact.statement for fact in self.repo.facts)
+        self.assertGreater(text.count('"'), 500)
+        self.assertEqual(text.count("”"), 0)
+        self.assertIn('"', _QUOTE_PAIRS["„"])
+
+    def test_the_earliest_closer_wins(self):
+        # A quotation ending on the ASCII mark must not run on to a later ”
+        # belonging to something else.
+        from src.biblical_tests.generation import _extend_through_quote
+        tail = ' a zis: „Vino!" apoi ” mai târziu.'
+        end = _extend_through_quote(tail, tail.index(":"))
+        self.assertEqual(tail[:end].strip(), 'a zis: „Vino!"')
+
+    def test_an_unclosed_quotation_is_still_refused(self):
+        from src.biblical_tests.generation import _extend_through_quote
+        tail = ' a zis: „Vino și vezi ce am făcut'
+        self.assertIsNone(_extend_through_quote(tail, tail.index(":")))
+
+    def test_the_corpus_actually_produces_quoted_speech_questions(self):
+        # The existing guard asserts only that no question *promises* reported
+        # speech and supplies none - trivially true while the branch never ran.
+        # This asserts the positive: the questions exist.
+        found = []
+        for chapters in ("1 Samuel 1-4", "1 Samuel 7-10", "1 Samuel 15-18",
+                         "2 Samuel 5-8", "2 Samuel 15-18"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                found += [q.question for q in test.section_ii + test.section_iv
+                          if q.question.startswith("Cine ") and ("„" in q.question or "«" in q.question)]
+        # Across every three-chapter window this shape supplies 154 of 671
+        # wh-questions; the floor here is well under what these five produce.
+        self.assertGreater(len(found), 10, "wh-questions are not recovering their quotations")
+        for question in found:
+            self.assertTrue(question.rstrip().endswith("?"), question)
+            # Whatever quotation it opened, it closed.
+            self.assertEqual(question.count("„"), question.count('"') + question.count("”"), question)
+
+    def test_a_wh_question_never_promises_speech_it_does_not_quote(self):
+        for chapters in ("1 Samuel 1-4", "1 Samuel 7-10", "2 Samuel 5-8", "2 Samuel 15-18"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                for question in test.section_ii + test.section_iv:
+                    if not question.question.startswith("Cine "):
+                        continue
+                    stem = question.question.rstrip("?").rstrip()
+                    self.assertFalse(
+                        stem.endswith(("a zis", "a răspuns", "a strigat", "i-a zis", "le-a zis")),
+                        f"{chapters} {question.id}: {question.question!r}",
+                    )
+
+
+class ReservationTests(_RealCorpusTest, unittest.TestCase):
+    def test_sections_iii_and_iv_never_spend_a_section_ii_candidate(self):
+        # This was a tuned budget whose floor had to be raised every time a new
+        # shape widened Section II's candidate set - 24 after the leading blank,
+        # 40 after quoted speech - and every sweep plateaued at the value where
+        # the budget stopped binding at all. It is now the plain refusal, which
+        # needs no tuning and cannot drift out of calibration with the corpus.
+        from src.biblical_tests.generation import _may_take
+        # A reserved set far larger than any floor the budget ever used: that is
+        # precisely where the budget said yes and the refusal says no.
+        reserved = {str(number) for number in range(200)}
+        self.assertFalse(_may_take(_Stub("7"), reserved, set()))
+        self.assertFalse(_may_take(_Stub("7"), reserved, {"8", "9"}))
+        self.assertTrue(_may_take(_Stub("outside"), reserved, set()))
+        # And no dependence on how much of the reserved set is still unspent.
+        self.assertFalse(_may_take(_Stub("7"), {"7", "8"}, set()))
+
+
+class _Stub:
+    def __init__(self, ident):
+        self.id = ident

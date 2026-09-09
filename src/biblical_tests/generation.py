@@ -651,7 +651,20 @@ def _safe_to_swap(sentence: str, obj: str) -> bool:
 
 # Matching opening/closing marks for Romanian block quotes and plain ASCII
 # quotes (used interchangeably across the corpus's verses).
-_QUOTE_PAIRS = {"„": "”", "«": "»", '"': '"'}
+# Each opener against every mark that may close it. „ is listed with the plain
+# ASCII quote *first* because that is what this corpus actually closes with: ”
+# appears zero times in it against 648 ASCII closers. Mapping „ to ” alone meant
+# `_extend_through_quote` searched for a character that was never there, always
+# returned None, and so `_name_predicate(allow_quote=True)` — the branch written
+# specifically to recover reported speech — never fired once on this corpus.
+# 288 verses carrying quoted speech were unusable for that reason, and the test
+# guarding the branch only asserted the *absence* of a truncated stub, which is
+# trivially true when the branch never runs.
+#
+# Same root cause as the `_quotes_balanced` defect: the module encoded „…” while
+# the corpus writes „…". It was fixed in `_concise` and `_completion_stem` and
+# missed here.
+_QUOTE_PAIRS = {"„": ('"', "”"), "«": ("»",), '"': ('"',)}
 # A quoted predicate can run well past the 14-word cap that keeps a plain
 # clause readable as one line of a matching table; it just needs its own,
 # more generous ceiling so a whole paragraph of dialogue doesn't slip through.
@@ -681,10 +694,12 @@ def _extend_through_quote(tail: str, cut: int) -> int | None:
     rest = tail[cut + 1:]
     stripped = rest.lstrip()
     opener_index = cut + 1 + (len(rest) - len(stripped))
-    closer = _QUOTE_PAIRS[stripped[0]]
-    close_index = tail.find(closer, opener_index + 1)
-    if close_index == -1:
+    # The earliest of the acceptable closers: a quotation that ends with the
+    # ASCII mark must not run on to a later ” belonging to something else.
+    found = [index for index in (tail.find(closer, opener_index + 1) for closer in _QUOTE_PAIRS[stripped[0]]) if index != -1]
+    if not found:
         return None
+    close_index = min(found)
     end = close_index + 1
     # A sentence-ending mark right after the closing quote still belongs to
     # this predicate — it closes the quote's own sentence, not a new clause.
@@ -1212,13 +1227,8 @@ _TOTAL_ITEMS = 28
 _QUALITY_ITEMS = 23
 
 
-# How many questions Section II must end up with. Sections III and IV consult
-# it before spending a verse Section II could have used.
-_SECTION_II_QUOTA = 24
-
-
 def _may_take(fact: Fact, reserved: set[str], used: set[str]) -> bool:
-    """True unless taking `fact` would leave Section II short of its quota.
+    """True unless `fact` is one Section II could have used.
 
     Sections III-named and IV both pick before Section II and both want the
     same verses it does — III's shape *is* `_name_predicate`, which is also
@@ -1229,12 +1239,22 @@ def _may_take(fact: Fact, reserved: set[str], used: set[str]) -> bool:
     sweep); refusing them outright was too strong (it starved Section III on
     thin selections, trading one section's failures for another's).
 
-    A budget is neither: a reserved verse is spent freely while Section II
-    still has more than it needs, and protected once it does not. Section II is
-    the one section whose shortfall is fatal — III falls back to
-    `_clause_halves` and IV to its single-answer shape — so it gets the floor.
+    This was a budget for a while — spend a reserved verse while Section II has
+    more than `_SECTION_II_QUOTA` left, protect it once it does not — and the
+    floor had to be re-tuned upwards every time a new shape widened Section II's
+    candidate set (24 after the leading blank, 40 after quoted speech), because
+    a larger reserved set means a larger share of the pool that III and IV are
+    free to spend before the floor bites. Every one of those sweeps plateaued at
+    the value where the budget stops binding at all, i.e. where it behaves
+    exactly as the plain refusal below does.
+
+    So it is the plain refusal, which needs no tuning and cannot drift out of
+    calibration with the corpus. Section II is the one section whose shortfall
+    is fatal — III falls back to `_clause_halves` and to Section II's own
+    leftovers afterwards, IV to its single-answer shape and then to an escape
+    pass — so it simply gets its candidates.
     """
-    return fact.id not in reserved or len(reserved - used) > _SECTION_II_QUOTA
+    return fact.id not in reserved
 
 
 def _section_iii_named(pool: list[Fact], used: set[str], rng: random.Random, reserved: set[str]) -> list[tuple[Fact, str, str]]:

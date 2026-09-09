@@ -412,3 +412,97 @@ tuning pass.
 `HeaderTests` — 14 cases, 12 of which fail against the previous commit (the
 other two are guards on shape behaviour rather than defect reproductions).
 Suite: 59 -> 73, all green.
+
+
+---
+
+# Audit remediation — 2026-09-09, fourth pass (the shape that never ran)
+
+The previous pass closed by saying the remaining two-chapter failures needed new
+question shapes, and named „Unde ...?" and „Câți ...?" as the candidates. That
+guess was wrong, and measuring before building is what caught it.
+
+Sizing the three candidate shapes against the verses no current Section II shape
+can use:
+
+| candidate | unusable verses it would reach | distinct after the duplicate check |
+|---|---|---|
+| „Unde ...?" (place objects) | 23 | 23 |
+| „Câți ...?" (spelled-out numerals) | 55 | 55 |
+| quoted speech | **288** | **287** |
+
+Quoted speech is an order of magnitude larger than either shape I had proposed,
+and — unlike the leading blank, which collapsed under `_StemLedger` — it is
+almost perfectly distinct, because every verse quotes something different.
+
+## 35. `allow_quote=True` had never fired once
+
+It is not a new shape. `_name_predicate(allow_quote=True)` and
+`_extend_through_quote` were written specifically to recover reported speech
+into a „Cine a zis: «...»?" question. They could never do it here:
+
+`_QUOTE_PAIRS` mapped „ to ”. This corpus closes with the plain ASCII quote —
+`”` appears **zero** times in it against **648** ASCII closers — so
+`_extend_through_quote` searched for a character that was never present, always
+returned None, and every verse carrying reported speech was skipped.
+
+Same root cause as the `_quotes_balanced` defect from the first pass: the module
+encoded „...” while the corpus writes „...". It was fixed in `_concise` and
+`_completion_stem` and missed in the quote-pair table.
+
+`_QUOTE_PAIRS` now lists every mark that may close each opener, and
+`_extend_through_quote` takes the earliest of them so a quotation ending on the
+ASCII mark cannot run on to an unrelated later one.
+
+The reason it survived a green suite is worth recording:
+`test_wh_questions_include_the_quoted_speech_they_ask_about` asserts only that
+no question *promises* reported speech and supplies none — which is trivially
+true while the branch never runs. The new test asserts the positive.
+
+Result: `_wh_question` eligibility 294 -> 378, strong Section II shapes 552 ->
+609, and **154 of 671 wh-questions across every three-chapter window now carry
+the quotation they ask about** — a whole question shape, present in the
+reference papers and in this code, brought into use for the first time.
+
+## 36. The reservation budget was replaced by a plain refusal
+
+`_may_take` was a tuned budget: spend one of Section II's candidates while it
+still has more than `_SECTION_II_QUOTA` left. The floor had to be raised every
+time a new shape widened that candidate set — 24 after the leading blank, 40
+after quoted speech — because a larger reserved set means a larger share of the
+pool III and IV may spend before the floor bites. Every sweep plateaued at the
+value where the budget stops binding at all, i.e. where it behaves exactly as a
+plain refusal.
+
+So it is now the plain refusal, and `_SECTION_II_QUOTA` is gone. It needs no
+tuning and cannot drift out of calibration with the corpus. This was only
+possible because the synthetic fixture was widened in the second pass — it was
+the thing that made the refusal look unworkable the first time it was tried.
+
+## Result
+
+| | third pass | now |
+|---|---|---|
+| `_wh_question` eligible facts | 294 | **378** |
+| wh-questions quoting the speech they ask about | 0 | **154 of 671** |
+| 2-chapter selections failing | 37 of 159 (23%) | 36 of 159 (23%) |
+| 3-chapter / 4-chapter | 0 | 0 |
+| tuned constants in the reservation | 1 | **0** |
+
+Every quality invariant from the earlier passes still holds at zero.
+
+The failure rate barely moved, and that is the honest headline: this pass bought
+**variety and fidelity**, not throughput. A fifth of Section II is now a shape
+the reference tests use and this generator could not produce. The remaining
+two-chapter failures are still the arithmetic edge described in the third pass —
+23 to 31 quality verses against the 23 a test must spend.
+
+**What is actually left.** „Câți ...?" over the 55 numeral verses and „Unde ...?"
+over the 23 place verses are both real and both small; together they would add
+roughly 78 candidates corpus-wide, concentrated in the narrative chapters rather
+than in the thin ones that fail. Neither is likely to move the 23% much — the
+per-selection table showed +0 to +4 each on the failing windows. Worth building
+for variety, not for throughput, and worth measuring per-selection first.
+
+**Tests.** `QuotedSpeechTests`, `ReservationTests` — 7 cases, 5 failing against
+the previous commit. Suite: 73 -> 80, all green.
