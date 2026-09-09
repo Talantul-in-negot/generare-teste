@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from .generation import _MAX_SAME_ANSWER_RELAXED, _same_referent
 from .models import Evidence, SingleChoiceQuestion, TestDefinition
 from .repository import BibleRepository
 
@@ -34,6 +35,21 @@ def validate_test(test: TestDefinition) -> None:
             errors.append(f"Item II invalid: {question.id}")
     if single_answers and max(Counter(single_answers).values()) > 4:
         errors.append("Distribuția răspunsurilor din II nu este echilibrată.")
+    # The check above balances the *letters*; this one balances what those
+    # letters say. They are not the same property, and only the second one
+    # stops a page whose ten answers are „David" nine times over — perfectly
+    # spread across A/B/C and still answerable without reading a word.
+    single_texts = [question.options[question.correct] for question in test.section_ii]
+    if single_texts and max(Counter(single_texts).values()) > _MAX_SAME_ANSWER_RELAXED:
+        errors.append("Un singur răspuns se repetă prea des în Secțiunea II.")
+    # Three options have to name three different answers, not merely be three
+    # different strings: „Domnul" beside „Dumnezeul" is one answer written
+    # twice, which either duplicates the correct one or hands the student two
+    # options to eliminate at once.
+    for question in test.section_ii + test.section_iv:
+        values = list(question.options.values())
+        if any(_same_referent(one, other) for index, one in enumerate(values) for other in values[index + 1:]):
+            errors.append(f"Două variante desemnează același răspuns: {question.id}")
     if test.section_iii:
         match = test.section_iii
         if set(match.right) != set("ABCDE") or set(match.answers) != set("12345") or set(match.answers.values()) != set("ABCDE") or len(set(match.right.values())) != 5:

@@ -295,3 +295,194 @@ class GeneratorTests(unittest.TestCase):
         for answers in ([], ["A"], ["A", "B"], ["A", "B", "C"]):
             self.test_definition.section_iv[0] = replace(original, correct=answers)
             validate_test(self.test_definition)
+
+
+class SemanticSoundnessTests(unittest.TestCase):
+    """Whether an item is *answerable*, which the structural checks never see.
+
+    Every defect below shipped past a green suite: the validator confirms ten
+    questions, a bijection, in-scope references and evidence matching the
+    corpus exactly, and none of that notices a False statement that is true, a
+    question with two correct answers, or a stem that is not a question.
+    """
+
+    CONTEST = {"title": "T", "stage": "F", "edition": 2027, "date": "x", "category": "6_7"}
+    SCORING = {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.repo = BibleRepository(Path("data"))
+
+    def _build(self, chapters, version=1, seed=12345):
+        from src.biblical_tests.selection import parse_selection
+        selection = parse_selection(chapters)
+        facts = self.repo.facts_for(selection)
+        return facts, build_test(facts, selection, self.CONTEST, self.SCORING, seed, version)
+
+    def test_a_false_statement_never_swaps_one_divine_title_for_another(self):
+        # "Domnul", "Dumnezeu" and "Dumnezeul" are one being under three
+        # spellings and share no common prefix, so the `_inflection` guard let
+        # them through: "Dumnezeul saraceste si El imbogateste" (1 Samuel 2:7)
+        # was keyed F while saying exactly what the verse says.
+        from src.biblical_tests.generation import _DEITY, _same_referent, _wrong_object
+        facts, _ = self._build("1 Samuel 1-4")
+        quality = [fact for fact in facts if fact.quality]
+        divine = [fact for fact in quality if fact.object in _DEITY]
+        self.assertTrue(divine, "selection should contain at least one fact about the Lord")
+        for fact in divine:
+            replacement = _wrong_object(fact, quality, statement=fact.statement)
+            self.assertFalse(
+                _same_referent(replacement, fact.object),
+                f"{fact.id}: {fact.object!r} -> {replacement!r} leaves the claim true",
+            )
+
+    def test_a_false_statement_never_reuses_a_name_the_sentence_already_has(self):
+        # "Saul i-a zis lui Saul" and "David, fata lui Saul, il iubea pe David"
+        # are not plausible falsehoods, they are visibly broken sentences - the
+        # student answers F without reading. Sections II and IV already refuse a
+        # distractor the quoted verse offers; this is the same rule for the one
+        # shape that rewrites the verse instead of quoting it.
+        from src.biblical_tests.generation import _mentions, _wrong_object
+        facts, _ = self._build("1 Samuel 17-20")
+        quality = [fact for fact in facts if fact.quality]
+        for fact in quality:
+            replacement = _wrong_object(fact, quality, statement=fact.statement)
+            self.assertFalse(
+                _mentions(fact.statement, replacement),
+                f"{fact.id}: swapped in {replacement!r}, which the sentence already names",
+            )
+
+    def test_three_options_always_name_three_different_answers(self):
+        # "Cine saraceste si El imbogateste?" offered A Domnul and C Dumnezeul:
+        # two correct answers, one of them keyed wrong. The same collision
+        # between two *distractors* hands the student a two-way guess instead.
+        from src.biblical_tests.generation import _same_referent
+        for chapters in ("1 Samuel 1-4", "1 Samuel 15-18", "2 Samuel 5-8", "2 Samuel 21-23"):
+            _, test = self._build(chapters)
+            for question in test.section_ii + test.section_iv:
+                values = list(question.options.values())
+                for index, one in enumerate(values):
+                    for other in values[index + 1:]:
+                        self.assertFalse(
+                            _same_referent(one, other),
+                            f"{chapters} {question.id}: {one!r} and {other!r} name the same answer",
+                        )
+
+    def test_section_iv_applies_the_same_ambiguity_guard_as_section_ii(self):
+        # 1 Samuel 3 has both Eli and the Lord call Samuel in nearly the same
+        # words. `_uniquely_answered` exists for exactly that, and Section II
+        # consulted it - Section IV's fallback did not, and shipped "Cine l-a
+        # chemat din nou pe Samuel?" with both of them among the options.
+        from src.biblical_tests.generation import _rival_predicates, _uniquely_answered
+        for chapters in ("1 Samuel 3-4", "1 Samuel 19-20", "1 Samuel 2-3"):
+            facts, test = self._build(chapters)
+            rivals = _rival_predicates([fact for fact in facts if fact.quality])
+            objects = {fact.id: fact.object for fact in facts}
+            for question in test.section_ii + test.section_iv:
+                if not question.question.startswith("Cine "):
+                    continue
+                predicate = question.question[len("Cine "):].rstrip("?")
+                self.assertTrue(
+                    _uniquely_answered(predicate, objects[question.fact_id], rivals),
+                    f"{chapters} {question.id}: {question.question!r} has more than one answer",
+                )
+
+    def test_a_wh_predicate_never_opens_on_a_bare_linker_or_subordinator(self):
+        # "Saul si oamenii lui erau..." names a compound subject, so the clause
+        # after the name starts on "si" and "Cine" lands in front of it. The
+        # results were not questions at all: "Cine si fratele sau?", "Cine ce te
+        # lasa inima?", "Cine sa pun mana pe unsul Domnului?".
+        from src.biblical_tests.generation import _LINKERS, _SUBORDINATE
+        for chapters in ("1 Samuel 13-16", "1 Samuel 23-27", "2 Samuel 2-5", "2 Samuel 15-19"):
+            _, test = self._build(chapters)
+            for question in test.section_ii + test.section_iv:
+                if not question.question.startswith("Cine "):
+                    continue
+                opener = question.question[len("Cine "):].split()[0].lower()
+                self.assertNotIn(opener, _LINKERS | _SUBORDINATE, f"{chapters} {question.id}: {question.question!r}")
+
+    def test_the_reflexive_clitic_is_not_mistaken_for_the_conjunction(self):
+        # The check above must test the bare word, not `_parallel_member`'s
+        # pre-hyphen stem: Romanian glues the reflexive clitic on with a hyphen,
+        # so the opener of "Saul si-a ales trei mii de barbati" is not the
+        # conjunction, and that question reads perfectly well.
+        from src.biblical_tests.generation import _name_predicate
+        from src.biblical_tests.models import Evidence, Fact
+        evidence = Evidence("1 Samuel", 13, 2, 2, "x")
+        good = Fact("t1", "Saul și-a ales trei mii de bărbați din Israel.", "s", "p", "Saul", evidence)
+        bad = Fact("t2", "Saul și oamenii lui erau în fundul peșterii.", "s", "p", "Saul", evidence)
+        self.assertEqual(_name_predicate(good), "și-a ales trei mii de bărbați din Israel")
+        self.assertIsNone(_name_predicate(bad))
+
+    def test_quote_balance_follows_the_corpus_own_convention(self):
+        # The corpus opens with the low quote and closes with a plain ASCII " -
+        # the right double quote never appears in it. Counting only " let a
+        # fragment carrying the opener but not the closer through; comparing the
+        # two curly marks rejected every verse containing reported speech.
+        from src.biblical_tests.generation import _quotes_balanced
+        opener, curly_closer = "„", "”"
+        guill_open, guill_close = "«", "»"
+        self.assertTrue(_quotes_balanced(f'A zis: {opener}Iata-ma!"'))
+        self.assertFalse(_quotes_balanced(f"A zis: {opener}Iata-ma!"))
+        self.assertFalse(_quotes_balanced('" Elcana a raspuns.'))
+        self.assertTrue(_quotes_balanced("Preotul Eli sedea pe un scaun."))
+        self.assertTrue(_quotes_balanced(f'A zis: {opener}Domnul a spus {guill_open}Du-te!{guill_close} astazi."'))
+        self.assertFalse(_quotes_balanced(f'A zis: {opener}Domnul a spus {guill_open}Du-te! astazi."'))
+        self.assertTrue(_quotes_balanced(f"A zis: {opener}Iata-ma!{curly_closer}"))
+        # A corpus quoting with plain ASCII " on both sides has no opener to
+        # count against; there an even number of them is the whole test.
+        self.assertTrue(_quotes_balanced('He said "go" today.'))
+        self.assertFalse(_quotes_balanced('He said "go today.'))
+
+    def test_no_section_i_statement_is_printed_with_an_unclosed_quotation(self):
+        from src.biblical_tests.generation import _quotes_balanced
+        for chapters in ("1 Samuel 1-4", "1 Samuel 9-12", "2 Samuel 1-4", "2 Samuel 11-14"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                for question in test.section_i:
+                    self.assertTrue(
+                        _quotes_balanced(question.statement),
+                        f"{chapters} v{version} {question.id}: {question.statement!r}",
+                    )
+
+    def test_one_answer_cannot_dominate_section_ii(self):
+        # Balancing the letters A/B/C is not the same property as balancing what
+        # those letters say: 2 Samuel 11-12 answered "David" nine times out of
+        # ten, spread evenly across the three letters - 36 of Section II's 40
+        # points to a student who writes one name down the page without reading.
+        from collections import Counter
+        from src.biblical_tests.generation import _MAX_SAME_ANSWER_RELAXED
+        for chapters in ("2 Samuel 10-13", "1 Samuel 26-29"):
+            for version in (1, 2, 3):
+                _, test = self._build(chapters, version=version)
+                counts = Counter(question.options[question.correct] for question in test.section_ii)
+                self.assertLessEqual(max(counts.values()), _MAX_SAME_ANSWER_RELAXED, f"{chapters} v{version}: {counts}")
+
+    def test_the_validator_rejects_a_dominated_section_ii(self):
+        from src.biblical_tests.generation import _MAX_SAME_ANSWER_RELAXED
+        _, test = self._build("1 Samuel 1-4")
+        dominant = test.section_ii[0]
+        test.section_ii = [
+            replace(question, options=dict(dominant.options), correct=dominant.correct)
+            for question in test.section_ii
+        ]
+        self.assertGreater(len(test.section_ii), _MAX_SAME_ANSWER_RELAXED)
+        with self.assertRaises(ValidationError):
+            validate_test(test)
+
+    def test_seed_and_version_are_separate_axes(self):
+        # `seed + version` made (seed=100, version=2) the same draw as
+        # (seed=101, version=1), so an off-by-one in the seed silently reissued
+        # a paper already handed out.
+        _, first = self._build("1 Samuel 1-4", version=2, seed=100)
+        _, second = self._build("1 Samuel 1-4", version=1, seed=101)
+        self.assertNotEqual(
+            [question.question for question in first.section_ii],
+            [question.question for question in second.section_ii],
+        )
+        # The same (seed, version) must still reproduce exactly.
+        _, again = self._build("1 Samuel 1-4", version=2, seed=100)
+        self.assertEqual(
+            [question.question for question in first.section_ii],
+            [question.question for question in again.section_ii],
+        )

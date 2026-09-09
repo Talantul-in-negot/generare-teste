@@ -43,6 +43,12 @@ _BLANK_MIN_WORDS = 6
 _STEM_OVERLAP_LIMIT = 0.7
 # No more than this many of Section II's ten questions may share one answer.
 _MAX_SAME_ANSWER = 3
+# What the cap relaxes *to* on a thin selection, rather than to no cap at all.
+# Dropping it entirely let 2 Samuel 11-12 answer „David" nine times out of ten,
+# worth 36 of Section II's 40 points to a student who writes one name down the
+# page without reading a single stem. `validate_test` enforces this ceiling, so
+# a future relaxation cannot quietly reintroduce that page.
+_MAX_SAME_ANSWER_RELAXED = 5
 # A handful of fixed Romanian phrases that point back at earlier, unquoted
 # narrative ("like the other times", "as usual") rather than at anything in
 # the sentence itself. A verse built around one reads as confusing on its own
@@ -366,7 +372,7 @@ _ARTICLED = {"Domnul", "Filistenii"}
 _DEFINITE_LEAD = {"lui", "acest", "acesta", "această", "aceasta", "acestui", "acestei", "aceste", "acești", "acestor"}
 
 
-def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "") -> str:
+def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "", statement: str = "") -> str:
     # Only names the selected chapters actually use, so a 2 Samuel test never
     # swaps in a character who appears nowhere in it.
     inside = {candidate.object for candidate in pool}
@@ -385,7 +391,22 @@ def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "") -> str:
     # _safe_to_swap banning it as the *source* — it's a case-inflected form,
     # not a name, so it only fits back into the exact genitive/dative slot
     # it came from, which isn't guaranteed here.
-    safe = lambda value: value != fact.object and value != "Domnului" and not _inflection(value, [fact.object]) and not (double_definite and value in _ARTICLED)
+    #
+    # `_same_referent` rather than `_inflection`: the test is whether the swap
+    # changes *who the claim is about*, and „Domnul"/„Dumnezeu"/„Dumnezeul"
+    # share no prefix while naming the same being. Swapping one for another
+    # leaves the statement true while the barem keys it False — the single
+    # worst defect this generator can ship, and it did so on roughly half of
+    # all tests („Dumnezeul sărăcește și El îmbogățește", 1 Samuel 2:7).
+    #
+    # A replacement already standing somewhere else in the sentence produces
+    # „Saul i-a zis lui Saul" or „David, fata lui Saul, îl iubea pe David":
+    # visibly broken rather than plausibly false, so the student answers F on
+    # sight without reading. Sections II and IV already refuse a distractor the
+    # quoted verse offers (`_mentions(segment, value)`); this is the same rule
+    # for the one shape that rewrites the verse instead of quoting it.
+    already_present = lambda value: bool(statement) and _mentions(statement, value)
+    safe = lambda value: value != fact.object and value != "Domnului" and not _same_referent(value, fact.object) and not (double_definite and value in _ARTICLED) and not already_present(value)
     same_gender = lambda value: _gender(value) == _gender(fact.object)
     same_class = lambda value: _swap_class(value) == _swap_class(fact.object)
     # Tried in order from safest to riskiest: matching both class and gender
@@ -402,12 +423,35 @@ def _wrong_object(fact: Fact, pool: list[Fact], lead: str = "") -> str:
     raise GenerationError("Nu există suficiente fapte distincte pentru un distractor sigur.")
 
 
+def _quotes_balanced(text: str) -> bool:
+    """True if every quotation opened in `text` also closes inside it.
+
+    The corpus quotes with „ as the opener and a plain ASCII " as the closer —
+    ” never appears in it at all — and uses «» for a quote inside a quote.
+    Balance has to be measured against that actual convention. Counting only
+    the ASCII mark, as `_concise` did, lets a fragment carrying the opener but
+    not the closer straight through, which is how 28% of Section I statements
+    came to be printed with a dangling „ („Ano, pentru ce plângi" with no end).
+    Comparing „ against ”, as `_completion_stem` did, is the opposite error:
+    ” is always zero here, so that test rejected *every* verse containing
+    reported speech — a third of the corpus — and starved Section II.
+    """
+    if text.count("«") != text.count("»"):
+        return False
+    opened = text.count("„")
+    if not opened:
+        # A corpus that quotes with plain ASCII " on both sides offers no
+        # opener to count against; there an even number of them is the test.
+        return text.count('"') % 2 == 0
+    return opened == text.count('"') + text.count("”")
+
+
 def _concise(fact: Fact, need_object: bool) -> str | None:
     """Section I keeps one clean clause; a verse that offers none is skipped."""
     for sentence in sorted(_sentences(fact.statement), key=len):
         if not 30 <= len(sentence) <= 165 or not sentence[:1].isupper():
             continue
-        if sentence.count('"') % 2 or "(" in sentence or "«" in sentence:
+        if not _quotes_balanced(sentence) or "(" in sentence:
             continue
         if need_object and not _mentions(sentence, fact.object):
             continue
@@ -444,7 +488,7 @@ def _completion_stem(fact: Fact) -> tuple[str, str] | None:
         hit = hits[0]
         # A quotation split across the blank reads as an unterminated fragment;
         # the same balance check `_concise` already applies to Section I.
-        if sentence.count('"') % 2 or sentence.count("„") != sentence.count("”"):
+        if not _quotes_balanced(sentence):
             continue
         if not sentence[:1].isupper():
             continue
@@ -599,7 +643,20 @@ def _name_predicate(fact: Fact, allow_quote: bool = False) -> str | None:
         # what follows is the verb's own complement, not a fresh predicate
         # about the name — a real predicate opens with a verb, not another
         # preposition continuing the earlier phrase.
-        if words[0].lower() in _OBLIQUE_MARKERS:
+        #
+        # A bare linker or subordinator opening it is the same defect wearing a
+        # different word class. „Saul și oamenii lui erau..." names a compound
+        # subject, so the clause after „Saul" starts on „și" and „Cine" lands in
+        # front of it: „Cine și oamenii lui erau în fundul peșterii?". „Domnul
+        # să te răsplătească" is a wish, not an assertion about the Lord, and
+        # gives „Cine să pun mâna pe unsul Domnului?". Both read as broken
+        # Romanian rather than as questions, and 47 of them shipped.
+        #
+        # The bare word only — deliberately not `_parallel_member`'s pre-hyphen
+        # stem. Romanian glues the reflexive clitic on with a hyphen, so „și-a"
+        # in „Saul și-a ales trei mii de bărbați" is not the conjunction „și",
+        # and „Cine și-a ales trei mii de bărbați?" is perfectly good.
+        if words[0].lower() in _OBLIQUE_MARKERS | _SUBORDINATE | _LINKERS:
             continue
         # The name must not reappear, or the association gives itself away.
         if len(predicate) < 10 or _mentions(predicate, fact.object):
@@ -655,6 +712,23 @@ def _same_referent(one: str, other: str) -> bool:
     if one.lower() == other.lower() or (one in _DEITY and other in _DEITY):
         return True
     return _inflection(one, [other])
+
+
+def _distinct_referents(candidates: list[str], count: int) -> list[str] | None:
+    """The first `count` candidates that all name different things, else None.
+
+    `candidates[0]` is the correct answer and is always kept; the rest are
+    tried in the caller's own order of preference. Two options that name one
+    referent make an item unanswerable when one of them is correct, and make
+    it a two-way guess when neither is, so the check is the same either way.
+    """
+    chosen: list[str] = []
+    for value in candidates:
+        if len(chosen) == count:
+            break
+        if not any(_same_referent(value, taken) for taken in chosen):
+            chosen.append(value)
+    return chosen if len(chosen) == count else None
 
 
 def _rival_predicates(facts: list[Fact]) -> list[tuple[str, set[str]]]:
@@ -910,14 +984,16 @@ def _enumeration(fact: Fact) -> tuple[str, list[str]] | None:
     return None
 
 
-def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger) -> list[MultiChoiceQuestion]:
+def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random.Random, stems: _StemLedger, rivals: list[tuple[str, set[str]]]) -> list[MultiChoiceQuestion]:
     """Mirrors the reference mix: items with three, two and one correct answer."""
     candidates = [(fact, *found) for fact in pool if (found := _enumeration(fact))]
     foreign = [member for _, _, members in candidates for member in members]
     multis: list[MultiChoiceQuestion] = []
 
     def add(fact: Fact, stem: str, values: list[str], correct_values: list[str]) -> bool:
-        if len({value.lower() for value in values}) != 3:
+        # Same rule as Section II: three options that are distinct *strings* can
+        # still be fewer than three distinct answers.
+        if _distinct_referents(values, 3) is None:
             return False
         rng.shuffle(values)
         options = dict(zip("ABC", values))
@@ -977,13 +1053,30 @@ def _section_iv(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
         for fact in pool:
             if len(multis) == 3:
                 break
-            if fact.id in used or not (built := _completion_stem(fact) or _wh_question(fact)):
+            if fact.id in used:
+                continue
+            # The „Cine ...?" shape needs the same ambiguity guard Section II
+            # applies to it. Without it this loop shipped the very question
+            # `_uniquely_answered` was written for — „Cine l-a chemat din nou pe
+            # Samuel?", which 1 Samuel 3 answers with both Eli and the Lord —
+            # and „Cine s-a ascuns în câmp?", where the distractor beside the
+            # keyed answer hid in that field too.
+            built = None
+            for name, builder in (("blank", _completion_stem), ("wh", _wh_question)):
+                if not (candidate := builder(fact)):
+                    continue
+                if name == "wh" and not _uniquely_answered(candidate[1], fact.object, rivals):
+                    continue
+                built = candidate
+                break
+            if not built:
                 continue
             stem, segment = built
-            distractors = _dedup(f.object for f in facts if f.object != fact.object and not _mentions(segment, f.object) and not _inflection(f.object, [fact.object]))
-            if len(distractors) < 2:
+            distractors = _dedup(f.object for f in facts if not _mentions(segment, f.object))
+            values = _distinct_referents([fact.object, *distractors], 3)
+            if values is None:
                 continue
-            add(fact, stem, [fact.object, *distractors[:2]], [fact.object])
+            add(fact, stem, values, [fact.object])
         if len(multis) == 3:
             break
     if len(multis) != 3:
@@ -1063,7 +1156,7 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
     # tier that can't otherwise reach ten relaxes the stem ledger's near-
     # duplicate check too (tier 3): a visibly repeated question is a worse
     # defect than an uncapped answer, so it stays last to give way.
-    for enforce_cap, enforce_ledger in ((True, True), (False, True), (False, False)):
+    for cap, enforce_ledger in ((_MAX_SAME_ANSWER, True), (_MAX_SAME_ANSWER_RELAXED, True), (_MAX_SAME_ANSWER_RELAXED, False)):
         stems.strict = enforce_ledger
         for fact in pool:
             if len(singles) == 10:
@@ -1097,16 +1190,24 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
             # on a few of them (the deity terms above all), so without a cap a
             # run of verses about the same subject turns into a run of
             # questions with the same answer — guessable without reading them.
-            if enforce_cap and answers[fact.object] >= _MAX_SAME_ANSWER:
+            if answers[fact.object] >= cap:
                 continue
             stem, segment = built
             # A distractor present in the quoted verse could also fill the blank,
             # so only terms the verse does not offer at all are safe to mark wrong.
-            safe = lambda value: value != fact.object and not _mentions(segment, value) and not _inflection(value, [fact.object])
+            safe = lambda value: not _mentions(segment, value)
             choices = [value for value in fact.options if safe(value)]
-            choices += [f.object for f in facts if safe(f.object) and f.object not in choices]
-            values = [fact.object, *choices[:2]]
-            if len(set(values)) != 3:
+            choices += [f.object for f in facts if safe(f.object)]
+            # Each option has to name a *different* answer from every other one,
+            # not merely differ as a string. „Domnul", „Dumnezeu" and „Dumnezeul"
+            # are one being under three spellings, so an item offering two of
+            # them either has two correct answers („Cine sărăcește și El
+            # îmbogățește?" — A Domnul, C Dumnezeul) or two eliminable
+            # distractors. Accumulating against `_same_referent` rather than
+            # filtering each candidate against the answer alone is what also
+            # keeps two *distractors* from colliding with each other.
+            values = _distinct_referents([fact.object, *choices], 3)
+            if values is None:
                 continue
             if not stems.claim(stem):
                 continue
@@ -1121,7 +1222,15 @@ def _section_ii(pool: list[Fact], facts: list[Fact], used: set[str], rng: random
         if len(singles) == 10:
             break
     if len(singles) != 10:
-        raise GenerationError("Nu sunt suficiente versete potrivite pentru Secțiunea II.")
+        # Section II is where a thin selection almost always runs out, and the
+        # bare message gave the reader nothing to act on. Two-chapter selections
+        # fail this way about a third of the time while three chapters fail 3%
+        # of the time and four fail none — so the shortfall is worth naming
+        # alongside the one thing that reliably fixes it.
+        raise GenerationError(
+            f"Secțiunea II are nevoie de 10 întrebări, dar selecția a produs doar {len(singles)}. "
+            "Adăugați încă un capitol la selecție."
+        )
     return singles
 
 
@@ -1130,7 +1239,11 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
     facts = [fact for fact in facts if fact.quality]
     if len(facts) < 20:
         raise GenerationError("Corpusul selectat necesită cel puțin 20 de facts verificate pentru un test complet.")
-    rng = random.Random(seed + version - 1)
+    # Not `seed + version`: that makes (seed=100, version=2) and (seed=101,
+    # version=1) the same draw, so an off-by-one in the seed silently reissues
+    # a paper already handed out. Separating the two axes keeps every
+    # (seed, version) pair its own test while staying fully deterministic.
+    rng = random.Random(seed * 1_000_003 + version)
     pool = _round_robin(facts, len(facts), rng)
     used: set[str] = set()
 
@@ -1198,7 +1311,7 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
 
     priority_pool = sorted(pool, key=lambda fact: fact.id in ii_eligible)
     stems = _StemLedger()
-    multis = _section_iv(priority_pool, facts, used, rng, stems)
+    multis = _section_iv(priority_pool, facts, used, rng, stems, rivals)
     iii_rows = _section_iii_named(priority_pool, used, rng)
     singles = _section_ii(pool, facts, used, rng, stems, rivals)
     matching = _section_iii_fill(pool, used, rng, iii_rows)
@@ -1261,7 +1374,7 @@ def build_test(facts: list[Fact], source: dict[str, list[int]], contest: dict, s
                 raise GenerationError(f"Statementul pentru {fact.id} nu mai conține obiectul de înlocuit.")
             hit = hits[-1]
             before, after = statement[:hit.start()], statement[hit.end():]
-            statement = before + _wrong_object(fact, facts, lead=before) + after
+            statement = before + _wrong_object(fact, facts, lead=before, statement=f"{before} {after}") + after
         tf.append(TrueFalseQuestion(f"I-{index}", statement, "A" if is_true else "F", fact.evidence, fact.id))
 
     return TestDefinition(source, seed, version, contest, scoring, section_i=tf, section_ii=singles, section_iii=matching, section_iv=multis)
