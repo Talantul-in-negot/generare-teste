@@ -56,6 +56,22 @@ Astfel fiecare variantă află ce au consumat surorile ei și le ocolește pe c�
 
 Cerute în rulări separate, variantele nu beneficiază deloc: generatorul nu ține minte nimic între procese. `--version` rămâne numărul primei variante.
 
+### Curățarea directorului de ieșire
+
+Interfața web își șterge singură sesiunile mai vechi de 24 de ore, dar numai când primește o cerere. Pe o mașină locală directorul se adună, așa că CLI-ul poate face curat după o rulare reușită:
+
+```bash
+python generate.py --chapters "1 Samuel 1,2,3" --versions 2 --keep-recent 5
+```
+
+Păstrează cele mai recente 5 intrări generate și le șterge pe celelalte, listând ce a șters. Trei garanții, fiindcă opțiunea chiar șterge:
+
+- variantele rulării curente sunt protejate întotdeauna, indiferent de vechimea aparentă a directorului — nici `--keep-recent 0` nu poate șterge testul tocmai generat;
+- se șterg numai directoarele care chiar conțin teste generate (`test.json`, direct sau la un nivel sub — ambele forme, a CLI-ului și a interfeței web). Un fișier lăsat acolo, un dosar propriu sau un director rămas dintr-o rulare întreruptă nu sunt atinse;
+- curățarea rulează abia după ce toate variantele au fost scrise și validate: o rulare eșuată nu ia cu ea și rezultatele celei anterioare.
+
+Fără opțiune nu se șterge nimic.
+
 ## Interfață web locală
 
 ```bash

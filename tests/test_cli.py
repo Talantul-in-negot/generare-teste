@@ -5,6 +5,8 @@ import io
 import os
 import subprocess
 import sys
+import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -143,6 +145,87 @@ class ErrorReportingTests(unittest.TestCase):
         # Neither mojibake nor the escaped form the old path produced.
         self.assertNotIn(chr(92) + "u", result.stderr)
         self.assertNotIn("?", result.stderr)
+
+
+def _session(root: Path, name: str, age_seconds: float = 0.0, nested: bool = True) -> Path:
+    """A directory shaped like generated output: `<name>/V1/test.json`, or
+    `<name>/test.json` for this program's own flat layout."""
+    folder = root / name / "V1" if nested else root / name
+    folder.mkdir(parents=True)
+    (folder / "test.json").write_text("{}", encoding="utf-8")
+    entry = root / name
+    if age_seconds:
+        stamp = time.time() - age_seconds
+        os.utime(entry, (stamp, stamp))
+    return entry
+
+
+class SweepTests(unittest.TestCase):
+    """`--keep-recent N` deletes generated output, so what it declines to
+    delete matters more than what it removes."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(self.root, ignore_errors=True))
+
+    def test_only_the_most_recent_entries_survive(self):
+        old = [_session(self.root, f"old{index}", age_seconds=3600 * (index + 2)) for index in range(3)]
+        fresh = [_session(self.root, f"fresh{index}", age_seconds=index) for index in range(2)]
+        removed = generate.sweep_output(self.root, keep=2, protected=set())
+        self.assertEqual(sorted(entry.name for entry in removed), sorted(entry.name for entry in old))
+        for entry in fresh:
+            self.assertTrue(entry.is_dir())
+
+    def test_the_current_run_is_never_deleted_even_at_keep_zero(self):
+        # The whole point of `--keep-recent 0` is to leave nothing *but* this
+        # run — it must not be a way to delete the test you just generated.
+        mine = _session(self.root, "V1", nested=False)
+        stale = _session(self.root, "someone-elses", age_seconds=99999)
+        removed = generate.sweep_output(self.root, keep=0, protected={mine})
+        self.assertEqual([entry.name for entry in removed], ["someone-elses"])
+        self.assertTrue(mine.is_dir())
+        self.assertFalse(stale.exists())
+
+    def test_protection_holds_even_when_the_entry_looks_old(self):
+        # A preserved mtime or a skewed clock must not sort this run's own
+        # output into the delete list.
+        mine = _session(self.root, "V1", age_seconds=99999, nested=False)
+        _session(self.root, "recent")
+        removed = generate.sweep_output(self.root, keep=1, protected={mine})
+        self.assertEqual(removed, [])
+        self.assertTrue(mine.is_dir())
+
+    def test_anything_that_is_not_generated_output_is_left_alone(self):
+        # A folder someone parked in the output directory, a loose file, and a
+        # directory from an interrupted run that never got its test.json.
+        (self.root / "notes").mkdir()
+        (self.root / "notes" / "draft.txt").write_text("keep me", encoding="utf-8")
+        (self.root / "loose.pdf").write_bytes(b"%PDF-")
+        (self.root / "interrupted" / "V1").mkdir(parents=True)
+        _session(self.root, "generated", age_seconds=99999)
+        removed = generate.sweep_output(self.root, keep=0, protected=set())
+        self.assertEqual([entry.name for entry in removed], ["generated"])
+        self.assertTrue((self.root / "notes" / "draft.txt").is_file())
+        self.assertTrue((self.root / "loose.pdf").is_file())
+        self.assertTrue((self.root / "interrupted" / "V1").is_dir())
+
+    def test_a_missing_output_directory_is_not_an_error(self):
+        self.assertEqual(generate.sweep_output(self.root / "absent", keep=1, protected=set()), [])
+
+    def test_it_is_off_unless_asked_for(self):
+        self.assertIsNone(generate.parse_args(["--chapters", "1 Samuel 1,2,3"]).keep_recent)
+
+    def test_a_negative_keep_count_is_refused(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            generate.parse_args(["--chapters", "1 Samuel 1,2,3", "--keep-recent", "-1"])
+
+    def test_a_failed_run_sweeps_nothing(self):
+        # The sweep runs only after every variant is written, so a run that
+        # fails does not also take the previous run's output with it.
+        stale = _session(self.root, "previous-run", age_seconds=99999)
+        with self.assertRaises(SelectionError):
+            generate.run(generate.parse_args(["--chapters", "1 Samuel 1,2", "--keep-recent", "0", "--output", str(self.root)]))
+        self.assertTrue(stale.is_dir())
 
 
 if __name__ == "__main__":

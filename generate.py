@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -98,6 +99,44 @@ def write_version(test: TestDefinition, repository: BibleRepository, folder: Pat
     return render_pair(test, folder)
 
 
+def generated_entries(output: Path) -> list[Path]:
+    """The top-level entries under `output` that hold generated tests.
+
+    Deliberately narrow, because the caller deletes what this returns. An entry
+    qualifies only by containing a `test.json` the generator writes — directly
+    (`output/V1/test.json`, this program's own layout) or one level down
+    (`output/<sesiune>/V1/test.json`, the web app's). Anything else sharing the
+    directory — a loose file, a folder someone parked there, a half-written
+    directory from an interrupted run — is not generated output as far as this
+    is concerned and is left alone rather than guessed about.
+    """
+    if not output.is_dir():
+        return []
+    return [entry for entry in output.iterdir()
+            if entry.is_dir() and (any(entry.glob("test.json")) or any(entry.glob("*/test.json")))]
+
+
+def sweep_output(output: Path, keep: int, protected: set[Path]) -> list[Path]:
+    """Deletes all but the `keep` most recent generated entries, and reports them.
+
+    `protected` is what the current run just wrote; it survives regardless of
+    where it sorts, so no invocation can delete its own output — including
+    `--keep-recent 0`, whose whole point is to leave nothing *but* this run.
+    That is a safety net rather than the counting rule: freshly written
+    directories are the most recent anyway, and it exists so a clock skew or a
+    preserved mtime cannot turn a cleanup flag into data loss.
+    """
+    protected = {path.resolve() for path in protected}
+    candidates = sorted(generated_entries(output), key=lambda entry: entry.stat().st_mtime, reverse=True)
+    removed = []
+    for entry in candidates[keep:]:
+        if entry.resolve() in protected:
+            continue
+        shutil.rmtree(entry, ignore_errors=True)
+        removed.append(entry)
+    return removed
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generator local de teste biblice fundamentate")
     parser.add_argument("--chapters", required=True, help='Ex.: "1 Samuel 1,2,3"')
@@ -106,11 +145,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--corpus", default="data")
     parser.add_argument("--output", default="output")
+    parser.add_argument("--keep-recent", type=int, default=None, metavar="N",
+                        help="După o rulare reușită, șterge din directorul de ieșire toate testele generate în afară de cele mai recente N (plus cele ale rulării curente, mereu păstrate). Implicit: nu șterge nimic.")
     args = parser.parse_args(argv)
     if args.version < 1:
         parser.error("--version trebuie să fie cel puțin 1.")
     if args.versions < 1:
         parser.error("--versions trebuie să fie cel puțin 1.")
+    if args.keep_recent is not None and args.keep_recent < 0:
+        parser.error("--keep-recent nu poate fi negativ.")
     return args
 
 
@@ -121,13 +164,23 @@ def run(args: argparse.Namespace) -> None:
     print("Loading source...")
     repository = BibleRepository(args.corpus)
     print("Parsed chapters: " + "; ".join(f"{book} {', '.join(map(str, chapters))}" for book, chapters in selection.items()))
+    written: set[Path] = set()
     for version, test in build_versions(repository, selection, config, args.version, args.versions):
         print(f"Generating Sections I-IV (V{version})... validated candidate bank")
         print("Checking references and duplicates... PASS")
-        competitor, key = write_version(test, repository, Path(args.output) / f"V{version}")
+        folder = Path(args.output) / f"V{version}"
+        competitor, key = write_version(test, repository, folder)
+        written.add(folder)
         print(f"Rendering competitor PDF... PASS: {competitor}")
         print(f"Rendering answer key PDF... PASS: {key}")
         print(f"Total: {test.total_points} puncte")
+    # Only after every variant is written and validated: a run that failed
+    # halfway must not also take the previous run's output with it.
+    if args.keep_recent is not None:
+        removed = sweep_output(Path(args.output), args.keep_recent, written)
+        print(f"Sweeping output... removed {len(removed)} older entr{'y' if len(removed) == 1 else 'ies'}")
+        for entry in removed:
+            print(f"  - {entry}")
 
 
 def main() -> None:
