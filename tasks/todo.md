@@ -603,3 +603,77 @@ from new ways to ask about the verses already accepted.
 
 **Tests.** `PlaceAndNumeralShapeTests` — 10 cases, 7 failing against the
 previous commit. Suite: 80 -> 90, all green.
+
+
+---
+
+# Audit remediation — 2026-09-09, sixth pass (the three follow-ups from the status report)
+
+## 1. Web app: audited end-to-end, no defects found
+
+Drove the actual HTTP handler over a real socket — path traversal (raw `..`
+and percent-encoded), download headers, the legacy `/download/` prefix, an
+internal exception forced to fire, two-variant coordination end-to-end,
+oversized bodies, rate limiting, and out-of-range `versions`. Every one of
+them was already correct; the earlier "essentially unaudited" note was a gap
+in test *coverage*, not a defect. `LiveServerTests` (10 cases) makes that
+verification permanent instead of a one-off manual check.
+
+One near-miss worth recording: I initially suspected the HTML form's `value=''`
+default for `category` would submit an empty string that shadows the
+documented `"6_7"` fallback in `data.get("category", "6_7")`. It doesn't —
+`urllib.parse.parse_qs` drops blank values by default (`keep_blank_values=False`),
+so an untouched field is simply absent from the parsed dict and the fallback
+applies. Checked before reporting it as a bug.
+
+## 2. `_read_js_corpus` removed
+
+Confirmed unreferenced anywhere in this repository — not by `generate.py`, not
+by the web app, not documented in `data/bible/README.md` (which describes only
+Markdown and JSON), not covered by any test. It read an undocumented template
+format (`{ref, text, blanks: [{answer, options}]}`) that traces to the project
+this generator was extracted from to become standalone (`af2ba93`), evidenced
+by a note in `data/1samuel-reference-text.md` referencing
+`js/verses-1samuel.js` — a file that exists nowhere in this repository.
+
+Removed rather than tested: writing tests for an input shape this repository
+does not use and cannot produce would only have pinned dead code in place.
+
+## 3. Section III's 7 remaining failures: investigated, not fixable without a trade-off
+
+Traced one failing case (2 Samuel 16-17) fact-by-fact through the real
+allocation pipeline. `_clause_halves` has 18 eligible verses in that selection;
+Section III's own pass claims 4 as rows, and by the time `_section_iii_fill`
+runs, Section I's False reservation has taken 4 more, Section IV 2, and
+**Section II 8** — leaving only 4 for the fifth row.
+
+Checked whether Section II's 8 were needless: they weren't. Every one of
+Section II's *other* unused candidates was already exhausted — it had zero
+non-overlapping alternatives left, so deferring these to Section III would
+simply fail Section II instead, which (unlike Section III) has no fallback
+shape of its own. This is the same arithmetic-edge phenomenon documented in
+the third and fourth passes, landing on Section III instead of Section II for
+these three specific selections.
+
+Also checked `_clause_halves` itself for a `_quotes_balanced`-style convention
+bug, since that pattern already paid off twice this session. It's clean: 680
+of 1183 quality facts (57%) pass, and every rejection reason is a real quality
+gate (clause length, split-point validity, self-containment) — no encoding
+mismatch to fix.
+
+**Not changed**: the allocation order. Reordering priority here would trade
+Section III's 7 failures for new ones in Section II, which is strictly worse
+(II has no fallback). **Changed**: the error message, to match the standard
+Section I and II already have — names the shortfall and points at the fix
+that reliably works (3-chapter selections: 0 failures, always).
+
+## Result
+
+| | before | now |
+|---|---|---|
+| web app defects found | — | 0 (10 new regression tests) |
+| dead/untested corpus readers | 1 (`_read_js_corpus`) | 0 |
+| Section III error message | generic | names the shortfall, suggests the fix |
+| Section III failures | 7 of 159 (unchanged — see above) | 7 of 159 |
+
+Suite: 90 -> 102, all green.

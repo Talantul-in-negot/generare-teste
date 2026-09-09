@@ -1061,3 +1061,27 @@ class PlaceAndNumeralShapeTests(_RealCorpusTest, unittest.TestCase):
         test.section_ii[0] = replace(question, options=broken)
         with self.assertRaises(ValidationError):
             validate_evidence(test, self.repo)
+
+
+class SectionIIIShortfallTests(_RealCorpusTest, unittest.TestCase):
+    """Section III runs last and defers to every other section, on the theory
+    that it alone has a fallback shape. On a selection where its own fallback
+    (`_clause_halves`) is itself scarce, Sections I/II/IV can still exhaust it
+    first - confirmed on real selections where Section II used every one of
+    its own non-overlapping candidates and still needed some of III's few
+    clause-half verses to reach its own quota. Reordering priority there would
+    only move the failure onto Section II, which has no fallback of its own,
+    so this is not fixed - only given the same actionable message Section II's
+    shortfall gets."""
+
+    def test_a_section_iii_shortfall_names_the_gap_and_suggests_the_fix(self):
+        with self.assertRaises(GenerationError) as caught:
+            self._build("2 Samuel 16-17")
+        message = str(caught.exception)
+        self.assertIn("Secțiunea III", message)
+        self.assertIn("capitol", message)
+
+    def test_the_same_selection_succeeds_with_one_more_chapter(self):
+        _, test = self._build("2 Samuel 16-18")
+        validate_test(test)
+        validate_evidence(test, self.repo)

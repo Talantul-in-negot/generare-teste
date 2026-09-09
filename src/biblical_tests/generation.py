@@ -1457,7 +1457,21 @@ def _section_iii_fill(pool: list[Fact], used: set[str], rng: random.Random, rows
             seen_lower.add(fact.object.lower())
             used.add(fact.id)
     if len(rows) != 5:
-        raise GenerationError("Nu sunt suficiente asocieri distincte pentru Sectiunea III.")
+        # Section III runs last and, unlike Section II, gives every other
+        # section first pick of a shared pool on the theory that it alone has
+        # a fallback shape to fall back on. That holds in general, but on a
+        # selection where `_clause_halves` itself is scarce, Sections I/II/IV
+        # can still exhaust it before Section III gets a turn — measured on
+        # real selections where Section II used every non-overlapping
+        # candidate it had and still needed some of III's few clause-half
+        # verses to reach its own quota. Reordering priority there would only
+        # move the failure to Section II, which has no fallback of its own —
+        # so, like Section II's message, this names the shortfall and points
+        # at the one thing that reliably fixes it.
+        raise GenerationError(
+            f"Secțiunea III are nevoie de 5 asocieri, dar selecția a produs doar {len(rows)}. "
+            "Adăugați încă un capitol la selecție."
+        )
     shuffled = list(rows)
     rng.shuffle(shuffled)
     right_column = {letter: item[2] for letter, item in zip("ABCDE", shuffled)}

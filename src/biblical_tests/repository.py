@@ -33,8 +33,6 @@ class BibleRepository:
             self.data = self._read_markdown_directory()
         elif self.path.suffix.lower() == ".md":
             self.data = self._read_markdown_files([self.path])
-        elif self.path.suffix.lower() == ".js":
-            self.data = self._read_js_corpus()
         else:
             self.data = json.loads(self.path.read_text(encoding="utf-8"))
         self.translation = self.data.get("translation", "Nespecificată")
@@ -196,28 +194,17 @@ class BibleRepository:
             raise ValueError(f"Nu pot extrage un răspuns verificabil din verset: {text!r}")
         return max(words, key=len)
 
-    def _read_js_corpus(self) -> dict:
-        raw = self.path.read_text(encoding="utf-8")
-        entries = []
-        pattern = re.compile(r'\{\s*ref:\s*"((?:\\.|[^"\\])*)",\s*text:\s*"((?:\\.|[^"\\])*)",\s*blanks:\s*\[\{\s*answer:\s*"((?:\\.|[^"\\])*)",\s*options:\s*\[((?:.|\n)*?)\]\s*\}\],\s*\}', re.DOTALL)
-        for match in pattern.finditer(raw):
-            ref, template, answer, options_raw = match.groups()
-            decode = lambda value: bytes(value, "utf-8").decode("unicode_escape").encode("latin1", "backslashreplace").decode("utf-8", "replace") if "\\" in value else value
-            ref, template, answer = decode(ref), decode(template), decode(answer)
-            options = tuple(decode(item) for item in re.findall(r'"((?:\\.|[^"\\])*)"', options_raw))
-            book_chapter, verse = ref.rsplit(":", 1)
-            book, chapter = book_chapter.rsplit(" ", 1)
-            filled = template.replace("{0}", answer)
-            entries.append((book, int(chapter), int(verse), filled, answer, options))
-        if not entries:
-            raise ValueError(f"Nu am putut citi corpusul JS: {self.path}")
-        books: dict[str, dict[str, dict[str, str]]] = {}
-        facts = []
-        for book, chapter, verse, text, answer, options in entries:
-            books.setdefault(book, {}).setdefault(str(chapter), {})[str(verse)] = text
-            facts.append({"id": f"{book}-{chapter}-{verse}", "statement": text, "subject": f"versetul {book} {chapter}:{verse}", "predicate": "conține răspunsul", "object": answer, "options": list(options), "evidence": {"book": book, "chapter": chapter, "verse_start": verse, "verse_end": verse, "text": text}})
-        return {"translation": f"Corpus JS local: {self.path.name}", "books": books, "facts": facts}
-
+    # A ".js" branch used to live here, reading an undocumented template
+    # format ({ref: "...", text: "...", blanks: [{answer, options}]}) from the
+    # project this generator was extracted to be standalone from (see
+    # `af2ba93`, "Make biblical test generator standalone", and the note in
+    # data/1samuel-reference-text.md referencing "js/verses-1samuel.js"). No
+    # file in this repository is in that format, `data/bible/README.md`
+    # documents only Markdown and JSON as supported input, and nothing calls
+    # it — it was dead code left over from the extraction, not a supported
+    # corpus source. Removed rather than tested: writing tests for an input
+    # shape this repository does not use and cannot produce would only pin the
+    # dead code in place.
     def _read_facts(self, values: list[dict]) -> list[Fact]:
         facts = []
         for raw in values:
