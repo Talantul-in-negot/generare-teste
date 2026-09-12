@@ -97,27 +97,38 @@ create table if not exists usage_log (
   id bigint generated always as identity primary key,
   created_at timestamptz not null default now(),
   client_ip text not null,
-  selection text not null,
-  versions int not null
+  selection text,
+  versions int not null,
+  event_type text not null default 'generation'
+    check (event_type in ('generation', 'download')),
+  document_type text
+    check (document_type in ('contest', 'answer_key')),
+  session_id text,
+  filename text
 );
 
 alter table usage_log enable row level security;
 ```
 
-Pentru a păstra și descărcările PDF, se creează suplimentar:
+Pentru o instalare existentă, actualizează tabelul astfel:
 
 ```sql
-create table if not exists download_log (
-  id bigint generated always as identity primary key,
-  created_at timestamptz not null default now(),
-  client_ip text not null,
-  session_id text not null,
-  version int not null,
-  document_type text not null check (document_type in ('contest', 'answer_key')),
-  filename text not null
-);
+alter table usage_log alter column selection drop not null;
+alter table usage_log add column if not exists event_type text not null default 'generation';
+alter table usage_log add column if not exists document_type text;
+alter table usage_log add column if not exists session_id text;
+alter table usage_log add column if not exists filename text;
 
-alter table download_log enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'usage_log_event_type_check') then
+    alter table usage_log add constraint usage_log_event_type_check
+      check (event_type in ('generation', 'download'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'usage_log_document_type_check') then
+    alter table usage_log add constraint usage_log_document_type_check
+      check (document_type in ('contest', 'answer_key'));
+  end if;
+end $$;
 ```
 
 (RLS activat din prudență, deși nu e nevoie de nicio politică — cheia service role o ocolește oricum.)

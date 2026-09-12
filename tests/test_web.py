@@ -356,8 +356,45 @@ class SupabaseUsageTests(unittest.TestCase):
         self.assertEqual(request.get_header("Apikey"), "service-key")
         self.assertEqual(request.get_header("Authorization"), "Bearer service-key")
         body = json.loads(request.data.decode("utf-8"))
-        self.assertEqual(body, {"client_ip": "203.0.113.9", "selection": "1 Samuel 1,2,3", "versions": 2})
+        self.assertEqual(body, {
+            "client_ip": "203.0.113.9",
+            "selection": "1 Samuel 1,2,3",
+            "versions": 2,
+            "event_type": "generation",
+            "document_type": None,
+            "session_id": None,
+            "filename": None,
+        })
         self.assertLessEqual(timeout, 5)
+
+    def test_download_event_uses_the_same_usage_log_table(self):
+        app.SUPABASE_URL, app.SUPABASE_SERVICE_KEY = "https://example.supabase.co", "service-key"
+        calls = []
+
+        class _FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        app.urlopen = lambda request, timeout=None: (calls.append((request, timeout)) or _FakeResponse())
+        app._post_to_supabase(
+            "203.0.113.9", "", 1,
+            event_type="download", document_type="answer_key",
+            session_id="abc123", filename="1 Samuel 1-3 V1 barem.pdf",
+        )
+
+        body = json.loads(calls[0][0].data.decode("utf-8"))
+        self.assertEqual(body, {
+            "client_ip": "203.0.113.9",
+            "selection": None,
+            "versions": 1,
+            "event_type": "download",
+            "document_type": "answer_key",
+            "session_id": "abc123",
+            "filename": "1 Samuel 1-3 V1 barem.pdf",
+        })
 
     def test_a_network_failure_does_not_propagate(self):
         app.SUPABASE_URL, app.SUPABASE_SERVICE_KEY = "https://example.supabase.co", "service-key"
