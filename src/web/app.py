@@ -440,6 +440,20 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
+    def do_HEAD(self) -> None:
+        """Answer Render's health-check without sending an HTML body."""
+        parsed = urlparse(self.path)
+        if parsed.path in {"/", APP_PATH, f"{APP_PATH}/"}:
+            content = page().encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            return
+        self.send_error(HTTPStatus.NOT_FOUND)
+
     def do_POST(self) -> None:
         if urlparse(self.path).path not in {"/generate", f"{APP_PATH}/generate", f"{APP_PATH}/generate/"}:
             return self.send_error(HTTPStatus.NOT_FOUND)
