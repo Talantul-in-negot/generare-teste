@@ -42,11 +42,10 @@ class ClientKeyTests(unittest.TestCase):
         app.TRUST_PROXY = False
         self.assertEqual(app.client_key(_request("203.0.113.9", "1.2.3.4")), "203.0.113.9")
 
-    def test_behind_a_trusted_proxy_the_rightmost_hop_wins(self):
-        # The router appends the address it saw; anything to the left of it is
-        # whatever the caller chose to send.
+    def test_behind_a_trusted_render_proxy_the_real_caller_wins(self):
+        # Render writes the real caller first; later entries are proxy hops.
         app.TRUST_PROXY = True
-        self.assertEqual(app.client_key(_request("10.0.0.1", "1.2.3.4, 198.51.100.7")), "198.51.100.7")
+        self.assertEqual(app.client_key(_request("10.0.0.1", "198.51.100.7, 10.26.204.136")), "198.51.100.7")
 
     def test_falls_back_to_the_socket_when_the_header_is_absent(self):
         app.TRUST_PROXY = True

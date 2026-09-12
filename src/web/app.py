@@ -69,17 +69,15 @@ _CLEANUP_LOCK = threading.Lock()
 def client_key(handler: BaseHTTPRequestHandler) -> str:
     """The address the rate limiter counts against.
 
-    Behind a platform router every request arrives from the router's own
-    address, so counting `client_address` there makes the limit global: ten
-    generations an hour for all visitors put together, rather than per
-    visitor. The router appends the real caller to X-Forwarded-For, so with
-    exactly one trusted proxy in front the rightmost entry is the one the
-    router itself wrote — the left of it is whatever the caller may have made
-    up, and is deliberately ignored.
+    Behind Render's platform router every request arrives from the router's
+    own address, so counting `client_address` there makes the limit global:
+    ten generations an hour for all visitors put together, rather than per
+    visitor. Render puts the real caller first in X-Forwarded-For; subsequent
+    entries are proxy hops, so the first entry is the identity to count.
     """
     forwarded = handler.headers.get("X-Forwarded-For", "") if TRUST_PROXY else ""
     if forwarded.strip():
-        return forwarded.rsplit(",", 1)[-1].strip()
+        return forwarded.split(",", 1)[0].strip()
     return handler.client_address[0]
 
 
