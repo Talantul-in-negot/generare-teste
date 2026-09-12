@@ -126,6 +126,35 @@ def _post_to_supabase(client_ip: str, chapters: str, versions: int) -> None:
         traceback.print_exc()
 
 
+def _post_download_to_supabase(client_ip: str, session_id: str, version: int,
+                                document_type: str, filename: str) -> None:
+    """Records a successful PDF download without affecting the response."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return
+    payload = json.dumps({
+        "client_ip": client_ip,
+        "session_id": session_id,
+        "version": version,
+        "document_type": document_type,
+        "filename": filename,
+    }).encode("utf-8")
+    request = Request(
+        f"{SUPABASE_URL}/rest/v1/download_log",
+        data=payload, method="POST",
+        headers={
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+    )
+    try:
+        with urlopen(request, timeout=5):
+            pass
+    except (URLError, OSError):
+        traceback.print_exc()
+
+
 def log_generation(client_ip: str, selection: dict[str, list[int]], versions: int) -> None:
     """Records a successful generation: locally, and in Supabase if configured.
 
@@ -413,7 +442,18 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Disposition", f'attachment; filename="{file.name}"')
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
-            return self.wfile.write(data)
+            self.wfile.write(data)
+            if file.suffix.lower() == ".pdf":
+                parts = file.relative_to(OUTPUT).parts
+                session_id = parts[0] if len(parts) >= 3 else ""
+                version_match = re.fullmatch(r"V(\d+)", parts[1]) if len(parts) >= 3 else None
+                if session_id and version_match:
+                    document_type = "answer_key" if "barem" in file.stem.lower() else "contest"
+                    _post_download_to_supabase(
+                        client_key(self), session_id, int(version_match.group(1)),
+                        document_type, file.name,
+                    )
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:

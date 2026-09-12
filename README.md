@@ -104,6 +104,22 @@ create table if not exists usage_log (
 alter table usage_log enable row level security;
 ```
 
+Pentru a păstra și descărcările PDF, se creează suplimentar:
+
+```sql
+create table if not exists download_log (
+  id bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  client_ip text not null,
+  session_id text not null,
+  version int not null,
+  document_type text not null check (document_type in ('contest', 'answer_key')),
+  filename text not null
+);
+
+alter table download_log enable row level security;
+```
+
 (RLS activat din prudență, deși nu e nevoie de nicio politică — cheia service role o ocolește oricum.)
 
 ## LLM (opțional, neimplementat intenționat în MVP)
