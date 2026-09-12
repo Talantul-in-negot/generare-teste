@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import tempfile
 import threading
@@ -313,6 +314,68 @@ class UsageLogTests(_LiveServerMixin, unittest.TestCase):
             app.TRUST_PROXY = False
         self.assertEqual(status, 200)
         self.assertIn("198.51.100.7", self.log_path.read_text(encoding="utf-8"))
+
+
+class SupabaseUsageTests(unittest.TestCase):
+    """The optional second half of usage logging. Never touches the network:
+    every case here works by replacing `urlopen` itself, so a misconfigured
+    or absent Supabase project can't turn into a real HTTP attempt."""
+
+    def setUp(self):
+        self.original = (app.SUPABASE_URL, app.SUPABASE_SERVICE_KEY, app.urlopen)
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        app.SUPABASE_URL, app.SUPABASE_SERVICE_KEY, app.urlopen = self.original
+
+    def test_unconfigured_supabase_makes_no_request_at_all(self):
+        app.SUPABASE_URL, app.SUPABASE_SERVICE_KEY = "", ""
+        app.urlopen = lambda *a, **k: (_ for _ in ()).throw(AssertionError("urlopen must not be called"))
+        app._post_to_supabase("203.0.113.9", "1 Samuel 1,2,3", 1)  # must not raise
+
+    def test_a_configured_project_receives_the_right_row(self):
+        app.SUPABASE_URL, app.SUPABASE_SERVICE_KEY = "https://example.supabase.co", "service-key"
+        calls = []
+
+        class _FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            calls.append((request, timeout))
+            return _FakeResponse()
+
+        app.urlopen = fake_urlopen
+        app._post_to_supabase("203.0.113.9", "1 Samuel 1,2,3", 2)
+
+        self.assertEqual(len(calls), 1)
+        request, timeout = calls[0]
+        self.assertEqual(request.full_url, "https://example.supabase.co/rest/v1/usage_log")
+        self.assertEqual(request.get_header("Apikey"), "service-key")
+        self.assertEqual(request.get_header("Authorization"), "Bearer service-key")
+        body = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(body, {"client_ip": "203.0.113.9", "selection": "1 Samuel 1,2,3", "versions": 2})
+        self.assertLessEqual(timeout, 5)
+
+    def test_a_network_failure_does_not_propagate(self):
+        app.SUPABASE_URL, app.SUPABASE_SERVICE_KEY = "https://example.supabase.co", "service-key"
+        app.urlopen = lambda *a, **k: (_ for _ in ()).throw(urllib.error.URLError("offline"))
+        app._post_to_supabase("203.0.113.9", "1 Samuel 1,2,3", 1)  # must not raise
+
+    def test_log_generation_calls_supabase_too(self):
+        original = app._post_to_supabase
+        with tempfile.TemporaryDirectory() as tmp:
+            app.USAGE_LOG_PATH = Path(tmp) / "usage.log"
+            recorded = []
+            app._post_to_supabase = lambda client_ip, chapters, versions: recorded.append((client_ip, chapters, versions))
+            try:
+                app.log_generation("203.0.113.9", {"1 Samuel": [1, 2, 3]}, 3)
+            finally:
+                app._post_to_supabase = original  # a `del` here would remove the real function from the module for good, not just undo this test's patch
+        self.assertEqual(recorded, [("203.0.113.9", "1 Samuel 1,2,3", 3)])
 
 
 if __name__ == "__main__":

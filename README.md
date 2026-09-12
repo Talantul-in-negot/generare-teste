@@ -86,7 +86,25 @@ Local, serverul ascultă numai pe `127.0.0.1`. Când platforma de găzduire sete
 
 Fiecare generare reușită (nu și cele eșuate) e înregistrată într-un fișier text, o linie: data/ora UTC, adresa reală a apelantului (aceeași verificată de `TRUST_PROXY`, nu adresa routerului), selecția generată, numărul de variante. Implicit `data/usage.log`, mutabil cu variabila de mediu `USAGE_LOG_PATH`. Aceeași linie apare și pe stdout, deci și în log-ul platformei de găzduire.
 
-Fișierul e local procesului care rulează — pe o platformă cu disc efemer (planul gratuit Render, printre altele) nu supraviețuiește unui redeploy sau unei reporniri după inactivitate, ci acoperă doar intervalul de la ultima pornire. Pentru păstrare completă între redeployuri e nevoie fie de un disc persistent atașat serverului (cost suplimentar pe majoritatea platformelor), fie de un serviciu extern de stocare la care fișierul/liniile să fie trimise în plus față de disc.
+Fișierul e local procesului care rulează — pe o platformă cu disc efemer (planul gratuit Render, printre altele) nu supraviețuiește unui redeploy sau unei reporniri după inactivitate, ci acoperă doar intervalul de la ultima pornire.
+
+Pentru păstrare completă între redeployuri, aceeași înregistrare se trimite opțional și către Supabase (Postgres găzduit), dacă sunt setate `SUPABASE_URL` și `SUPABASE_SERVICE_KEY` ca variabile de mediu — nicio cheie nu se stochează în repository, la fel ca la integrarea LLM de mai jos. `SUPABASE_SERVICE_KEY` trebuie să fie cheia *service role* (nu cea publică/anon): apelul se face exclusiv din acest server, niciodată dintr-un browser, iar cheia service ocolește Row Level Security fără să fie nevoie de nicio politică suplimentară. Fără cele două variabile, comportamentul rămâne identic cu cel de mai sus — fișier local + stdout.
+
+Tabelul se creează o singură dată, în editorul SQL al proiectului Supabase ales:
+
+```sql
+create table if not exists usage_log (
+  id bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  client_ip text not null,
+  selection text not null,
+  versions int not null
+);
+
+alter table usage_log enable row level security;
+```
+
+(RLS activat din prudență, deși nu e nevoie de nicio politică — cheia service role o ocolește oricum.)
 
 ## LLM (opțional, neimplementat intenționat în MVP)
 

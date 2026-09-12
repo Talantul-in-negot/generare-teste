@@ -15,7 +15,9 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import NamedTuple
+from urllib.error import URLError
 from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.request import Request, urlopen
 
 from src.biblical_tests import USER_ERRORS
 from src.biblical_tests.generation import build_test
@@ -31,12 +33,23 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = PROJECT_ROOT / "output"
 REPOSITORY = BibleRepository(PROJECT_ROOT / "data")
 
-# Who generated what, and when — an append-only, human-readable trail. This is
-# the only record of usage this process keeps; nothing here is a database or
-# survives a redeploy on its own (see log_generation's docstring). Overridable
-# so a deployment with a persistent disk can point it somewhere that does.
+# Who generated what, and when — an append-only, human-readable trail. This
+# file alone is not a database and does not survive a redeploy on its own
+# (see log_generation's docstring); it stays as the local/stdout half of the
+# record regardless of whether Supabase below is configured. Overridable so a
+# deployment with a persistent disk can point it somewhere that does survive.
 USAGE_LOG_PATH = Path(os.environ.get("USAGE_LOG_PATH") or PROJECT_ROOT / "data" / "usage.log")
 _USAGE_LOG_LOCK = threading.Lock()
+
+# Optional, and off unless both are set: a Supabase project's REST endpoint
+# and its *service role* key, which bypasses Row Level Security entirely.
+# That's the correct key here, not the anon/public one — this call is made
+# only from this server process, is never sent to a browser, and the whole
+# point of the service key is server-to-server writes like this one. It is
+# read only from the environment, the same rule the README already states
+# for the optional LLM integration: no key is ever stored in the repository.
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
 # Anti-abuse: max requests to /generate per IP within the rolling window below.
 RATE_LIMIT_MAX_REQUESTS = 10
@@ -83,18 +96,54 @@ def _log_field(value: str) -> str:
     return re.sub(r"[\r\n;]+", " ", value).strip()
 
 
-def log_generation(client_ip: str, selection: dict[str, list[int]], versions: int) -> None:
-    """Appends one line recording a successful generation.
+def _post_to_supabase(client_ip: str, chapters: str, versions: int) -> None:
+    """Inserts one usage row into Supabase, if it's configured; a no-op otherwise.
 
-    This is deliberately a flat file, not a database - the whole feature is
-    "know who used it and how many tests came out", and a file `grep`s and
-    downloads without any extra machinery. What it can't do: survive a
+    This is the half of the record meant to survive a redeploy on ephemeral
+    disk, which the local file (log_generation's other half) cannot. Failure
+    here — network, misconfigured table, expired key — must not fail the
+    generation the caller is waiting on any more than a local disk error
+    does, so every failure is caught and only printed, never raised. A short
+    timeout for the same reason: a slow or hung Supabase request must not
+    make the caller wait past what a completely offline third party would
+    otherwise cost them.
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return
+    payload = json.dumps({"client_ip": client_ip, "selection": chapters, "versions": versions}).encode("utf-8")
+    request = Request(
+        f"{SUPABASE_URL}/rest/v1/usage_log",
+        data=payload, method="POST",
+        headers={
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+    )
+    try:
+        with urlopen(request, timeout=5):
+            pass
+    except (URLError, OSError):
+        traceback.print_exc()
+
+
+def log_generation(client_ip: str, selection: dict[str, list[int]], versions: int) -> None:
+    """Records a successful generation: locally, and in Supabase if configured.
+
+    The local file is deliberately flat, not a database - the whole feature
+    is "know who used it and how many tests came out", and a file `grep`s
+    and downloads without any extra machinery. What it can't do: survive a
     redeploy on a host with an ephemeral filesystem (Render's free tier among
     them), since the file lives on that same disk. A host with a persistent
     disk can point USAGE_LOG_PATH there instead; short of that, this only
-    covers the time since the last restart. Printing the same line is the
-    other half of that tradeoff - the platform's own log stream captures it
-    independently of this file, for whatever retention window it offers.
+    covers the time since the last restart. Printing the same line is a
+    second, independent copy - the platform's own log stream captures it
+    without touching this file at all.
+
+    Supabase is the piece that actually survives a redeploy, and is entirely
+    optional: unset SUPABASE_URL/SUPABASE_SERVICE_KEY, and this behaves
+    exactly as before their introduction.
     """
     chapters = "; ".join(f"{book} {','.join(map(str, chapters))}" for book, chapters in selection.items())
     line = f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}\t{_log_field(client_ip)}\t{_log_field(chapters)}\tversions={versions}"
@@ -108,6 +157,7 @@ def log_generation(client_ip: str, selection: dict[str, list[int]], versions: in
         # A read-only or missing-disk edge case must not fail the generation
         # the caller is waiting on; the stdout line above already covers it.
         traceback.print_exc()
+    _post_to_supabase(client_ip, chapters, versions)
 
 
 def rate_limited(client_ip: str) -> bool:
