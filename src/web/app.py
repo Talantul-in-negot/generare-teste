@@ -147,7 +147,15 @@ def log_generation(client_ip: str, selection: dict[str, list[int]], versions: in
     """
     chapters = "; ".join(f"{book} {','.join(map(str, chapters))}" for book, chapters in selection.items())
     line = f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}\t{_log_field(client_ip)}\t{_log_field(chapters)}\tversions={versions}"
-    print(f"[usage] {line}")
+    # flush=True: stdout is line-buffered only when it's a terminal. Piped to
+    # a host's log collector (every hosted deployment, this one included),
+    # Python block-buffers it instead — this line would sit unflushed for an
+    # arbitrary stretch, or be lost entirely if the process restarts first.
+    # The access log a few lines above comes from BaseHTTPRequestHandler's
+    # own logging, which writes to stderr - unbuffered by default - which is
+    # why those lines show up immediately while an unflushed stdout print
+    # does not; the difference is the stream, not whether this line ran.
+    print(f"[usage] {line}", flush=True)
     try:
         with _USAGE_LOG_LOCK:
             USAGE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
