@@ -344,7 +344,10 @@ def make_tests(data: dict[str, str]) -> GenerationResult:
     seed = _whole_number(data, "seed", None, "Seed-ul")
     base_seed = secrets.randbelow(2**31) if seed is None else seed
     versions = max(1, min(10, _whole_number(data, "versions", 1, "Numărul de variante")))
-    contest = {"title": "TALANTUL ÎN NEGOȚ", "category": data.get("category", "6_7"), "edition": _whole_number(data, "edition", 2027, "Ediția"), "stage": data.get("stage", "Faza pe biserică"), "date": data.get("date", "")}
+    # Left empty, "Categoria" is omitted from the header entirely rather than
+    # printing a stale placeholder (rendering.py only prints the line when
+    # this is truthy) - so an empty field means exactly what the box shows.
+    contest = {"title": "TALANTUL ÎN NEGOȚ", "category": data.get("category", ""), "edition": _whole_number(data, "edition", 2027, "Ediția"), "stage": data.get("stage", "Faza pe biserică"), "date": data.get("date", "")}
     scoring = {"section_1": 2, "section_2": 4, "section_3": 2, "section_4": 5}
     session_id = secrets.token_urlsafe(9)
     links = []
