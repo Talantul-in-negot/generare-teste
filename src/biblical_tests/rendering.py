@@ -19,15 +19,17 @@ RED = colors.HexColor("#ff0000")
 PAGE_MARGIN = 10*mm
 CONTENT_WIDTH = A4[0] - 2*PAGE_MARGIN
 SECTION_NUMERAL_WIDTH = 7*mm
+FONT_DIR = Path(__file__).resolve().parents[2] / "assets" / "fonts"
 
 
 def _register_fonts() -> tuple[str, str, str]:
     candidates = [
+        FONT_DIR / "calibri.ttf",
         Path("C:/Windows/Fonts/calibri.ttf"), Path("C:/Windows/Fonts/arial.ttf"),
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     ]
-    bold = [Path("C:/Windows/Fonts/calibrib.ttf"), Path("C:/Windows/Fonts/arialbd.ttf"), Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")]
-    italic = [Path("C:/Windows/Fonts/calibrii.ttf"), Path("C:/Windows/Fonts/ariali.ttf"), Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf")]
+    bold = [FONT_DIR / "calibrib.ttf", Path("C:/Windows/Fonts/calibrib.ttf"), Path("C:/Windows/Fonts/arialbd.ttf"), Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")]
+    italic = [FONT_DIR / "calibrii.ttf", Path("C:/Windows/Fonts/calibrii.ttf"), Path("C:/Windows/Fonts/ariali.ttf"), Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf")]
     regular = next((item for item in candidates if item.exists()), None)
     bold_path = next((item for item in bold if item.exists()), regular)
     italic_path = next((item for item in italic if item.exists()), regular)
