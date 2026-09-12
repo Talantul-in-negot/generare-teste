@@ -82,6 +82,12 @@ Deschideți `http://127.0.0.1:8000`. Interfața susține selecții pe linii, cat
 
 Local, serverul ascultă numai pe `127.0.0.1`. Când platforma de găzduire setează `PORT`, ascultă pe toate interfețele; setați `HOST` pentru a forța o adresă anume. În spatele unui router de platformă setați `TRUST_PROXY=1` (așa cum face `Procfile`), altfel limita de generări per utilizator devine o limită globală, comună tuturor vizitatorilor: fără antetul `X-Forwarded-For` toate cererile par să vină de la aceeași adresă, cea a routerului.
 
+### Jurnalul de utilizare
+
+Fiecare generare reușită (nu și cele eșuate) e înregistrată într-un fișier text, o linie: data/ora UTC, adresa reală a apelantului (aceeași verificată de `TRUST_PROXY`, nu adresa routerului), selecția generată, numărul de variante. Implicit `data/usage.log`, mutabil cu variabila de mediu `USAGE_LOG_PATH`. Aceeași linie apare și pe stdout, deci și în log-ul platformei de găzduire.
+
+Fișierul e local procesului care rulează — pe o platformă cu disc efemer (planul gratuit Render, printre altele) nu supraviețuiește unui redeploy sau unei reporniri după inactivitate, ci acoperă doar intervalul de la ultima pornire. Pentru păstrare completă între redeployuri e nevoie fie de un disc persistent atașat serverului (cost suplimentar pe majoritatea platformelor), fie de un serviciu extern de stocare la care fișierul/liniile să fie trimise în plus față de disc.
+
 ## LLM (opțional, neimplementat intenționat în MVP)
 
 O integrare LLM poate propune facts, dar trebuie să emită JSON strict, să primească numai versetele selectate și să treacă prin verificarea deterministă înainte de a fi salvată în corpus. Cheile nu se stochează în repository; se folosesc numai variabile de mediu. Renderingul și validarea nu depind de vreun provider.

@@ -129,10 +129,11 @@ class MinimumSelectionSizeTests(unittest.TestCase):
 
 
 
-class LiveServerTests(unittest.TestCase):
-    """Drives the actual HTTP handler over a real socket. Everything below was
-    verified once by hand against a running server and had no test pinning it
-    in place — this is that verification, made permanent.
+class _LiveServerMixin:
+    """Shared server lifecycle for tests that drive the real HTTP handler over
+    a socket. A mixin rather than a base `TestCase`: a subclass of a
+    `TestCase` inherits its test methods too, which would silently re-run
+    every `LiveServerTests` case a second time under each subclass's name.
     """
 
     @classmethod
@@ -157,15 +158,22 @@ class LiveServerTests(unittest.TestCase):
     def setUp(self):
         app._REQUEST_LOG.clear()
 
-    def _request(self, method, path, data=None):
+    def _request(self, method, path, data=None, extra_headers=None):
         url = self.base + path
         body = urllib.parse.urlencode(data).encode() if data is not None else None
-        request = urllib.request.Request(url, data=body, method=method)
+        request = urllib.request.Request(url, data=body, method=method, headers=extra_headers or {})
         try:
             with urllib.request.urlopen(request, timeout=15) as response:
                 return response.status, dict(response.headers), response.read()
         except urllib.error.HTTPError as exc:
             return exc.code, dict(exc.headers), exc.read()
+
+
+class LiveServerTests(_LiveServerMixin, unittest.TestCase):
+    """Drives the actual HTTP handler over a real socket. Everything below was
+    verified once by hand against a running server and had no test pinning it
+    in place — this is that verification, made permanent.
+    """
 
     def test_a_generated_pdf_downloads_with_the_right_headers(self):
         status, _, body = self._request("POST", f"{app.APP_PATH}/generate", {"chapters": "1 Samuel 1,2,3"})
@@ -252,6 +260,59 @@ class LiveServerTests(unittest.TestCase):
             links = re.findall(r'href="([^"]+)"', body.decode())
             self.assertEqual(len([l for l in links if l.endswith(".pdf")]), expected_pdfs, value)
 
+
+class UsageLogTests(_LiveServerMixin, unittest.TestCase):
+    """A successful generation is the only thing this app records about who
+    used it. That record has to name the real caller (not the platform's own
+    address), the selection actually generated, and how many variants — and
+    it must never happen for a request that failed."""
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log_path = Path(self.tmp.name) / "usage.log"
+        self.original_path = app.USAGE_LOG_PATH
+        app.USAGE_LOG_PATH = self.log_path
+        self.addCleanup(lambda: setattr(app, "USAGE_LOG_PATH", self.original_path))
+
+    def test_a_successful_generation_is_recorded(self):
+        app.log_generation("203.0.113.9", {"1 Samuel": [1, 2, 3]}, 2)
+        line = self.log_path.read_text(encoding="utf-8").strip()
+        self.assertIn("203.0.113.9", line)
+        self.assertIn("1 Samuel 1,2,3", line)
+        self.assertIn("versions=2", line)
+
+    def test_a_newline_in_a_field_cannot_forge_a_second_line(self):
+        app.log_generation("1.2.3.4\nFAKED: 9.9.9.9\tstolen\tversions=1", {"1 Samuel": [1, 2, 3]}, 1)
+        lines = self.log_path.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertNotIn("\n", lines[0])
+
+    def test_a_failed_request_writes_nothing(self):
+        with self.assertRaises(app.USER_ERRORS):
+            app.make_tests({"chapters": "1 Samuel 1,2"})  # below the 3-chapter floor
+        self.assertFalse(self.log_path.exists())
+
+    def test_a_successful_request_over_http_is_recorded(self):
+        status, _, _ = self._request("POST", f"{app.APP_PATH}/generate", {"chapters": "1 Samuel 1,2,3"})
+        self.assertEqual(status, 200)
+        line = self.log_path.read_text(encoding="utf-8")
+        self.assertIn("127.0.0.1", line)
+        self.assertIn("1 Samuel 1,2,3", line)
+        self.assertIn("versions=1", line)
+
+    def test_the_real_caller_is_recorded_not_the_router(self):
+        app.TRUST_PROXY = True
+        try:
+            status, _, _ = self._request(
+                "POST", f"{app.APP_PATH}/generate", {"chapters": "1 Samuel 1,2,3"},
+                extra_headers={"X-Forwarded-For": "198.51.100.7"},
+            )
+        finally:
+            app.TRUST_PROXY = False
+        self.assertEqual(status, 200)
+        self.assertIn("198.51.100.7", self.log_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

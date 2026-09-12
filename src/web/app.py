@@ -10,9 +10,11 @@ import threading
 import time
 import traceback
 from collections import defaultdict, deque
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import NamedTuple
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from src.biblical_tests import USER_ERRORS
@@ -28,6 +30,13 @@ from src.biblical_tests.validation import coverage_report, validate_evidence, va
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = PROJECT_ROOT / "output"
 REPOSITORY = BibleRepository(PROJECT_ROOT / "data")
+
+# Who generated what, and when — an append-only, human-readable trail. This is
+# the only record of usage this process keeps; nothing here is a database or
+# survives a redeploy on its own (see log_generation's docstring). Overridable
+# so a deployment with a persistent disk can point it somewhere that does.
+USAGE_LOG_PATH = Path(os.environ.get("USAGE_LOG_PATH") or PROJECT_ROOT / "data" / "usage.log")
+_USAGE_LOG_LOCK = threading.Lock()
 
 # Anti-abuse: max requests to /generate per IP within the rolling window below.
 RATE_LIMIT_MAX_REQUESTS = 10
@@ -59,6 +68,46 @@ def client_key(handler: BaseHTTPRequestHandler) -> str:
     if forwarded.strip():
         return forwarded.rsplit(",", 1)[-1].strip()
     return handler.client_address[0]
+
+
+def _log_field(value: str) -> str:
+    """Makes a value safe as one field in a one-line, `;`-separated record.
+
+    Every field here either comes from the network (`client_ip`, by way of a
+    header a caller controls when TRUST_PROXY is off) or is otherwise outside
+    this program's control. Without this, a value carrying a newline would
+    forge a second log line, and a `;` would shift every field after it -
+    both by construction of the format itself, not by any weakness in the
+    values this app happens to produce today.
+    """
+    return re.sub(r"[\r\n;]+", " ", value).strip()
+
+
+def log_generation(client_ip: str, selection: dict[str, list[int]], versions: int) -> None:
+    """Appends one line recording a successful generation.
+
+    This is deliberately a flat file, not a database - the whole feature is
+    "know who used it and how many tests came out", and a file `grep`s and
+    downloads without any extra machinery. What it can't do: survive a
+    redeploy on a host with an ephemeral filesystem (Render's free tier among
+    them), since the file lives on that same disk. A host with a persistent
+    disk can point USAGE_LOG_PATH there instead; short of that, this only
+    covers the time since the last restart. Printing the same line is the
+    other half of that tradeoff - the platform's own log stream captures it
+    independently of this file, for whatever retention window it offers.
+    """
+    chapters = "; ".join(f"{book} {','.join(map(str, chapters))}" for book, chapters in selection.items())
+    line = f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}\t{_log_field(client_ip)}\t{_log_field(chapters)}\tversions={versions}"
+    print(f"[usage] {line}")
+    try:
+        with _USAGE_LOG_LOCK:
+            USAGE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with USAGE_LOG_PATH.open("a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+    except OSError:
+        # A read-only or missing-disk edge case must not fail the generation
+        # the caller is waiting on; the stdout line above already covers it.
+        traceback.print_exc()
 
 
 def rate_limited(client_ip: str) -> bool:
@@ -224,7 +273,13 @@ def _whole_number(data: dict[str, str], key: str, default: int | None, label: st
         raise SelectionError(f"{label} trebuie să fie un număr întreg.") from None
 
 
-def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
+class GenerationResult(NamedTuple):
+    links: list[tuple[str, str]]
+    selection: dict[str, list[int]]
+    versions: int
+
+
+def make_tests(data: dict[str, str]) -> GenerationResult:
     selection = parse_selection(data.get("chapters", ""))
     require_minimum_chapters(selection)
     repo = REPOSITORY
@@ -250,7 +305,7 @@ def make_tests(data: dict[str, str]) -> list[tuple[str, str]]:
         candidate_url = quote(candidate.relative_to(OUTPUT).as_posix(), safe="/")
         answer_url = quote(answer_key.relative_to(OUTPUT).as_posix(), safe="/")
         links.extend([(f"Descarcă Test Concurenți V{version}", f"{APP_PATH}/download/{candidate_url}"), (f"Descarcă Barem Corectori V{version}", f"{APP_PATH}/download/{answer_url}")])
-    return links
+    return GenerationResult(links, selection, versions)
 
 
 # The page loads nothing from anywhere: no scripts, no fonts, no images. The
@@ -319,7 +374,8 @@ class Handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(length).decode("utf-8")
             values = {key: value[-1] for key, value in parse_qs(raw, max_num_fields=32).items()}
             cleanup_output()
-            links = make_tests(values)
+            result = make_tests(values)
+            log_generation(client_ip, result.selection, result.versions)
         except USER_ERRORS as exc:
             return self._html(page(f"<p class='err'><strong>Generarea a eșuat:</strong> {html.escape(str(exc))}</p>"), HTTPStatus.BAD_REQUEST)
         except Exception:
@@ -332,7 +388,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._html(page("<p class='err'><strong>Eroare internă.</strong> Încercați din nou; dacă persistă, raportați ora exactă a încercării.</p>"), HTTPStatus.INTERNAL_SERVER_ERROR)
         # Outside the try: a failure while writing this response must not lead
         # to a second, complete response being written onto the same connection.
-        self._html(page("<p class='ok'>✓ Test generat și validat.</p>", links))
+        self._html(page("<p class='ok'>✓ Test generat și validat.</p>", result.links))
 
 
 def main() -> None:
