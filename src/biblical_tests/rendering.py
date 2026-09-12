@@ -111,7 +111,9 @@ def _header(test: TestDefinition, styles: dict, answer_key: bool = False) -> lis
     center_lines = [str(c.get("title", ""))]
     if c.get("edition", ""):
         center_lines.append(f"Ediția {c['edition']}")
-    right_lines = [f"Varianta {test.version}"]
+    # The first paper is the default output; only additional variants need a
+    # visible label to distinguish them in a batch.
+    right_lines = [f"Varianta {test.version}"] if test.version > 1 else []
     if answer_key:
         right_lines.append("BAREM CORECTORI")
     header = Table([

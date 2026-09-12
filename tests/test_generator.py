@@ -826,10 +826,11 @@ class HeaderTests(_RealCorpusTest, unittest.TestCase):
                     out.append((path.name, pdf.pages[0].extract_text()))
             return out
 
-    def test_the_header_carries_category_stage_date_edition_and_variant(self):
+    def test_the_header_carries_explicit_category_stage_date_and_edition(self):
         (_, competitor), _ = self._pages(1)
-        for expected in ("Categoria 6_7", "Faza pe biserică", "28 martie 2026", "TALANTUL ÎN NEGOȚ", "Ediția 2027", "Varianta 1"):
+        for expected in ("Categoria 6_7", "Faza pe biserică", "28 martie 2026", "TALANTUL ÎN NEGOȚ", "Ediția 2027"):
             self.assertIn(expected, competitor)
+        self.assertNotIn("Varianta 1", competitor)
 
     def test_the_answer_key_announces_itself_and_the_paper_does_not(self):
         (_, competitor), (_, key) = self._pages(1)
@@ -845,7 +846,7 @@ class HeaderTests(_RealCorpusTest, unittest.TestCase):
         self.assertNotEqual(first_name, second_name)
         self.assertIn("V1", first_name)
         self.assertIn("V2", second_name)
-        self.assertIn("Varianta 1", first_text)
+        self.assertNotIn("Varianta 1", first_text)
         self.assertIn("Varianta 2", second_text)
 
 
